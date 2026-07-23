@@ -1,0 +1,506 @@
+//
+//  TTSEngine.swift
+//  Qwen3 TTS Studio
+//
+//  Owns model download, loading, and generation. One model resident at a
+//  time (Apple unified memory friendly). Models are fetched from Hugging
+//  Face via swift-transformers' Hub API into Application Support, so end
+//  users never touch a terminal.
+//
+
+import AVFoundation
+import Foundation
+import Hub
+import MLX
+import Qwen3TTS
+
+// MARK: - Modes
+
+enum TTSMode: String, CaseIterable, Identifiable {
+    case presetVoice = "Preset voice"
+    case voiceDesign = "Voice design"
+    case voiceClone = "Voice clone"
+
+    var id: String { rawValue }
+
+    /// Hugging Face repo backing each mode.
+    /// Swap the CustomVoice repo for
+    /// "AtomGradient/Qwen3-TTS-0.6B-CustomVoice-4bit-pruned-vocab-lite"
+    /// (808 MB) if download size matters more than max fidelity.
+    var repoID: String {
+        switch self {
+        case .presetVoice: "mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-bf16"
+        case .voiceDesign: "mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16"
+        case .voiceClone:  "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16"
+        }
+    }
+
+    /// Rough total download size, used only for throughput and ETA
+    /// estimates in the log — the Hub API only reports a fraction.
+    var approxDownloadBytes: Double {
+        switch self {
+        case .presetVoice: 1.4e9
+        case .voiceDesign: 3.4e9
+        case .voiceClone:  3.4e9
+        }
+    }
+}
+
+// MARK: - Engine state
+
+enum EngineStatus: Equatable {
+    case idle
+    case downloading(Double)      // 0...1
+    case loading
+    case transcribing             // auto-transcribing the clone reference
+    case generating(Int)          // codec tokens emitted so far
+    case error(String)
+
+    var isBusy: Bool {
+        switch self {
+        case .idle, .error: false
+        default: true
+        }
+    }
+}
+
+// MARK: - Engine
+
+@MainActor
+@Observable
+final class TTSEngine {
+    var status: EngineStatus = .idle
+    var lastOutputURL: URL?
+    /// Human-readable download detail ("42% — about 3.1 MB/s, ~6 min left").
+    var downloadDetail: String?
+    /// Transcript produced by auto-transcription, so the UI can show it and
+    /// save it with the voice instead of storing an empty string.
+    var lastReferenceTranscript: String?
+
+    private var loadedRepo: String?
+    private var model: Qwen3TTSModel?
+
+    private let log = LogStore.shared
+    private var downloadStart = Date()
+    private var downloadApproxBytes: Double = 0
+    private var lastLoggedPercent = -1
+
+    private let outputDir: URL = {
+        let dir = FileManager.default.urls(for: .musicDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Qwen3 TTS", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }()
+
+    var speakers: [String] { model?.supportedSpeakers ?? [] }
+
+    // MARK: Model lifecycle
+
+    /// Download (if needed) and load the model for `mode`.
+    func prepare(mode: TTSMode) async throws -> Qwen3TTSModel {
+        let repoID = mode.effectiveRepoID
+        if let model, loadedRepo == repoID { return model }
+
+        // Evict the previous model before loading the next one.
+        if loadedRepo != nil { log.log("Unloading previous model") }
+        self.model = nil
+        self.loadedRepo = nil
+        MLX.GPU.clearCache()
+
+        log.log("Preparing \(mode.rawValue) — \(repoID)")
+        let localDir = try await download(mode: mode, repoID: repoID)
+        try await ensureTokenizerJSON(in: localDir)
+
+        status = .loading
+        log.log("Loading model into memory…")
+        let loadStart = Date()
+        let loaded = try await Qwen3TTSModel.fromPretrained(localDir.path)
+        log.log(String(format: "Model loaded in %.1f s",
+                       Date().timeIntervalSince(loadStart)))
+        self.model = loaded
+        self.loadedRepo = repoID
+        return loaded
+    }
+
+    private func download(mode: TTSMode, repoID: String) async throws -> URL {
+        let base = ModelsLocation.current()
+        let localDir = base.appendingPathComponent("models/\(repoID)",
+                                                   isDirectory: true)
+
+        // Pre-downloaded (or previously completed) models are used as-is,
+        // without touching the network — this also makes the app fully
+        // offline once a model is in place.
+        if Self.hasCompleteModel(at: localDir) {
+            log.log("Using existing model files at \(localDir.path)")
+            return localDir
+        }
+
+        let hub = HubApi(downloadBase: base)
+        status = .downloading(0)
+        downloadStart = Date()
+        downloadApproxBytes = mode.approxDownloadBytes
+        lastLoggedPercent = -1
+        log.log("Checking model files (already-downloaded files are skipped)")
+        let monitor = startDiskMonitor(at: base)
+        defer { monitor.cancel() }
+        // Snapshot is incremental: already-downloaded files are skipped, so
+        // this is fast when the model is cached.
+        let dir = try await hub.snapshot(
+            from: Hub.Repo(id: repoID),
+            matching: ["*.safetensors", "*.json", "*.model", "*.txt"]
+        ) { @Sendable [weak self] progress in
+            let fraction = progress.fractionCompleted
+            Task { @MainActor in
+                self?.noteDownloadProgress(fraction)
+            }
+        }
+        downloadDetail = nil
+        log.log("Model files ready at \(dir.path)")
+        return dir
+    }
+
+    /// The mlx-community conversions ship vocab.json + merges.txt but not
+    /// the tokenizer.json that swift-transformers' AutoTokenizer requires.
+    /// All Qwen3-TTS variants share the same text tokenizer (verified:
+    /// identical 151,643-token vocab), so fetch one from a repo that
+    /// includes it.
+    private static let tokenizerJSONURL = URL(string:
+        "https://huggingface.co/AtomGradient/Qwen3-TTS-0.6B-CustomVoice-bf16-pruned-vocab-lite/resolve/main/tokenizer.json")!
+
+    private func ensureTokenizerJSON(in dir: URL) async throws {
+        let dest = dir.appendingPathComponent("tokenizer.json")
+        guard !FileManager.default.fileExists(atPath: dest.path) else { return }
+        log.log("Model has no tokenizer.json — fetching a compatible one")
+        let (tmp, response) = try await URLSession.shared
+            .download(from: Self.tokenizerJSONURL)
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+            throw TTSError.tokenizerDownloadFailed
+        }
+        try FileManager.default.moveItem(at: tmp, to: dest)
+        log.log("Added tokenizer.json to \(dir.path)")
+    }
+
+    /// A usable model folder: config plus weights, and no partial downloads
+    /// anywhere in the tree (the Hub keeps them under .cache/huggingface).
+    nonisolated private static func hasCompleteModel(at dir: URL) -> Bool {
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: dir.appendingPathComponent("config.json").path),
+              let enumerator = fm.enumerator(at: dir, includingPropertiesForKeys: nil)
+        else { return false }
+        var hasWeights = false
+        for case let url as URL in enumerator {
+            switch url.pathExtension {
+            case "safetensors": hasWeights = true
+            case "incomplete": return false
+            default: break
+            }
+        }
+        return hasWeights
+    }
+
+    /// The Hub fraction only moves when a whole file completes, so during a
+    /// multi-GB safetensors file it looks frozen. Watching bytes on disk
+    /// tells stalled and slow apart.
+    private func startDiskMonitor(at dir: URL) -> Task<Void, Never> {
+        Task { [log] in
+            var lastSize: Int64 = -1
+            var lastChange = Date()
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(10))
+                if Task.isCancelled { break }
+                let size = Self.directorySize(dir)
+                if size != lastSize {
+                    lastSize = size
+                    lastChange = Date()
+                    log.log("\(size.formatted(.byteCount(style: .file))) on disk in the models folder")
+                } else if Date().timeIntervalSince(lastChange) >= 30 {
+                    lastChange = Date()
+                    log.log("No new data for 30 s — the connection may be stalled")
+                }
+            }
+        }
+    }
+
+    nonisolated private static func directorySize(_ dir: URL) -> Int64 {
+        var total: Int64 = 0
+        let keys: [URLResourceKey] = [.totalFileAllocatedSizeKey, .fileSizeKey]
+        if let enumerator = FileManager.default.enumerator(
+            at: dir, includingPropertiesForKeys: keys) {
+            for case let url as URL in enumerator {
+                let values = try? url.resourceValues(forKeys: Set(keys))
+                total += Int64(values?.totalFileAllocatedSize ?? values?.fileSize ?? 0)
+            }
+        }
+        return total
+    }
+
+    private func noteDownloadProgress(_ fraction: Double) {
+        status = .downloading(fraction)
+        let elapsed = Date().timeIntervalSince(downloadStart)
+        guard fraction > 0.001, elapsed > 1 else { return }
+
+        // The Hub API only reports a fraction, so rate and ETA are estimates
+        // based on the model's approximate size. Cached files complete
+        // instantly and inflate the early numbers; they settle quickly.
+        let rate = downloadApproxBytes * fraction / elapsed
+        let secondsLeft = elapsed * (1 - fraction) / fraction
+        let percent = Int(fraction * 100)
+        let detail = "\(percent)% — about "
+            + "\(Int64(rate).formatted(.byteCount(style: .file)))/s, "
+            + Self.etaText(secondsLeft)
+        downloadDetail = detail
+
+        if percent / 5 != lastLoggedPercent / 5 || percent == 100 {
+            lastLoggedPercent = percent
+            log.log("Download \(detail)")
+        }
+    }
+
+    private static func etaText(_ seconds: Double) -> String {
+        seconds < 90
+            ? "under a minute left"
+            : "about \(Int((seconds / 60).rounded())) min left"
+    }
+
+    // MARK: Generation
+
+    func generate(
+        mode: TTSMode,
+        text: String,
+        speaker: String?,
+        instruct: String?,
+        language: String,
+        referenceAudioURL: URL?,
+        referenceText: String?
+    ) async {
+        do {
+            let model = try await prepare(mode: mode)
+            status = .generating(0)
+            let generateStart = Date()
+
+            let audio: MLXArray
+            switch mode {
+            case .voiceClone:
+                guard let refURL = referenceAudioURL else {
+                    throw TTSError.missingReference
+                }
+                log.log("Cloning voice from \(refURL.lastPathComponent)")
+                let gotAccess = refURL.startAccessingSecurityScopedResource()
+                defer { if gotAccess { refURL.stopAccessingSecurityScopedResource() } }
+
+                // ICL cloning needs the reference transcript. If the user left
+                // it blank, transcribe the clip on-device so they don't have to.
+                let refText: String
+                let typed = referenceText?.trimmingCharacters(in: .whitespacesAndNewlines)
+                if let typed, !typed.isEmpty {
+                    refText = typed
+                } else {
+                    status = .transcribing
+                    log.log("No transcript given — transcribing the reference "
+                        + "clip on-device")
+                    refText = try await ReferenceTranscriber.transcribe(
+                        url: refURL, locale: Self.locale(for: language))
+                    lastReferenceTranscript = refText
+                    log.log("Reference transcript: \"\(refText)\"")
+                    status = .generating(0)
+                }
+
+                log.log("Preparing reference audio — resampling to "
+                    + "\(model.sampleRate / 1000) kHz mono")
+                let refAudio = try Self.loadReferenceAudio(
+                    from: refURL, targetSampleRate: Double(model.sampleRate))
+
+                // generateVoiceClone is synchronous and heavy. Run it off the
+                // main actor so the UI stays responsive, and bridge its onToken
+                // callback back as live progress over an AsyncStream. The model
+                // and MLXArray aren't Sendable, so cross the boundary in an
+                // unchecked box — safe because only one generation runs at once.
+                let inputs = Unchecked(value: (model, refAudio))
+                let (tokens, continuation) = AsyncStream.makeStream(of: Int.self)
+                let cloneTask = Task.detached(priority: .userInitiated) {
+                    defer { continuation.finish() }
+                    var count = 0
+                    let (m, ref) = inputs.value
+                    let wav = try m.generateVoiceClone(
+                        text: text,
+                        referenceAudio: ref,
+                        referenceText: refText,
+                        language: language,
+                        onToken: { _ in
+                            count += 1
+                            continuation.yield(count)
+                        }
+                    )
+                    return Unchecked(value: wav)
+                }
+                for await count in tokens {
+                    if count % 5 == 0 { status = .generating(count) }
+                    if count % 100 == 0 { log.log("Generated \(count) tokens…") }
+                }
+                audio = try await cloneTask.value.value
+
+            case .presetVoice, .voiceDesign:
+                if mode == .presetVoice {
+                    log.log("Generating with speaker \(speaker ?? "default")")
+                } else {
+                    log.log("Generating designed voice")
+                }
+                // Stream so the UI can show live token progress.
+                var final: MLXArray?
+                var tokenCount = 0
+                for try await event in model.generateStream(
+                    text: text,
+                    speaker: mode == .presetVoice ? speaker : nil,
+                    instruct: (instruct?.isEmpty == false) ? instruct : nil,
+                    language: language
+                ) {
+                    switch event {
+                    case .token:
+                        tokenCount += 1
+                        if tokenCount % 5 == 0 { status = .generating(tokenCount) }
+                        if tokenCount % 100 == 0 {
+                            log.log("Generated \(tokenCount) tokens…")
+                        }
+                    case .info:
+                        break
+                    case .audio(let wav):
+                        final = wav
+                    }
+                }
+                guard let wav = final else { throw TTSError.noAudio }
+                audio = wav
+            }
+
+            let url = outputDir.appendingPathComponent(Self.fileName(for: mode))
+            try saveAudioArray(audio, sampleRate: Double(model.sampleRate), to: url)
+            log.log(String(format: "Saved %@ (%.1f s total)", url.path,
+                           Date().timeIntervalSince(generateStart)))
+            lastOutputURL = url
+            status = .idle
+        } catch {
+            log.log("Error: \(String(describing: error))")
+            status = .error(error.localizedDescription)
+        }
+    }
+
+    /// Carries a non-Sendable value across an actor boundary. Safe here
+    /// because generation is serialized — one job touches it at a time.
+    private struct Unchecked<T>: @unchecked Sendable {
+        let value: T
+    }
+
+    /// Speech-recognition locale for the UI's language choice.
+    private static func locale(for language: String) -> Locale {
+        let map = [
+            "english": "en-US", "chinese": "zh-CN", "japanese": "ja-JP",
+            "korean": "ko-KR", "german": "de-DE", "french": "fr-FR",
+            "russian": "ru-RU", "portuguese": "pt-BR", "spanish": "es-ES",
+            "italian": "it-IT",
+        ]
+        return Locale(identifier: map[language.lowercased()] ?? "en-US")
+    }
+
+    /// Load reference audio as mono at the model's rate. The package's
+    /// `loadAudioArray` keeps the file's native rate and takes channel 0;
+    /// voice cloning needs 24 kHz mono, and `generateVoiceClone` has no
+    /// sample-rate argument, so it assumes 24 kHz. Feeding a 44.1/48 kHz clip
+    /// unchanged is exactly what produces distorted, wrong-pitch output.
+    nonisolated private static func loadReferenceAudio(
+        from url: URL, targetSampleRate: Double
+    ) throws -> MLXArray {
+        let file = try AVAudioFile(forReading: url)
+        let inFormat = file.processingFormat
+        guard let inBuffer = AVAudioPCMBuffer(
+            pcmFormat: inFormat,
+            frameCapacity: AVAudioFrameCount(file.length)) else {
+            throw TTSError.referenceAudioUnreadable
+        }
+        try file.read(into: inBuffer)
+
+        guard let outFormat = AVAudioFormat(
+            commonFormat: .pcmFormatFloat32, sampleRate: targetSampleRate,
+            channels: 1, interleaved: false),
+              let converter = AVAudioConverter(from: inFormat, to: outFormat)
+        else { throw TTSError.referenceAudioUnreadable }
+
+        // Downsampling shrinks frame count, upsampling grows it; pad the
+        // output capacity so a full conversion always fits.
+        let ratio = targetSampleRate / inFormat.sampleRate
+        let capacity = AVAudioFrameCount(Double(inBuffer.frameLength) * ratio) + 4096
+        guard let outBuffer = AVAudioPCMBuffer(
+            pcmFormat: outFormat, frameCapacity: capacity) else {
+            throw TTSError.referenceAudioUnreadable
+        }
+
+        // The input block is @Sendable but AVAudioConverter calls it
+        // synchronously here, so the non-Sendable buffer crosses no real
+        // thread boundary — carry it in an unchecked box to satisfy the check.
+        let inBox = Unchecked(value: inBuffer)
+        nonisolated(unsafe) var provided = false
+        var convError: NSError?
+        converter.convert(to: outBuffer, error: &convError) { _, inStatus in
+            if provided {
+                inStatus.pointee = .endOfStream
+                return nil
+            }
+            provided = true
+            inStatus.pointee = .haveData
+            return inBox.value
+        }
+        if let convError { throw convError }
+
+        guard let channel = outBuffer.floatChannelData,
+              outBuffer.frameLength > 0 else {
+            throw TTSError.referenceAudioEmpty
+        }
+        let samples = Array(UnsafeBufferPointer(
+            start: channel[0], count: Int(outBuffer.frameLength)))
+        return MLXArray(samples)
+    }
+
+    private static func fileName(for mode: TTSMode) -> String {
+        let stamp = Date().formatted(.iso8601.year().month().day()
+            .timeSeparator(.omitted).time(includingFractionalSeconds: false))
+            .replacingOccurrences(of: ":", with: "")
+        return "\(mode.rawValue.replacingOccurrences(of: " ", with: "-"))-\(stamp).wav"
+    }
+
+    func revealLastOutput() {
+        guard let url = lastOutputURL else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+}
+
+enum TTSError: LocalizedError {
+    case missingReference
+    case noAudio
+    case tokenizerDownloadFailed
+    case referenceAudioUnreadable
+    case referenceAudioEmpty
+    case transcriptionNotAuthorized
+    case transcriptionUnavailable
+    case transcriptionEmpty
+
+    var errorDescription: String? {
+        switch self {
+        case .missingReference: "Choose a reference audio clip first."
+        case .noAudio: "The model finished without producing audio. Try again."
+        case .tokenizerDownloadFailed:
+            "Couldn't fetch the tokenizer file this model is missing. Check your connection and try again."
+        case .referenceAudioUnreadable:
+            "Couldn't read that reference clip. Try a WAV, M4A, or MP3 file."
+        case .referenceAudioEmpty:
+            "The reference clip seems to be empty. Use 5–10 seconds of clean speech."
+        case .transcriptionNotAuthorized:
+            "Allow speech recognition in System Settings > Privacy, or type the reference transcript yourself."
+        case .transcriptionUnavailable:
+            "Speech recognition isn't available for this language. Type the reference transcript yourself."
+        case .transcriptionEmpty:
+            "Couldn't make out any speech in the reference clip. Use a clean clip, or type the transcript yourself."
+        }
+    }
+}
+
+#if canImport(AppKit)
+import AppKit
+#endif

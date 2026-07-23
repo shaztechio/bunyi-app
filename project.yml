@@ -1,0 +1,59 @@
+name: Qwen3TTSStudio
+options:
+  bundleIdPrefix: com.geppettoforge
+  deploymentTarget:
+    macOS: "15.0"
+packages:
+  swift-qwen3-tts:
+    url: https://github.com/AtomGradient/swift-qwen3-tts.git
+    branch: main
+targets:
+  Qwen3TTSStudio:
+    type: application
+    platform: macOS
+    sources:
+      - Qwen3TTSStudioApp.swift
+      - ContentView.swift
+      - TTSEngine.swift
+      - LogStore.swift
+      - LogsView.swift
+      - ModelSettings.swift
+      - SettingsView.swift
+      - BackupManager.swift
+      - ReferenceTranscriber.swift
+      - VoiceLibrary.swift
+    dependencies:
+      - package: swift-qwen3-tts
+        product: Qwen3TTS
+    entitlements:
+      path: Qwen3TTSStudio.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.network.client: true
+        com.apple.security.files.user-selected.read-write: true
+        com.apple.security.assets.music.read-write: true
+    info:
+      path: Info.plist
+      properties:
+        CFBundleDisplayName: Qwen3 TTS Studio
+        LSApplicationCategoryType: public.app-category.utilities
+        NSSpeechRecognitionUsageDescription: >-
+          Used to transcribe your reference clip on-device so voice cloning
+          can match the spoken words to the audio.
+    settings:
+      base:
+        PRODUCT_NAME: Qwen3 TTS Studio
+        PRODUCT_BUNDLE_IDENTIFIER: com.geppettoforge.Qwen3TTSStudio
+        MARKETING_VERSION: 0.1.0
+        CURRENT_PROJECT_VERSION: 1
+        SWIFT_VERSION: "6.0"
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: "-"
+        ENABLE_HARDENED_RUNTIME: NO
+schemes:
+  Qwen3 TTS Studio:
+    build:
+      targets:
+        Qwen3TTSStudio: all
+    run:
+      config: Debug
