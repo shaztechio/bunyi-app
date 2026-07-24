@@ -7,17 +7,37 @@
 
 import Foundation
 
-// MARK: - Model repo overrides
+// MARK: - Model source
+
+/// Where a mode's model comes from. A Hugging Face repo (default, via the
+/// Hub API) or a plain base URL the user self-hosts (files fetched directly).
+enum ModelSource: Equatable {
+    case repo(String)
+    case baseURL(URL)
+}
 
 extension TTSMode {
     var repoDefaultsKey: String { "modelRepo.\(rawValue)" }
 
-    /// Repo actually used: the Settings override when set, else the default.
+    /// The configured value: the Settings override when set, else the default
+    /// repo ID. May be a repo ID or an http(s) base URL.
     var effectiveRepoID: String {
         let custom = UserDefaults.standard.string(forKey: repoDefaultsKey)?
             .trimmingCharacters(in: .whitespacesAndNewlines)
         if let custom, !custom.isEmpty { return custom }
         return repoID
+    }
+
+    /// Resolved source: an http(s) value is a self-hosted base URL, anything
+    /// else is a Hugging Face repo ID.
+    var effectiveSource: ModelSource {
+        let value = effectiveRepoID
+        let lower = value.lowercased()
+        if lower.hasPrefix("https://") || lower.hasPrefix("http://"),
+           let url = URL(string: value) {
+            return .baseURL(url)
+        }
+        return .repo(value)
     }
 }
 

@@ -50,6 +50,37 @@ CLI demo. Xcode app builds bundle the Metal library through mlx-swift's
 build plugin, so you shouldn't need it — if you hit a Metal library error
 at runtime, that step is the fix.
 
+## Self-hosting the models
+
+Each mode's field in **Settings → Models** accepts either a Hugging Face
+repo ID (default) **or** an `https://` base URL you control — the app
+decides by scheme. With a base URL it downloads the model files directly
+from your server (no Hugging Face API involved), so you can serve them from
+your own host, an internal mirror, or your own HF "fork" (point the URL at
+its `.../resolve/main` directory).
+
+How the app finds the file list:
+
+1. It fetches `<base>/manifest.txt` — a newline-separated list of relative
+   paths — and downloads each `<base>/<path>`. Generate it from a model
+   folder with:
+   ```sh
+   cd model-dir && find . -type f ! -name manifest.txt | sed 's|^\./||' > manifest.txt
+   ```
+2. If there's no `manifest.txt`, it falls back to the standard Qwen3-TTS
+   file set. `config.json` and `model.safetensors` are required (a 404
+   fails the download); everything else is best-effort (single-shard repos
+   have no `.index.json`, and a missing `tokenizer.json` is backfilled from
+   Hugging Face automatically).
+
+Files download to `models/self-hosted/<slug>` in the models folder and are
+reused offline afterwards, exactly like Hub downloads.
+
+**Use https.** Plain `http://` is blocked by App Transport Security; to
+allow it (e.g. a LAN server) add an `NSAppTransportSecurity` exception to
+the Info.plist section of `project.yml` and regenerate — the default is
+https-only so the app isn't weakened globally.
+
 ## Things you'll likely tune
 
 - **Models** (`TTSMode.repoID`): defaults are the bf16 conversions the

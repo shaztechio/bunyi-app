@@ -37,8 +37,15 @@ build fails.
 - `LogStore.swift` / `LogsView.swift` — in-app Logs window (Window →
   Logs, ⌘L), mirrored to OSLog subsystem com.geppettoforge.Qwen3TTSStudio
 - `ModelSettings.swift` / `SettingsView.swift` — Settings (⌘,): per-mode
-  repo ID overrides (UserDefaults, `TTSMode.effectiveRepoID`) and a
-  custom models folder via security-scoped bookmark (`ModelsLocation`)
+  model source (UserDefaults, `TTSMode.effectiveRepoID` /
+  `effectiveSource`) and a custom models folder via security-scoped
+  bookmark (`ModelsLocation`). Each mode's field is a HF repo ID OR an
+  http(s) base URL to self-host (scheme decides). Self-hosted downloads
+  (`TTSEngine.downloadFromBaseURL`) fetch `<base>/manifest.txt` if present
+  else a built-in Qwen3-TTS file list, pulling each `<base>/<relpath>`
+  directly (no HF API); config.json + model.safetensors are required, the
+  rest best-effort. Files land in `models/self-hosted/<slug>`. Plain http
+  is blocked by ATS — https only unless an Info.plist exception is added.
 - `VoiceLibrary.swift` — saved voice-clone prompts (name + reference clip
   + transcript) in `<AppSupport>/Qwen3TTSStudio/Voices` (`voices.json` +
   copied audio). The clip is COPIED into the container so it works after

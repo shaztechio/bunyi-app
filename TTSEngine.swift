@@ -108,8 +108,9 @@ final class TTSEngine {
         MLX.GPU.clearCache()
 
         log.log("Preparing \(mode.rawValue) — \(repoID)")
-        let localDir = try await download(mode: mode, repoID: repoID)
-        try await ensureTokenizerJSON(in: localDir)
+        let source = mode.effectiveSource
+        let localDir = try await download(mode: mode, source: source)
+        try await ensureTokenizerJSON(in: localDir, source: source)
 
         status = .loading
         log.log("Loading model into memory…")
@@ -122,7 +123,16 @@ final class TTSEngine {
         return loaded
     }
 
-    private func download(mode: TTSMode, repoID: String) async throws -> URL {
+    private func download(mode: TTSMode, source: ModelSource) async throws -> URL {
+        switch source {
+        case .repo(let repoID):
+            return try await downloadFromHub(mode: mode, repoID: repoID)
+        case .baseURL(let url):
+            return try await downloadFromBaseURL(mode: mode, base: url)
+        }
+    }
+
+    private func downloadFromHub(mode: TTSMode, repoID: String) async throws -> URL {
         let base = ModelsLocation.current()
         let localDir = base.appendingPathComponent("models/\(repoID)",
                                                    isDirectory: true)
@@ -159,6 +169,115 @@ final class TTSEngine {
         return dir
     }
 
+    // MARK: Self-hosted download
+
+    /// Standard Qwen3-TTS file set, used when a self-hosted server has no
+    /// manifest.txt. Only `requiredModelFiles` fail the download on 404; the
+    /// rest are best-effort — single-shard repos lack the index, and a server
+    /// may omit tokenizer.json (which `ensureTokenizerJSON` then backfills).
+    private static let defaultModelFiles: [String] = [
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "model.safetensors.index.json",
+        "preprocessor_config.json",
+        "tokenizer_config.json",
+        "vocab.json",
+        "merges.txt",
+        "tokenizer.json",
+        "speech_tokenizer/config.json",
+        "speech_tokenizer/configuration.json",
+        "speech_tokenizer/preprocessor_config.json",
+        "speech_tokenizer/model.safetensors",
+    ]
+    private static let requiredModelFiles: Set<String> = ["config.json", "model.safetensors"]
+
+    private func downloadFromBaseURL(mode: TTSMode, base: URL) async throws -> URL {
+        let root = ModelsLocation.current()
+        let localDir = root.appendingPathComponent(
+            "models/self-hosted/\(Self.slug(for: base))", isDirectory: true)
+
+        if Self.hasCompleteModel(at: localDir) {
+            log.log("Using existing model files at \(localDir.path)")
+            return localDir
+        }
+
+        status = .downloading(0)
+        downloadStart = Date()
+        downloadApproxBytes = mode.approxDownloadBytes
+        lastLoggedPercent = -1
+
+        let files = try await fileList(base: base)
+        log.log("Downloading \(files.count) files from \(base.absoluteString)")
+        try FileManager.default.createDirectory(
+            at: localDir, withIntermediateDirectories: true)
+        let monitor = startDiskMonitor(at: localDir)
+        defer { monitor.cancel() }
+
+        for (index, relPath) in files.enumerated() {
+            try await downloadFile(relPath: relPath, base: base, into: localDir)
+            noteDownloadProgress(Double(index + 1) / Double(files.count))
+        }
+
+        downloadDetail = nil
+        guard Self.hasCompleteModel(at: localDir) else {
+            throw TTSError.selfHostIncomplete
+        }
+        log.log("Model files ready at \(localDir.path)")
+        return localDir
+    }
+
+    /// manifest.txt from the server if present, else the built-in file set.
+    private func fileList(base: URL) async throws -> [String] {
+        let manifestURL = base.appendingPathComponent("manifest.txt")
+        if let (data, response) = try? await URLSession.shared.data(from: manifestURL),
+           (response as? HTTPURLResponse)?.statusCode == 200,
+           let text = String(data: data, encoding: .utf8) {
+            let paths = text.split(whereSeparator: \.isNewline)
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty && !$0.hasPrefix("#") }
+            if !paths.isEmpty {
+                log.log("Using manifest.txt (\(paths.count) files)")
+                return paths
+            }
+        }
+        log.log("No manifest.txt — using the built-in Qwen3-TTS file list")
+        return Self.defaultModelFiles
+    }
+
+    private func downloadFile(relPath: String, base: URL, into localDir: URL) async throws {
+        let fileURL = base.appendingPathComponent(relPath)
+        let (tmp, response) = try await URLSession.shared.download(from: fileURL)
+        let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard code == 200 else {
+            if Self.requiredModelFiles.contains(relPath) {
+                throw TTSError.selfHostFileMissing(relPath, code)
+            }
+            log.log("Skipped \(relPath) (HTTP \(code))")
+            return
+        }
+        let dest = localDir.appendingPathComponent(relPath)
+        let fm = FileManager.default
+        try fm.createDirectory(at: dest.deletingLastPathComponent(),
+                               withIntermediateDirectories: true)
+        if fm.fileExists(atPath: dest.path) { try fm.removeItem(at: dest) }
+        try fm.moveItem(at: tmp, to: dest)
+    }
+
+    /// Filesystem-safe folder name derived from a base URL.
+    nonisolated private static func slug(for url: URL) -> String {
+        let allowed = CharacterSet(charactersIn:
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-_")
+        let raw = (url.host ?? "server") + url.path
+        let cleaned = String(raw.unicodeScalars.map {
+            allowed.contains($0) ? Character($0) : "-"
+        })
+        let trimmed = cleaned.trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+        return trimmed.isEmpty ? "server" : trimmed
+    }
+
+    // MARK: Tokenizer
+
     /// The mlx-community conversions ship vocab.json + merges.txt but not
     /// the tokenizer.json that swift-transformers' AutoTokenizer requires.
     /// All Qwen3-TTS variants share the same text tokenizer (verified:
@@ -167,17 +286,27 @@ final class TTSEngine {
     private static let tokenizerJSONURL = URL(string:
         "https://huggingface.co/AtomGradient/Qwen3-TTS-0.6B-CustomVoice-bf16-pruned-vocab-lite/resolve/main/tokenizer.json")!
 
-    private func ensureTokenizerJSON(in dir: URL) async throws {
+    private func ensureTokenizerJSON(in dir: URL, source: ModelSource) async throws {
         let dest = dir.appendingPathComponent("tokenizer.json")
         guard !FileManager.default.fileExists(atPath: dest.path) else { return }
         log.log("Model has no tokenizer.json — fetching a compatible one")
-        let (tmp, response) = try await URLSession.shared
-            .download(from: Self.tokenizerJSONURL)
-        guard (response as? HTTPURLResponse)?.statusCode == 200 else {
-            throw TTSError.tokenizerDownloadFailed
+
+        // Prefer the self-hosted server's own copy, then the known HF URL.
+        var candidates: [URL] = []
+        if case .baseURL(let base) = source {
+            candidates.append(base.appendingPathComponent("tokenizer.json"))
         }
-        try FileManager.default.moveItem(at: tmp, to: dest)
-        log.log("Added tokenizer.json to \(dir.path)")
+        candidates.append(Self.tokenizerJSONURL)
+
+        for url in candidates {
+            if let (tmp, response) = try? await URLSession.shared.download(from: url),
+               (response as? HTTPURLResponse)?.statusCode == 200 {
+                try FileManager.default.moveItem(at: tmp, to: dest)
+                log.log("Added tokenizer.json to \(dir.path)")
+                return
+            }
+        }
+        throw TTSError.tokenizerDownloadFailed
     }
 
     /// A usable model folder: config plus weights, and no partial downloads
@@ -480,6 +609,8 @@ enum TTSError: LocalizedError {
     case transcriptionNotAuthorized
     case transcriptionUnavailable
     case transcriptionEmpty
+    case selfHostFileMissing(String, Int)
+    case selfHostIncomplete
 
     var errorDescription: String? {
         switch self {
@@ -497,6 +628,10 @@ enum TTSError: LocalizedError {
             "Speech recognition isn't available for this language. Type the reference transcript yourself."
         case .transcriptionEmpty:
             "Couldn't make out any speech in the reference clip. Use a clean clip, or type the transcript yourself."
+        case .selfHostFileMissing(let name, let code):
+            "Your server is missing a required model file: \(name) (HTTP \(code)). Check the URL and that the file is published."
+        case .selfHostIncomplete:
+            "The download from your server didn't produce a complete model (needs config.json and a .safetensors file). Check the files or add a manifest.txt."
         }
     }
 }

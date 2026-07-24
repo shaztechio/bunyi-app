@@ -65,10 +65,18 @@ struct SettingsView: View {
                 repoField("Preset voice", text: $presetRepo, mode: .presetVoice)
                 repoField("Voice design", text: $designRepo, mode: .voiceDesign)
                 repoField("Voice clone", text: $cloneRepo, mode: .voiceClone)
-                Text("Hugging Face repo IDs, MLX conversions of Qwen3-TTS. "
-                    + "Each must match its mode: CustomVoice for preset voice, "
-                    + "VoiceDesign for voice design, Base for voice clone. "
-                    + "Leave blank for the default. Applies on the next generate.")
+                Text("A Hugging Face repo ID (MLX conversion of Qwen3-TTS) or a "
+                    + "base URL to self-host — each must match its mode: "
+                    + "CustomVoice for preset voice, VoiceDesign for voice "
+                    + "design, Base for voice clone. Leave blank for the "
+                    + "default. Applies on the next generate.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text("To self-host, enter an https base URL holding the model "
+                    + "files (e.g. https://example.com/qwen3-custom). The app "
+                    + "reads manifest.txt there if present, otherwise the "
+                    + "standard Qwen3-TTS file set. Plain http needs an App "
+                    + "Transport Security exception; https is recommended.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
