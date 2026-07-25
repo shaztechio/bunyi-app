@@ -215,6 +215,7 @@ final class TTSEngine {
         defer { monitor.cancel() }
 
         for (index, relPath) in files.enumerated() {
+            try Task.checkCancellation()
             try await downloadFile(relPath: relPath, base: base, into: localDir)
             noteDownloadProgress(Double(index + 1) / Double(files.count))
         }
@@ -404,6 +405,7 @@ final class TTSEngine {
     ) async {
         do {
             let model = try await prepare(mode: mode)
+            try Task.checkCancellation()
             status = .generating(0)
             let generateStart = Date()
 
@@ -463,10 +465,12 @@ final class TTSEngine {
                     return Unchecked(value: wav)
                 }
                 for await count in tokens {
+                    if Task.isCancelled { break }
                     if count % 5 == 0 { status = .generating(count) }
                     if count % 100 == 0 { log.log("Generated \(count) tokens…") }
                 }
                 audio = try await cloneTask.value.value
+                try Task.checkCancellation()
 
             case .presetVoice, .voiceDesign:
                 if mode == .presetVoice {
@@ -483,6 +487,7 @@ final class TTSEngine {
                     instruct: (instruct?.isEmpty == false) ? instruct : nil,
                     language: language
                 ) {
+                    try Task.checkCancellation()
                     switch event {
                     case .token:
                         tokenCount += 1
@@ -506,10 +511,26 @@ final class TTSEngine {
                            Date().timeIntervalSince(generateStart)))
             lastOutputURL = url
             status = .idle
+        } catch is CancellationError {
+            status = .idle
+            downloadDetail = nil
+            log.log("Stopped the current operation")
+        } catch let urlError as URLError where urlError.code == .cancelled {
+            status = .idle
+            downloadDetail = nil
+            log.log("Stopped the current operation")
         } catch {
             log.log("Error: \(String(describing: error))")
             status = .error(error.localizedDescription)
         }
+    }
+
+    /// Clears the visible busy state when work is cancelled (e.g. the window
+    /// is closed mid-operation). The generation Task is cancelled by the
+    /// caller; downloads and streaming then stop at their next checkpoint.
+    func stop() {
+        status = .idle
+        downloadDetail = nil
     }
 
     /// Carries a non-Sendable value across an actor boundary. Safe here

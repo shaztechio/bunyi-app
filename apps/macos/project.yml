@@ -22,6 +22,7 @@ targets:
       - BackupManager.swift
       - ReferenceTranscriber.swift
       - VoiceLibrary.swift
+      - WindowCloseGuard.swift
     dependencies:
       - package: swift-qwen3-tts
         product: Qwen3TTS

@@ -1,0 +1,18 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Qwen3TtsStudio.App.MainWindow"
+        Width="600" Height="560"
+        Title="Qwen3 TTS Studio">
+    <!--
+      Scaffold shell only. Build the real UI (mode picker, text editor,
+      per-mode controls, status, playback, settings tabs, logs window,
+      busy-close confirmation) against /spec/FEATURES.md. The macOS app
+      (apps/macos/ContentView.swift) is the reference.
+    -->
+    <StackPanel Margin="24" Spacing="12">
+        <TextBlock Text="Qwen3 TTS Studio (Windows + Linux)"
+                   FontSize="20" FontWeight="SemiBold" />
+        <TextBlock TextWrapping="Wrap"
+                   Text="Scaffold. Not yet implemented. See apps/dotnet/AGENTS.md and /spec/FEATURES.md." />
+    </StackPanel>
+</Window>

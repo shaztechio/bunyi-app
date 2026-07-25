@@ -1,0 +1,31 @@
+name: .NET build (Windows + Linux)
+
+# The Windows+Linux app (apps/dotnet) is a SCAFFOLD — this workflow will be
+# red until it is implemented. It documents the intended build and turns
+# green once the stubs are filled in against /spec/FEATURES.md.
+
+on:
+  push:
+    paths: ["apps/dotnet/**", "spec/**", ".github/workflows/dotnet.yml"]
+  pull_request:
+    paths: ["apps/dotnet/**", "spec/**", ".github/workflows/dotnet.yml"]
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: apps/dotnet
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+      - name: Restore
+        run: dotnet restore
+      - name: Build
+        run: dotnet build --no-restore -c Release

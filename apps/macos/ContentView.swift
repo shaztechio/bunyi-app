@@ -26,6 +26,8 @@ struct ContentView: View {
     @State private var newVoiceName = ""
     @State private var voiceError: String?
 
+    @State private var genTask: Task<Void, Never>?
+
     private let languages = [
         "auto", "english", "chinese", "japanese", "korean", "german",
         "french", "russian", "portuguese", "spanish", "italian",
@@ -94,6 +96,9 @@ struct ContentView: View {
         }
         .padding(20)
         .frame(minWidth: 560, minHeight: 520)
+        .background(WindowCloseGuard(
+            isBusy: { engine.status.isBusy },
+            onConfirmedClose: stopWork))
         .fileImporter(isPresented: $showImporter,
                       allowedContentTypes: [.audio]) { result in
             if case .success(let url) = result {
@@ -215,7 +220,8 @@ struct ContentView: View {
 
     private func generate() {
         player?.stop()
-        Task {
+        genTask?.cancel()
+        genTask = Task {
             await engine.generate(
                 mode: mode,
                 text: text,
@@ -233,6 +239,15 @@ struct ContentView: View {
             }
             if engine.lastOutputURL != nil { playLast() }
         }
+    }
+
+    /// Stops in-flight work when the window is closed mid-operation. Cancels
+    /// the generation task (cooperative — downloads and streaming stop at the
+    /// next checkpoint) and resets engine state.
+    private func stopWork() {
+        genTask?.cancel()
+        player?.stop()
+        engine.stop()
     }
 
     // MARK: Saved voices

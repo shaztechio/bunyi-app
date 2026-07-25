@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>Qwen3TtsStudio.Core</RootNamespace>
+  </PropertyGroup>
+
+  <!--
+    Versions are indicative and unverified (authored on macOS without a
+    .NET toolchain). Pin real versions when first building on Windows/Linux.
+    - Microsoft.ML.OnnxRuntime: Qwen3-TTS inference (spec §1-§2). Add the
+      DirectML variant on Windows for GPU (Microsoft.ML.OnnxRuntime.DirectML).
+    - Whisper.net: reference-clip auto-transcription (spec §4).
+    - Audio playback + resample lib (miniaudio/SDL/PortAudio) is TBD.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.20.1" />
+    <PackageReference Include="Whisper.net" Version="1.7.4" />
+  </ItemGroup>
+
+</Project>

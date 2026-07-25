@@ -1,0 +1,27 @@
+name: macOS build
+
+on:
+  push:
+    paths: ["apps/macos/**", "spec/**", ".github/workflows/macos.yml"]
+  pull_request:
+    paths: ["apps/macos/**", "spec/**", ".github/workflows/macos.yml"]
+
+jobs:
+  build:
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: apps/macos
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Metal Toolchain (Xcode 26 needs it for mlx-swift shaders)
+        run: xcodebuild -downloadComponent MetalToolchain || true
+      - name: Generate project
+        run: xcodegen generate
+      - name: Build
+        run: |
+          xcodebuild -project Qwen3TTSStudio.xcodeproj \
+            -scheme "Qwen3 TTS Studio" \
+            -destination 'platform=macOS' build
