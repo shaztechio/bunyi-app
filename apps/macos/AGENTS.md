@@ -16,6 +16,9 @@ wrapped for Swift/MLX by
 
 ## Build & verify
 
+**Requires Xcode 26** (Swift 6.2 features + mlx-swift's Metal Toolchain);
+it does not build on Xcode 16.x. CI uses the `macos-26` runner.
+
 Run from `apps/macos/`. The Xcode project is generated from `project.yml`
 via XcodeGen — edit `project.yml` and rerun `xcodegen generate`, never
 hand-edit `Qwen3TTSStudio.xcodeproj`. `Info.plist` and the entitlements

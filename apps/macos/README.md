@@ -7,7 +7,11 @@ voices, voice design, voice cloning — with automatic model download, live
 generation progress, playback, and outputs saved to `~/Music/Qwen3 TTS`.
 Targets macOS 15+ (Apple Silicon).
 
-## Build (Xcode 16+, Apple Silicon)
+## Build (Xcode 26, Apple Silicon)
+
+Requires **Xcode 26** — the app uses Swift 6.2 features and mlx-swift's
+Metal Toolchain, and does not build on Xcode 16.x. CI runs on the
+`macos-26` runner.
 
 The Xcode project is **generated** — `Qwen3TTSStudio.xcodeproj`,
 `Info.plist`, and the entitlements file are all produced from
