@@ -14,12 +14,16 @@ if command -v xcodegen >/dev/null; then
     xcodegen generate
 fi
 
+# NB: do NOT pass CODE_SIGNING_ALLOWED=NO. An unsigned app loses its
+# entitlements, so the sandbox never engages and Application Support resolves
+# outside the app container — the models folder would look empty and
+# re-download. Ad-hoc signing ("-", per project.yml) keeps the sandbox.
 xcodebuild -project Qwen3TTSStudio.xcodeproj \
     -scheme "Qwen3 TTS Studio" \
     -configuration "$CONFIG" \
     -destination 'platform=macOS' \
     -derivedDataPath "$DERIVED" \
-    build CODE_SIGNING_ALLOWED=NO
+    build
 
 rm -rf "$DIST"
 mkdir -p "$DIST"
