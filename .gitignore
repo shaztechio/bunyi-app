@@ -23,6 +23,9 @@ build/
 xcuserdata/
 *.xcuserstate
 
+# Build output (all platforms)
+dist/
+
 # ── .NET app (apps/dotnet) ────────────────────────────────────────────
 [Bb]in/
 [Oo]bj/
