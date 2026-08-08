@@ -32,7 +32,8 @@ targets:
         com.apple.security.app-sandbox: true
         com.apple.security.network.client: true
         com.apple.security.files.user-selected.read-write: true
-        com.apple.security.assets.music.read-write: true
+        # On-device transcription of reference clips (voice cloning).
+        com.apple.security.device.speech-recognition: true
     info:
       path: Info.plist
       properties:
@@ -43,6 +44,8 @@ targets:
           can match the spoken words to the audio.
     settings:
       base:
+        # MLX only runs on Apple Silicon — never build an Intel slice.
+        ARCHS: arm64
         PRODUCT_NAME: Qwen3 TTS Studio
         PRODUCT_BUNDLE_IDENTIFIER: com.geppettoforge.Qwen3TTSStudio
         MARKETING_VERSION: 0.1.0
