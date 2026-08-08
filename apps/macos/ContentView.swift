@@ -492,6 +492,15 @@ private extension TTSMode {
     }
 }
 
-#Preview {
+// All colors in this view are semantic (`.secondary`, `.bar`,
+// `NSColor.textBackgroundColor`, …), so it follows the system
+// appearance — these previews pin both variants against regressions.
+#Preview("Light") {
     ContentView()
+        .preferredColorScheme(.light)
+}
+
+#Preview("Dark") {
+    ContentView()
+        .preferredColorScheme(.dark)
 }

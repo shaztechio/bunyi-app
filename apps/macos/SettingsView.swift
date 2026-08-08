@@ -9,6 +9,7 @@ import UniformTypeIdentifiers
 
 struct SettingsView: View {
     @State private var backup = BackupManager()
+    @AppStorage("appearance") private var appearance: AppAppearance = .system
     @AppStorage("modelRepo.Preset voice") private var presetRepo = ""
     @AppStorage("modelRepo.Voice design") private var designRepo = ""
     @AppStorage("modelRepo.Voice clone") private var cloneRepo = ""
@@ -29,6 +30,8 @@ struct SettingsView: View {
 
     var body: some View {
         TabView {
+            generalTab
+                .tabItem { Label("General", systemImage: "gearshape") }
             modelsTab
                 .tabItem { Label("Models", systemImage: "person.wave.2") }
             storageTab
@@ -58,6 +61,24 @@ struct SettingsView: View {
     }
 
     // MARK: Tabs
+
+    private var generalTab: some View {
+        Form {
+            Section {
+                Picker("Appearance", selection: $appearance) {
+                    ForEach(AppAppearance.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                Text("System follows your macOS appearance; Light and Dark "
+                    + "pin the app regardless. Applies immediately.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+    }
 
     private var modelsTab: some View {
         Form {
