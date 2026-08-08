@@ -37,9 +37,12 @@ A segmented picker selects one of three modes. macOS source:
 ## 2. Generation output
 
 - Sample rate **24 kHz**, mono, WAV.
-- Saved to a user-visible folder: macOS `~/Music/Qwen3 TTS`. Other
-  platforms: an equivalent per-user Music/Documents subfolder named
-  `Qwen3 TTS`. Filename: `<Mode>-<ISO8601 timestamp>.wav`.
+- Saved to the app's per-user data folder: macOS
+  `~/Library/Application Support/Qwen3TTSStudio/Outputs` (inside the
+  sandbox container — no extra file-access entitlement needed). Other
+  platforms: an equivalent per-user app-data subfolder named `Outputs`.
+  One click away via the in-app reveal-in-file-manager button.
+  Filename: `<Mode>-<ISO8601 timestamp>.wav`.
 - After generation the app auto-plays the result and offers Play + reveal
   in file manager.
 - Live progress: a token counter during generation. macOS uses

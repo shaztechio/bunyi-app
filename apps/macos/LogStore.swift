@@ -27,7 +27,9 @@ final class LogStore {
     private let cap = 2000
 
     func log(_ message: String) {
-        osLog.info("\(message, privacy: .public)")
+        // .notice (OSLogType.default) persists to the log store, so entries
+        // are retrievable via `log show` after the fact — .info is not.
+        osLog.notice("\(message, privacy: .public)")
         entries.append(Entry(date: .now, message: message))
         if entries.count > cap {
             entries.removeFirst(entries.count - cap)

@@ -35,7 +35,8 @@ xcodebuild -scheme "Qwen3 TTS Studio" -destination 'platform=macOS' build
   `xcodebuild -downloadComponent MetalToolchain` (one-time, ~690 MB).
 - Runtime smoke test: launch, Preset voice, short English sentence, speaker
   Ryan → downloads ~1.4 GB model once, then produces and auto-plays a WAV
-  in `~/Music/Qwen3 TTS`.
+  in the app's `Outputs` folder (Application Support, inside the sandbox
+  container).
 
 ## Project structure
 
@@ -47,7 +48,8 @@ xcodebuild -scheme "Qwen3 TTS Studio" -destination 'platform=macOS' build
 - `TTSEngine.swift` — @MainActor @Observable engine: model download via
   swift-transformers HubApi.snapshot, one model resident at a time (evict +
   `MLX.GPU.clearCache()` on switch), generation, WAV output to
-  `~/Music/Qwen3 TTS`. Skips the network when a complete model is on disk
+  `Qwen3TTSStudio/Outputs` under the container's Application Support.
+  Skips the network when a complete model is on disk
   (`hasCompleteModel`); a disk monitor logs bytes-on-disk every 10 s. Also
   hosts self-hosted base-URL downloads (`downloadFromBaseURL` + manifest.txt
   / built-in list) and reference-audio resampling.

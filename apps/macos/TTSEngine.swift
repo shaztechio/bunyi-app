@@ -85,9 +85,13 @@ final class TTSEngine {
     private var downloadApproxBytes: Double = 0
     private var lastLoggedPercent = -1
 
+    /// Output lives in the app's own Application Support folder: the sandbox
+    /// grants it without extra entitlements (unlike ~/Music), and "Show in
+    /// Finder" still surfaces the files.
     private let outputDir: URL = {
-        let dir = FileManager.default.urls(for: .musicDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Qwen3 TTS", isDirectory: true)
+        let dir = FileManager.default.urls(for: .applicationSupportDirectory,
+                                           in: .userDomainMask)[0]
+            .appendingPathComponent("Qwen3TTSStudio/Outputs", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }()

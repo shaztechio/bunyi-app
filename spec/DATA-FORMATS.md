@@ -91,7 +91,8 @@ Stored in a `Voices` subfolder of app data, alongside copied audio clips.
 
 ## Output WAV
 
-- 24 kHz, mono, PCM WAV. Saved to a user-visible `Qwen3 TTS` folder under
-  the platform's Music (or Documents) location.
+- 24 kHz, mono, PCM WAV. Saved to an `Outputs` folder under the app's
+  per-user data directory (macOS: Application Support inside the sandbox
+  container).
 - Filename: `<Mode>-<ISO8601-basic timestamp>.wav`
   (e.g. `Voice-clone-20260725T2312.wav`).
