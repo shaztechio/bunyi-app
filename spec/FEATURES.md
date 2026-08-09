@@ -267,7 +267,10 @@ macOS source: `WindowCloseGuard.swift`.
   and still holding the model; the app then has no window and visible work.
   The window stays up, showing its *stopping* state, until the engine reports
   idle. A timeout closes anyway rather than trapping the user in a window
-  that will not shut. Not busy ⇒ close immediately.
+  that will not shut, and the confirmation says so — a prompt promising to
+  close "once it has stopped" would be a lie in exactly the case the timeout
+  exists for. Pressing close again during the wait does nothing: it must not
+  ask twice or start a second stop. Not busy ⇒ close immediately.
 
 ## 10. Error handling & copy tone
 

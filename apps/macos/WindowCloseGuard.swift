@@ -60,6 +60,10 @@ struct WindowCloseGuard: NSViewRepresentable {
         /// Set once the wait is over, so the programmatic close is not mistaken
         /// for the user pressing the red button again.
         private var isClosing = false
+        /// Set while waiting for the engine to stop. Without it, pressing the
+        /// red button again during the wait asks a second time, runs the stop
+        /// again, and starts a second polling chain racing the first.
+        private var isWaitingToClose = false
         /// Stop is cooperative: the engine may take a moment, and if something
         /// goes wrong it might never report idle. Closing anyway after this
         /// beats trapping the user in a window that will not shut.
@@ -81,12 +85,17 @@ struct WindowCloseGuard: NSViewRepresentable {
 
         func windowShouldClose(_ sender: NSWindow) -> Bool {
             if isClosing { return true }
+            // Already stopping and closing: pressing the button again asks for
+            // something that is already happening.
+            if isWaitingToClose { return false }
             guard isBusy() else { return true }
 
             let alert = NSAlert()
             alert.messageText = "Stop the current operation?"
-            alert.informativeText =
-                "Something is still running. The window will close once it has stopped."
+            alert.informativeText = """
+                Something is still running. The window will close once it has \
+                stopped, or after \(Int(Self.stopTimeout)) seconds.
+                """
             alert.addButton(withTitle: "Keep Working")
             alert.addButton(withTitle: "Stop and Close")
             alert.buttons.last?.hasDestructiveAction = true
@@ -96,6 +105,7 @@ struct WindowCloseGuard: NSViewRepresentable {
             // window down while the engine was still generating: the status
             // says "Stopping…" for a reason, and closing on top of it hides
             // work that is still running and still holding the model.
+            isWaitingToClose = true
             onConfirmedClose()
             waitForIdle(then: sender, since: Date())
             return false
@@ -112,6 +122,7 @@ struct WindowCloseGuard: NSViewRepresentable {
                 }
                 return
             }
+            isWaitingToClose = false
             isClosing = true
             window.close()
         }
