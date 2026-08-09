@@ -132,8 +132,11 @@ certificate.
   regenerates. The workflow bumps it there and fails a tag that disagrees
   with the built version.
 - `make-dmg.sh` replays a committed `.DS_Store` for the window layout rather
-  than driving Finder on a runner. None is committed yet, so the image builds
-  with Finder's default arrangement until someone captures one.
+  than driving Finder on a runner, which needs a desktop session. The layout
+  and background came from Sandfort; the app record's filename key was
+  rewritten `Sandfort.app` → `Bunyi.app`, because positions are keyed by
+  filename and a plain copy would have left the app unplaced. Icons sit at
+  x=165 (app) and x=495 (Applications) on a 660×400 background.
 
 ## Key API facts (from swift-qwen3-tts)
 
@@ -180,6 +183,6 @@ certificate.
 2. Optional smaller default model for distribution
    (`AtomGradient/Qwen3-TTS-0.6B-CustomVoice-4bit-pruned-vocab-lite`, 808 MB)
    — A/B audio quality first.
-3. Capture a `dmg-layout.DS_Store` so the disk-image window has a real
-   layout instead of Finder's default. ~~Signing + notarization pipeline~~
-   — done, see "Releasing" above.
+3. Bunyi-coloured DMG background — the current one is Sandfort's generic
+   chevron, which works but is not the app's indigo/violet.
+   ~~Signing + notarization pipeline~~ — done, see "Releasing" above.

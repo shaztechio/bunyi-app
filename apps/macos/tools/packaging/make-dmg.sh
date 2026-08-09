@@ -23,11 +23,16 @@
 # either flaky or impossible. Capturing the layout once and replaying it is
 # deterministic and needs nothing but hdiutil.
 #
-# No layout is committed yet, and the image builds without one — the window just
-# opens with Finder's default arrangement. To make one: mount a read-write image,
-# arrange it in Finder, and copy the resulting .DS_Store to
-# tools/packaging/dmg-layout.DS_Store. The positions are keyed by filename, so
-# "Bunyi.app" and "Applications" must keep those exact names.
+# The committed layout came from Sandfort, with the app record's filename key
+# rewritten from "Sandfort.app" to "Bunyi.app" — .DS_Store positions are keyed by
+# filename, so the copied file would otherwise have left Bunyi.app unplaced while
+# still positioning Applications. To change the layout: mount a read-write image,
+# arrange it in Finder, and copy the resulting .DS_Store over
+# tools/packaging/dmg-layout.DS_Store. "Bunyi.app" and "Applications" must keep
+# those exact names.
+#
+# The image still builds if the layout is missing; the window just opens with
+# Finder's default arrangement.
 
 set -euo pipefail
 
