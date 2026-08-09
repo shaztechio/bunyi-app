@@ -120,6 +120,10 @@ a **Download** button, and reveal-in-file-manager.
   hover** — text, mode, language, voice, style or reference transcript, and
   the model. A file with no embedded metadata says so on hover rather than
   showing a bare filename that reads like a fault.
+- **Copy details** puts that same record on the clipboard as readable text.
+  Hover is for looking; a tooltip cannot be pasted into a note, a bug report,
+  or back into the app to reproduce a result. The button acknowledges the
+  copy, because one that appears to do nothing gets pressed again.
 - **Trash** moves a file to the system Trash after confirming, not an
   unrecoverable delete: the row label is truncated, so the wrong icon is easy
   to hit, and the audio may be the only copy.

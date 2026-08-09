@@ -49,6 +49,8 @@ struct HistoryView: View {
     @State private var playingID: URL?
     @State private var error: String?
     @State private var pendingDeletion: GeneratedOutput?
+    @State private var copiedID: URL?
+    @State private var copyResetTask: Task<Void, Never>?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -157,6 +159,19 @@ struct HistoryView: View {
 
             Spacer(minLength: 8)
 
+            // Copying beats hover for anything you want to keep: a tooltip
+            // cannot be pasted into a note, a bug report, or back into the app
+            // to reproduce a result.
+            Button {
+                copyDetails(item)
+            } label: {
+                Image(systemName: copiedID == item.url
+                      ? "checkmark" : "doc.on.doc")
+            }
+            .buttonStyle(.borderless)
+            .foregroundStyle(copiedID == item.url ? .green : .primary)
+            .help("Copy details")
+
             Button {
                 save(item)
             } label: {
@@ -227,6 +242,24 @@ struct HistoryView: View {
         player?.stop()
         player = nil
         playingID = nil
+    }
+
+    /// Puts the record on the clipboard as readable text — the same thing the
+    /// tooltip shows, in a form that can be pasted.
+    private func copyDetails(_ item: GeneratedOutput) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(
+            Self.tooltip(for: item, metadata: metadata[item.url]),
+            forType: .string
+        )
+        // Without an acknowledgement a copy button looks like it did nothing.
+        copiedID = item.url
+        copyResetTask?.cancel()
+        copyResetTask = Task {
+            try? await Task.sleep(for: .seconds(1.5))
+            guard !Task.isCancelled else { return }
+            copiedID = nil
+        }
     }
 
     /// Trash rather than delete: this is the user's audio, the row label is
