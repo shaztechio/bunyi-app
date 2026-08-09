@@ -1,10 +1,11 @@
-# Qwen3 TTS Studio — native macOS starter
+# Bunyi — native macOS app
 
 A SwiftUI app wrapping [swift-qwen3-tts](https://github.com/AtomGradient/swift-qwen3-tts)
 (MLX), the Swift/MLX port of Qwen's
 [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS). Three modes — preset
 voices, voice design, voice cloning — with automatic model download, live
-generation progress, playback, and outputs saved to `~/Music/Qwen3 TTS`.
+generation progress, playback, and outputs saved to the app's `Outputs`
+folder (Application Support, inside the sandbox container).
 Targets macOS 15+ (Apple Silicon).
 
 ## Build (Xcode 26, Apple Silicon)
@@ -13,19 +14,20 @@ Requires **Xcode 26** — the app uses Swift 6.2 features and mlx-swift's
 Metal Toolchain, and does not build on Xcode 16.x. CI runs on the
 `macos-26` runner.
 
-The Xcode project is **generated** — `Qwen3TTSStudio.xcodeproj`,
+The Xcode project is **generated** — `Bunyi.xcodeproj`,
 `Info.plist`, and the entitlements file are all produced from
 `project.yml`, so they aren't in the repo. Edit `project.yml` and
 regenerate; never hand-edit the `.xcodeproj`.
 
 ```sh
 brew install xcodegen
-xcodegen generate                    # creates Qwen3TTSStudio.xcodeproj
-xcodebuild -scheme "Qwen3 TTS Studio" -destination 'platform=macOS' build
+xcodegen generate                    # creates Bunyi.xcodeproj
+xcodebuild -scheme "Bunyi" -destination 'platform=macOS' build
 ```
 
-Then `open Qwen3TTSStudio.xcodeproj` and ⌘R, or launch the built `.app`
-from DerivedData.
+Then `open Bunyi.xcodeproj` and ⌘R, or launch the built `.app`
+from DerivedData. `./build-dist.sh` builds Release into
+`../../dist/macos/Bunyi.app`.
 
 Xcode resolves the package dependencies on first build:
 [swift-qwen3-tts](https://github.com/AtomGradient/swift-qwen3-tts) (branch
@@ -35,8 +37,10 @@ are pinned in the checked-in `Package.resolved`.
 
 Sandbox entitlements are declared in `project.yml`: outgoing network
 (model downloads), user-selected files read/write (reference clips and
-backup archives), and Music read/write (generated WAVs land in
-`~/Music/Qwen3 TTS`).
+backup archives), and on-device speech recognition (reference-clip
+transcription for voice cloning). Generated WAVs land in the app's
+`Outputs` folder under the container's Application Support, so no
+file-access entitlement is needed for output.
 
 First generation in each mode downloads that mode's model (~1.5–4.5 GB)
 with a progress bar; after that it runs fully offline.

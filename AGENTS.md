@@ -1,15 +1,20 @@
-# AGENTS.md — Qwen3 TTS Studio (multi-platform)
+# AGENTS.md — Bunyi (multi-platform)
 
 Guidance for AI agents and developers working in this repository. This is
 the canonical entry point; `CLAUDE.md` files just point here.
 
 ## What this repo is
 
-Qwen3 TTS Studio is a local, no-terminal text-to-speech desktop app for
-[Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS), for non-technical users.
-It ships as **native apps per platform**, kept at feature parity by a
-shared specification — **not** shared code (the runtimes have no common
-denominator).
+Bunyi (formerly "Qwen3 TTS Studio") is a local, no-terminal text-to-speech
+desktop app for [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS), for
+non-technical users. It ships as **native apps per platform**, kept at
+feature parity by a shared specification — **not** shared code (the runtimes
+have no common denominator).
+
+> Rename note: the macOS bundle ID stays `com.geppettoforge.Qwen3TTSStudio`
+> so existing installs keep their sandbox container (models, saved voices,
+> settings). On-disk container subfolders likewise keep the `Qwen3TTSStudio`
+> path component. Only user-facing names changed.
 
 ```
 apps/macos/     Swift + MLX + SwiftUI    → macOS (Apple Silicon)   [built here]

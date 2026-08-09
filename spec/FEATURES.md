@@ -1,4 +1,4 @@
-# Qwen3 TTS Studio — Feature Specification
+# Bunyi — Feature Specification
 
 **This document is the source of truth for feature parity across platforms.**
 Every app (macOS Swift/MLX, and the .NET/Avalonia app for Windows + Linux)

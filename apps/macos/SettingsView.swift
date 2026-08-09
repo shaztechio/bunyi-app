@@ -1,6 +1,6 @@
 //
 //  SettingsView.swift
-//  Qwen3 TTS Studio
+//  Bunyi
 //
 
 import AppKit
@@ -232,7 +232,7 @@ struct SettingsView: View {
     private func chooseBackupDestination() {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.zip]
-        panel.nameFieldStringValue = "Qwen3 TTS Models "
+        panel.nameFieldStringValue = "Bunyi Models "
             + Date().formatted(.iso8601.year().month().day()) + ".zip"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         backup.startBackup(to: url)

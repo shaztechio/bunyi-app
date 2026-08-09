@@ -1,6 +1,6 @@
 //
 //  ReferenceTranscriber.swift
-//  Qwen3 TTS Studio
+//  Bunyi
 //
 //  Transcribes a voice-clone reference clip on-device with the Speech
 //  framework. ICL cloning needs the reference transcript to align the

@@ -1,6 +1,6 @@
 //
 //  WindowCloseGuard.swift
-//  Qwen3 TTS Studio
+//  Bunyi
 //
 //  Intercepts the window's red close button. SwiftUI has no "should close"
 //  hook, so this installs an NSWindowDelegate (forwarding everything else to

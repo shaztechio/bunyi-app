@@ -1,4 +1,4 @@
-name: Qwen3TTSStudio
+name: Bunyi
 options:
   bundleIdPrefix: com.geppettoforge
   deploymentTarget:
@@ -8,12 +8,12 @@ packages:
     url: https://github.com/AtomGradient/swift-qwen3-tts.git
     branch: main
 targets:
-  Qwen3TTSStudio:
+  Bunyi:
     type: application
     platform: macOS
     sources:
       - Assets.xcassets
-      - Qwen3TTSStudioApp.swift
+      - BunyiApp.swift
       - ContentView.swift
       - TTSEngine.swift
       - LogStore.swift
@@ -28,7 +28,7 @@ targets:
       - package: swift-qwen3-tts
         product: Qwen3TTS
     entitlements:
-      path: Qwen3TTSStudio.entitlements
+      path: Bunyi.entitlements
       properties:
         com.apple.security.app-sandbox: true
         com.apple.security.network.client: true
@@ -38,7 +38,7 @@ targets:
     info:
       path: Info.plist
       properties:
-        CFBundleDisplayName: Qwen3 TTS Studio
+        CFBundleDisplayName: Bunyi
         LSApplicationCategoryType: public.app-category.utilities
         NSSpeechRecognitionUsageDescription: >-
           Used to transcribe your reference clip on-device so voice cloning
@@ -48,7 +48,10 @@ targets:
         # MLX only runs on Apple Silicon — never build an Intel slice.
         ARCHS: arm64
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        PRODUCT_NAME: Qwen3 TTS Studio
+        PRODUCT_NAME: Bunyi
+        # Legacy bundle ID from the app's original name (Qwen3 TTS Studio).
+        # Intentionally kept: the sandbox container, UserDefaults, saved
+        # voices, and the downloaded multi-GB models are all keyed to it.
         PRODUCT_BUNDLE_IDENTIFIER: com.geppettoforge.Qwen3TTSStudio
         MARKETING_VERSION: 0.1.0
         CURRENT_PROJECT_VERSION: 1
@@ -57,9 +60,9 @@ targets:
         CODE_SIGN_IDENTITY: "-"
         ENABLE_HARDENED_RUNTIME: NO
 schemes:
-  Qwen3 TTS Studio:
+  Bunyi:
     build:
       targets:
-        Qwen3TTSStudio: all
+        Bunyi: all
     run:
       config: Debug

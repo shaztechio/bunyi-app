@@ -1,6 +1,6 @@
 //
 //  TTSEngine.swift
-//  Qwen3 TTS Studio
+//  Bunyi
 //
 //  Owns model download, loading, and generation. One model resident at a
 //  time (Apple unified memory friendly). Models are fetched from Hugging

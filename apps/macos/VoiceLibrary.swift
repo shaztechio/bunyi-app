@@ -1,6 +1,6 @@
 //
 //  VoiceLibrary.swift
-//  Qwen3 TTS Studio
+//  Bunyi
 //
 //  Saved voice-clone prompts: a name, the reference clip, and its
 //  transcript. Cloned voices can't become real model presets (those are

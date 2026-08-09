@@ -1,4 +1,4 @@
-// Generates Assets.xcassets/AppIcon.appiconset for Qwen3 TTS Studio.
+// Generates Assets.xcassets/AppIcon.appiconset for Bunyi.
 // Renders a gradient background + "waveform.badge.mic" symbol at every
 // required macOS icon size. Run from apps/macos:
 //   swift tools/generate-icon.swift

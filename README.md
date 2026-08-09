@@ -1,10 +1,16 @@
-# Qwen3 TTS Studio
+# Bunyi
+
+**Bunyi** (pronounced *BOON-yee*, IPA /ˈbuːɲi/ — the "ny" is the palatal
+nasal, like the "ñ" in *jalapeño* or the "ni" in *onion*) is Malay/Indonesian
+for **"sound"**.
 
 Local, no-terminal desktop text-to-speech using
 [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS), for non-technical users:
 models auto-download with a progress bar, three modes (preset voices, voice
 design, voice cloning), and outputs are playable WAVs. Built to run natively
 on **macOS, Windows, and Linux**.
+
+Home: [bunyi.app](https://bunyi.app)
 
 ## How it's structured
 

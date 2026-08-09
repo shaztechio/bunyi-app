@@ -1,6 +1,6 @@
 //
 //  LogsView.swift
-//  Qwen3 TTS Studio
+//  Bunyi
 //
 
 import AppKit

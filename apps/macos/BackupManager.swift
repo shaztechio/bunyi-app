@@ -1,6 +1,6 @@
 //
 //  BackupManager.swift
-//  Qwen3 TTS Studio
+//  Bunyi
 //
 //  Backs up the models folder to a single zip and restores from one.
 //  Sandbox shapes both directions. The default container folder is zipped

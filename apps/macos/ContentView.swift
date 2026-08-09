@@ -1,6 +1,6 @@
 //
 //  ContentView.swift
-//  Qwen3 TTS Studio
+//  Bunyi
 //
 
 import AVFoundation

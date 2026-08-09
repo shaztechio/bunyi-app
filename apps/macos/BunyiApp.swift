@@ -1,6 +1,6 @@
 //
-//  Qwen3TTSStudioApp.swift
-//  Qwen3 TTS Studio
+//  BunyiApp.swift
+//  Bunyi
 //
 
 import SwiftUI
@@ -23,11 +23,11 @@ enum AppAppearance: String, CaseIterable, Identifiable {
 }
 
 @main
-struct Qwen3TTSStudioApp: App {
+struct BunyiApp: App {
     @AppStorage("appearance") private var appearance: AppAppearance = .system
 
     var body: some Scene {
-        WindowGroup("Qwen3 TTS Studio") {
+        WindowGroup("Bunyi") {
             ContentView()
                 .preferredColorScheme(appearance.colorScheme)
         }

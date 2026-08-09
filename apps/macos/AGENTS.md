@@ -1,9 +1,14 @@
 # AGENTS.md — macOS app (Swift + MLX + SwiftUI)
 
-The **reference implementation** of Qwen3 TTS Studio. Behavior is specified
+The **reference implementation** of Bunyi. Behavior is specified
 in `/spec/FEATURES.md` and `/spec/DATA-FORMATS.md` (source of truth for all
 platforms); see `/AGENTS.md` for the multi-platform picture and the parity
 rule. This file holds macOS build details and hard-won implementation notes.
+
+> Renamed to **Bunyi** (was "Qwen3 TTS Studio"). The bundle ID
+> (`com.geppettoforge.Qwen3TTSStudio`), log subsystem, and container
+> subfolders (`Qwen3TTSStudio/Models|Outputs|Voices`) deliberately keep the
+> old name so existing installs keep their models, voices, and settings.
 
 Native macOS SwiftUI app for local text-to-speech using Qwen3-TTS on Apple
 Silicon via MLX. For non-technical end users: no terminal, models
@@ -21,14 +26,14 @@ it does not build on Xcode 16.x. CI uses the `macos-26` runner.
 
 Run from `apps/macos/`. The Xcode project is generated from `project.yml`
 via XcodeGen — edit `project.yml` and rerun `xcodegen generate`, never
-hand-edit `Qwen3TTSStudio.xcodeproj`. `Info.plist` and the entitlements
+hand-edit `Bunyi.xcodeproj`. `Info.plist` and the entitlements
 file are generated too.
 
 ```sh
 cd apps/macos
 brew install xcodegen                 # once
 xcodegen generate
-xcodebuild -scheme "Qwen3 TTS Studio" -destination 'platform=macOS' build
+xcodebuild -scheme "Bunyi" -destination 'platform=macOS' build
 ```
 
 - **Xcode 26** needs the Metal Toolchain or mlx-swift's shader build fails:
@@ -40,7 +45,7 @@ xcodebuild -scheme "Qwen3 TTS Studio" -destination 'platform=macOS' build
 
 ## Project structure
 
-- `Qwen3TTSStudioApp.swift` — @main entry point; WindowGroup + Logs Window +
+- `BunyiApp.swift` — @main entry point; WindowGroup + Logs Window +
   Settings scene
 - `ContentView.swift` — UI: segmented mode picker, text editor, per-mode
   controls, status area, AVAudioPlayer playback, fileImporter for clone

@@ -1,6 +1,6 @@
 //
 //  LogStore.swift
-//  Qwen3 TTS Studio
+//  Bunyi
 //
 //  In-memory log for the Logs window, mirrored to OSLog so messages also
 //  show up in Console.app when debugging a user's machine.

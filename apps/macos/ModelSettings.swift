@@ -1,6 +1,6 @@
 //
 //  ModelSettings.swift
-//  Qwen3 TTS Studio
+//  Bunyi
 //
 //  User-configurable model repos and models-folder location.
 //

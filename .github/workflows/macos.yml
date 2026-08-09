@@ -26,6 +26,6 @@ jobs:
         run: xcodegen generate
       - name: Build
         run: |
-          xcodebuild -project Qwen3TTSStudio.xcodeproj \
-            -scheme "Qwen3 TTS Studio" \
+          xcodebuild -project Bunyi.xcodeproj \
+            -scheme "Bunyi" \
             -destination 'platform=macOS' build
