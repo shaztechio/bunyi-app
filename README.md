@@ -1,3 +1,5 @@
+<img src="docs/assets/icon.png" alt="" width="128" align="right">
+
 # Bunyi
 
 **Bunyi** (pronounced *BOON-yee*, IPA /ˈbuːɲi/ — the "ny" is the palatal
