@@ -1,0 +1,314 @@
+# Copyright 2026 Shazron Abdullah and Bunyi contributors
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: Signed release
+
+# Never on pull_request. A workflow that runs on a fork's pull request would
+# hand the signing certificate to code the author does not control — true even
+# while this repository is private, because that can change with one click and
+# nobody re-reads the workflows when it does. Tags and manual runs only.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Cut a release? "none" builds and signs without publishing.'
+        type: choice
+        default: none
+        options: [none, patch, minor, major]
+      version:
+        description: 'Exact version x.y.z. Overrides the bump choice.'
+        type: string
+        default: ''
+
+# write is needed to create the Release, and to push the version bump when a
+# release is cut from the browser. It is the only elevated permission here, and
+# it is why this workflow must never be reachable from a fork's pull request.
+permissions:
+  contents: write
+
+# One release at a time. Two overlapping runs would race over the version in
+# project.yml and could publish two releases from the same number.
+concurrency:
+  group: signed-release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    # macos-26, not macos-15: the app needs Xcode 26 for Swift 6.2 and
+    # mlx-swift's Metal toolchain. This must stay in step with macos.yml.
+    runs-on: macos-26
+    # MLX compiles a large amount of C++ and Metal from source on a cold cache,
+    # and notarization adds a wait on Apple's service after that.
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The bump step pushes a commit and a tag, which needs the token the
+          # checkout leaves behind.
+          persist-credentials: true
+          # Release notes are built from the commits since the previous tag, so
+          # the default shallow clone would produce an empty changelog.
+          fetch-depth: 0
+
+      - name: Show toolchain
+        run: xcodebuild -version && swift --version
+
+      # Cutting a release from the browser. The version lives in project.yml
+      # because Info.plist is generated from it by XcodeGen, so bumping the
+      # plist would be overwritten by the next `xcodegen generate`.
+      #
+      # Pushing the tag here does not start a second run of this workflow:
+      # GitHub does not raise workflow events for pushes made with GITHUB_TOKEN.
+      - name: Bump the version and tag
+        id: bump
+        if: github.event_name == 'workflow_dispatch' && (inputs.bump != 'none' || inputs.version != '')
+        run: |
+          set -euo pipefail
+          project="apps/macos/project.yml"
+          current="$(sed -n 's/^ *MARKETING_VERSION: *//p' "$project" | head -1)"
+          build="$(sed -n 's/^ *CURRENT_PROJECT_VERSION: *//p' "$project" | head -1)"
+
+          requested="${{ inputs.version }}"
+          if [ -n "$requested" ]; then
+            version="${requested#v}"
+          else
+            major="${current%%.*}"; rest="${current#*.}"
+            minor="${rest%%.*}"; patch="${rest#*.}"
+            case "${{ inputs.bump }}" in
+              patch) version="$major.$minor.$((patch + 1))" ;;
+              minor) version="$major.$((minor + 1)).0" ;;
+              major) version="$((major + 1)).0.0" ;;
+              *) echo "unknown bump ${{ inputs.bump }}"; exit 1 ;;
+            esac
+          fi
+
+          case "$version" in
+            [0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "$version is not a valid x.y.z version"; exit 1 ;;
+          esac
+
+          tag="v$version"
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+            echo "Tag $tag already exists."
+            exit 1
+          fi
+
+          # The build number rises across every version: macOS treats a lower
+          # one as a downgrade even when the visible version went up.
+          perl -pi -e "s/^( *MARKETING_VERSION: ).*/\${1}$version/" "$project"
+          perl -pi -e "s/^( *CURRENT_PROJECT_VERSION: ).*/\${1}$((build + 1))/" "$project"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$project"
+          git commit -m "Release $tag"
+          git tag -a "$tag" -m "Bunyi $version"
+          git push origin HEAD:"${GITHUB_REF_NAME}"
+          git push origin "$tag"
+
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Cut $tag from $current ($build)"
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      # Xcode 26 ships the Metal compiler separately and mlx-swift compiles
+      # shaders, so without this the build fails with "cannot execute tool
+      # 'metal'". Tolerated failing: on an image that already has it, the
+      # download is a no-op that can still exit non-zero.
+      - name: Metal toolchain
+        run: xcodebuild -downloadComponent MetalToolchain || true
+
+      # There is no test suite yet, so the Release build is the gate: it is the
+      # same script a developer runs locally, and it produces the exact bundle
+      # that gets signed below.
+      - name: Build the app
+        run: ./apps/macos/build-dist.sh Release
+
+      # The certificate lives in a throwaway keychain, not the login keychain,
+      # so nothing outlives the job. set-key-partition-list is what stops
+      # codesign blocking on a UI prompt that no one can answer on a runner.
+      - name: Import the Developer ID certificate
+        env:
+          CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          # Random per run: this password protects nothing beyond the job.
+          keychain_password="$(uuidgen)"
+          certificate="$RUNNER_TEMP/certificate.p12"
+
+          echo "$CERTIFICATE_P12" | base64 --decode > "$certificate"
+
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$certificate" -k "$keychain" \
+            -P "$CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple: \
+            -k "$keychain_password" "$keychain" >/dev/null
+          security list-keychain -d user -s "$keychain" login.keychain-db
+
+          rm -f "$certificate"
+
+          echo "Identities available to this job:"
+          security find-identity -v -p codesigning "$keychain" | sed 's/^/  /'
+
+      - name: Sign, notarize, and staple
+        env:
+          BUNYI_SIGN_IDENTITY: ${{ secrets.APPLE_SIGN_IDENTITY }}
+          BUNYI_APPLE_ID: ${{ secrets.APPLE_ID }}
+          BUNYI_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          BUNYI_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: ./apps/macos/tools/packaging/sign-and-notarize.sh
+
+      # Proves what is about to be published, rather than trusting that the
+      # previous step's exit code covered everything.
+      - name: Verify the notarized app
+        run: |
+          set -euo pipefail
+          app="dist/macos/Bunyi.app"
+          codesign --verify --strict --verbose=2 "$app"
+          spctl --assess --type execute --verbose=4 "$app"
+          xcrun stapler validate "$app"
+          entitlements="$(codesign -d --entitlements - "$app" 2>/dev/null)"
+          echo "$entitlements" | grep -q 'com.apple.security.app-sandbox' \
+            || { echo "Sandbox entitlement missing; Bunyi would lose every downloaded model."; exit 1; }
+          echo "$entitlements" | grep -q 'com.apple.security.network.client' \
+            || { echo "Network entitlement missing; Bunyi could never download a model."; exit 1; }
+          test -d "$app/Contents/Resources/Bunyi.help" \
+            || { echo "The help book is missing from the bundle."; exit 1; }
+          dmg="$(ls -t dist/macos/Bunyi-*.dmg | head -1)"
+          codesign --verify --strict --verbose=2 "$dmg"
+          xcrun stapler validate "$dmg"
+
+      # A run publishes when it was started by a tag push, or when the bump step
+      # just created one. Deciding it once keeps the later steps from drifting
+      # apart on separate conditions.
+      - name: Decide whether this run publishes
+        id: mode
+        run: |
+          set -euo pipefail
+          if [ -n "${{ steps.bump.outputs.tag }}" ]; then
+            tag="${{ steps.bump.outputs.tag }}"
+          elif [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            tag="${GITHUB_REF_NAME}"
+          else
+            tag=""
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if [ -n "$tag" ]; then
+            echo "Publishing $tag"
+          else
+            echo "Build and sign only; nothing will be published."
+          fi
+
+      # The version comes from the app that was just built, not from the tag, so
+      # the filename can never disagree with what is inside the bundle.
+      - name: Read the built version
+        id: version
+        run: |
+          set -euo pipefail
+          plist="dist/macos/Bunyi.app/Contents/Info.plist"
+          short="$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$plist")"
+          build="$(/usr/libexec/PlistBuddy -c 'Print CFBundleVersion' "$plist")"
+          echo "short=$short" >> "$GITHUB_OUTPUT"
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+          echo "name=Bunyi-$short-$build" >> "$GITHUB_OUTPUT"
+          printf 'Built Bunyi %s (%s)\n' "$short" "$build"
+
+      # A tag that disagrees with the built version would publish a release whose
+      # name does not match its contents. Fail instead, before anything is
+      # published; the fix is a version bump, not a re-run.
+      - name: Check the tag matches the built version
+        if: github.ref_type == 'tag'
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#v}"
+          built="${{ steps.version.outputs.short }}"
+          if [ "$tag" != "$built" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match MARKETING_VERSION $built."
+            echo "Update apps/macos/project.yml, or tag v$built."
+            exit 1
+          fi
+          echo "Tag and built version agree: $built"
+
+      # The disk image is the download; the archive stays for anyone scripting an
+      # install, where mounting an image is friction rather than affordance.
+      - name: Package for download
+        run: |
+          set -euo pipefail
+          name="${{ steps.version.outputs.name }}"
+          ditto -c -k --keepParent dist/macos/Bunyi.app "dist/macos/$name.zip"
+          cd dist/macos && shasum -a 256 "$name.dmg" "$name.zip" | tee "$name.sha256"
+
+      # Tag builds publish a Release, whose asset is the zip itself: downloading
+      # it expands straight to Bunyi.app. Uploading the same zip as an artifact
+      # as well would be the redundant copy that arrives double-zipped, because
+      # upload-artifact zips whatever it is given.
+      #
+      # Manual runs have no Release, so the artifact is the only way to get the
+      # build out. It stays zipped on purpose: artifacts do not preserve the
+      # executable bit, and a raw .app would download as a bundle whose binary
+      # cannot run.
+      - uses: actions/upload-artifact@v4
+        if: steps.mode.outputs.tag == ''
+        with:
+          name: ${{ steps.version.outputs.name }}
+          path: |
+            dist/macos/${{ steps.version.outputs.name }}.dmg
+            dist/macos/${{ steps.version.outputs.name }}.zip
+            dist/macos/${{ steps.version.outputs.name }}.sha256
+
+      # Tags only. A manual run still builds, signs, and uploads an artifact, so
+      # the pipeline can be exercised without publishing anything.
+      - name: Create the GitHub Release
+        if: steps.mode.outputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          name="${{ steps.version.outputs.name }}"
+          notes="$(mktemp)"
+          {
+            # What changed comes first. The install boilerplate is identical
+            # every release and nobody reads it twice.
+            python3 apps/macos/tools/packaging/release-notes.py "${{ steps.mode.outputs.tag }}"
+            printf '\n---\n\n'
+            printf 'Signed with a Developer ID certificate, notarized by Apple, and stapled.\n\n'
+            printf 'Requires macOS 15 or later on an Apple silicon Mac.\n\n'
+            printf 'Open the .dmg and drag Bunyi to Applications. The .zip is the same app '
+            printf 'for anyone scripting an install.\n\n'
+            printf 'The first generation in each mode downloads that mode’s model '
+            printf '(about 1.5–4.5 GB) with a progress bar; after that it runs offline.\n\n'
+            printf 'SHA-256:\n\n```\n'
+            cat "dist/macos/$name.sha256"
+            printf '```\n'
+          } > "$notes"
+          gh release create "${{ steps.mode.outputs.tag }}" \
+            "dist/macos/$name.dmg" "dist/macos/$name.zip" "dist/macos/$name.sha256" \
+            --title "Bunyi ${{ steps.version.outputs.short }}" \
+            --notes-file "$notes" \
+            --verify-tag
+
+      # Runs even if a step above failed, so a failure never leaves a signing
+      # certificate on the runner.
+      - name: Remove the signing keychain
+        if: always()
+        run: security delete-keychain "$RUNNER_TEMP/signing.keychain-db" || true

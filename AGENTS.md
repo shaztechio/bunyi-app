@@ -11,10 +11,14 @@ non-technical users. It ships as **native apps per platform**, kept at
 feature parity by a shared specification — **not** shared code (the runtimes
 have no common denominator).
 
-> Rename note: the macOS bundle ID stays `com.geppettoforge.Qwen3TTSStudio`
-> so existing installs keep their sandbox container (models, saved voices,
-> settings). On-disk container subfolders likewise keep the `Qwen3TTSStudio`
-> path component. Only user-facing names changed.
+> Rename note: the macOS bundle ID is now `app.bunyi.Bunyi` (was
+> `com.geppettoforge.Qwen3TTSStudio`). That re-keys the sandbox container, so
+> anyone upgrading from an older build starts with an empty one — models,
+> saved voices, and settings stay behind in the old container and cannot be
+> migrated in code, because a sandboxed app cannot read another app's
+> container. The on-disk subfolders were renamed to `Bunyi/Models|Outputs|
+> Voices` in the same move — free to do while the container was changing
+> anyway, and nothing of the old name survives in the app.
 
 ```
 apps/macos/     Swift + MLX + SwiftUI    → macOS (Apple Silicon)   [built here]
@@ -65,6 +69,13 @@ by humans or agents — including docs, spec edits, and one-line fixes.
    in one app with no spec change and no tracked follow-up.
 4. Squash or merge via the PR — don't push the branch's commits straight
    onto `main` to "save a step".
+
+## Licensing
+
+The project is **Apache-2.0** (`/LICENSE`). Every source file carries the
+license header as a comment block at the top — Swift, shell, Python, and the
+workflow and project YAML. New files get one too; the wording is identical
+everywhere, so copy it from any neighboring file.
 
 ## Where to work
 

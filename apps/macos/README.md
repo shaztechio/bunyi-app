@@ -184,7 +184,7 @@ review notes) and confirm the Apache-2.0 model licenses fit your use.
 - `TTSEngine` is a `@MainActor @Observable` class owning one loaded model
   at a time; switching modes evicts the previous model and calls
   `MLX.GPU.clearCache()` to return unified memory.
-- Models download to `~/Library/Application Support/Qwen3TTSStudio/Models`
+- Models download to `~/Library/Application Support/Bunyi/Models`
   via the Hub snapshot API (incremental — cached files are skipped).
 - Preset/design modes use `generateStream` and surface `.token` events as
   a live counter; final audio arrives as one `MLXArray`, written with the

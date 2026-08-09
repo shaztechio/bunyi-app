@@ -5,10 +5,21 @@ in `/spec/FEATURES.md` and `/spec/DATA-FORMATS.md` (source of truth for all
 platforms); see `/AGENTS.md` for the multi-platform picture and the parity
 rule. This file holds macOS build details and hard-won implementation notes.
 
-> Renamed to **Bunyi** (was "Qwen3 TTS Studio"). The bundle ID
-> (`com.geppettoforge.Qwen3TTSStudio`), log subsystem, and container
-> subfolders (`Qwen3TTSStudio/Models|Outputs|Voices`) deliberately keep the
-> old name so existing installs keep their models, voices, and settings.
+> Renamed to **Bunyi** (was "Qwen3 TTS Studio"). Nothing carries the old name
+> any more: the bundle ID and log subsystem are `app.bunyi.Bunyi`, and the
+> container subfolders are `Bunyi/Models|Outputs|Voices`.
+>
+> **The bundle-ID change re-keys the sandbox container.** An install upgraded
+> from a build with the old ID gets a new, empty container: its models, saved
+> voices, and settings remain in
+> `~/Library/Containers/com.geppettoforge.Qwen3TTSStudio` and are not visible
+> to the new app. This cannot be fixed in code — a sandboxed app cannot read
+> another app's container. The only migration is manual: move the old
+> `…/com.geppettoforge.Qwen3TTSStudio/Data/Library/Application Support/
+> Qwen3TTSStudio` folder to `…/app.bunyi.Bunyi/Data/Library/Application
+> Support/Bunyi` — note it is renamed as well as moved — or point
+> Settings → Storage at the old models folder via the file picker, which
+> *is* allowed because the user chose it.
 
 Native macOS SwiftUI app for local text-to-speech using Qwen3-TTS on Apple
 Silicon via MLX. For non-technical end users: no terminal, models
@@ -53,7 +64,7 @@ xcodebuild -scheme "Bunyi" -destination 'platform=macOS' build
 - `TTSEngine.swift` — @MainActor @Observable engine: model download via
   swift-transformers HubApi.snapshot, one model resident at a time (evict +
   `MLX.GPU.clearCache()` on switch), generation, WAV output to
-  `Qwen3TTSStudio/Outputs` under the container's Application Support.
+  `Bunyi/Outputs` under the container's Application Support.
   Skips the network when a complete model is on disk
   (`hasCompleteModel`); a disk monitor logs bytes-on-disk every 10 s. Also
   hosts self-hosted base-URL downloads (`downloadFromBaseURL` + manifest.txt
@@ -64,19 +75,79 @@ xcodebuild -scheme "Bunyi" -destination 'platform=macOS' build
   via security-scoped bookmark (`ModelsLocation`). Plain http is blocked by
   ATS — https only unless an Info.plist exception is added.
 - `VoiceLibrary.swift` — saved voice-clone prompts in
-  `<AppSupport>/Qwen3TTSStudio/Voices` (`voices.json` + copied audio).
+  `<AppSupport>/Bunyi/Voices` (`voices.json` + copied audio).
 - `BackupManager.swift` — zip backup/restore, `zip -0` stored, live progress
   + Stop (child process killed via `RunningProcess`), volume-aware save off
   the main actor.
 - `ReferenceTranscriber.swift` — on-device auto-transcription (Speech) when
   the transcript field is blank; feeds PCM buffers, not a file URL.
 - `LogStore.swift` / `LogsView.swift` — Logs window (⌘L), mirrored to OSLog
-  subsystem `com.geppettoforge.Qwen3TTSStudio`.
+  subsystem `app.bunyi.Bunyi`.
 - `WindowCloseGuard.swift` — confirm-and-stop when the window is closed
   mid-operation (NSWindowDelegate bridge, forwards to SwiftUI's delegate).
 - App is sandboxed: default models dir is
-  `~/Library/Containers/com.geppettoforge.Qwen3TTSStudio/Data/Library/
-  Application Support/Qwen3TTSStudio/Models`.
+  `~/Library/Containers/app.bunyi.Bunyi/Data/Library/
+  Application Support/Bunyi/Models`.
+
+## Help book
+
+`HELP.md` is the only copy of the user-facing help text. `tools/packaging/
+make-help.sh` renders it to `Bunyi.help` inside the built bundle
+(`render-help.swift` → HTML, then `hiutil` for the search index), and
+`project.yml` runs it as a **post-build script**, so ⌘R and `build-dist.sh`
+both ship help without a separate step. Nothing generated is committed.
+
+- Help Viewer resolves a book by identifier: `CFBundleHelpBookName`
+  (`app.bunyi.help`) and `CFBundleHelpBookFolder` (`Bunyi.help`) in the app's
+  Info.plist must match the help bundle's `CFBundleIdentifier`. A mismatch
+  shows an **empty Help window**, not an error.
+- The book's version is set from the app's, because `helpd` caches a
+  registered book by identifier *and* version — a frozen version serves stale
+  help after `HELP.md` changes.
+- `BunyiApp.swift` replaces SwiftUI's default Help item
+  (`CommandGroup(replacing: .help)`) with one that calls
+  `NSApplication.shared.showHelp(nil)`.
+- Editing help = editing `HELP.md`. Keep it to what the renderer supports:
+  headings, paragraphs, lists, code blocks, and inline bold/italic/code/links.
+
+## Releasing (Developer ID + notarization)
+
+`.github/workflows/release.yml` builds, signs, notarizes, staples, and
+publishes. It runs **only** on `v*` tags and manual dispatch — never on
+pull requests, because a fork's PR would otherwise get the signing
+certificate.
+
+```sh
+./apps/macos/build-dist.sh Release          # ad-hoc signed, local use
+./apps/macos/tools/packaging/sign-and-notarize.sh   # Developer ID + notarize + .dmg
+```
+
+- `sign-and-notarize.sh` never builds; it signs exactly what was tested.
+  Nested code (the help book, frameworks) is signed before the outer bundle —
+  `--deep` is deliberately unused.
+- It verifies the **sandbox** and **network** entitlements survived signing.
+  Losing the sandbox entitlement is the quiet failure that matters: the app
+  launches fine and then resolves Application Support *outside* the container,
+  so the models folder looks empty and re-downloads gigabytes.
+- The app and the .dmg are notarized **separately**, so dragging the app out
+  of the image and launching it offline still passes its first check.
+- Local runs use a `notarytool` keychain profile (`BUNYI_NOTARY_PROFILE`,
+  default `bunyi`); CI passes `BUNYI_APPLE_ID` / `BUNYI_TEAM_ID` /
+  `BUNYI_APP_PASSWORD` instead, since a runner has no keychain profile.
+- Repo secrets the workflow needs: `APPLE_CERTIFICATE_P12`,
+  `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGN_IDENTITY`, `APPLE_ID`,
+  `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD`. Set them with
+  `tools/packaging/set-release-secrets.sh`.
+- The version lives in `project.yml` (`MARKETING_VERSION` /
+  `CURRENT_PROJECT_VERSION`), **not** `Info.plist`, which XcodeGen
+  regenerates. The workflow bumps it there and fails a tag that disagrees
+  with the built version.
+- `make-dmg.sh` replays a committed `.DS_Store` for the window layout rather
+  than driving Finder on a runner, which needs a desktop session. The layout
+  and background came from Sandfort; the app record's filename key was
+  rewritten `Sandfort.app` → `Bunyi.app`, because positions are keyed by
+  filename and a plain copy would have left the app unplaced. Icons sit at
+  x=165 (app) and x=495 (Applications) on a 660×400 background.
 
 ## Key API facts (from swift-qwen3-tts)
 
@@ -123,4 +194,6 @@ xcodebuild -scheme "Bunyi" -destination 'platform=macOS' build
 2. Optional smaller default model for distribution
    (`AtomGradient/Qwen3-TTS-0.6B-CustomVoice-4bit-pruned-vocab-lite`, 808 MB)
    — A/B audio quality first.
-3. Signing + notarization pipeline (xcodebuild archive + notarytool).
+3. Bunyi-coloured DMG background — the current one is Sandfort's generic
+   chevron, which works but is not the app's indigo/violet.
+   ~~Signing + notarization pipeline~~ — done, see "Releasing" above.
