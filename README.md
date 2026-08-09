@@ -52,3 +52,11 @@ Any feature change updates the spec **and** every app.
 
 CI: [`.github/workflows/`](.github/workflows/) builds macOS (green) and the
 .NET matrix for Windows + Linux (red until the app is implemented).
+[`release.yml`](.github/workflows/release.yml) builds, Developer ID signs,
+notarizes, staples, and publishes the macOS app — tags and manual runs only.
+See [`apps/macos/AGENTS.md`](apps/macos/AGENTS.md) for the release and help-book
+details.
+
+## License
+
+[Apache-2.0](LICENSE). Every source file carries the license header at the top.

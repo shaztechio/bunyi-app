@@ -66,6 +66,13 @@ by humans or agents — including docs, spec edits, and one-line fixes.
 4. Squash or merge via the PR — don't push the branch's commits straight
    onto `main` to "save a step".
 
+## Licensing
+
+The project is **Apache-2.0** (`/LICENSE`). Every source file carries the
+license header as a comment block at the top — Swift, shell, Python, and the
+workflow and project YAML. New files get one too; the wording is identical
+everywhere, so copy it from any neighboring file.
+
 ## Where to work
 
 - Building/maintaining **macOS** → `apps/macos/AGENTS.md`.

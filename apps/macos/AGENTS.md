@@ -78,6 +78,63 @@ xcodebuild -scheme "Bunyi" -destination 'platform=macOS' build
   `~/Library/Containers/com.geppettoforge.Qwen3TTSStudio/Data/Library/
   Application Support/Qwen3TTSStudio/Models`.
 
+## Help book
+
+`HELP.md` is the only copy of the user-facing help text. `tools/packaging/
+make-help.sh` renders it to `Bunyi.help` inside the built bundle
+(`render-help.swift` → HTML, then `hiutil` for the search index), and
+`project.yml` runs it as a **post-build script**, so ⌘R and `build-dist.sh`
+both ship help without a separate step. Nothing generated is committed.
+
+- Help Viewer resolves a book by identifier: `CFBundleHelpBookName`
+  (`app.bunyi.help`) and `CFBundleHelpBookFolder` (`Bunyi.help`) in the app's
+  Info.plist must match the help bundle's `CFBundleIdentifier`. A mismatch
+  shows an **empty Help window**, not an error.
+- The book's version is set from the app's, because `helpd` caches a
+  registered book by identifier *and* version — a frozen version serves stale
+  help after `HELP.md` changes.
+- `BunyiApp.swift` replaces SwiftUI's default Help item
+  (`CommandGroup(replacing: .help)`) with one that calls
+  `NSApplication.shared.showHelp(nil)`.
+- Editing help = editing `HELP.md`. Keep it to what the renderer supports:
+  headings, paragraphs, lists, code blocks, and inline bold/italic/code/links.
+
+## Releasing (Developer ID + notarization)
+
+`.github/workflows/release.yml` builds, signs, notarizes, staples, and
+publishes. It runs **only** on `v*` tags and manual dispatch — never on
+pull requests, because a fork's PR would otherwise get the signing
+certificate.
+
+```sh
+./apps/macos/build-dist.sh Release          # ad-hoc signed, local use
+./apps/macos/tools/packaging/sign-and-notarize.sh   # Developer ID + notarize + .dmg
+```
+
+- `sign-and-notarize.sh` never builds; it signs exactly what was tested.
+  Nested code (the help book, frameworks) is signed before the outer bundle —
+  `--deep` is deliberately unused.
+- It verifies the **sandbox** and **network** entitlements survived signing.
+  Losing the sandbox entitlement is the quiet failure that matters: the app
+  launches fine and then resolves Application Support *outside* the container,
+  so the models folder looks empty and re-downloads gigabytes.
+- The app and the .dmg are notarized **separately**, so dragging the app out
+  of the image and launching it offline still passes its first check.
+- Local runs use a `notarytool` keychain profile (`BUNYI_NOTARY_PROFILE`,
+  default `bunyi`); CI passes `BUNYI_APPLE_ID` / `BUNYI_TEAM_ID` /
+  `BUNYI_APP_PASSWORD` instead, since a runner has no keychain profile.
+- Repo secrets the workflow needs: `APPLE_CERTIFICATE_P12`,
+  `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGN_IDENTITY`, `APPLE_ID`,
+  `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD`. Set them with
+  `tools/packaging/set-release-secrets.sh`.
+- The version lives in `project.yml` (`MARKETING_VERSION` /
+  `CURRENT_PROJECT_VERSION`), **not** `Info.plist`, which XcodeGen
+  regenerates. The workflow bumps it there and fails a tag that disagrees
+  with the built version.
+- `make-dmg.sh` replays a committed `.DS_Store` for the window layout rather
+  than driving Finder on a runner. None is committed yet, so the image builds
+  with Finder's default arrangement until someone captures one.
+
 ## Key API facts (from swift-qwen3-tts)
 
 - `Qwen3TTSModel.fromPretrained(_ localPath:) async throws`
@@ -123,4 +180,6 @@ xcodebuild -scheme "Bunyi" -destination 'platform=macOS' build
 2. Optional smaller default model for distribution
    (`AtomGradient/Qwen3-TTS-0.6B-CustomVoice-4bit-pruned-vocab-lite`, 808 MB)
    — A/B audio quality first.
-3. Signing + notarization pipeline (xcodebuild archive + notarytool).
+3. Capture a `dmg-layout.DS_Store` so the disk-image window has a real
+   layout instead of Finder's default. ~~Signing + notarization pipeline~~
+   — done, see "Releasing" above.
