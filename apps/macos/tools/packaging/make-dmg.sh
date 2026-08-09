@@ -63,7 +63,17 @@ build="$(/usr/libexec/PlistBuddy -c 'Print CFBundleVersion' "$app/Contents/Info.
 output="${1:-$root/dist/macos/Bunyi-$short-$build.dmg}"
 
 staging="$(mktemp -d)"
-cleanup() { rm -rf "$staging"; }
+# mount_point is set once the read-write image is attached, below. The trap has
+# to know about it from the start: with `set -e`, a failure anywhere between the
+# attach and the detach would otherwise leave the volume mounted. A leftover
+# /Volumes/Bunyi is not harmless — the next run mounts at "/Volumes/Bunyi 1"
+# instead, and the background reference is then built against a path that is not
+# the one the image ships with.
+mount_point=""
+cleanup() {
+    [ -n "$mount_point" ] && [ -d "$mount_point" ] && hdiutil detach "$mount_point" -force -quiet 2>/dev/null
+    rm -rf "$staging" "$staging.rw.dmg" "$staging.alias"
+}
 trap cleanup EXIT
 
 # ditto rather than cp: it preserves the bundle's extended attributes and the
@@ -82,11 +92,13 @@ fi
 rm -f "$output"
 
 # Built read-write first, then converted. The background picture is referenced
-# from the .DS_Store by a bookmark that encodes the volume's identity, so it has
-# to be created against the very volume that ships. A bookmark made anywhere
-# else -- a scratch image, another project's volume -- resolves "stale", and
-# Finder will not draw a background from a stale bookmark. It falls back to the
-# plain colour with no error, which looks identical to forgetting the artwork.
+# from the .DS_Store by an AliasRecord that identifies the volume by name AND
+# creation date, so it has to be built against the very volume that ships. A
+# record made anywhere else -- a scratch image, another project's volume --
+# names a volume that never matches, and Finder will not draw a background from
+# a reference it cannot resolve. It falls back to the plain colour with no
+# error, which looks identical to forgetting the artwork. Bookmark data in this
+# field does not work either; see tools/packaging/README.md.
 rw_image="$staging.rw.dmg"
 rm -f "$rw_image"
 hdiutil create \

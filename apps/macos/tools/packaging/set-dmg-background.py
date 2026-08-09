@@ -15,11 +15,16 @@
 
 """Writes a background reference into a .DS_Store's `icvp` record.
 
-    set-dmg-background.py <layout.DS_Store> <bookmark.bin>
+    set-dmg-background.py <layout.DS_Store> <reference.bin>
 
-capture-dmg-background.sh produces the bookmark against a live volume and
-calls this. Doing it by hand is not useful: a reference captured anywhere
-else names the wrong volume.
+`make-dmg.sh` calls this against the mounted read-write image, passing the
+AliasRecord that `make-background-alias.py` just built from that volume.
+Running it by hand is not useful: a reference built anywhere else identifies
+a volume that will not match the one the image ships with, and Finder then
+draws no background at all.
+
+Bookmark data is also accepted, because the field can hold either — but it
+is not what Finder draws from here. See tools/packaging/README.md.
 
 The .DS_Store is a Bud1 buddy-allocator file holding a B-tree. Records are
 rewritten inside their existing block, so the file's size and every other
@@ -32,7 +37,15 @@ import sys
 FIXED = {b"long": 4, b"shor": 4, b"type": 4, b"bool": 1, b"comp": 8, b"dutc": 8}
 
 
-def read_record(data, pos):
+def read_record(data, pos, limit=None):
+    """Parse one record at `pos`. `limit` bounds it to the enclosing block.
+
+    Without the bound, a node advertising a plausible record count whose
+    records run past its own block is followed straight into the next block,
+    and the caller then rewrites bytes that belong to something else.
+    """
+    if limit is not None and pos + 4 > limit:
+        raise ValueError("record header crosses the block boundary")
     (name_len,) = struct.unpack_from(">I", data, pos)
     pos += 4
     name = data[pos:pos + name_len * 2].decode("utf-16-be")
@@ -47,6 +60,8 @@ def read_record(data, pos):
         size = 4 + (n if struct_type == b"blob" else n * 2)
     else:
         raise ValueError(f"unknown struct type {struct_type!r}")
+    if limit is not None and pos + size > limit:
+        raise ValueError("record value crosses the block boundary")
     return (name, struct_id, struct_type, bytes(data[pos:pos + size])), pos + size
 
 
@@ -100,7 +115,7 @@ def main(layout_path, bookmark_path):
                 continue
             records, pos = [], off + 8
             for _ in range(n):
-                record, pos = read_record(data, pos)
+                record, pos = read_record(data, pos, limit=off + size)
                 records.append(record)
         except Exception:
             continue
