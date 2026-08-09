@@ -104,12 +104,12 @@ mount_point="$(hdiutil attach "$rw_image" -nobrowse -noautoopen \
 [ -d "$mount_point" ] || { printf 'error: the read-write image did not mount.\n' >&2; exit 1; }
 
 if [ -f "$layout" ] && [ -f "$mount_point/.background/background.tiff" ]; then
-    bookmark="$staging.bookmark"
-    swift "$root/apps/macos/tools/packaging/make-background-bookmark.swift" \
-        "$mount_point/.background/background.tiff" "$bookmark"
+    alias_record="$staging.alias"
+    python3 "$root/apps/macos/tools/packaging/make-background-alias.py" \
+        "$mount_point/.background/background.tiff" "$alias_record"
     python3 "$root/apps/macos/tools/packaging/set-dmg-background.py" \
-        "$mount_point/.DS_Store" "$bookmark"
-    rm -f "$bookmark"
+        "$mount_point/.DS_Store" "$alias_record"
+    rm -f "$alias_record"
 fi
 
 hdiutil detach "$mount_point" -quiet

@@ -78,8 +78,11 @@ def find_dsdb(data, alloc, addresses):
 def main(layout_path, bookmark_path):
     data = bytearray(open(layout_path, "rb").read())
     bookmark = open(bookmark_path, "rb").read()
-    if bookmark[:4] != b"book":
-        raise SystemExit("that file is not bookmark data")
+    # Either format: a version-2 AliasRecord (what Finder stores, and what a
+    # DMG known to display its background was found to use) or bookmark data.
+    is_alias = bookmark[:4] == b"\x00\x00\x00\x00" and struct.unpack_from(">H", bookmark, 6)[0] == 2
+    if not (is_alias or bookmark[:4] == b"book"):
+        raise SystemExit("that file is neither an AliasRecord nor bookmark data")
 
     alloc = struct.unpack_from(">I", data, 8)[0] + 4
     count = struct.unpack_from(">I", data, alloc)[0]
