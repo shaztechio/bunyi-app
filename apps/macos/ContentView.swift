@@ -302,15 +302,31 @@ struct ContentView: View {
                 playbackControls
             }
 
-            Button(action: generate) {
-                Label("Generate", systemImage: "waveform")
-                    .frame(minWidth: 110)
+            // Stop replaces Generate while work is in progress, rather than
+            // sitting beside it greyed out. Downloading a model can take many
+            // minutes, and until now the only way out was closing the window
+            // and confirming the prompt.
+            if engine.status.isBusy {
+                Button(action: stopWork) {
+                    Label("Stop", systemImage: "stop.fill")
+                        .frame(minWidth: 110)
+                }
+                // Escape is what people press to abandon something.
+                .keyboardShortcut(.cancelAction)
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+                .tint(.red)
+                .help("Stop the current operation")
+            } else {
+                Button(action: generate) {
+                    Label("Generate", systemImage: "waveform")
+                        .frame(minWidth: 110)
+                }
+                .keyboardShortcut(.return, modifiers: .command)
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
-            .keyboardShortcut(.return, modifiers: .command)
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .disabled(engine.status.isBusy ||
-                      text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)

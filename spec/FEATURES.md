@@ -55,14 +55,21 @@ A segmented picker selects one of three modes. macOS source:
   froze the app at the end of every generation. Any runtime with deferred
   evaluation has the same trap in a different place — the rule is that the
   window stays responsive for the whole run, not that one named call is moved.
+- **Stop**: while any work is in progress — model download, transcription,
+  model load, or generation — the Generate button is **replaced** by a Stop
+  button (Escape). Not merely disabled: a model download runs for minutes,
+  and without Stop the only way out is closing the window and confirming
+  (§9).
 - **Cancellation is cooperative, and the app stays busy until the engine has
   actually stopped.** Cancelling stops the consumer; the inference engine may
   run to completion regardless (macOS: the package generates on its own
-  thread, and `generateVoiceClone` takes no cancellation at all). Until that
-  work ends, the app shows a distinct *stopping* state and refuses to start
-  another generation. Reporting ready early is not allowed: it invites a
-  second job against the same model, and switching mode would then free that
-  model out from under work still using it.
+  thread, and `generateVoiceClone` takes no cancellation at all), and its
+  result is discarded. Until that work ends, the app shows a distinct
+  *stopping* state and refuses to start another generation. Reporting ready
+  early is not allowed: it invites a second job against the same model, and
+  switching mode would then free that model out from under work still using
+  it. So Stop does not promise the machine stops computing — only that the
+  app stops waiting, and says so honestly while it does.
 
 ## 3. Model management
 
