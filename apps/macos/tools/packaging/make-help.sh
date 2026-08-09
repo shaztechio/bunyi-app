@@ -71,7 +71,16 @@ else
     exit 1
 fi
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $app_short_version" "$help_book/Contents/Info.plist"
-/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $app_build_version" "$help_book/Contents/Info.plist"
+
+# helpd caches a registered book by identifier AND version, and it holds that
+# cache across rebuilds and relaunches. Matching the app's build number alone
+# means every edit to HELP.md re-registers a book helpd already believes it
+# has, so it keeps serving the old text — the app looks like it ignored the
+# change. Mixing a digest of the source into the build number makes the
+# version move whenever the content does, and stay put when it does not.
+help_digest="$(md5 -q "$source_markdown" | tr -dc '0-9' | cut -c1-5)"
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $app_build_version.${help_digest:-0}" \
+    "$help_book/Contents/Info.plist"
 
 # Help Viewer resolves a book by this identifier, which has to match on both
 # sides. project.yml is what sets CFBundleHelpBookName and CFBundleHelpBookFolder;
