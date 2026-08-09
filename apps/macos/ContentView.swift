@@ -120,10 +120,29 @@ struct ContentView: View {
             .labelsHidden()
             .disabled(engine.status.isBusy)
 
-            Text(mode.subtitle)
-                .font(.callout)
+            HStack(alignment: .firstTextBaseline) {
+                Text(mode.subtitle)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .animation(.none, value: mode)
+
+                Spacer(minLength: 12)
+
+                // The Help menu already opens this book; the button is here
+                // because the audience for this app does not go looking in
+                // menus. Deliberately not disabled while busy — reading the
+                // help during a long download is exactly when it is wanted.
+                Button {
+                    NSApplication.shared.showHelp(nil)
+                } label: {
+                    Image(systemName: "questionmark.circle")
+                        .imageScale(.large)
+                }
+                .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
-                .animation(.none, value: mode)
+                .help("Open Bunyi Help")
+                .accessibilityLabel("Open Bunyi Help")
+            }
         }
     }
 

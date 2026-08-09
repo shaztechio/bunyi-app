@@ -63,7 +63,17 @@ build="$(/usr/libexec/PlistBuddy -c 'Print CFBundleVersion' "$app/Contents/Info.
 output="${1:-$root/dist/macos/Bunyi-$short-$build.dmg}"
 
 staging="$(mktemp -d)"
-cleanup() { rm -rf "$staging"; }
+# mount_point is set once the read-write image is attached, below. The trap has
+# to know about it from the start: with `set -e`, a failure anywhere between the
+# attach and the detach would otherwise leave the volume mounted. A leftover
+# /Volumes/Bunyi is not harmless — the next run mounts at "/Volumes/Bunyi 1"
+# instead, and the background reference is then built against a path that is not
+# the one the image ships with.
+mount_point=""
+cleanup() {
+    [ -n "$mount_point" ] && [ -d "$mount_point" ] && hdiutil detach "$mount_point" -force -quiet 2>/dev/null
+    rm -rf "$staging" "$staging.rw.dmg" "$staging.alias"
+}
 trap cleanup EXIT
 
 # ditto rather than cp: it preserves the bundle's extended attributes and the
@@ -80,14 +90,46 @@ if [ -f "$background" ]; then
 fi
 
 rm -f "$output"
-# UDZO is the widely compatible compressed format. UDBZ and ULFO compress a
-# little better but are not worth a format question on someone else's Mac.
+
+# Built read-write first, then converted. The background picture is referenced
+# from the .DS_Store by an AliasRecord that identifies the volume by name AND
+# creation date, so it has to be built against the very volume that ships. A
+# record made anywhere else -- a scratch image, another project's volume --
+# names a volume that never matches, and Finder will not draw a background from
+# a reference it cannot resolve. It falls back to the plain colour with no
+# error, which looks identical to forgetting the artwork. Bookmark data in this
+# field does not work either; see tools/packaging/README.md.
+rw_image="$staging.rw.dmg"
+rm -f "$rw_image"
 hdiutil create \
   -volname "$volume_name" \
   -srcfolder "$staging" \
-  -format UDZO \
+  -format UDRW \
   -ov -quiet \
-  "$output"
+  "$rw_image"
+
+# The mount point is not on hdiutil's last line -- a partitioned image prints
+# scheme entries after it, with an empty mount-point column -- so pick the line
+# that actually has one rather than the last line.
+mount_point="$(hdiutil attach "$rw_image" -nobrowse -noautoopen \
+  | grep -o '/Volumes/.*' | head -1 | sed 's/[[:space:]]*$//')"
+[ -d "$mount_point" ] || { printf 'error: the read-write image did not mount.\n' >&2; exit 1; }
+
+if [ -f "$layout" ] && [ -f "$mount_point/.background/background.tiff" ]; then
+    alias_record="$staging.alias"
+    python3 "$root/apps/macos/tools/packaging/make-background-alias.py" \
+        "$mount_point/.background/background.tiff" "$alias_record"
+    python3 "$root/apps/macos/tools/packaging/set-dmg-background.py" \
+        "$mount_point/.DS_Store" "$alias_record"
+    rm -f "$alias_record"
+fi
+
+hdiutil detach "$mount_point" -quiet
+
+# UDZO is the widely compatible compressed format. UDBZ and ULFO compress a
+# little better but are not worth a format question on someone else's Mac.
+hdiutil convert "$rw_image" -format UDZO -o "$output" -quiet
+rm -f "$rw_image"
 
 printf 'Built %s\n' "$output"
 

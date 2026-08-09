@@ -18,6 +18,12 @@ limitations under the License.
 
 Bunyi turns text into speech on your own Mac. Nothing you type and no audio you make is sent anywhere: the voice models run locally, and after the first download the app works with no internet connection at all.
 
+## Saying the name
+
+**Bunyi** is *BOON-yee* — /ˈbuːɲi/ in the phonetic alphabet. The "ny" in the middle is a single sound, the one in the middle of *onion*, or the "ñ" of *jalapeño*; it is not "boon-yai" or "bun-yi".
+
+The word is Malay and Indonesian for **sound**.
+
 ## Start here
 
 1. Type or paste your text in the big box.

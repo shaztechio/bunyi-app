@@ -54,18 +54,47 @@ cp "$packaging/BunyiHelp-InfoPlist.strings" "$help_lproj/InfoPlist.strings"
 # Keep the help book's version in step with the app. helpd caches a registered
 # book by identifier and version, so a frozen version makes it keep serving
 # stale content after the help source changes.
-app_short_version="$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$contents/Info.plist")"
-app_build_version="$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$contents/Info.plist")"
-/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $app_short_version" "$help_book/Contents/Info.plist"
-/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $app_build_version" "$help_book/Contents/Info.plist"
+#
+# Xcode's environment is the source of truth when this runs as a build phase.
+# Reading the bundle's Info.plist instead only ever worked by accident: on a
+# clean build the "Process Info.plist" phase has not run yet, so the file does
+# not exist, and incremental builds were reading the PREVIOUS build's copy.
+if [ -n "${MARKETING_VERSION:-}" ]; then
+    app_short_version="$MARKETING_VERSION"
+    app_build_version="${CURRENT_PROJECT_VERSION:-1}"
+elif [ -f "$contents/Info.plist" ]; then
+    app_short_version="$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$contents/Info.plist")"
+    app_build_version="$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$contents/Info.plist")"
+else
+    printf 'error: no version available — neither MARKETING_VERSION nor %s\n' \
+        "$contents/Info.plist" >&2
+    exit 1
+fi
+# Help Viewer keeps its own copy of the book under
+#   ~/Library/Group Containers/group.com.apple.helpviewer.content/Library/Caches
+# in a directory named "<app id>.<book id>*<CFBundleShortVersionString>.help",
+# and helpd's index under ~/Library/Caches/com.apple.helpd/Generated is keyed
+# the same way. The SHORT version string is the cache key — CFBundleVersion is
+# not part of it. So the digest has to go here: putting it in CFBundleVersion
+# moved the version on every edit while the cache key stayed at 0.1.0, and
+# Help Viewer went on serving its stale copy.
+help_digest="$(md5 -q "$source_markdown" | tr -dc '0-9' | cut -c1-5)"
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $app_short_version.${help_digest:-0}" \
+    "$help_book/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $app_build_version" \
+    "$help_book/Contents/Info.plist"
 
 # Help Viewer resolves a book by this identifier, which has to match on both
-# sides. project.yml sets CFBundleHelpBookName to the same value; setting it
-# here too means a hand-edited Info.plist cannot drift out of agreement.
-/usr/libexec/PlistBuddy -c "Set :CFBundleHelpBookName $help_identifier" "$contents/Info.plist" 2>/dev/null \
-  || /usr/libexec/PlistBuddy -c "Add :CFBundleHelpBookName string $help_identifier" "$contents/Info.plist"
-/usr/libexec/PlistBuddy -c "Set :CFBundleHelpBookFolder Bunyi.help" "$contents/Info.plist" 2>/dev/null \
-  || /usr/libexec/PlistBuddy -c "Add :CFBundleHelpBookFolder string Bunyi.help" "$contents/Info.plist"
+# sides. project.yml is what sets CFBundleHelpBookName and CFBundleHelpBookFolder;
+# this only repairs a bundle built some other way. Skipped when the plist is not
+# there yet, because Xcode is about to write it — creating one here would be
+# overwritten at best and would corrupt the bundle at worst.
+if [ -f "$contents/Info.plist" ]; then
+    /usr/libexec/PlistBuddy -c "Set :CFBundleHelpBookName $help_identifier" "$contents/Info.plist" 2>/dev/null \
+      || /usr/libexec/PlistBuddy -c "Add :CFBundleHelpBookName string $help_identifier" "$contents/Info.plist"
+    /usr/libexec/PlistBuddy -c "Set :CFBundleHelpBookFolder Bunyi.help" "$contents/Info.plist" 2>/dev/null \
+      || /usr/libexec/PlistBuddy -c "Add :CFBundleHelpBookFolder string Bunyi.help" "$contents/Info.plist"
+fi
 
 swift "$packaging/render-help.swift" "$source_markdown" "$help_lproj/Bunyi.html" "$help_identifier"
 
@@ -75,5 +104,21 @@ hiutil -I lsm -C -ag -s en -l en -f "$help_lproj/Bunyi.helpindex" "$help_lproj"
 
 test -s "$help_lproj/Bunyi.html"
 test -s "$help_lproj/Bunyi.helpindex"
+
+# Help Viewer copies the book into its own container and serves that copy. The
+# directory is named "<app id>.<book id>*<APP short version>.help" — keyed on
+# the APP's version, which does not move between development builds. So editing
+# HELP.md and rebuilding changes nothing a reader can see: Help Viewer keeps
+# serving the copy it made the first time, which reads exactly like the app
+# ignoring the edit. There is no version to bump that would invalidate it, so
+# the stale copy is removed here instead.
+#
+# helpd's own index under ~/Library/Caches/com.apple.helpd/Generated IS keyed on
+# the book's short version, which is why the digest above is worth setting.
+help_cache="$HOME/Library/Group Containers/group.com.apple.helpviewer.content/Library/Caches"
+if [ -d "$help_cache" ]; then
+    find "$help_cache" -maxdepth 1 -name "*$help_identifier*" -exec rm -rf {} + 2>/dev/null || true
+fi
+rm -rf "$HOME/Library/Caches/com.apple.helpd/Generated/$help_identifier"* 2>/dev/null || true
 
 printf 'Built %s\n' "$help_book"
