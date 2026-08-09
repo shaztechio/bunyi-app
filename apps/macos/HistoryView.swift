@@ -49,8 +49,16 @@ struct HistoryView: View {
     @State private var playingID: URL?
     @State private var error: String?
     @State private var pendingDeletion: GeneratedOutput?
+    @State private var isPaused = false
     @State private var copiedID: URL?
     @State private var copyResetTask: Task<Void, Never>?
+
+    /// A clip that reaches its end stops on its own, and nothing tells the view
+    /// — so the row kept showing Pause for audio that had finished. AVAudioPlayer
+    /// has a delegate for this, but it needs an NSObject; polling matches how
+    /// the main window already tracks playback.
+    private let tick = Timer.publish(every: 0.2, on: .main, in: .common)
+        .autoconnect()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -72,6 +80,12 @@ struct HistoryView: View {
         // A generation finishing writes a new file; refresh so it appears
         // without the user having to leave the tab and come back.
         .onChange(of: engine.lastOutputURL) { _, _ in reload() }
+        .onReceive(tick) { _ in
+            // Finished on its own: not playing, and not deliberately paused.
+            if playingID != nil, !isPaused, player?.isPlaying == false {
+                stop()
+            }
+        }
         .alert("Could not save", isPresented: .constant(error != nil)) {
             Button("OK") { error = nil }
         } message: {
@@ -136,11 +150,11 @@ struct HistoryView: View {
             Button {
                 toggle(item)
             } label: {
-                Image(systemName: playingID == item.url ? "pause.fill" : "play.fill")
+                Image(systemName: isPlaying(item) ? "pause.fill" : "play.fill")
                     .frame(width: 14)
             }
             .buttonStyle(.borderless)
-            .help(playingID == item.url ? "Pause" : "Play")
+            .help(isPlaying(item) ? "Pause" : "Play")
 
             VStack(alignment: .leading, spacing: 2) {
                 // The prompt when the file carries one, the mode otherwise —
@@ -222,9 +236,24 @@ struct HistoryView: View {
         }
     }
 
+    /// Playing *right now* — not merely the selected row. A paused row shows
+    /// Play, because pressing it resumes.
+    private func isPlaying(_ item: GeneratedOutput) -> Bool {
+        playingID == item.url && !isPaused
+    }
+
     private func toggle(_ item: GeneratedOutput) {
-        if playingID == item.url {
-            stop()
+        // Pause and resume, not stop and restart. The icon said pause while the
+        // action threw the player away, so pressing it twice restarted the clip
+        // from the beginning instead of continuing.
+        if playingID == item.url, let player {
+            if player.isPlaying {
+                player.pause()
+                isPaused = true
+            } else {
+                player.play()
+                isPaused = false
+            }
             return
         }
         stop()
@@ -233,6 +262,7 @@ struct HistoryView: View {
             next.play()
             player = next
             playingID = item.url
+            isPaused = false
         } catch {
             self.error = error.localizedDescription
         }
@@ -242,6 +272,7 @@ struct HistoryView: View {
         player?.stop()
         player = nil
         playingID = nil
+        isPaused = false
     }
 
     /// Puts the record on the clipboard as readable text — the same thing the
