@@ -54,18 +54,36 @@ cp "$packaging/BunyiHelp-InfoPlist.strings" "$help_lproj/InfoPlist.strings"
 # Keep the help book's version in step with the app. helpd caches a registered
 # book by identifier and version, so a frozen version makes it keep serving
 # stale content after the help source changes.
-app_short_version="$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$contents/Info.plist")"
-app_build_version="$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$contents/Info.plist")"
+#
+# Xcode's environment is the source of truth when this runs as a build phase.
+# Reading the bundle's Info.plist instead only ever worked by accident: on a
+# clean build the "Process Info.plist" phase has not run yet, so the file does
+# not exist, and incremental builds were reading the PREVIOUS build's copy.
+if [ -n "${MARKETING_VERSION:-}" ]; then
+    app_short_version="$MARKETING_VERSION"
+    app_build_version="${CURRENT_PROJECT_VERSION:-1}"
+elif [ -f "$contents/Info.plist" ]; then
+    app_short_version="$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$contents/Info.plist")"
+    app_build_version="$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$contents/Info.plist")"
+else
+    printf 'error: no version available — neither MARKETING_VERSION nor %s\n' \
+        "$contents/Info.plist" >&2
+    exit 1
+fi
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $app_short_version" "$help_book/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $app_build_version" "$help_book/Contents/Info.plist"
 
 # Help Viewer resolves a book by this identifier, which has to match on both
-# sides. project.yml sets CFBundleHelpBookName to the same value; setting it
-# here too means a hand-edited Info.plist cannot drift out of agreement.
-/usr/libexec/PlistBuddy -c "Set :CFBundleHelpBookName $help_identifier" "$contents/Info.plist" 2>/dev/null \
-  || /usr/libexec/PlistBuddy -c "Add :CFBundleHelpBookName string $help_identifier" "$contents/Info.plist"
-/usr/libexec/PlistBuddy -c "Set :CFBundleHelpBookFolder Bunyi.help" "$contents/Info.plist" 2>/dev/null \
-  || /usr/libexec/PlistBuddy -c "Add :CFBundleHelpBookFolder string Bunyi.help" "$contents/Info.plist"
+# sides. project.yml is what sets CFBundleHelpBookName and CFBundleHelpBookFolder;
+# this only repairs a bundle built some other way. Skipped when the plist is not
+# there yet, because Xcode is about to write it — creating one here would be
+# overwritten at best and would corrupt the bundle at worst.
+if [ -f "$contents/Info.plist" ]; then
+    /usr/libexec/PlistBuddy -c "Set :CFBundleHelpBookName $help_identifier" "$contents/Info.plist" 2>/dev/null \
+      || /usr/libexec/PlistBuddy -c "Add :CFBundleHelpBookName string $help_identifier" "$contents/Info.plist"
+    /usr/libexec/PlistBuddy -c "Set :CFBundleHelpBookFolder Bunyi.help" "$contents/Info.plist" 2>/dev/null \
+      || /usr/libexec/PlistBuddy -c "Add :CFBundleHelpBookFolder string Bunyi.help" "$contents/Info.plist"
+fi
 
 swift "$packaging/render-help.swift" "$source_markdown" "$help_lproj/Bunyi.html" "$help_identifier"
 
