@@ -43,6 +43,13 @@ A segmented picker selects one of three modes. macOS source:
   platforms: an equivalent per-user app-data subfolder named `Outputs`.
   One click away via the in-app reveal-in-file-manager button.
   Filename: `<Mode>-<ISO8601 timestamp>.wav`.
+- **The file carries what produced it** — text, mode, language, speaker,
+  style, reference transcript, model repo, app version, timestamp — embedded
+  in the audio file itself (macOS: a RIFF `LIST`/`INFO` chunk; see
+  `DATA-FORMATS.md`). The filename records only mode and time, so without
+  this a WAV that leaves the app loses every setting that produced it.
+  History reads it back to label each row, and ordinary audio tools show the
+  standard fields.
 - After generation the app auto-plays the result and offers Play + reveal
   in file manager. **Only this run's result.** Starting a run clears the
   previous one: the playback controls disappear for the duration, so nothing

@@ -91,6 +91,18 @@ Stored in a `Voices` subfolder of app data, alongside copied audio clips.
 
 ## Output WAV
 
+- **Embedded metadata**: a RIFF `LIST`/`INFO` chunk appended to the file,
+  carrying what produced it. Standard fields so ordinary tools show something
+  useful — `INAM` (the text, truncated), `IART` (speaker or voice
+  description), `ISFT` (`Bunyi <version>`), `ICRD` (ISO 8601), `IGNR`
+  (`Speech`) — plus the whole record as JSON in `ICMT`:
+  `mode`, `text`, `language`, `speaker`, `instruct`, `referenceTranscript`,
+  `modelRepo`, `appVersion`, `created`.
+  There is no standard four-character code for "the prompt", and inventing
+  private ones would be readable by nothing, so one comment field carries it.
+  The chunk is **appended**, leaving the audio bytes untouched, and tagging is
+  best-effort: a file that plays without its metadata beats losing the audio
+  to a failed tag write. Timestamps are ISO 8601 with milliseconds.
 - 24 kHz, mono, PCM WAV. Saved to an `Outputs` folder under the app's
   per-user data directory (macOS: Application Support inside the sandbox
   container).

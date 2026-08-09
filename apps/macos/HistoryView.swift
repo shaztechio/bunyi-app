@@ -44,6 +44,7 @@ struct HistoryView: View {
     let engine: TTSEngine
 
     @State private var items: [GeneratedOutput] = []
+    @State private var metadata: [URL: OutputMetadata] = [:]
     @State private var player: AVAudioPlayer?
     @State private var playingID: URL?
     @State private var error: String?
@@ -120,12 +121,18 @@ struct HistoryView: View {
             .help(playingID == item.url ? "Pause" : "Play")
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(item.mode)
+                // The prompt when the file carries one, the mode otherwise —
+                // "what did it say" identifies a clip far better than
+                // "Preset voice" repeated down the list.
+                Text(metadata[item.url]?.title ?? item.mode)
                     .fontWeight(.medium)
-                Text(Self.subtitle(for: item))
+                    .lineLimit(1)
+                Text(Self.subtitle(for: item, metadata: metadata[item.url]))
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
+            .help(Self.tooltip(for: item, metadata: metadata[item.url]))
 
             Spacer(minLength: 8)
 
@@ -152,6 +159,13 @@ struct HistoryView: View {
 
     private func reload() {
         items = engine.generatedOutputs()
+        // Read the tags once per refresh rather than per row: SwiftUI evaluates
+        // a row body repeatedly, and each read opens the file.
+        metadata = Dictionary(
+            uniqueKeysWithValues: items.compactMap { item in
+                WAVMetadata.read(from: item.url).map { (item.url, $0) }
+            }
+        )
         // A file can vanish from the folder while it is playing.
         if let playingID, !items.contains(where: { $0.url == playingID }) {
             stop()
@@ -202,10 +216,35 @@ struct HistoryView: View {
         }
     }
 
-    private static func subtitle(for item: GeneratedOutput) -> String {
+    private static func subtitle(for item: GeneratedOutput,
+                                 metadata: OutputMetadata?) -> String {
         let date = item.created.formatted(date: .abbreviated, time: .shortened)
         let size = ByteCountFormatter.string(fromByteCount: item.byteCount,
                                              countStyle: .file)
-        return "\(date) · \(size)"
+        var parts = [metadata?.mode ?? item.mode, date, size]
+        if let voice = metadata?.speaker, !voice.isEmpty {
+            parts.insert(voice, at: 1)
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    /// The full record on hover — the text can be far longer than a row.
+    private static func tooltip(for item: GeneratedOutput,
+                                metadata: OutputMetadata?) -> String {
+        guard let metadata else { return item.url.lastPathComponent }
+        var lines = ["\(metadata.mode) · \(metadata.language)"]
+        if let speaker = metadata.speaker, !speaker.isEmpty {
+            lines.append("Speaker: \(speaker)")
+        }
+        if let instruct = metadata.instruct, !instruct.isEmpty {
+            lines.append("Style: \(instruct)")
+        }
+        if let reference = metadata.referenceTranscript, !reference.isEmpty {
+            lines.append("Reference: \(reference)")
+        }
+        lines.append("Model: \(metadata.modelRepo)")
+        lines.append("")
+        lines.append(metadata.text)
+        return lines.joined(separator: "\n")
     }
 }
