@@ -50,6 +50,22 @@ Because the inference engine and UI cannot be shared, parity is a
    ambiguous, match its behavior (`spec/FEATURES.md` cross-references the
    exact Swift source for each feature).
 
+## How changes land: pull requests only
+
+**Every change goes through a pull request.** No direct commits to `main`,
+by humans or agents — including docs, spec edits, and one-line fixes.
+
+1. Branch off `main` (`git switch -c <topic>`), commit there, push, and
+   open a PR.
+2. CI (`.github/workflows/`) must run on the PR. The .NET matrix is red
+   until that app is implemented — that's expected; the macOS workflow is
+   the gate for `apps/macos/` changes.
+3. A PR that changes a feature must also carry the `spec/` update the
+   parity rule above requires. Reviewers reject feature changes that land
+   in one app with no spec change and no tracked follow-up.
+4. Squash or merge via the PR — don't push the branch's commits straight
+   onto `main` to "save a step".
+
 ## Where to work
 
 - Building/maintaining **macOS** → `apps/macos/AGENTS.md`.
