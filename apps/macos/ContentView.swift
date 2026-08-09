@@ -64,8 +64,18 @@ struct ContentView: View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 16) {
                 modeBar
+                // Locked while work is in progress. Editing the text or
+                // switching speaker mid-run changed nothing about the audio
+                // being produced — the values were already passed to the
+                // engine — so the controls invited edits that silently did
+                // not apply. The help button inside modeBar is deliberately
+                // outside this: SwiftUI's disabled() cannot be undone by a
+                // child, so anything that must stay live has to sit outside
+                // the disabled scope.
                 textCard
+                    .disabled(engine.status.isBusy)
                 optionsCard
+                    .disabled(engine.status.isBusy)
             }
             .padding(20)
             .frame(maxWidth: .infinity, maxHeight: .infinity,
@@ -423,6 +433,11 @@ struct ContentView: View {
         isPlaying = false
         playbackTime = 0
         genTask?.cancel()
+        // What "auto-play the result" is allowed to mean: THIS run's result.
+        // lastOutputURL still holds the previous run's file, so a cancelled or
+        // failed run used to play the older audio back — which reads as the
+        // Stop button having generated something.
+        let previousOutput = engine.lastOutputURL
         genTask = Task {
             await engine.generate(
                 mode: mode,
@@ -439,7 +454,10 @@ struct ContentView: View {
                let auto = engine.lastReferenceTranscript {
                 referenceText = auto
             }
-            if engine.lastOutputURL != nil { startPlayback() }
+            guard !Task.isCancelled,
+                  let output = engine.lastOutputURL,
+                  output != previousOutput else { return }
+            startPlayback()
         }
     }
 

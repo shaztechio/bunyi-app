@@ -44,7 +44,16 @@ A segmented picker selects one of three modes. macOS source:
   One click away via the in-app reveal-in-file-manager button.
   Filename: `<Mode>-<ISO8601 timestamp>.wav`.
 - After generation the app auto-plays the result and offers Play + reveal
-  in file manager.
+  in file manager. **Only this run's result.** A cancelled or failed run
+  plays nothing — the previous output is still on disk and still the newest
+  file the app knows about, so "play the latest" would play the older audio
+  and read as though Stop had produced it.
+- **While work is in progress the inputs are disabled** — text, language,
+  speaker, style, reference clip, saved voice, and the mode picker. Their
+  values were already handed to the engine when the run started, so leaving
+  them editable invited changes that silently did not apply to the audio
+  being produced. Help stays reachable: a long download is exactly when
+  someone reads it.
 - Live progress: a token counter during generation. macOS uses
   `generateStream` (preset/design) and an `onToken` callback bridged over a
   stream (clone). Any backend must surface incremental progress.
