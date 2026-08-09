@@ -174,9 +174,16 @@ struct ContentView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity,
                    alignment: .topLeading)
 
-            Divider()
+            // History has no Generate button, so an idle bar would read
+            // "press ⌘↩ to generate" beside nothing that generates — and the
+            // list is better off with the height. It comes back while a run is
+            // in progress, which is reachable from History on purpose: that is
+            // where the progress and the Stop button live.
+            if tab != .history || engine.status.isBusy {
+                Divider()
 
-            bottomBar
+                bottomBar
+            }
         }
         .frame(minWidth: 620, minHeight: 580)
         .background(WindowCloseGuard(

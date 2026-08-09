@@ -115,6 +115,14 @@ a **Download** button, and reveal-in-file-manager.
 - History remains available while a generation is running — it only reads the
   folder. The generation modes do not: switching one evicts the model the
   running job is using (§2).
+- Each row shows one line: the text it spoke, the mode, the voice, the date
+  and the size. A prompt can be paragraphs long, so **the whole record is on
+  hover** — text, mode, language, voice, style or reference transcript, and
+  the model. A file with no embedded metadata says so on hover rather than
+  showing a bare filename that reads like a fault.
+- **Trash** moves a file to the system Trash after confirming, not an
+  unrecoverable delete: the row label is truncated, so the wrong icon is easy
+  to hit, and the audio may be the only copy.
 - **No Generate button in History**: there is no text on screen to speak, so
   the button would either do nothing or silently act on a mode that is not
   visible. **Stop stays**, because a run can still be in progress while

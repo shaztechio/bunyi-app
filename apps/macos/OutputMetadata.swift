@@ -52,11 +52,13 @@ struct OutputMetadata: Codable, Hashable {
     }
 
     /// The voice, however this mode chose one — for display, and for `IART`.
+    /// For a clone the reference transcript is the only thing that identifies
+    /// which voice it was, so it stands in rather than a generic label.
     var voiceSummary: String? {
         if let speaker, !speaker.isEmpty { return speaker }
         if let voiceDescription, !voiceDescription.isEmpty { return voiceDescription }
         if let referenceTranscript, !referenceTranscript.isEmpty {
-            return "Cloned voice"
+            return "Clone of “\(referenceTranscript)”"
         }
         return nil
     }

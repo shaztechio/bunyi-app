@@ -48,6 +48,7 @@ struct HistoryView: View {
     @State private var player: AVAudioPlayer?
     @State private var playingID: URL?
     @State private var error: String?
+    @State private var pendingDeletion: GeneratedOutput?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -73,6 +74,25 @@ struct HistoryView: View {
             Button("OK") { error = nil }
         } message: {
             Text(error ?? "")
+        }
+        // Confirmed rather than immediate: the row shows a truncated label, so
+        // the wrong trash icon is easy to hit and the audio may be the only
+        // copy. It goes to the Trash, not `removeItem`, so it stays
+        // recoverable even after confirming.
+        .confirmationDialog(
+            "Move this audio to the Trash?",
+            isPresented: .constant(pendingDeletion != nil),
+            titleVisibility: .visible
+        ) {
+            Button("Move to Trash", role: .destructive) {
+                if let item = pendingDeletion { trash(item) }
+                pendingDeletion = nil
+            }
+            Button("Cancel", role: .cancel) { pendingDeletion = nil }
+        } message: {
+            Text(pendingDeletion.map {
+                metadata[$0.url]?.title ?? $0.url.lastPathComponent
+            } ?? "")
         }
     }
 
@@ -123,7 +143,9 @@ struct HistoryView: View {
             VStack(alignment: .leading, spacing: 2) {
                 // The prompt when the file carries one, the mode otherwise —
                 // "what did it say" identifies a clip far better than
-                // "Preset voice" repeated down the list.
+                // "Preset voice" repeated down the list. A prompt can be
+                // paragraphs long, so the row shows one line and the whole
+                // thing is on hover.
                 Text(metadata[item.url]?.title ?? item.mode)
                     .fontWeight(.medium)
                     .lineLimit(1)
@@ -132,7 +154,6 @@ struct HistoryView: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
-            .help(Self.tooltip(for: item, metadata: metadata[item.url]))
 
             Spacer(minLength: 8)
 
@@ -151,8 +172,22 @@ struct HistoryView: View {
             }
             .buttonStyle(.borderless)
             .help("Show in Finder")
+
+            Button {
+                pendingDeletion = item
+            } label: {
+                Image(systemName: "trash")
+            }
+            .buttonStyle(.borderless)
+            .foregroundStyle(.red)
+            .help("Move to Trash")
         }
         .padding(.vertical, 2)
+        .contentShape(Rectangle())
+        // On the whole row, not just the label: hovering anywhere in the row is
+        // what people do, and a tooltip that only appears over the text reads
+        // as no tooltip at all.
+        .help(Self.tooltip(for: item, metadata: metadata[item.url]))
     }
 
     // MARK: Behaviour
@@ -192,6 +227,23 @@ struct HistoryView: View {
         player?.stop()
         player = nil
         playingID = nil
+    }
+
+    /// Trash rather than delete: this is the user's audio, the row label is
+    /// truncated, and a mis-click should be undoable from the Finder.
+    private func trash(_ item: GeneratedOutput) {
+        if playingID == item.url { stop() }
+        do {
+            try FileManager.default.trashItem(at: item.url,
+                                              resultingItemURL: nil)
+            // The engine still points at this file if it was the last run's
+            // output; leaving that dangling would offer Play on a file in the
+            // Trash.
+            if engine.lastOutputURL == item.url { engine.clearLastOutput() }
+            reload()
+        } catch {
+            self.error = error.localizedDescription
+        }
     }
 
     /// Save panel rather than a fixed destination: the app is sandboxed, and
@@ -240,7 +292,16 @@ struct HistoryView: View {
     /// The full record on hover — the text can be far longer than a row.
     private static func tooltip(for item: GeneratedOutput,
                                 metadata: OutputMetadata?) -> String {
-        guard let metadata else { return item.url.lastPathComponent }
+        guard let metadata else {
+            // Generated before the app embedded metadata. Say so, rather than
+            // showing a bare filename that looks like something went wrong.
+            return """
+            \(item.url.lastPathComponent)
+
+            This file was made before Bunyi started recording how audio was \
+            generated, so it carries no details.
+            """
+        }
         var lines = ["\(metadata.mode) · \(metadata.language)"]
         if let speaker = metadata.speaker {
             lines.append("Speaker: \(speaker)")
