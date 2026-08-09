@@ -56,6 +56,38 @@ struct ContentView: View {
         "Dylan", "Eric", "Ono_Anna", "Sohee",
     ]
 
+    /// The list the picker shows: the model's own speakers once one is loaded,
+    /// the fallback until then.
+    private var availableSpeakers: [String] {
+        engine.speakers.isEmpty ? defaultSpeakers : engine.speakers
+    }
+
+    /// Speakers are identified to the model by its exact spelling, which is
+    /// lowercase and underscored ("uncle_fu"). Only the label is prettified, so
+    /// the list does not visibly change the moment a model finishes loading.
+    private static func speakerLabel(_ speaker: String) -> String {
+        speaker
+            .replacingOccurrences(of: "_", with: " ")
+            .split(separator: " ")
+            .map { $0.prefix(1).uppercased() + $0.dropFirst() }
+            .joined(separator: " ")
+    }
+
+    /// Keep the chosen speaker across the swap from the fallback list to the
+    /// model's. The names match apart from case, so a plain identity check
+    /// leaves the Picker with a selection that is not in its list — which it
+    /// renders as blank, silently losing the choice just as a generation ends.
+    private func reconcileSpeaker(with available: [String]) {
+        guard !available.isEmpty, !available.contains(speaker) else { return }
+        if let same = available.first(where: {
+            $0.caseInsensitiveCompare(speaker) == .orderedSame
+        }) {
+            speaker = same
+        } else if let first = available.first {
+            speaker = first
+        }
+    }
+
     /// Drives the playback progress bar and detects a naturally-finished clip.
     private let playbackTimer = Timer.publish(every: 0.1, on: .main, in: .common)
         .autoconnect()
@@ -103,6 +135,9 @@ struct ContentView: View {
         } message: {
             Text("Keeps this reference clip and transcript so you can pick the "
                  + "voice again from the menu.")
+        }
+        .onChange(of: availableSpeakers) { _, new in
+            reconcileSpeaker(with: new)
         }
         .onReceive(playbackTimer) { _ in
             guard isPlaying, let player else { return }
@@ -203,11 +238,9 @@ struct ContentView: View {
             case .presetVoice:
                 rowDivider
                 optionRow(icon: "person.wave.2", label: "Speaker") {
-                    let available = engine.speakers.isEmpty
-                        ? defaultSpeakers : engine.speakers
                     Picker("Speaker", selection: $speaker) {
-                        ForEach(available, id: \.self) {
-                            Text($0.replacingOccurrences(of: "_", with: " "))
+                        ForEach(availableSpeakers, id: \.self) {
+                            Text(Self.speakerLabel($0))
                         }
                     }
                     .labelsHidden()
