@@ -68,6 +68,12 @@ enum EngineStatus: Equatable {
     case loading
     case transcribing             // auto-transcribing the clone reference
     case generating(Int)          // codec tokens emitted so far
+    /// Cancelled, but the inference engine is still computing. Cancellation is
+    /// cooperative and only the consumer stops: the package generates on a
+    /// thread of its own that runs to completion. Reporting idle here would be
+    /// a lie the UI acts on — it re-enables Generate, and a second job would
+    /// then touch the same model as the first.
+    case stopping
     case error(String)
 
     var isBusy: Bool {
@@ -421,6 +427,14 @@ final class TTSEngine {
         referenceAudioURL: URL?,
         referenceText: String?
     ) async {
+        // Serialization is not a nicety here: one model, non-Sendable, shared
+        // by everything below. `stop()` keeps the app busy until abandoned work
+        // finishes, so reaching this while busy would mean the UI let through a
+        // second job. Refuse rather than race.
+        guard !status.isBusy else {
+            log.log("Ignoring Generate — the previous job has not finished")
+            return
+        }
         do {
             let model = try await prepare(mode: mode)
             try Task.checkCancellation()
@@ -487,6 +501,14 @@ final class TTSEngine {
                     if count % 5 == 0 { status = .generating(count) }
                     if count % 100 == 0 { log.log("Generated \(count) tokens…") }
                 }
+                // generateVoiceClone is synchronous and ignores cancellation,
+                // so the detached task runs to completion whatever we do here.
+                // Register it before checking, so `stop()` can wait for the
+                // model to be free instead of declaring victory early.
+                if Task.isCancelled {
+                    pendingWork = Task.detached { _ = try? await cloneTask.value }
+                    try Task.checkCancellation()
+                }
                 audio = try await cloneTask.value.value
                 try Task.checkCancellation()
 
@@ -496,59 +518,131 @@ final class TTSEngine {
                 } else {
                     log.log("Generating designed voice")
                 }
-                // Stream so the UI can show live token progress.
-                var final: MLXArray?
-                var tokenCount = 0
-                for try await event in model.generateStream(
+                // Stream so the UI can show live token progress. Held in a
+                // local so it can still be drained if we stop consuming it —
+                // the package generates on its own thread, and abandoning the
+                // stream would leave that thread running against the model
+                // with nothing tracking it.
+                let stream = model.generateStream(
                     text: text,
                     speaker: mode == .presetVoice ? speaker : nil,
                     instruct: (instruct?.isEmpty == false) ? instruct : nil,
                     language: language
-                ) {
-                    try Task.checkCancellation()
-                    switch event {
-                    case .token:
-                        tokenCount += 1
-                        if tokenCount % 5 == 0 { status = .generating(tokenCount) }
-                        if tokenCount % 100 == 0 {
-                            log.log("Generated \(tokenCount) tokens…")
+                )
+                var final: MLXArray?
+                var tokenCount = 0
+                do {
+                    for try await event in stream {
+                        try Task.checkCancellation()
+                        switch event {
+                        case .token:
+                            tokenCount += 1
+                            if tokenCount % 5 == 0 { status = .generating(tokenCount) }
+                            if tokenCount % 100 == 0 {
+                                log.log("Generated \(tokenCount) tokens…")
+                            }
+                        case .info:
+                            break
+                        case .audio(let wav):
+                            final = wav
                         }
-                    case .info:
-                        break
-                    case .audio(let wav):
-                        final = wav
                     }
+                } catch {
+                    // Cancelled mid-generation. Keep consuming in the
+                    // background so the producer thread reaches its end and
+                    // lets go of the model; `stop()` waits on this before it
+                    // reports idle.
+                    let draining = Unchecked(value: stream)
+                    pendingWork = Task.detached {
+                        do {
+                            for try await _ in draining.value {}
+                        } catch {
+                            // The producer's own failure; nothing to report
+                            // here, the run is already being cancelled.
+                        }
+                    }
+                    throw error
                 }
                 guard let wav = final else { throw TTSError.noAudio }
                 audio = wav
             }
 
             let url = outputDir.appendingPathComponent(Self.fileName(for: mode))
-            try saveAudioArray(audio, sampleRate: Double(model.sampleRate), to: url)
+            try Task.checkCancellation()
+
+            // This is where the beachball came from. MLX is lazy: the array the
+            // generator yields is an unevaluated graph, and nothing in the
+            // package evaluates it. The first thing that does is
+            // `audio.asArray(Float.self)` inside saveAudioArray — so calling
+            // that here ran the whole audio decode on the main actor, freezing
+            // the UI at the very end of every generation, in every mode.
+            //
+            // Same unchecked box as the clone path above, for the same reason:
+            // MLXArray isn't Sendable, and only one generation runs at a time.
+            let boxed = Unchecked(value: audio)
+            let rate = Double(model.sampleRate)
+            try await Task.detached(priority: .userInitiated) {
+                // Proves the offload rather than trusting it: this traps if the
+                // evaluation is ever back on the main thread.
+                dispatchPrecondition(condition: .notOnQueue(.main))
+                try saveAudioArray(boxed.value, sampleRate: rate, to: url)
+            }.value
             log.log(String(format: "Saved %@ (%.1f s total)", url.path,
                            Date().timeIntervalSince(generateStart)))
             lastOutputURL = url
             status = .idle
         } catch is CancellationError {
-            status = .idle
-            downloadDetail = nil
-            log.log("Stopped the current operation")
+            await finishStopping()
         } catch let urlError as URLError where urlError.code == .cancelled {
-            status = .idle
-            downloadDetail = nil
-            log.log("Stopped the current operation")
+            await finishStopping()
         } catch {
             log.log("Error: \(String(describing: error))")
             status = .error(error.localizedDescription)
         }
     }
 
-    /// Clears the visible busy state when work is cancelled (e.g. the window
-    /// is closed mid-operation). The generation Task is cancelled by the
+    /// Cancels the visible work. The generation Task is cancelled by the
     /// caller; downloads and streaming then stop at their next checkpoint.
+    ///
+    /// Does NOT report idle straight away. Cancelling stops the consumer, not
+    /// the inference engine: for preset and design the package is generating on
+    /// a `Thread.detachNewThread` it owns, and for clone a detached task is
+    /// still inside `generateVoiceClone`. Both keep using the loaded model.
+    /// Going idle here would re-enable Generate, and a second job would then be
+    /// running against the same non-Sendable model as the first — which is the
+    /// exact invariant `Unchecked<T>` is justified by. Worse, switching mode
+    /// first makes `prepare` release that model and call `MLX.GPU.clearCache()`
+    /// out from under the thread still computing on it.
+    ///
+    /// So the app stays busy, showing "Stopping…", until the abandoned work is
+    /// actually finished. The wait is real work, not an artificial delay.
     func stop() {
-        status = .idle
         downloadDetail = nil
+        // Only shows the intent. `generate` always runs its cancellation path
+        // afterwards, and that is what decides when idle is true — doing the
+        // wait here instead would race with it, because the work to wait on is
+        // not registered until the cancellation actually lands.
+        status = status.isBusy ? .stopping : .idle
+    }
+
+    /// Work that was abandoned by cancellation but is still running inside the
+    /// inference engine. Awaiting it is how the app knows the model is free.
+    private var pendingWork: Task<Void, Never>?
+
+    /// Ends a cancelled run: stay busy until the inference engine has really
+    /// let go of the model, then report idle. Everything that starts a
+    /// generation is gated on `status.isBusy`, so this window is what makes a
+    /// second job impossible rather than merely unlikely.
+    private func finishStopping() async {
+        downloadDetail = nil
+        if let pending = pendingWork {
+            status = .stopping
+            log.log("Stopping — the model is still generating; waiting for it")
+            await pending.value
+            pendingWork = nil
+        }
+        status = .idle
+        log.log("Stopped the current operation")
     }
 
     /// Carries a non-Sendable value across an actor boundary. Safe here

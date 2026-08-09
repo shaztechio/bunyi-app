@@ -396,6 +396,11 @@ struct ContentView: View {
             busyLine("Transcribing the reference clip…")
         case .generating(let tokens):
             busyLine(tokens > 0 ? "Generating… (\(tokens) tokens)" : "Generating…")
+        case .stopping:
+            // Says why it is still busy. The alternative — going idle while the
+            // model is still generating — reads as finished and invites a
+            // second Generate on top of the first.
+            busyLine("Stopping — finishing the current job…")
         case .error(let message):
             Label(message, systemImage: "exclamationmark.triangle.fill")
                 .foregroundStyle(.red)
