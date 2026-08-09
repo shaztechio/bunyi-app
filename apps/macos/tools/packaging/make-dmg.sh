@@ -80,14 +80,44 @@ if [ -f "$background" ]; then
 fi
 
 rm -f "$output"
-# UDZO is the widely compatible compressed format. UDBZ and ULFO compress a
-# little better but are not worth a format question on someone else's Mac.
+
+# Built read-write first, then converted. The background picture is referenced
+# from the .DS_Store by a bookmark that encodes the volume's identity, so it has
+# to be created against the very volume that ships. A bookmark made anywhere
+# else -- a scratch image, another project's volume -- resolves "stale", and
+# Finder will not draw a background from a stale bookmark. It falls back to the
+# plain colour with no error, which looks identical to forgetting the artwork.
+rw_image="$staging.rw.dmg"
+rm -f "$rw_image"
 hdiutil create \
   -volname "$volume_name" \
   -srcfolder "$staging" \
-  -format UDZO \
+  -format UDRW \
   -ov -quiet \
-  "$output"
+  "$rw_image"
+
+# The mount point is not on hdiutil's last line -- a partitioned image prints
+# scheme entries after it, with an empty mount-point column -- so pick the line
+# that actually has one rather than the last line.
+mount_point="$(hdiutil attach "$rw_image" -nobrowse -noautoopen \
+  | grep -o '/Volumes/.*' | head -1 | sed 's/[[:space:]]*$//')"
+[ -d "$mount_point" ] || { printf 'error: the read-write image did not mount.\n' >&2; exit 1; }
+
+if [ -f "$layout" ] && [ -f "$mount_point/.background/background.tiff" ]; then
+    bookmark="$staging.bookmark"
+    swift "$root/apps/macos/tools/packaging/make-background-bookmark.swift" \
+        "$mount_point/.background/background.tiff" "$bookmark"
+    python3 "$root/apps/macos/tools/packaging/set-dmg-background.py" \
+        "$mount_point/.DS_Store" "$bookmark"
+    rm -f "$bookmark"
+fi
+
+hdiutil detach "$mount_point" -quiet
+
+# UDZO is the widely compatible compressed format. UDBZ and ULFO compress a
+# little better but are not worth a format question on someone else's Mac.
+hdiutil convert "$rw_image" -format UDZO -o "$output" -quiet
+rm -f "$rw_image"
 
 printf 'Built %s\n' "$output"
 
