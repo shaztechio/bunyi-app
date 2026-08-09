@@ -89,6 +89,12 @@ xcodebuild -scheme "Bunyi" -destination 'platform=macOS' build
   `~/Library/Containers/app.bunyi.Bunyi/Data/Library/
   Application Support/Bunyi/Models`.
 
+> **Packaging details live in
+> [`tools/packaging/README.md`](tools/packaging/README.md)** — how the .dmg is
+> built, why the background reference must be an alias made against the live
+> volume, and the two help caches that make an edit look like it did nothing.
+> Read it before changing `make-dmg.sh` or `make-help.sh`.
+
 ## Help book
 
 `HELP.md` is the only copy of the user-facing help text. `tools/packaging/
