@@ -48,6 +48,21 @@ A segmented picker selects one of three modes. macOS source:
 - Live progress: a token counter during generation. macOS uses
   `generateStream` (preset/design) and an `onToken` callback bridged over a
   stream (clone). Any backend must surface incremental progress.
+- **The UI thread never does inference work, and never writes the output.**
+  Includes the step that forces a lazily-evaluated tensor to be materialized:
+  on macOS the generator yields an unevaluated MLX graph and
+  `saveAudioArray` is what evaluates it, so writing the WAV on the main actor
+  froze the app at the end of every generation. Any runtime with deferred
+  evaluation has the same trap in a different place — the rule is that the
+  window stays responsive for the whole run, not that one named call is moved.
+- **Cancellation is cooperative, and the app stays busy until the engine has
+  actually stopped.** Cancelling stops the consumer; the inference engine may
+  run to completion regardless (macOS: the package generates on its own
+  thread, and `generateVoiceClone` takes no cancellation at all). Until that
+  work ends, the app shows a distinct *stopping* state and refuses to start
+  another generation. Reporting ready early is not allowed: it invites a
+  second job against the same model, and switching mode would then free that
+  model out from under work still using it.
 
 ## 3. Model management
 
