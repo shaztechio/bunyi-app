@@ -14,6 +14,10 @@ on **macOS, Windows, and Linux**.
 
 Home: [bunyi.app](https://bunyi.app)
 
+**Download:** [Bunyi 1.0.0](https://github.com/shaztechio/bunyi-app/releases/latest)
+— a signed and notarized `.dmg` for Apple Silicon Macs on macOS 15 or later.
+Drag it to Applications and launch; no Gatekeeper warnings, no terminal.
+
 ## How it's structured
 
 Qwen3-TTS has no single cross-platform runtime — MLX is Apple-Silicon only —
