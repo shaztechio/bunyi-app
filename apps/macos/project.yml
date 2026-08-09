@@ -54,6 +54,10 @@ targets:
       properties:
         CFBundleDisplayName: Bunyi
         LSApplicationCategoryType: public.app-category.utilities
+        # The copyright line in the standard About panel. The panel itself is
+        # left alone deliberately — AppKit already fills in the name, icon, and
+        # version from this plist, and a hand-built one would only drift.
+        NSHumanReadableCopyright: Copyright 2026 Shazron Abdullah and Bunyi contributors
         # Without these, XcodeGen writes a literal 1.0 / 1 and the build
         # settings below are ignored — so the app shipped as 1.0 no matter
         # what MARKETING_VERSION said, and release.yml's tag check compared
