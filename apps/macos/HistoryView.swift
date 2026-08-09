@@ -86,7 +86,15 @@ struct HistoryView: View {
             progress = player.duration > 0
                 ? player.currentTime / player.duration : 0
         }
-        .alert("Could not save", isPresented: .constant(error != nil)) {
+        // A real binding, not .constant: dismissing with Escape or a click
+        // outside sets isPresented false, and with a constant binding nothing
+        // clears `error` — so the alert immediately comes back. The title is
+        // generic because this reports playback and Trash failures too, not
+        // only saving.
+        .alert("Something went wrong", isPresented: Binding(
+            get: { error != nil },
+            set: { if !$0 { error = nil } }
+        )) {
             Button("OK") { error = nil }
         } message: {
             Text(error ?? "")
@@ -97,7 +105,10 @@ struct HistoryView: View {
         // recoverable even after confirming.
         .confirmationDialog(
             "Move this audio to the Trash?",
-            isPresented: .constant(pendingDeletion != nil),
+            isPresented: Binding(
+                get: { pendingDeletion != nil },
+                set: { if !$0 { pendingDeletion = nil } }
+            ),
             titleVisibility: .visible
         ) {
             Button("Move to Trash", role: .destructive) {

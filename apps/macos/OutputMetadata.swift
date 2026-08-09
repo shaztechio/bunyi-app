@@ -92,7 +92,10 @@ enum WAVMetadata {
 
     private static var whole: ISO8601DateFormatter { ISO8601DateFormatter() }
 
-    private static let encoder: JSONEncoder = {
+    /// Per use, not shared. Embedding runs in a detached task while History
+    /// reads on the main actor, and JSONEncoder/JSONDecoder are not documented
+    /// as thread-safe. One allocation per file is not worth a data race.
+    private static var encoder: JSONEncoder {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .custom { date, encoder in
             var container = encoder.singleValueContainer()
@@ -100,9 +103,9 @@ enum WAVMetadata {
         }
         encoder.outputFormatting = [.sortedKeys]
         return encoder
-    }()
+    }
 
-    private static let decoder: JSONDecoder = {
+    private static var decoder: JSONDecoder {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .custom { decoder in
             let text = try decoder.singleValueContainer().decode(String.self)
@@ -117,14 +120,17 @@ enum WAVMetadata {
             return date
         }
         return decoder
-    }()
+    }
 
-    /// Appends the INFO chunk to an existing WAV, in place.
+    /// Adds the INFO chunk to an existing WAV.
     ///
-    /// Appending rather than rewriting: the audio data is untouched, so this
-    /// cannot corrupt the samples even if the metadata is wrong. A reader that
-    /// ignores unknown chunks — which the format requires — sees the same file
-    /// it saw before.
+    /// The chunk goes after the existing ones, so the audio bytes are carried
+    /// over unchanged and a wrong tag cannot corrupt the samples. The file
+    /// itself is rewritten, not extended: it is read into memory, the chunk is
+    /// added, and the whole thing is written back atomically — so the cost is
+    /// proportional to the file, and a failure leaves the original in place
+    /// rather than a half-written one. A reader that ignores unknown chunks,
+    /// which the format requires, sees the same audio it saw before.
     static func embed(_ metadata: OutputMetadata, in url: URL) throws {
         var data = try Data(contentsOf: url)
         guard data.count >= 12,
@@ -164,7 +170,7 @@ enum WAVMetadata {
             ("INAM", metadata.title),
             ("IART", metadata.voiceSummary ?? metadata.mode),
             ("ISFT", "Bunyi \(metadata.appVersion)"),
-            ("ICRD", ISO8601DateFormatter().string(from: metadata.created)),
+            ("ICRD", precise.string(from: metadata.created)),
             ("IGNR", "Speech"),
             ("ICMT", json),
         ]
