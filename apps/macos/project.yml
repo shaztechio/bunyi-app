@@ -32,6 +32,7 @@ targets:
       - TTSEngine.swift
       - LogStore.swift
       - LogsView.swift
+      - HistoryView.swift
       - ModelSettings.swift
       - SettingsView.swift
       - BackupManager.swift

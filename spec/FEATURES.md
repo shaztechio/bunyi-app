@@ -81,6 +81,27 @@ A segmented picker selects one of three modes. macOS source:
   it. So Stop does not promise the machine stops computing — only that the
   app stops waiting, and says so honestly while it does.
 
+## 2a. History
+
+macOS source: `HistoryView.swift`, `TTSEngine.generatedOutputs()`.
+
+A fourth segment beside the three generation modes lists **everything
+generated so far, newest first**: mode, date, size, with play/pause per row,
+a **Download** button, and reveal-in-file-manager.
+
+- **The folder is the record**, not an in-app database. The list is read from
+  the `Outputs` folder each time it is shown, so a file deleted outside the
+  app disappears from History, and the list survives relaunches with no state
+  to migrate. Deliberately named History, not Library — "library" already
+  means the saved *voices* library (§5).
+- **Download** opens a save panel so the user chooses the destination. On a
+  sandboxed platform that choice is also what grants permission to write
+  there, so a fixed destination would need an entitlement this does not
+  otherwise require.
+- History remains available while a generation is running — it only reads the
+  folder. The generation modes do not: switching one evicts the model the
+  running job is using (§2).
+
 ## 3. Model management
 
 macOS source: `TTSEngine.download*`, `ModelSettings.swift`.

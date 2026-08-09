@@ -21,10 +21,27 @@ import AVFoundation
 import SwiftUI
 import UniformTypeIdentifiers
 
+/// What the segmented control selects. History is not a generation mode —
+/// TTSMode maps one-to-one onto model repos — so it sits beside them here
+/// rather than becoming a fourth case there.
+enum MainTab: Hashable {
+    case generate(TTSMode)
+    case history
+}
+
 struct ContentView: View {
     @State private var engine = TTSEngine()
 
-    @State private var mode: TTSMode = .presetVoice
+    @State private var tab: MainTab = .generate(.presetVoice)
+
+    /// The generation mode the rest of the view works with. Selecting History
+    /// leaves it alone, so returning to a mode returns to the one you left.
+    private var mode: TTSMode {
+        if case .generate(let mode) = tab { return mode }
+        return lastGenerateMode
+    }
+
+    @State private var lastGenerateMode: TTSMode = .presetVoice
     @State private var text: String = ""
     @State private var speaker: String = "Ryan"
     @State private var instruct: String = ""
@@ -96,18 +113,23 @@ struct ContentView: View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 16) {
                 modeBar
-                // Locked while work is in progress. Editing the text or
-                // switching speaker mid-run changed nothing about the audio
-                // being produced — the values were already passed to the
-                // engine — so the controls invited edits that silently did
-                // not apply. The help button inside modeBar is deliberately
-                // outside this: SwiftUI's disabled() cannot be undone by a
-                // child, so anything that must stay live has to sit outside
-                // the disabled scope.
-                textCard
-                    .disabled(engine.status.isBusy)
-                optionsCard
-                    .disabled(engine.status.isBusy)
+
+                if tab == .history {
+                    HistoryView(engine: engine)
+                } else {
+                    // Locked while work is in progress. Editing the text or
+                    // switching speaker mid-run changed nothing about the audio
+                    // being produced — the values were already passed to the
+                    // engine — so the controls invited edits that silently did
+                    // not apply. The help button inside modeBar is deliberately
+                    // outside this: SwiftUI's disabled() cannot be undone by a
+                    // child, so anything that must stay live has to sit outside
+                    // the disabled scope.
+                    textCard
+                        .disabled(engine.status.isBusy)
+                    optionsCard
+                        .disabled(engine.status.isBusy)
+                }
             }
             .padding(20)
             .frame(maxWidth: .infinity, maxHeight: .infinity,
@@ -139,6 +161,9 @@ struct ContentView: View {
         .onChange(of: availableSpeakers) { _, new in
             reconcileSpeaker(with: new)
         }
+        .onChange(of: tab) { _, new in
+            if case .generate(let mode) = new { lastGenerateMode = mode }
+        }
         .onReceive(playbackTimer) { _ in
             guard isPlaying, let player else { return }
             playbackTime = player.currentTime
@@ -156,17 +181,26 @@ struct ContentView: View {
 
     private var modeBar: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Picker("Mode", selection: $mode) {
+            Picker("Mode", selection: $tab) {
                 ForEach(TTSMode.allCases) { mode in
-                    Label(mode.rawValue, systemImage: mode.symbol).tag(mode)
+                    Label(mode.rawValue, systemImage: mode.symbol)
+                        .tag(MainTab.generate(mode))
                 }
+                Label("History", systemImage: "clock.arrow.circlepath")
+                    .tag(MainTab.history)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            .disabled(engine.status.isBusy)
+            // History stays reachable mid-run — it only reads the folder, and
+            // wanting to hear the previous result while waiting is reasonable.
+            // The generation modes do not, because switching one evicts the
+            // model the running job is using.
+            .disabled(engine.status.isBusy && tab != .history)
 
             HStack(alignment: .firstTextBaseline) {
-                Text(mode.subtitle)
+                Text(tab == .history
+                     ? "Everything you have generated, newest first."
+                     : mode.subtitle)
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .animation(.none, value: mode)
