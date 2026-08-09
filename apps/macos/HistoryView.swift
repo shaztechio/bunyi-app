@@ -44,9 +44,21 @@ struct HistoryView: View {
     let engine: TTSEngine
 
     @State private var items: [GeneratedOutput] = []
+    @State private var metadata: [URL: OutputMetadata] = [:]
     @State private var player: AVAudioPlayer?
     @State private var playingID: URL?
     @State private var error: String?
+    @State private var pendingDeletion: GeneratedOutput?
+    @State private var progress: Double = 0
+    @State private var copiedID: URL?
+    @State private var copyResetTask: Task<Void, Never>?
+
+    /// Drives the ring, and notices a clip that reached its end — the player
+    /// stops on its own and tells the view nothing. AVAudioPlayer has a
+    /// delegate for that, but it needs an NSObject; polling matches how the
+    /// main window already tracks playback.
+    private let tick = Timer.publish(every: 0.2, on: .main, in: .common)
+        .autoconnect()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -68,10 +80,46 @@ struct HistoryView: View {
         // A generation finishing writes a new file; refresh so it appears
         // without the user having to leave the tab and come back.
         .onChange(of: engine.lastOutputURL) { _, _ in reload() }
-        .alert("Could not save", isPresented: .constant(error != nil)) {
+        .onReceive(tick) { _ in
+            guard playingID != nil, let player else { return }
+            guard player.isPlaying else { stop(); return }
+            progress = player.duration > 0
+                ? player.currentTime / player.duration : 0
+        }
+        // A real binding, not .constant: dismissing with Escape or a click
+        // outside sets isPresented false, and with a constant binding nothing
+        // clears `error` — so the alert immediately comes back. The title is
+        // generic because this reports playback and Trash failures too, not
+        // only saving.
+        .alert("Something went wrong", isPresented: Binding(
+            get: { error != nil },
+            set: { if !$0 { error = nil } }
+        )) {
             Button("OK") { error = nil }
         } message: {
             Text(error ?? "")
+        }
+        // Confirmed rather than immediate: the row shows a truncated label, so
+        // the wrong trash icon is easy to hit and the audio may be the only
+        // copy. It goes to the Trash, not `removeItem`, so it stays
+        // recoverable even after confirming.
+        .confirmationDialog(
+            "Move this audio to the Trash?",
+            isPresented: Binding(
+                get: { pendingDeletion != nil },
+                set: { if !$0 { pendingDeletion = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Move to Trash", role: .destructive) {
+                if let item = pendingDeletion { trash(item) }
+                pendingDeletion = nil
+            }
+            Button("Cancel", role: .cancel) { pendingDeletion = nil }
+        } message: {
+            Text(pendingDeletion.map {
+                metadata[$0.url]?.title ?? $0.url.lastPathComponent
+            } ?? "")
         }
     }
 
@@ -113,21 +161,62 @@ struct HistoryView: View {
             Button {
                 toggle(item)
             } label: {
-                Image(systemName: playingID == item.url ? "pause.fill" : "play.fill")
-                    .frame(width: 14)
+                // The ring is the progress bar, so a playing row needs no
+                // separate track taking up width — the control and its
+                // progress are the same object.
+                ZStack {
+                    if playingID == item.url {
+                        Circle()
+                            .stroke(.quaternary, lineWidth: 2)
+                        Circle()
+                            .trim(from: 0, to: progress)
+                            .stroke(Color.accentColor,
+                                    style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                            // Trim starts at 3 o'clock; sweeping from the top
+                            // is what reads as progress.
+                            .rotationEffect(.degrees(-90))
+                            // Matched to the tick, so the ring sweeps instead
+                            // of stepping.
+                            .animation(.linear(duration: 0.2), value: progress)
+                    }
+                    Image(systemName: playingID == item.url ? "stop.fill" : "play.fill")
+                        .font(.system(size: 9))
+                }
+                .frame(width: 22, height: 22)
+                .contentShape(Circle())
             }
             .buttonStyle(.borderless)
-            .help(playingID == item.url ? "Pause" : "Play")
+            .help(playingID == item.url ? "Stop" : "Play")
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(item.mode)
+                // The prompt when the file carries one, the mode otherwise —
+                // "what did it say" identifies a clip far better than
+                // "Preset voice" repeated down the list. A prompt can be
+                // paragraphs long, so the row shows one line and the whole
+                // thing is on hover.
+                Text(metadata[item.url]?.title ?? item.mode)
                     .fontWeight(.medium)
-                Text(Self.subtitle(for: item))
+                    .lineLimit(1)
+                Text(Self.subtitle(for: item, metadata: metadata[item.url]))
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
 
             Spacer(minLength: 8)
+
+            // Copying beats hover for anything you want to keep: a tooltip
+            // cannot be pasted into a note, a bug report, or back into the app
+            // to reproduce a result.
+            Button {
+                copyDetails(item)
+            } label: {
+                Image(systemName: copiedID == item.url
+                      ? "checkmark" : "doc.on.doc")
+            }
+            .buttonStyle(.borderless)
+            .foregroundStyle(copiedID == item.url ? .green : .primary)
+            .help("Copy details")
 
             Button {
                 save(item)
@@ -144,20 +233,44 @@ struct HistoryView: View {
             }
             .buttonStyle(.borderless)
             .help("Show in Finder")
+
+            Button {
+                pendingDeletion = item
+            } label: {
+                Image(systemName: "trash")
+            }
+            .buttonStyle(.borderless)
+            .foregroundStyle(.red)
+            .help("Move to Trash")
         }
         .padding(.vertical, 2)
+        .contentShape(Rectangle())
+        // On the whole row, not just the label: hovering anywhere in the row is
+        // what people do, and a tooltip that only appears over the text reads
+        // as no tooltip at all.
+        .help(Self.tooltip(for: item, metadata: metadata[item.url]))
     }
 
     // MARK: Behaviour
 
     private func reload() {
         items = engine.generatedOutputs()
+        // Read the tags once per refresh rather than per row: SwiftUI evaluates
+        // a row body repeatedly, and each read opens the file.
+        metadata = Dictionary(
+            uniqueKeysWithValues: items.compactMap { item in
+                WAVMetadata.read(from: item.url).map { (item.url, $0) }
+            }
+        )
         // A file can vanish from the folder while it is playing.
         if let playingID, !items.contains(where: { $0.url == playingID }) {
             stop()
         }
     }
 
+    /// Play, or stop what is playing. No resume: these are short clips, and a
+    /// paused row is a third state to explain for something you would nearly
+    /// always just play again.
     private func toggle(_ item: GeneratedOutput) {
         if playingID == item.url {
             stop()
@@ -169,6 +282,7 @@ struct HistoryView: View {
             next.play()
             player = next
             playingID = item.url
+            progress = 0
         } catch {
             self.error = error.localizedDescription
         }
@@ -178,6 +292,45 @@ struct HistoryView: View {
         player?.stop()
         player = nil
         playingID = nil
+        // Snap back rather than animating to zero, which reads as a rewind.
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) { progress = 0 }
+    }
+
+    /// Puts the record on the clipboard as readable text — the same thing the
+    /// tooltip shows, in a form that can be pasted.
+    private func copyDetails(_ item: GeneratedOutput) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(
+            Self.tooltip(for: item, metadata: metadata[item.url]),
+            forType: .string
+        )
+        // Without an acknowledgement a copy button looks like it did nothing.
+        copiedID = item.url
+        copyResetTask?.cancel()
+        copyResetTask = Task {
+            try? await Task.sleep(for: .seconds(1.5))
+            guard !Task.isCancelled else { return }
+            copiedID = nil
+        }
+    }
+
+    /// Trash rather than delete: this is the user's audio, the row label is
+    /// truncated, and a mis-click should be undoable from the Finder.
+    private func trash(_ item: GeneratedOutput) {
+        if playingID == item.url { stop() }
+        do {
+            try FileManager.default.trashItem(at: item.url,
+                                              resultingItemURL: nil)
+            // The engine still points at this file if it was the last run's
+            // output; leaving that dangling would offer Play on a file in the
+            // Trash.
+            if engine.lastOutputURL == item.url { engine.clearLastOutput() }
+            reload()
+        } catch {
+            self.error = error.localizedDescription
+        }
     }
 
     /// Save panel rather than a fixed destination: the app is sandboxed, and
@@ -202,10 +355,56 @@ struct HistoryView: View {
         }
     }
 
-    private static func subtitle(for item: GeneratedOutput) -> String {
+    private static func subtitle(for item: GeneratedOutput,
+                                 metadata: OutputMetadata?) -> String {
         let date = item.created.formatted(date: .abbreviated, time: .shortened)
         let size = ByteCountFormatter.string(fromByteCount: item.byteCount,
                                              countStyle: .file)
-        return "\(date) · \(size)"
+        var parts = [metadata?.mode ?? item.mode, date, size]
+        // The voice, whichever way this mode picked one — a speaker name, a
+        // designed-voice description, or a clone. Showing only `speaker` left
+        // every Voice design row with nothing identifying its voice.
+        if let voice = metadata?.voiceSummary {
+            parts.insert(Self.trimmed(voice), at: 1)
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    /// Voice descriptions are free text and can be a sentence; a row is not.
+    private static func trimmed(_ value: String) -> String {
+        let flat = value.replacingOccurrences(of: "\n", with: " ")
+        return flat.count <= 40 ? flat : String(flat.prefix(39)) + "…"
+    }
+
+    /// The full record on hover — the text can be far longer than a row.
+    private static func tooltip(for item: GeneratedOutput,
+                                metadata: OutputMetadata?) -> String {
+        guard let metadata else {
+            // Generated before the app embedded metadata. Say so, rather than
+            // showing a bare filename that looks like something went wrong.
+            return """
+            \(item.url.lastPathComponent)
+
+            This file was made before Bunyi started recording how audio was \
+            generated, so it carries no details.
+            """
+        }
+        var lines = ["\(metadata.mode) · \(metadata.language)"]
+        if let speaker = metadata.speaker {
+            lines.append("Speaker: \(speaker)")
+        }
+        if let voice = metadata.voiceDescription {
+            lines.append("Voice: \(voice)")
+        }
+        if let style = metadata.style {
+            lines.append("Style: \(style)")
+        }
+        if let reference = metadata.referenceTranscript {
+            lines.append("Reference: \(reference)")
+        }
+        lines.append("Model: \(metadata.modelRepo)")
+        lines.append("")
+        lines.append(metadata.text)
+        return lines.joined(separator: "\n")
     }
 }

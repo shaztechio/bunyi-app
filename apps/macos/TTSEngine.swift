@@ -103,6 +103,14 @@ final class TTSEngine {
     /// The Outputs folder itself, for History and "Show in Finder".
     var outputsFolder: URL { outputDir }
 
+    /// Stamped into every generated file so a WAV says which build made it.
+    static var appVersion: String {
+        let info = Bundle.main.infoDictionary
+        let short = info?["CFBundleShortVersionString"] as? String ?? "0.0.0"
+        let build = info?["CFBundleVersion"] as? String ?? "0"
+        return build == short ? short : "\(short) (\(build))"
+    }
+
     /// Everything generated so far, newest first. Read from disk rather than
     /// tracked in memory: the folder is the record, it survives relaunches, and
     /// a file deleted in Finder should disappear from History without the app
@@ -617,11 +625,37 @@ final class TTSEngine {
             // MLXArray isn't Sendable, and only one generation runs at a time.
             let boxed = Unchecked(value: audio)
             let rate = Double(model.sampleRate)
+            // One UI field means two different things: the delivery
+            // instruction in preset voice, the voice description in voice
+            // design. Recording which it was is the difference between a file
+            // that can be reproduced and one that merely has a string in it.
+            let nonEmpty: (String?) -> String? = { value in
+                let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines)
+                return (trimmed?.isEmpty == false) ? trimmed : nil
+            }
+            let metadata = OutputMetadata(
+                mode: mode.rawValue,
+                text: text,
+                language: language,
+                speaker: mode == .presetVoice ? nonEmpty(speaker) : nil,
+                style: mode == .presetVoice ? nonEmpty(instruct) : nil,
+                voiceDescription: mode == .voiceDesign ? nonEmpty(instruct) : nil,
+                referenceTranscript: mode == .voiceClone
+                    ? nonEmpty(referenceText) ?? nonEmpty(lastReferenceTranscript)
+                    : nil,
+                modelRepo: mode.effectiveRepoID,
+                appVersion: Self.appVersion,
+                created: Date()
+            )
             try await Task.detached(priority: .userInitiated) {
                 // Proves the offload rather than trusting it: this traps if the
                 // evaluation is ever back on the main thread.
                 dispatchPrecondition(condition: .notOnQueue(.main))
                 try saveAudioArray(boxed.value, sampleRate: rate, to: url)
+                // Tagging is best-effort: a file that plays but lacks its
+                // metadata is a far better outcome than losing the audio
+                // because a chunk could not be appended.
+                try? WAVMetadata.embed(metadata, in: url)
             }.value
             log.log(String(format: "Saved %@ (%.1f s total)", url.path,
                            Date().timeIntervalSince(generateStart)))

@@ -30,6 +30,13 @@ A segmented picker selects one of three modes. macOS source:
   (`supportedSpeakers`); a fallback list is shown until a model loads.
 - Language selector: auto + english, chinese, japanese, korean, german,
   french, russian, portuguese, spanish, italian.
+- **Generate is unavailable until the mode has what it needs**, and says why
+  on hover: text in every mode, plus a voice description for voice design and
+  a reference clip for voice clone. Not a validation message after the fact —
+  the engine rejects a clone with no clip only *after* preparing the model,
+  which on a first run means waiting out a multi-gigabyte download to be told
+  a file is missing. Voice design had no check at all and would generate an
+  arbitrary voice from an empty description.
 - **Emotion for clones is not supported** by the 12 Hz Base model. Do not
   add an emotion field to clone mode. Emotion for a cloned voice must come
   from the reference clip's own delivery. (Tracked upstream: 25 Hz models.)
@@ -43,6 +50,13 @@ A segmented picker selects one of three modes. macOS source:
   platforms: an equivalent per-user app-data subfolder named `Outputs`.
   One click away via the in-app reveal-in-file-manager button.
   Filename: `<Mode>-<ISO8601 timestamp>.wav`.
+- **The file carries what produced it** — text, mode, language, speaker,
+  style, reference transcript, model repo, app version, timestamp — embedded
+  in the audio file itself (macOS: a RIFF `LIST`/`INFO` chunk; see
+  `DATA-FORMATS.md`). The filename records only mode and time, so without
+  this a WAV that leaves the app loses every setting that produced it.
+  History reads it back to label each row, and ordinary audio tools show the
+  standard fields.
 - After generation the app auto-plays the result and offers Play + reveal
   in file manager. **Only this run's result.** Starting a run clears the
   previous one: the playback controls disappear for the duration, so nothing
@@ -101,6 +115,30 @@ a **Download** button, and reveal-in-file-manager.
 - History remains available while a generation is running — it only reads the
   folder. The generation modes do not: switching one evicts the model the
   running job is using (§2).
+- Playback is **play/stop, with progress drawn as a ring around the button
+  itself** rather than a separate bar — the control and its progress are the
+  same object, which is what the row has space for. No pause: these are short
+  clips, and a paused row is a third state to explain for something a user
+  would nearly always just play again. A clip that reaches its end returns the
+  row to Play on its own.
+- Each row shows one line: the text it spoke, the mode, the voice, the date
+  and the size. A prompt can be paragraphs long, so **the whole record is on
+  hover** — text, mode, language, voice, style or reference transcript, and
+  the model. A file with no embedded metadata says so on hover rather than
+  showing a bare filename that reads like a fault.
+- **Copy details** puts that same record on the clipboard as readable text.
+  Hover is for looking; a tooltip cannot be pasted into a note, a bug report,
+  or back into the app to reproduce a result. The button acknowledges the
+  copy, because one that appears to do nothing gets pressed again.
+- **Trash** moves a file to the system Trash after confirming, not an
+  unrecoverable delete: the row label is truncated, so the wrong icon is easy
+  to hit, and the audio may be the only copy.
+- **No Generate button in History**: there is no text on screen to speak, so
+  the button would either do nothing or silently act on a mode that is not
+  visible. **Stop stays**, because a run can still be in progress while
+  History is open and hiding it would strand the user. The single-file
+  playback controls are also hidden here — History has its own per-row
+  player, and two players on screen can play over each other.
 
 ## 3. Model management
 

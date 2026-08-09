@@ -33,6 +33,7 @@ targets:
       - LogStore.swift
       - LogsView.swift
       - HistoryView.swift
+      - OutputMetadata.swift
       - ModelSettings.swift
       - SettingsView.swift
       - BackupManager.swift

@@ -73,6 +73,45 @@ struct ContentView: View {
         "Dylan", "Eric", "Ono_Anna", "Sohee",
     ]
 
+    /// Whether the current mode has everything it needs.
+    ///
+    /// Checked before the button is pressed rather than inside the engine: the
+    /// engine already rejects a clone with no reference clip, but only after
+    /// preparing the model — which on a first run means waiting out a 3.4 GB
+    /// download to be told a file is missing. Voice design had no check at all
+    /// and would generate some arbitrary voice from an empty description.
+    private var canGenerate: Bool {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return false
+        }
+        switch mode {
+        case .presetVoice:
+            return true     // a speaker is always selected
+        case .voiceDesign:
+            return !instruct.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case .voiceClone:
+            return referenceAudioURL != nil
+        }
+    }
+
+    /// Why Generate is unavailable, shown on hover — a disabled button with no
+    /// explanation is a dead end.
+    private var generateBlockedReason: String? {
+        if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return "Enter some text to speak."
+        }
+        switch mode {
+        case .presetVoice:
+            return nil
+        case .voiceDesign:
+            return instruct.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? "Describe the voice you want." : nil
+        case .voiceClone:
+            return referenceAudioURL == nil
+                ? "Choose a reference clip, or pick a saved voice." : nil
+        }
+    }
+
     /// The list the picker shows: the model's own speakers once one is loaded,
     /// the fallback until then.
     private var availableSpeakers: [String] {
@@ -135,9 +174,16 @@ struct ContentView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity,
                    alignment: .topLeading)
 
-            Divider()
+            // History has no Generate button, so an idle bar would read
+            // "press ⌘↩ to generate" beside nothing that generates — and the
+            // list is better off with the height. It comes back while a run is
+            // in progress, which is reachable from History on purpose: that is
+            // where the progress and the Stop button live.
+            if tab != .history || engine.status.isBusy {
+                Divider()
 
-            bottomBar
+                bottomBar
+            }
         }
         .frame(minWidth: 620, minHeight: 580)
         .background(WindowCloseGuard(
@@ -375,7 +421,10 @@ struct ContentView: View {
             statusView
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            if engine.lastOutputURL != nil {
+            // History has its own per-row playback, and its own player. Showing
+            // this one too would put two players on screen that can play over
+            // each other.
+            if tab != .history, engine.lastOutputURL != nil {
                 playbackControls
             }
 
@@ -383,6 +432,12 @@ struct ContentView: View {
             // sitting beside it greyed out. Downloading a model can take many
             // minutes, and until now the only way out was closing the window
             // and confirming the prompt.
+            //
+            // Stop survives in History — a run can still be going while it is
+            // open, and hiding the only way to abandon it would strand the
+            // user. Generate does not: History has no text to speak, and the
+            // button would either do nothing or silently act on a mode that is
+            // not on screen.
             if engine.status.isBusy {
                 Button(action: stopWork) {
                     Label("Stop", systemImage: "stop.fill")
@@ -394,7 +449,7 @@ struct ContentView: View {
                 .controlSize(.large)
                 .tint(.red)
                 .help("Stop the current operation")
-            } else {
+            } else if tab != .history {
                 Button(action: generate) {
                     Label("Generate", systemImage: "waveform")
                         .frame(minWidth: 110)
@@ -402,7 +457,8 @@ struct ContentView: View {
                 .keyboardShortcut(.return, modifiers: .command)
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
-                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(!canGenerate)
+                .help(generateBlockedReason ?? "Generate audio (⌘↩)")
             }
         }
         .padding(.horizontal, 16)
