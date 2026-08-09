@@ -38,7 +38,7 @@ A segmented picker selects one of three modes. macOS source:
 
 - Sample rate **24 kHz**, mono, WAV.
 - Saved to the app's per-user data folder: macOS
-  `~/Library/Application Support/Qwen3TTSStudio/Outputs` (inside the
+  `~/Library/Application Support/Bunyi/Outputs` (inside the
   sandbox container — no extra file-access entitlement needed). Other
   platforms: an equivalent per-user app-data subfolder named `Outputs`.
   One click away via the in-app reveal-in-file-manager button.

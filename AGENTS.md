@@ -16,9 +16,9 @@ have no common denominator).
 > anyone upgrading from an older build starts with an empty one — models,
 > saved voices, and settings stay behind in the old container and cannot be
 > migrated in code, because a sandboxed app cannot read another app's
-> container. On-disk container *subfolders* still use the `Qwen3TTSStudio`
-> path component; renaming those is free now that the container changed
-> anyway, but it hasn't been done.
+> container. The on-disk subfolders were renamed to `Bunyi/Models|Outputs|
+> Voices` in the same move — free to do while the container was changing
+> anyway, and nothing of the old name survives in the app.
 
 ```
 apps/macos/     Swift + MLX + SwiftUI    → macOS (Apple Silicon)   [built here]

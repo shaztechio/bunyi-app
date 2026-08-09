@@ -44,7 +44,7 @@ final class VoiceLibrary {
     private let dir: URL = {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory,
                                            in: .userDomainMask)[0]
-            .appendingPathComponent("Qwen3TTSStudio/Voices", isDirectory: true)
+            .appendingPathComponent("Bunyi/Voices", isDirectory: true)
         try? FileManager.default.createDirectory(
             at: dir, withIntermediateDirectories: true)
         return dir

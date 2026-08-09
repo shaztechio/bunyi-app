@@ -5,19 +5,21 @@ in `/spec/FEATURES.md` and `/spec/DATA-FORMATS.md` (source of truth for all
 platforms); see `/AGENTS.md` for the multi-platform picture and the parity
 rule. This file holds macOS build details and hard-won implementation notes.
 
-> Renamed to **Bunyi** (was "Qwen3 TTS Studio"). The bundle ID and log
-> subsystem are now `app.bunyi.Bunyi`; the container subfolders
-> (`Qwen3TTSStudio/Models|Outputs|Voices`) still carry the old name.
+> Renamed to **Bunyi** (was "Qwen3 TTS Studio"). Nothing carries the old name
+> any more: the bundle ID and log subsystem are `app.bunyi.Bunyi`, and the
+> container subfolders are `Bunyi/Models|Outputs|Voices`.
 >
 > **The bundle-ID change re-keys the sandbox container.** An install upgraded
 > from a build with the old ID gets a new, empty container: its models, saved
 > voices, and settings remain in
 > `~/Library/Containers/com.geppettoforge.Qwen3TTSStudio` and are not visible
 > to the new app. This cannot be fixed in code — a sandboxed app cannot read
-> another app's container. The only migration is manual: copy the old
-> `Data/Library/Application Support/Qwen3TTSStudio` folder into the new
-> container, or point Settings → Storage at the old models folder via the
-> file picker, which *is* allowed because the user chose it.
+> another app's container. The only migration is manual: move the old
+> `…/com.geppettoforge.Qwen3TTSStudio/Data/Library/Application Support/
+> Qwen3TTSStudio` folder to `…/app.bunyi.Bunyi/Data/Library/Application
+> Support/Bunyi` — note it is renamed as well as moved — or point
+> Settings → Storage at the old models folder via the file picker, which
+> *is* allowed because the user chose it.
 
 Native macOS SwiftUI app for local text-to-speech using Qwen3-TTS on Apple
 Silicon via MLX. For non-technical end users: no terminal, models
@@ -62,7 +64,7 @@ xcodebuild -scheme "Bunyi" -destination 'platform=macOS' build
 - `TTSEngine.swift` — @MainActor @Observable engine: model download via
   swift-transformers HubApi.snapshot, one model resident at a time (evict +
   `MLX.GPU.clearCache()` on switch), generation, WAV output to
-  `Qwen3TTSStudio/Outputs` under the container's Application Support.
+  `Bunyi/Outputs` under the container's Application Support.
   Skips the network when a complete model is on disk
   (`hasCompleteModel`); a disk monitor logs bytes-on-disk every 10 s. Also
   hosts self-hosted base-URL downloads (`downloadFromBaseURL` + manifest.txt
@@ -73,7 +75,7 @@ xcodebuild -scheme "Bunyi" -destination 'platform=macOS' build
   via security-scoped bookmark (`ModelsLocation`). Plain http is blocked by
   ATS — https only unless an Info.plist exception is added.
 - `VoiceLibrary.swift` — saved voice-clone prompts in
-  `<AppSupport>/Qwen3TTSStudio/Voices` (`voices.json` + copied audio).
+  `<AppSupport>/Bunyi/Voices` (`voices.json` + copied audio).
 - `BackupManager.swift` — zip backup/restore, `zip -0` stored, live progress
   + Stop (child process killed via `RunningProcess`), volume-aware save off
   the main actor.
@@ -85,7 +87,7 @@ xcodebuild -scheme "Bunyi" -destination 'platform=macOS' build
   mid-operation (NSWindowDelegate bridge, forwards to SwiftUI's delegate).
 - App is sandboxed: default models dir is
   `~/Library/Containers/app.bunyi.Bunyi/Data/Library/
-  Application Support/Qwen3TTSStudio/Models`.
+  Application Support/Bunyi/Models`.
 
 ## Help book
 

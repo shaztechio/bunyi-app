@@ -68,7 +68,7 @@ enum ModelsLocation {
     static var defaultDir: URL {
         FileManager.default.urls(for: .applicationSupportDirectory,
                                  in: .userDomainMask)[0]
-            .appendingPathComponent("Qwen3TTSStudio/Models", isDirectory: true)
+            .appendingPathComponent("Bunyi/Models", isDirectory: true)
     }
 
     static var isCustom: Bool {

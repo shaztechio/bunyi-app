@@ -105,7 +105,7 @@ final class TTSEngine {
     private let outputDir: URL = {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory,
                                            in: .userDomainMask)[0]
-            .appendingPathComponent("Qwen3TTSStudio/Outputs", isDirectory: true)
+            .appendingPathComponent("Bunyi/Outputs", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }()
