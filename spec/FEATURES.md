@@ -108,6 +108,12 @@ a **Download** button, and reveal-in-file-manager.
 - History remains available while a generation is running — it only reads the
   folder. The generation modes do not: switching one evicts the model the
   running job is using (§2).
+- **No Generate button in History**: there is no text on screen to speak, so
+  the button would either do nothing or silently act on a mode that is not
+  visible. **Stop stays**, because a run can still be in progress while
+  History is open and hiding it would strand the user. The single-file
+  playback controls are also hidden here — History has its own per-row
+  player, and two players on screen can play over each other.
 
 ## 3. Model management
 

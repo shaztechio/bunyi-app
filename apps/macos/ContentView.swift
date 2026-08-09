@@ -375,7 +375,10 @@ struct ContentView: View {
             statusView
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            if engine.lastOutputURL != nil {
+            // History has its own per-row playback, and its own player. Showing
+            // this one too would put two players on screen that can play over
+            // each other.
+            if tab != .history, engine.lastOutputURL != nil {
                 playbackControls
             }
 
@@ -383,6 +386,12 @@ struct ContentView: View {
             // sitting beside it greyed out. Downloading a model can take many
             // minutes, and until now the only way out was closing the window
             // and confirming the prompt.
+            //
+            // Stop survives in History — a run can still be going while it is
+            // open, and hiding the only way to abandon it would strand the
+            // user. Generate does not: History has no text to speak, and the
+            // button would either do nothing or silently act on a mode that is
+            // not on screen.
             if engine.status.isBusy {
                 Button(action: stopWork) {
                     Label("Stop", systemImage: "stop.fill")
@@ -394,7 +403,7 @@ struct ContentView: View {
                 .controlSize(.large)
                 .tint(.red)
                 .help("Stop the current operation")
-            } else {
+            } else if tab != .history {
                 Button(action: generate) {
                     Label("Generate", systemImage: "waveform")
                         .frame(minWidth: 110)
