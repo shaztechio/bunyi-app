@@ -30,6 +30,13 @@ A segmented picker selects one of three modes. macOS source:
   (`supportedSpeakers`); a fallback list is shown until a model loads.
 - Language selector: auto + english, chinese, japanese, korean, german,
   french, russian, portuguese, spanish, italian.
+- **Generate is unavailable until the mode has what it needs**, and says why
+  on hover: text in every mode, plus a voice description for voice design and
+  a reference clip for voice clone. Not a validation message after the fact —
+  the engine rejects a clone with no clip only *after* preparing the model,
+  which on a first run means waiting out a multi-gigabyte download to be told
+  a file is missing. Voice design had no check at all and would generate an
+  arbitrary voice from an empty description.
 - **Emotion for clones is not supported** by the 12 Hz Base model. Do not
   add an emotion field to clone mode. Emotion for a cloned voice must come
   from the reference clip's own delivery. (Tracked upstream: 25 Hz models.)

@@ -73,6 +73,45 @@ struct ContentView: View {
         "Dylan", "Eric", "Ono_Anna", "Sohee",
     ]
 
+    /// Whether the current mode has everything it needs.
+    ///
+    /// Checked before the button is pressed rather than inside the engine: the
+    /// engine already rejects a clone with no reference clip, but only after
+    /// preparing the model — which on a first run means waiting out a 3.4 GB
+    /// download to be told a file is missing. Voice design had no check at all
+    /// and would generate some arbitrary voice from an empty description.
+    private var canGenerate: Bool {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return false
+        }
+        switch mode {
+        case .presetVoice:
+            return true     // a speaker is always selected
+        case .voiceDesign:
+            return !instruct.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case .voiceClone:
+            return referenceAudioURL != nil
+        }
+    }
+
+    /// Why Generate is unavailable, shown on hover — a disabled button with no
+    /// explanation is a dead end.
+    private var generateBlockedReason: String? {
+        if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return "Enter some text to speak."
+        }
+        switch mode {
+        case .presetVoice:
+            return nil
+        case .voiceDesign:
+            return instruct.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? "Describe the voice you want." : nil
+        case .voiceClone:
+            return referenceAudioURL == nil
+                ? "Choose a reference clip, or pick a saved voice." : nil
+        }
+    }
+
     /// The list the picker shows: the model's own speakers once one is loaded,
     /// the fallback until then.
     private var availableSpeakers: [String] {
@@ -411,7 +450,8 @@ struct ContentView: View {
                 .keyboardShortcut(.return, modifiers: .command)
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
-                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(!canGenerate)
+                .help(generateBlockedReason ?? "Generate audio (⌘↩)")
             }
         }
         .padding(.horizontal, 16)
