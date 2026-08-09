@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bunyi — local text-to-speech for your desktop</title>
+<meta name="description" content="Bunyi is a local, no-terminal desktop text-to-speech app for Qwen3-TTS. Preset voices, voice design, and voice cloning — models download themselves, then it runs offline.">
+<link rel="icon" href="assets/icon-256.png" type="image/png">
+<link rel="apple-touch-icon" href="assets/icon-256.png">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Bunyi — local text-to-speech for your desktop">
+<meta property="og:description" content="Local, no-terminal desktop text-to-speech using Qwen3-TTS. Preset voices, voice design, voice cloning. Runs offline after the first download.">
+<meta property="og:url" content="https://bunyi.app/">
+<meta property="og:image" content="https://bunyi.app/assets/icon.png">
+<meta name="twitter:card" content="summary">
+<style>
+  :root {
+    --bg: #0c0b14;
+    --bg-soft: #14121f;
+    --panel: #191627;
+    --line: #2a2740;
+    --text: #ece9f7;
+    --muted: #a49fbe;
+    --indigo: #5c54f5;
+    --violet: #a03de3;
+    --ok: #3ddc97;
+    --warn: #f5b942;
+    --radius: 14px;
+    --measure: 68ch;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  a { color: #b3aefb; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  h1, h2, h3 { line-height: 1.2; letter-spacing: -0.02em; margin: 0 0 .5em; }
+  h2 { font-size: clamp(1.5rem, 1.1rem + 1.6vw, 2.1rem); }
+  h3 { font-size: 1.06rem; letter-spacing: -0.01em; }
+  p { margin: 0 0 1em; }
+
+  code, pre, .mono {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: .875em;
+  }
+  code { background: #221f34; border: 1px solid var(--line); border-radius: 5px; padding: .1em .35em; }
+  pre {
+    background: #100e1b;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 1rem 1.1rem;
+    overflow-x: auto;
+    margin: 0 0 1rem;
+  }
+  pre code { background: none; border: 0; padding: 0; }
+
+  .wrap { width: min(100% - 2.5rem, 1060px); margin-inline: auto; }
+
+  /* ── header ─────────────────────────────────────────────── */
+  header {
+    position: sticky; top: 0; z-index: 10;
+    background: rgba(12, 11, 20, .78);
+    backdrop-filter: saturate(160%) blur(12px);
+    border-bottom: 1px solid var(--line);
+  }
+  .nav { display: flex; align-items: center; gap: 1.25rem; padding: .7rem 0; }
+  .brand { display: flex; align-items: center; gap: .55rem; font-weight: 650; letter-spacing: -0.02em; color: var(--text); }
+  .brand:hover { text-decoration: none; }
+  .brand img { width: 26px; height: 26px; border-radius: 7px; }
+  .nav nav { margin-left: auto; display: flex; gap: 1.15rem; flex-wrap: wrap; font-size: .93rem; }
+  .nav nav a { color: var(--muted); }
+  .nav nav a:hover { color: var(--text); text-decoration: none; }
+
+  /* ── hero ───────────────────────────────────────────────── */
+  .hero { position: relative; padding: clamp(3rem, 7vw, 5.5rem) 0 clamp(2.5rem, 5vw, 4rem); }
+  .hero::before {
+    content: ""; position: absolute; inset: -30% -10% auto; height: 620px; z-index: -1;
+    background:
+      radial-gradient(46% 60% at 22% 30%, rgba(92, 84, 245, .38), transparent 70%),
+      radial-gradient(44% 58% at 76% 18%, rgba(160, 61, 227, .32), transparent 70%);
+    filter: blur(6px);
+  }
+  .hero-grid { display: grid; gap: clamp(2rem, 5vw, 3.5rem); grid-template-columns: 1fr; align-items: center; }
+  @media (min-width: 820px) { .hero-grid { grid-template-columns: minmax(0, 1.25fr) minmax(0, .75fr); } }
+
+  .hero h1 { font-size: clamp(2.4rem, 1.5rem + 3.6vw, 3.9rem); margin-bottom: .35rem; }
+  .grad {
+    background: linear-gradient(100deg, #8b84ff 10%, #c77bff 70%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .pron { color: var(--muted); font-size: 1rem; margin-bottom: 1.1rem; }
+  .lede { font-size: clamp(1.05rem, 1rem + .35vw, 1.22rem); color: #d6d2ea; max-width: var(--measure); }
+
+  .hero-art { justify-self: center; }
+  .hero-art img {
+    width: min(240px, 62vw); height: auto; border-radius: 28%;
+    box-shadow: 0 30px 70px -20px rgba(92, 84, 245, .6), 0 0 0 1px rgba(255,255,255,.06);
+  }
+
+  .cta { display: flex; flex-wrap: wrap; gap: .7rem; margin-top: 1.6rem; }
+  .btn {
+    display: inline-flex; align-items: center; gap: .5rem;
+    padding: .68rem 1.15rem; border-radius: 10px; font-weight: 600; font-size: .95rem;
+    border: 1px solid transparent; color: #fff;
+  }
+  .btn:hover { text-decoration: none; }
+  .btn-primary { background: linear-gradient(100deg, var(--indigo), var(--violet)); }
+  .btn-primary:hover { filter: brightness(1.1); }
+  .btn-ghost { border-color: var(--line); background: var(--panel); color: var(--text); }
+  .btn-ghost:hover { border-color: #3d3860; }
+
+  .note { font-size: .9rem; color: var(--muted); margin-top: .9rem; max-width: var(--measure); }
+
+  /* ── sections ───────────────────────────────────────────── */
+  section { padding: clamp(2.5rem, 6vw, 4.25rem) 0; border-top: 1px solid var(--line); }
+  section > .wrap > p { max-width: var(--measure); color: #cfcbe4; }
+  .eyebrow {
+    text-transform: uppercase; letter-spacing: .14em; font-size: .74rem; font-weight: 700;
+    color: #9a92ee; margin: 0 0 .6rem;
+  }
+
+  .cards { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); margin-top: 1.75rem; }
+  .card {
+    background: linear-gradient(180deg, var(--panel), var(--bg-soft));
+    border: 1px solid var(--line); border-radius: var(--radius); padding: 1.25rem 1.3rem;
+  }
+  .card h3 { margin-bottom: .4rem; }
+  .card p { color: var(--muted); font-size: .94rem; margin: 0; }
+  .card .tag {
+    display: inline-block; font-size: .72rem; font-weight: 700; letter-spacing: .06em;
+    text-transform: uppercase; color: #cfcbe4; background: #262239;
+    border: 1px solid var(--line); border-radius: 999px; padding: .12rem .55rem; margin-bottom: .7rem;
+  }
+
+  .features { display: grid; gap: 1.35rem 2rem; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); margin-top: 1.75rem; }
+  .feature h3 { margin-bottom: .3rem; }
+  .feature p { color: var(--muted); font-size: .94rem; margin: 0; }
+  .feature h3::before { content: "▚"; color: #7b72f0; margin-right: .5rem; font-size: .8em; }
+
+  .table-scroll { overflow-x: auto; margin-top: 1.5rem; }
+  table { border-collapse: collapse; width: 100%; min-width: 560px; font-size: .95rem; }
+  th, td { text-align: left; padding: .8rem .9rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: .78rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); font-weight: 700; }
+  tbody tr:last-child td { border-bottom: 0; }
+  .pill { display: inline-block; font-size: .78rem; font-weight: 700; border-radius: 999px; padding: .12rem .6rem; }
+  .pill-ok { color: #0d2a1f; background: var(--ok); }
+  .pill-wip { color: #2c2003; background: var(--warn); }
+
+  .steps { counter-reset: step; list-style: none; padding: 0; margin: 1.5rem 0 0; }
+  .steps li { counter-increment: step; position: relative; padding-left: 2.4rem; margin-bottom: 1.4rem; }
+  .steps li::before {
+    content: counter(step); position: absolute; left: 0; top: .05rem;
+    width: 1.7rem; height: 1.7rem; border-radius: 50%;
+    display: grid; place-items: center; font-size: .85rem; font-weight: 700;
+    background: linear-gradient(140deg, var(--indigo), var(--violet)); color: #fff;
+  }
+  .steps h3 { margin-bottom: .25rem; }
+  .steps p { color: var(--muted); font-size: .94rem; }
+
+  .callout {
+    border: 1px solid var(--line); border-left: 3px solid #7b72f0;
+    background: var(--bg-soft); border-radius: 0 var(--radius) var(--radius) 0;
+    padding: 1rem 1.2rem; margin-top: 1.5rem; max-width: var(--measure);
+  }
+  .callout p:last-child { margin-bottom: 0; }
+
+  footer {
+    border-top: 1px solid var(--line); padding: 2.5rem 0 3.5rem;
+    color: var(--muted); font-size: .9rem;
+  }
+  .foot-grid { display: flex; flex-wrap: wrap; gap: 1.5rem 2.5rem; justify-content: space-between; align-items: flex-start; }
+  .foot-links { display: flex; gap: 1.25rem; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap nav">
+    <a class="brand" href="./"><img src="assets/icon-256.png" alt=""> Bunyi</a>
+    <nav>
+      <a href="#modes">Modes</a>
+      <a href="#features">Features</a>
+      <a href="#platforms">Platforms</a>
+      <a href="#get">Get it</a>
+      <a href="https://github.com/shaztechio/bunyi-app">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+<div class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <h1>Text to speech that stays <span class="grad">on your machine</span></h1>
+      <p class="pron"><strong>Bunyi</strong> — <em>BOON-yee</em>, /ˈbuːɲi/ — is Malay/Indonesian for <em>“sound.”</em></p>
+      <p class="lede">
+        A desktop app for <a href="https://github.com/QwenLM/Qwen3-TTS">Qwen3-TTS</a> built for people
+        who don’t use a terminal. Pick a voice, describe one, or clone one from a clip. Models download
+        themselves with a progress bar; after that it generates offline, and the audio never leaves your computer.
+      </p>
+      <div class="cta">
+        <a class="btn btn-primary" href="#get">Get started</a>
+        <a class="btn btn-ghost" href="https://github.com/shaztechio/bunyi-app">View source</a>
+      </div>
+      <p class="note">
+        macOS (Apple Silicon) works today and is built from source — there’s no signed release download yet.
+        The Windows and Linux app is a scaffold, not a working build.
+      </p>
+    </div>
+    <div class="hero-art">
+      <img src="assets/icon.png" alt="The Bunyi app icon: a white waveform on an indigo-to-violet gradient.">
+    </div>
+  </div>
+</div>
+
+<section id="modes">
+  <div class="wrap">
+    <p class="eyebrow">Three ways to make a voice</p>
+    <h2>One text box, three modes</h2>
+    <p>
+      A segmented picker at the top switches modes. Every generation is 24&nbsp;kHz mono WAV, auto-played
+      when it finishes and saved to the app’s <code>Outputs</code> folder — one click from a reveal button.
+    </p>
+
+    <div class="cards">
+      <div class="card">
+        <span class="tag">Preset voice</span>
+        <h3>Pick from the model’s speakers</h3>
+        <p>Choose a built-in speaker, set a language, and optionally add a style instruction to steer emotion and delivery.</p>
+      </div>
+      <div class="card">
+        <span class="tag">Voice design</span>
+        <h3>Describe the voice you want</h3>
+        <p>Write a description — “a calm older narrator, slightly gravelly” — and the model builds a voice to match. Style instructions apply here too.</p>
+      </div>
+      <div class="card">
+        <span class="tag">Voice clone</span>
+        <h3>Match a reference clip</h3>
+        <p>Give it a short clip and its transcript. Bunyi resamples to 24&nbsp;kHz mono for you, and if you leave the transcript blank it transcribes the clip on-device.</p>
+      </div>
+    </div>
+
+    <div class="callout">
+      <p>
+        <strong>Emotion and clones.</strong> Cloning runs on the Base model, which isn’t instruction-tuned, so there’s
+        no style field in clone mode — the emotion has to come from the reference clip’s own delivery. Keeping one saved
+        voice per emotion is the practical workaround. This is a limit of today’s 12&nbsp;Hz models, not of the app.
+      </p>
+    </div>
+  </div>
+</section>
+
+<section id="features">
+  <div class="wrap">
+    <p class="eyebrow">What’s in the box</p>
+    <h2>Built so nobody has to open a terminal</h2>
+
+    <div class="features">
+      <div class="feature">
+        <h3>Models download themselves</h3>
+        <p>First generation in a mode fetches that model (~1.5–4.5&nbsp;GB) with a progress bar and an ETA (“42% — about 3.1&nbsp;MB/s, ~6 min left”). Resumable, incremental, and skipped entirely once complete.</p>
+      </div>
+      <div class="feature">
+        <h3>Offline after that</h3>
+        <p>A complete model on disk is used with no network at all. Generation, playback, and file output are local.</p>
+      </div>
+      <div class="feature">
+        <h3>Stall detection</h3>
+        <p>A disk monitor logs bytes-on-disk every 10 seconds during a multi-gigabyte file and warns when nothing new has landed for 30 — so a dead connection looks different from a slow one.</p>
+      </div>
+      <div class="feature">
+        <h3>Saved voices</h3>
+        <p>Store a clone recipe — name, reference clip, transcript. The clip is copied into app storage, so it survives relaunch and folder cleanups.</p>
+      </div>
+      <div class="feature">
+        <h3>On-device transcription</h3>
+        <p>Cloning needs the reference transcript to align audio to words. Leave it blank and the app transcribes locally (Apple’s Speech framework on macOS); anything you type wins.</p>
+      </div>
+      <div class="feature">
+        <h3>Backup and restore</h3>
+        <p>Archive the whole models folder to one stored (uncompressed) zip with a real progress bar and a Stop button. Restore merges per repo and never clobbers a model you already have.</p>
+      </div>
+      <div class="feature">
+        <h3>Bring your own model host</h3>
+        <p>Each mode takes a Hugging Face repo ID <em>or</em> an <code>https://</code> base URL you control. Bunyi reads <code>manifest.txt</code> from your server and pulls the files directly.</p>
+      </div>
+      <div class="feature">
+        <h3>Your own models folder</h3>
+        <p>Point storage at an external drive and it stays there across launches. Settings also shows copyable <code>hf download</code> commands with the real path filled in.</p>
+      </div>
+      <div class="feature">
+        <h3>A real log window</h3>
+        <p>Timestamped, selectable, copyable. Downloads, tokenizer steps, transcription results, token milestones, output paths and timings, and full error text.</p>
+      </div>
+      <div class="feature">
+        <h3>Won’t lose your work</h3>
+        <p>Closing the window mid-download or mid-generation asks first, with “Keep Working” as the safe default.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="platforms">
+  <div class="wrap">
+    <p class="eyebrow">Status, honestly</p>
+    <h2>Three operating systems, two codebases, one spec</h2>
+    <p>
+      Qwen3-TTS has no single cross-platform runtime — MLX is Apple-Silicon only — so Bunyi is native apps per
+      platform, kept at feature parity by a shared specification rather than shared code.
+    </p>
+
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>Target</th><th>Stack</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>macOS</strong><br><span style="color:var(--muted)">Apple Silicon, macOS 15+</span></td>
+            <td>Swift + MLX + SwiftUI</td>
+            <td><span class="pill pill-ok">Working</span><br><span style="color:var(--muted)">Reference implementation; build it yourself</span></td>
+          </tr>
+          <tr>
+            <td><strong>Windows and Linux</strong><br><span style="color:var(--muted)">One app, both systems</span></td>
+            <td>C# .NET + Avalonia + ONNX Runtime</td>
+            <td><span class="pill pill-wip">Scaffold</span><br><span style="color:var(--muted)">Structure, build docs, and stubs — not yet implemented</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout">
+      <p>
+        <strong>The spec is the source of truth.</strong> Observable behavior lives in
+        <a href="https://github.com/shaztechio/bunyi-app/blob/main/spec/FEATURES.md">FEATURES.md</a>, and on-disk
+        layout lives in <a href="https://github.com/shaztechio/bunyi-app/blob/main/spec/DATA-FORMATS.md">DATA-FORMATS.md</a>
+        — so a models folder, a backup zip, or a voices library is interchangeable between apps of the same runtime family.
+        A feature change updates the spec <em>and</em> every app.
+      </p>
+    </div>
+  </div>
+</section>
+
+<section id="get">
+  <div class="wrap">
+    <p class="eyebrow">Get it running</p>
+    <h2>Build the macOS app</h2>
+    <p>
+      There’s no notarized download yet, so today this means a build from source on an Apple Silicon Mac
+      running macOS 15 or later, with Xcode 26 (the app uses Swift 6.2 and mlx-swift’s Metal toolchain).
+    </p>
+
+    <ol class="steps">
+      <li>
+        <h3>Clone and generate the Xcode project</h3>
+        <p>The <code>.xcodeproj</code> is generated from <code>project.yml</code> and isn’t checked in — edit the YAML, never the project.</p>
+<pre><code>git clone https://github.com/shaztechio/bunyi-app.git
+cd bunyi-app/apps/macos
+brew install xcodegen
+xcodegen generate</code></pre>
+      </li>
+      <li>
+        <h3>Install the Metal toolchain</h3>
+        <p>Xcode 26 ships the Metal compiler separately, and mlx-swift compiles shaders. Skip this and the first build fails with <em>“cannot execute tool ‘metal’”</em>.</p>
+<pre><code>xcodebuild -downloadComponent MetalToolchain</code></pre>
+      </li>
+      <li>
+        <h3>Build and run</h3>
+        <p>Open <code>Bunyi.xcodeproj</code> and press ⌘R, or build from the command line. Xcode resolves swift-qwen3-tts and its dependencies on the first build.</p>
+<pre><code>xcodebuild -scheme "Bunyi" -destination 'platform=macOS' build</code></pre>
+      </li>
+      <li>
+        <h3>Generate something</h3>
+        <p>Type text, pick a mode, hit Generate. The first run in each mode downloads that mode’s model with a progress bar; every run after that is offline.</p>
+      </li>
+    </ol>
+
+    <p class="note">
+      Working on Windows or Linux? The .NET app is a scaffold — start from
+      <a href="https://github.com/shaztechio/bunyi-app/blob/main/apps/dotnet/AGENTS.md">apps/dotnet/AGENTS.md</a>
+      and the spec. It can’t be built on a Mac.
+    </p>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap foot-grid">
+    <div>
+      <a class="brand" href="./"><img src="assets/icon-256.png" alt=""> Bunyi</a>
+      <p style="margin:.6rem 0 0">Local text-to-speech, no terminal required.</p>
+    </div>
+    <div class="foot-links">
+      <a href="https://github.com/shaztechio/bunyi-app">Repository</a>
+      <a href="https://github.com/shaztechio/bunyi-app/blob/main/spec/FEATURES.md">Feature spec</a>
+      <a href="https://github.com/QwenLM/Qwen3-TTS">Qwen3-TTS</a>
+      <a href="https://github.com/AtomGradient/swift-qwen3-tts">swift-qwen3-tts</a>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
