@@ -625,13 +625,24 @@ final class TTSEngine {
             // MLXArray isn't Sendable, and only one generation runs at a time.
             let boxed = Unchecked(value: audio)
             let rate = Double(model.sampleRate)
+            // One UI field means two different things: the delivery
+            // instruction in preset voice, the voice description in voice
+            // design. Recording which it was is the difference between a file
+            // that can be reproduced and one that merely has a string in it.
+            let nonEmpty: (String?) -> String? = { value in
+                let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines)
+                return (trimmed?.isEmpty == false) ? trimmed : nil
+            }
             let metadata = OutputMetadata(
                 mode: mode.rawValue,
                 text: text,
                 language: language,
-                speaker: mode == .presetVoice ? speaker : nil,
-                instruct: mode == .voiceClone ? nil : instruct,
-                referenceTranscript: mode == .voiceClone ? lastReferenceTranscript : nil,
+                speaker: mode == .presetVoice ? nonEmpty(speaker) : nil,
+                style: mode == .presetVoice ? nonEmpty(instruct) : nil,
+                voiceDescription: mode == .voiceDesign ? nonEmpty(instruct) : nil,
+                referenceTranscript: mode == .voiceClone
+                    ? nonEmpty(referenceText) ?? nonEmpty(lastReferenceTranscript)
+                    : nil,
                 modelRepo: mode.effectiveRepoID,
                 appVersion: Self.appVersion,
                 created: Date()

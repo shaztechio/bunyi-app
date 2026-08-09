@@ -24,9 +24,21 @@ struct OutputMetadata: Codable, Hashable {
     var mode: String
     var text: String
     var language: String
+
+    // The three modes choose a voice in three different ways, and the UI reuses
+    // one text field for two of them — "Style" in preset voice, "Voice" in
+    // voice design. Storing both under one key would leave a reader unable to
+    // tell a delivery instruction from a voice description, so each gets its
+    // own, and only the one belonging to the mode is filled.
+    /// Preset voice: the speaker chosen from the model's list.
     var speaker: String?
-    var instruct: String?
+    /// Preset voice: the optional delivery instruction.
+    var style: String?
+    /// Voice design: the description the voice was built from.
+    var voiceDescription: String?
+    /// Voice clone: the transcript of the reference clip.
     var referenceTranscript: String?
+
     var modelRepo: String
     var appVersion: String
     var created: Date
@@ -39,11 +51,14 @@ struct OutputMetadata: Codable, Hashable {
         return firstLine.count <= 60 ? firstLine : String(firstLine.prefix(59)) + "…"
     }
 
-    /// The voice, however it was chosen in this mode.
-    var voiceDescription: String {
+    /// The voice, however this mode chose one — for display, and for `IART`.
+    var voiceSummary: String? {
         if let speaker, !speaker.isEmpty { return speaker }
-        if let instruct, !instruct.isEmpty { return instruct }
-        return mode
+        if let voiceDescription, !voiceDescription.isEmpty { return voiceDescription }
+        if let referenceTranscript, !referenceTranscript.isEmpty {
+            return "Cloned voice"
+        }
+        return nil
     }
 }
 
@@ -145,7 +160,7 @@ enum WAVMetadata {
 
         var fields: [(String, String)] = [
             ("INAM", metadata.title),
-            ("IART", metadata.voiceDescription),
+            ("IART", metadata.voiceSummary ?? metadata.mode),
             ("ISFT", "Bunyi \(metadata.appVersion)"),
             ("ICRD", ISO8601DateFormatter().string(from: metadata.created)),
             ("IGNR", "Speech"),

@@ -96,8 +96,14 @@ Stored in a `Voices` subfolder of app data, alongside copied audio clips.
   useful — `INAM` (the text, truncated), `IART` (speaker or voice
   description), `ISFT` (`Bunyi <version>`), `ICRD` (ISO 8601), `IGNR`
   (`Speech`) — plus the whole record as JSON in `ICMT`:
-  `mode`, `text`, `language`, `speaker`, `instruct`, `referenceTranscript`,
-  `modelRepo`, `appVersion`, `created`.
+  `mode`, `text`, `language`, `modelRepo`, `appVersion`, `created`, plus
+  exactly one voice field for the mode that produced it: `speaker` and
+  optional `style` (preset voice), `voiceDescription` (voice design), or
+  `referenceTranscript` (voice clone). They are separate keys on purpose —
+  the macOS UI reuses one text field for the preset-voice *style* and the
+  voice-design *description*, so a single key would leave a reader unable to
+  tell a delivery instruction from a voice. Empty values are omitted rather
+  than stored blank.
   There is no standard four-character code for "the prompt", and inventing
   private ones would be readable by nothing, so one comment field carries it.
   The chunk is **appended**, leaving the audio bytes untouched, and tagging is

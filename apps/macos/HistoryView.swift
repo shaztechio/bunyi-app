@@ -222,10 +222,19 @@ struct HistoryView: View {
         let size = ByteCountFormatter.string(fromByteCount: item.byteCount,
                                              countStyle: .file)
         var parts = [metadata?.mode ?? item.mode, date, size]
-        if let voice = metadata?.speaker, !voice.isEmpty {
-            parts.insert(voice, at: 1)
+        // The voice, whichever way this mode picked one — a speaker name, a
+        // designed-voice description, or a clone. Showing only `speaker` left
+        // every Voice design row with nothing identifying its voice.
+        if let voice = metadata?.voiceSummary {
+            parts.insert(Self.trimmed(voice), at: 1)
         }
         return parts.joined(separator: " · ")
+    }
+
+    /// Voice descriptions are free text and can be a sentence; a row is not.
+    private static func trimmed(_ value: String) -> String {
+        let flat = value.replacingOccurrences(of: "\n", with: " ")
+        return flat.count <= 40 ? flat : String(flat.prefix(39)) + "…"
     }
 
     /// The full record on hover — the text can be far longer than a row.
@@ -233,13 +242,16 @@ struct HistoryView: View {
                                 metadata: OutputMetadata?) -> String {
         guard let metadata else { return item.url.lastPathComponent }
         var lines = ["\(metadata.mode) · \(metadata.language)"]
-        if let speaker = metadata.speaker, !speaker.isEmpty {
+        if let speaker = metadata.speaker {
             lines.append("Speaker: \(speaker)")
         }
-        if let instruct = metadata.instruct, !instruct.isEmpty {
-            lines.append("Style: \(instruct)")
+        if let voice = metadata.voiceDescription {
+            lines.append("Voice: \(voice)")
         }
-        if let reference = metadata.referenceTranscript, !reference.isEmpty {
+        if let style = metadata.style {
+            lines.append("Style: \(style)")
+        }
+        if let reference = metadata.referenceTranscript {
             lines.append("Reference: \(reference)")
         }
         lines.append("Model: \(metadata.modelRepo)")
