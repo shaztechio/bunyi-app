@@ -115,6 +115,12 @@ a **Download** button, and reveal-in-file-manager.
 - History remains available while a generation is running — it only reads the
   folder. The generation modes do not: switching one evicts the model the
   running job is using (§2).
+- Playback is **play/stop, with progress drawn as a ring around the button
+  itself** rather than a separate bar — the control and its progress are the
+  same object, which is what the row has space for. No pause: these are short
+  clips, and a paused row is a third state to explain for something a user
+  would nearly always just play again. A clip that reaches its end returns the
+  row to Play on its own.
 - Each row shows one line: the text it spoke, the mode, the voice, the date
   and the size. A prompt can be paragraphs long, so **the whole record is on
   hover** — text, mode, language, voice, style or reference transcript, and

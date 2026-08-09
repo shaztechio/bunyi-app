@@ -49,14 +49,14 @@ struct HistoryView: View {
     @State private var playingID: URL?
     @State private var error: String?
     @State private var pendingDeletion: GeneratedOutput?
-    @State private var isPaused = false
+    @State private var progress: Double = 0
     @State private var copiedID: URL?
     @State private var copyResetTask: Task<Void, Never>?
 
-    /// A clip that reaches its end stops on its own, and nothing tells the view
-    /// — so the row kept showing Pause for audio that had finished. AVAudioPlayer
-    /// has a delegate for this, but it needs an NSObject; polling matches how
-    /// the main window already tracks playback.
+    /// Drives the ring, and notices a clip that reached its end — the player
+    /// stops on its own and tells the view nothing. AVAudioPlayer has a
+    /// delegate for that, but it needs an NSObject; polling matches how the
+    /// main window already tracks playback.
     private let tick = Timer.publish(every: 0.2, on: .main, in: .common)
         .autoconnect()
 
@@ -81,10 +81,10 @@ struct HistoryView: View {
         // without the user having to leave the tab and come back.
         .onChange(of: engine.lastOutputURL) { _, _ in reload() }
         .onReceive(tick) { _ in
-            // Finished on its own: not playing, and not deliberately paused.
-            if playingID != nil, !isPaused, player?.isPlaying == false {
-                stop()
-            }
+            guard playingID != nil, let player else { return }
+            guard player.isPlaying else { stop(); return }
+            progress = player.duration > 0
+                ? player.currentTime / player.duration : 0
         }
         .alert("Could not save", isPresented: .constant(error != nil)) {
             Button("OK") { error = nil }
@@ -150,11 +150,32 @@ struct HistoryView: View {
             Button {
                 toggle(item)
             } label: {
-                Image(systemName: isPlaying(item) ? "pause.fill" : "play.fill")
-                    .frame(width: 14)
+                // The ring is the progress bar, so a playing row needs no
+                // separate track taking up width — the control and its
+                // progress are the same object.
+                ZStack {
+                    if playingID == item.url {
+                        Circle()
+                            .stroke(.quaternary, lineWidth: 2)
+                        Circle()
+                            .trim(from: 0, to: progress)
+                            .stroke(Color.accentColor,
+                                    style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                            // Trim starts at 3 o'clock; sweeping from the top
+                            // is what reads as progress.
+                            .rotationEffect(.degrees(-90))
+                            // Matched to the tick, so the ring sweeps instead
+                            // of stepping.
+                            .animation(.linear(duration: 0.2), value: progress)
+                    }
+                    Image(systemName: playingID == item.url ? "stop.fill" : "play.fill")
+                        .font(.system(size: 9))
+                }
+                .frame(width: 22, height: 22)
+                .contentShape(Circle())
             }
             .buttonStyle(.borderless)
-            .help(isPlaying(item) ? "Pause" : "Play")
+            .help(playingID == item.url ? "Stop" : "Play")
 
             VStack(alignment: .leading, spacing: 2) {
                 // The prompt when the file carries one, the mode otherwise —
@@ -236,24 +257,12 @@ struct HistoryView: View {
         }
     }
 
-    /// Playing *right now* — not merely the selected row. A paused row shows
-    /// Play, because pressing it resumes.
-    private func isPlaying(_ item: GeneratedOutput) -> Bool {
-        playingID == item.url && !isPaused
-    }
-
+    /// Play, or stop what is playing. No resume: these are short clips, and a
+    /// paused row is a third state to explain for something you would nearly
+    /// always just play again.
     private func toggle(_ item: GeneratedOutput) {
-        // Pause and resume, not stop and restart. The icon said pause while the
-        // action threw the player away, so pressing it twice restarted the clip
-        // from the beginning instead of continuing.
-        if playingID == item.url, let player {
-            if player.isPlaying {
-                player.pause()
-                isPaused = true
-            } else {
-                player.play()
-                isPaused = false
-            }
+        if playingID == item.url {
+            stop()
             return
         }
         stop()
@@ -262,7 +271,7 @@ struct HistoryView: View {
             next.play()
             player = next
             playingID = item.url
-            isPaused = false
+            progress = 0
         } catch {
             self.error = error.localizedDescription
         }
@@ -272,7 +281,10 @@ struct HistoryView: View {
         player?.stop()
         player = nil
         playingID = nil
-        isPaused = false
+        // Snap back rather than animating to zero, which reads as a rewind.
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) { progress = 0 }
     }
 
     /// Puts the record on the clipboard as readable text — the same thing the
