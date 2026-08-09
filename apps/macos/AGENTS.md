@@ -5,10 +5,19 @@ in `/spec/FEATURES.md` and `/spec/DATA-FORMATS.md` (source of truth for all
 platforms); see `/AGENTS.md` for the multi-platform picture and the parity
 rule. This file holds macOS build details and hard-won implementation notes.
 
-> Renamed to **Bunyi** (was "Qwen3 TTS Studio"). The bundle ID
-> (`com.geppettoforge.Qwen3TTSStudio`), log subsystem, and container
-> subfolders (`Qwen3TTSStudio/Models|Outputs|Voices`) deliberately keep the
-> old name so existing installs keep their models, voices, and settings.
+> Renamed to **Bunyi** (was "Qwen3 TTS Studio"). The bundle ID and log
+> subsystem are now `app.bunyi.Bunyi`; the container subfolders
+> (`Qwen3TTSStudio/Models|Outputs|Voices`) still carry the old name.
+>
+> **The bundle-ID change re-keys the sandbox container.** An install upgraded
+> from a build with the old ID gets a new, empty container: its models, saved
+> voices, and settings remain in
+> `~/Library/Containers/com.geppettoforge.Qwen3TTSStudio` and are not visible
+> to the new app. This cannot be fixed in code — a sandboxed app cannot read
+> another app's container. The only migration is manual: copy the old
+> `Data/Library/Application Support/Qwen3TTSStudio` folder into the new
+> container, or point Settings → Storage at the old models folder via the
+> file picker, which *is* allowed because the user chose it.
 
 Native macOS SwiftUI app for local text-to-speech using Qwen3-TTS on Apple
 Silicon via MLX. For non-technical end users: no terminal, models
@@ -71,11 +80,11 @@ xcodebuild -scheme "Bunyi" -destination 'platform=macOS' build
 - `ReferenceTranscriber.swift` — on-device auto-transcription (Speech) when
   the transcript field is blank; feeds PCM buffers, not a file URL.
 - `LogStore.swift` / `LogsView.swift` — Logs window (⌘L), mirrored to OSLog
-  subsystem `com.geppettoforge.Qwen3TTSStudio`.
+  subsystem `app.bunyi.Bunyi`.
 - `WindowCloseGuard.swift` — confirm-and-stop when the window is closed
   mid-operation (NSWindowDelegate bridge, forwards to SwiftUI's delegate).
 - App is sandboxed: default models dir is
-  `~/Library/Containers/com.geppettoforge.Qwen3TTSStudio/Data/Library/
+  `~/Library/Containers/app.bunyi.Bunyi/Data/Library/
   Application Support/Qwen3TTSStudio/Models`.
 
 ## Help book

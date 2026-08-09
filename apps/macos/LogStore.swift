@@ -37,7 +37,7 @@ final class LogStore {
     private(set) var entries: [Entry] = []
 
     private let osLog = Logger(
-        subsystem: "com.geppettoforge.Qwen3TTSStudio", category: "app")
+        subsystem: "app.bunyi.Bunyi", category: "app")
     private let cap = 2000
 
     func log(_ message: String) {

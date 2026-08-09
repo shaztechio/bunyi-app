@@ -11,10 +11,14 @@ non-technical users. It ships as **native apps per platform**, kept at
 feature parity by a shared specification — **not** shared code (the runtimes
 have no common denominator).
 
-> Rename note: the macOS bundle ID stays `com.geppettoforge.Qwen3TTSStudio`
-> so existing installs keep their sandbox container (models, saved voices,
-> settings). On-disk container subfolders likewise keep the `Qwen3TTSStudio`
-> path component. Only user-facing names changed.
+> Rename note: the macOS bundle ID is now `app.bunyi.Bunyi` (was
+> `com.geppettoforge.Qwen3TTSStudio`). That re-keys the sandbox container, so
+> anyone upgrading from an older build starts with an empty one — models,
+> saved voices, and settings stay behind in the old container and cannot be
+> migrated in code, because a sandboxed app cannot read another app's
+> container. On-disk container *subfolders* still use the `Qwen3TTSStudio`
+> path component; renaming those is free now that the container changed
+> anyway, but it hasn't been done.
 
 ```
 apps/macos/     Swift + MLX + SwiftUI    → macOS (Apple Silicon)   [built here]
