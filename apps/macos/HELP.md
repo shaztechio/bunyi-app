@@ -27,7 +27,7 @@ The word is Malay and Indonesian for **sound**.
 ## Start here
 
 1. Type or paste your text in the big box.
-2. Pick a mode at the top: **Preset voice**, **Voice design**, or **Voice clone**.
+2. Pick a mode at the top: **Preset voice**, **Voice design**, or **Voice clone**. (The fourth tab, **History**, is where everything you have made is kept.)
 3. Click **Generate**.
 
 The first time you use each mode, Bunyi downloads that mode's voice model — between about 1.5 GB and 4.5 GB — and shows a progress bar with an estimate of the time remaining. This happens once per mode. Every generation after that is offline and much faster.
@@ -71,9 +71,34 @@ Pick a saved voice from the menu and its recording and transcript fill in for yo
 
 Saved voices are not the same as the preset speakers. A preset is a voice the model was trained on; a saved voice is a shortcut that re-runs the clone with the inputs you stored.
 
+## Stopping
+
+While Bunyi is working — downloading a model, transcribing, or generating — the **Generate** button becomes **Stop**. Press it, or press Escape, to abandon the run.
+
+Stopping is not always instant. The app stops waiting immediately, but the part doing the actual speech work may take a moment to wind down, and Bunyi says *Stopping…* until it has. It will not start another generation until that finishes.
+
+## History
+
+The **History** tab lists everything you have generated, newest first.
+
+Each row shows what was said, the voice it used, and when it was made. Hover over a row to see the whole thing — the full text, the language, the voice or reference, and which model produced it.
+
+Every row has four things you can do:
+
+- **Play** — a ring around the button fills as the audio plays. Press it again to stop.
+- **Download** — save a copy wherever you like.
+- **Show in Finder** — reveal the original file.
+- **Trash** — move it to the Trash, after confirming. It goes to the Trash rather than vanishing, so you can still get it back.
+
+**Copy details** puts everything Bunyi knows about a clip on the clipboard, ready to paste into a note or a message.
+
+History reads the folder each time you open it, so a file you delete in the Finder disappears from the list too.
+
 ## Where your files go
 
 Generated audio is saved automatically as a WAV file named for the mode and the time it was made. The reveal button next to **Play** opens the folder in the Finder.
+
+**Each file remembers how it was made.** The text, the voice, the language, and the model are stored inside the WAV itself, so a file you find months later — or send to someone else — still says what produced it. Other audio apps can read it too: the title and artist fields show the text and the voice.
 
 ## Settings
 

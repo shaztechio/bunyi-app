@@ -242,8 +242,9 @@
     <p class="eyebrow">Three ways to make a voice</p>
     <h2>One text box, three modes</h2>
     <p>
-      A segmented picker at the top switches modes. Every generation is 24&nbsp;kHz mono WAV, auto-played
-      when it finishes and saved to the app’s <code>Outputs</code> folder — one click from a reveal button.
+      A segmented picker at the top switches modes — plus a fourth tab, <strong>History</strong>, holding
+      everything you’ve made. Every generation is 24&nbsp;kHz mono WAV, auto-played when it finishes and
+      saved to the app’s <code>Outputs</code> folder — one click from a reveal button.
     </p>
 
     <div class="cards">
@@ -280,6 +281,18 @@
     <h2>Built so nobody has to open a terminal</h2>
 
     <div class="features">
+      <div class="feature">
+        <h3>Everything you’ve made, kept</h3>
+        <p>A History tab lists every clip, newest first — what it said, which voice, when. Play it back with the progress drawn around the button, save a copy anywhere, copy the details, or move it to the Trash. It reads the folder, so deleting a file in the Finder removes it from the list too.</p>
+      </div>
+      <div class="feature">
+        <h3>Every file remembers how it was made</h3>
+        <p>The text, voice, language, and model are written inside the WAV itself, so a file you find months later still says what produced it. Standard RIFF tags, so <code>ffprobe</code> and ordinary audio apps read them too — not a sidecar file to lose.</p>
+      </div>
+      <div class="feature">
+        <h3>Stop whenever you like</h3>
+        <p>Generate becomes Stop while anything is running — a download, a transcription, a generation — and Escape works too. It tells you when it’s still winding down rather than pretending it stopped instantly.</p>
+      </div>
       <div class="feature">
         <h3>Models download themselves</h3>
         <p>First generation in a mode fetches that model (~1.5–4.5&nbsp;GB) with a progress bar and an ETA (“42% — about 3.1&nbsp;MB/s, ~6 min left”). Resumable, incremental, and skipped entirely once complete.</p>
