@@ -261,9 +261,13 @@ macOS source: `WindowCloseGuard.swift`.
   is in progress** (download, transcription, generation, model load),
   confirm first: "Stop the current operation?" with *Keep Working* (safe
   default) and *Stop and Close* (destructive).
-- Confirming **stops the work** (cancel cooperatively) and closes. The
-  synchronous clone compute may finish in the background but its result is
-  discarded. Not busy ⇒ close immediately.
+- Confirming **stops the work first, and closes once it has actually
+  stopped** — not both at once. Cancellation is cooperative (§2), so a window
+  that closes on confirmation disappears while the engine is still generating
+  and still holding the model; the app then has no window and visible work.
+  The window stays up, showing its *stopping* state, until the engine reports
+  idle. A timeout closes anyway rather than trapping the user in a window
+  that will not shut. Not busy ⇒ close immediately.
 
 ## 10. Error handling & copy tone
 
