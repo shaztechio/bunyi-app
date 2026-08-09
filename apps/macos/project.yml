@@ -54,6 +54,12 @@ targets:
       properties:
         CFBundleDisplayName: Bunyi
         LSApplicationCategoryType: public.app-category.utilities
+        # Without these, XcodeGen writes a literal 1.0 / 1 and the build
+        # settings below are ignored — so the app shipped as 1.0 no matter
+        # what MARKETING_VERSION said, and release.yml's tag check compared
+        # a bumped tag against a version that never moved.
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSSpeechRecognitionUsageDescription: >-
           Used to transcribe your reference clip on-device so voice cloning
           can match the spoken words to the audio.

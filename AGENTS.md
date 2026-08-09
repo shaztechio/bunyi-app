@@ -61,14 +61,30 @@ by humans or agents — including docs, spec edits, and one-line fixes.
 
 1. Branch off `main` (`git switch -c <topic>`), commit there, push, and
    open a PR.
-2. CI (`.github/workflows/`) must run on the PR. The .NET matrix is red
-   until that app is implemented — that's expected; the macOS workflow is
-   the gate for `apps/macos/` changes.
-3. A PR that changes a feature must also carry the `spec/` update the
+2. **The PR title is a Conventional Commit.** `<type>[(scope)][!]: <summary>`
+   — e.g. `feat(macos): add a help button to the main window`. Types:
+   `feat`, `fix`, `docs`, `refactor`, `perf`, `test`, `build`, `ci`,
+   `chore`, `revert`; `!` marks a breaking change. Lowercase after the
+   colon, no trailing period, imperative mood ("add", not "adds"/"added").
+   This matters because PRs squash: the title *becomes* the commit subject
+   on `main` and then a line in the release notes that
+   `tools/packaging/release-notes.py` groups by type. A title that skips
+   the convention lands under "Other changes" forever.
+3. CI (`.github/workflows/`) must run on the PR. The macOS workflow is the
+   gate for `apps/macos/` changes.
+4. A PR that changes a feature must also carry the `spec/` update the
    parity rule above requires. Reviewers reject feature changes that land
    in one app with no spec change and no tracked follow-up.
-4. Squash or merge via the PR — don't push the branch's commits straight
-   onto `main` to "save a step".
+5. Squash or merge via the PR — don't push the branch's commits straight
+   onto `main` to "save a step". A stacked PR merges **bottom-up**: merging
+   the base first strands whatever sits above it, which is how #2's work
+   missed `main` entirely and needed #3 to rescue it.
+
+The title rule is documented, not enforced — nothing rejects a
+non-conforming title today. Sandfort's `tools/packaging/check-pull-request.py`
+implements exactly this check and was deliberately left unported; bring it
+over, plus the `pull_request: types: [… edited]` trigger it needs, if the
+rule should become a gate.
 
 ## Licensing
 
