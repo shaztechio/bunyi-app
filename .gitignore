@@ -33,3 +33,7 @@ dist/
 
 # ── Claude Code machine-local settings ────────────────────────────────
 .claude/settings.local.json
+
+# Python bytecode from the packaging scripts
+__pycache__/
+*.pyc

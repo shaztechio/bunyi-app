@@ -1,13 +1,45 @@
+# Copyright 2026 Shazron Abdullah and Bunyi contributors
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 name: macOS build
 
+# Safe on pull requests, unlike release.yml: this needs no secrets, so a branch
+# cannot use it to reach the signing certificate.
 on:
   push:
+    branches: [main]
     paths: ["apps/macos/**", "spec/**", ".github/workflows/macos.yml"]
   pull_request:
     paths: ["apps/macos/**", "spec/**", ".github/workflows/macos.yml"]
+  workflow_dispatch:
+
+# Read-only. Nothing here writes to the repository, and saying so means a token
+# leak from a build step cannot push.
+permissions:
+  contents: read
+
+# A new push supersedes the previous run for the same branch. Release builds are
+# deliberately excluded from this pattern — see release.yml, where cancelling a
+# half-finished notarization would be worse than waiting.
+concurrency:
+  group: macos-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
+    # MLX compiles a large amount of C++ and Metal from source on a cold cache.
+    timeout-minutes: 90
     # Xcode 26 required: the app uses Swift 6.2 features and mlx-swift's
     # Metal Toolchain. It does NOT build on the macos-15 image (Xcode 16.4).
     runs-on: macos-26

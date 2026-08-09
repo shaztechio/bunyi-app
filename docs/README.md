@@ -26,8 +26,27 @@ site is reachable at `https://shaztechio.github.io/bunyi-app/`; delete
 | `index.html` | The whole site — hero, modes, features, platform status, build steps |
 | `assets/icon.png` | 1024px app icon, copied from `apps/macos/Assets.xcassets` |
 | `assets/icon-256.png` | 256px copy, used as the favicon |
+| `assets/og-card.png` | 1200×630 link-preview image (`og:image`) |
+| `tools/generate-og-card.swift` | Renders `og-card.png` |
 | `CNAME` | Custom domain |
 | `.nojekyll` | Serve files as-is |
+
+## Link previews
+
+`og:image` must be an **absolute** URL — scrapers do not resolve relative
+ones — so every OpenGraph URL on the page points at `https://bunyi.app/…`.
+They are only correct once the domain actually serves this site; until then
+previews resolve to nothing, whatever the tags say.
+
+Regenerate the card after changing the wordmark or tagline:
+
+```sh
+swift docs/tools/generate-og-card.swift    # from the repository root
+```
+
+It draws into an explicitly sized bitmap rather than `NSImage.lockFocus()`,
+which would use the display's backing scale and quietly emit a 2400×1260
+image that contradicts the declared `og:image:width`/`height`.
 
 The icons are copies. If `apps/macos/tools/generate-icon.swift` changes,
 re-copy them:
