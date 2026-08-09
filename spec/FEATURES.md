@@ -48,6 +48,15 @@ A segmented picker selects one of three modes. macOS source:
 - Live progress: a token counter during generation. macOS uses
   `generateStream` (preset/design) and an `onToken` callback bridged over a
   stream (clone). Any backend must surface incremental progress.
+- **Stop**: while any work is in progress — model download, transcription,
+  model load, or generation — the Generate button is **replaced** by a Stop
+  button (Escape) that cancels it and returns the app to idle. Not merely
+  disabled: a model download runs for minutes, and without Stop the only way
+  out is closing the window and confirming (§9).
+  Cancellation is cooperative and the same caveat as §9 applies: work already
+  running inside the inference engine may finish in the background, and its
+  result is discarded. What the user is promised is that the app stops
+  waiting and becomes usable again, not that the machine stops computing.
 
 ## 3. Model management
 
