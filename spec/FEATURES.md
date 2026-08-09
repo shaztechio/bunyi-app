@@ -44,10 +44,11 @@ A segmented picker selects one of three modes. macOS source:
   One click away via the in-app reveal-in-file-manager button.
   Filename: `<Mode>-<ISO8601 timestamp>.wav`.
 - After generation the app auto-plays the result and offers Play + reveal
-  in file manager. **Only this run's result.** A cancelled or failed run
-  plays nothing — the previous output is still on disk and still the newest
-  file the app knows about, so "play the latest" would play the older audio
-  and read as though Stop had produced it.
+  in file manager. **Only this run's result.** Starting a run clears the
+  previous one: the playback controls disappear for the duration, so nothing
+  offers to play the old audio while new audio is being made, and a cancelled
+  run leaves nothing to play rather than falling back to the file from
+  before. The old file is untouched on disk — it is still in `Outputs`.
 - **While work is in progress the inputs are disabled** — text, language,
   speaker, style, reference clip, saved voice, and the mode picker. Their
   values were already handed to the engine when the run started, so leaving

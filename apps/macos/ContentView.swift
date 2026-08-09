@@ -433,11 +433,12 @@ struct ContentView: View {
         isPlaying = false
         playbackTime = 0
         genTask?.cancel()
-        // What "auto-play the result" is allowed to mean: THIS run's result.
-        // lastOutputURL still holds the previous run's file, so a cancelled or
-        // failed run used to play the older audio back — which reads as the
-        // Stop button having generated something.
-        let previousOutput = engine.lastOutputURL
+        // Drop the previous run's audio the moment a new one starts: the
+        // playback controls disappear with it, so there is nothing offering to
+        // play the old result while a new one is being made. It also means a
+        // cancelled run leaves nothing to play, rather than quietly falling
+        // back to the file from before.
+        engine.clearLastOutput()
         genTask = Task {
             await engine.generate(
                 mode: mode,
@@ -454,9 +455,7 @@ struct ContentView: View {
                let auto = engine.lastReferenceTranscript {
                 referenceText = auto
             }
-            guard !Task.isCancelled,
-                  let output = engine.lastOutputURL,
-                  output != previousOutput else { return }
+            guard !Task.isCancelled, engine.lastOutputURL != nil else { return }
             startPlayback()
         }
     }
