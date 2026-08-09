@@ -91,6 +91,42 @@ enum EngineStatus: Equatable {
 final class TTSEngine {
     var status: EngineStatus = .idle
     var lastOutputURL: URL?
+
+    /// Forgets the previous run's file so the UI stops offering it. Called when
+    /// a new run starts: the old audio is still on disk and still reachable in
+    /// the Outputs folder, but presenting Play beside a run in progress invites
+    /// listening to the previous result and taking it for the new one.
+    func clearLastOutput() {
+        lastOutputURL = nil
+    }
+
+    /// The Outputs folder itself, for History and "Show in Finder".
+    var outputsFolder: URL { outputDir }
+
+    /// Everything generated so far, newest first. Read from disk rather than
+    /// tracked in memory: the folder is the record, it survives relaunches, and
+    /// a file deleted in Finder should disappear from History without the app
+    /// needing to be told.
+    func generatedOutputs() -> [GeneratedOutput] {
+        let keys: [URLResourceKey] = [.contentModificationDateKey, .fileSizeKey]
+        let files = (try? FileManager.default.contentsOfDirectory(
+            at: outputDir,
+            includingPropertiesForKeys: keys,
+            options: [.skipsHiddenFiles]
+        )) ?? []
+
+        return files
+            .filter { $0.pathExtension.lowercased() == "wav" }
+            .map { url in
+                let values = try? url.resourceValues(forKeys: Set(keys))
+                return GeneratedOutput(
+                    url: url,
+                    created: values?.contentModificationDate ?? .distantPast,
+                    byteCount: Int64(values?.fileSize ?? 0)
+                )
+            }
+            .sorted { $0.created > $1.created }
+    }
     /// Human-readable download detail ("42% — about 3.1 MB/s, ~6 min left").
     var downloadDetail: String?
     /// Transcript produced by auto-transcription, so the UI can show it and

@@ -44,7 +44,17 @@ A segmented picker selects one of three modes. macOS source:
   One click away via the in-app reveal-in-file-manager button.
   Filename: `<Mode>-<ISO8601 timestamp>.wav`.
 - After generation the app auto-plays the result and offers Play + reveal
-  in file manager.
+  in file manager. **Only this run's result.** Starting a run clears the
+  previous one: the playback controls disappear for the duration, so nothing
+  offers to play the old audio while new audio is being made, and a cancelled
+  run leaves nothing to play rather than falling back to the file from
+  before. The old file is untouched on disk — it is still in `Outputs`.
+- **While work is in progress the inputs are disabled** — text, language,
+  speaker, style, reference clip, saved voice, and the mode picker. Their
+  values were already handed to the engine when the run started, so leaving
+  them editable invited changes that silently did not apply to the audio
+  being produced. Help stays reachable: a long download is exactly when
+  someone reads it.
 - Live progress: a token counter during generation. macOS uses
   `generateStream` (preset/design) and an `onToken` callback bridged over a
   stream (clone). Any backend must surface incremental progress.
@@ -70,6 +80,27 @@ A segmented picker selects one of three modes. macOS source:
   switching mode would then free that model out from under work still using
   it. So Stop does not promise the machine stops computing — only that the
   app stops waiting, and says so honestly while it does.
+
+## 2a. History
+
+macOS source: `HistoryView.swift`, `TTSEngine.generatedOutputs()`.
+
+A fourth segment beside the three generation modes lists **everything
+generated so far, newest first**: mode, date, size, with play/pause per row,
+a **Download** button, and reveal-in-file-manager.
+
+- **The folder is the record**, not an in-app database. The list is read from
+  the `Outputs` folder each time it is shown, so a file deleted outside the
+  app disappears from History, and the list survives relaunches with no state
+  to migrate. Deliberately named History, not Library — "library" already
+  means the saved *voices* library (§5).
+- **Download** opens a save panel so the user chooses the destination. On a
+  sandboxed platform that choice is also what grants permission to write
+  there, so a fixed destination would need an entitlement this does not
+  otherwise require.
+- History remains available while a generation is running — it only reads the
+  folder. The generation modes do not: switching one evicts the model the
+  running job is using (§2).
 
 ## 3. Model management
 

@@ -21,10 +21,27 @@ import AVFoundation
 import SwiftUI
 import UniformTypeIdentifiers
 
+/// What the segmented control selects. History is not a generation mode —
+/// TTSMode maps one-to-one onto model repos — so it sits beside them here
+/// rather than becoming a fourth case there.
+enum MainTab: Hashable {
+    case generate(TTSMode)
+    case history
+}
+
 struct ContentView: View {
     @State private var engine = TTSEngine()
 
-    @State private var mode: TTSMode = .presetVoice
+    @State private var tab: MainTab = .generate(.presetVoice)
+
+    /// The generation mode the rest of the view works with. Selecting History
+    /// leaves it alone, so returning to a mode returns to the one you left.
+    private var mode: TTSMode {
+        if case .generate(let mode) = tab { return mode }
+        return lastGenerateMode
+    }
+
+    @State private var lastGenerateMode: TTSMode = .presetVoice
     @State private var text: String = ""
     @State private var speaker: String = "Ryan"
     @State private var instruct: String = ""
@@ -56,6 +73,38 @@ struct ContentView: View {
         "Dylan", "Eric", "Ono_Anna", "Sohee",
     ]
 
+    /// The list the picker shows: the model's own speakers once one is loaded,
+    /// the fallback until then.
+    private var availableSpeakers: [String] {
+        engine.speakers.isEmpty ? defaultSpeakers : engine.speakers
+    }
+
+    /// Speakers are identified to the model by its exact spelling, which is
+    /// lowercase and underscored ("uncle_fu"). Only the label is prettified, so
+    /// the list does not visibly change the moment a model finishes loading.
+    private static func speakerLabel(_ speaker: String) -> String {
+        speaker
+            .replacingOccurrences(of: "_", with: " ")
+            .split(separator: " ")
+            .map { $0.prefix(1).uppercased() + $0.dropFirst() }
+            .joined(separator: " ")
+    }
+
+    /// Keep the chosen speaker across the swap from the fallback list to the
+    /// model's. The names match apart from case, so a plain identity check
+    /// leaves the Picker with a selection that is not in its list — which it
+    /// renders as blank, silently losing the choice just as a generation ends.
+    private func reconcileSpeaker(with available: [String]) {
+        guard !available.isEmpty, !available.contains(speaker) else { return }
+        if let same = available.first(where: {
+            $0.caseInsensitiveCompare(speaker) == .orderedSame
+        }) {
+            speaker = same
+        } else if let first = available.first {
+            speaker = first
+        }
+    }
+
     /// Drives the playback progress bar and detects a naturally-finished clip.
     private let playbackTimer = Timer.publish(every: 0.1, on: .main, in: .common)
         .autoconnect()
@@ -64,8 +113,23 @@ struct ContentView: View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 16) {
                 modeBar
-                textCard
-                optionsCard
+
+                if tab == .history {
+                    HistoryView(engine: engine)
+                } else {
+                    // Locked while work is in progress. Editing the text or
+                    // switching speaker mid-run changed nothing about the audio
+                    // being produced — the values were already passed to the
+                    // engine — so the controls invited edits that silently did
+                    // not apply. The help button inside modeBar is deliberately
+                    // outside this: SwiftUI's disabled() cannot be undone by a
+                    // child, so anything that must stay live has to sit outside
+                    // the disabled scope.
+                    textCard
+                        .disabled(engine.status.isBusy)
+                    optionsCard
+                        .disabled(engine.status.isBusy)
+                }
             }
             .padding(20)
             .frame(maxWidth: .infinity, maxHeight: .infinity,
@@ -94,6 +158,12 @@ struct ContentView: View {
             Text("Keeps this reference clip and transcript so you can pick the "
                  + "voice again from the menu.")
         }
+        .onChange(of: availableSpeakers) { _, new in
+            reconcileSpeaker(with: new)
+        }
+        .onChange(of: tab) { _, new in
+            if case .generate(let mode) = new { lastGenerateMode = mode }
+        }
         .onReceive(playbackTimer) { _ in
             guard isPlaying, let player else { return }
             playbackTime = player.currentTime
@@ -111,17 +181,26 @@ struct ContentView: View {
 
     private var modeBar: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Picker("Mode", selection: $mode) {
+            Picker("Mode", selection: $tab) {
                 ForEach(TTSMode.allCases) { mode in
-                    Label(mode.rawValue, systemImage: mode.symbol).tag(mode)
+                    Label(mode.rawValue, systemImage: mode.symbol)
+                        .tag(MainTab.generate(mode))
                 }
+                Label("History", systemImage: "clock.arrow.circlepath")
+                    .tag(MainTab.history)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            .disabled(engine.status.isBusy)
+            // History stays reachable mid-run — it only reads the folder, and
+            // wanting to hear the previous result while waiting is reasonable.
+            // The generation modes do not, because switching one evicts the
+            // model the running job is using.
+            .disabled(engine.status.isBusy && tab != .history)
 
             HStack(alignment: .firstTextBaseline) {
-                Text(mode.subtitle)
+                Text(tab == .history
+                     ? "Everything you have generated, newest first."
+                     : mode.subtitle)
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .animation(.none, value: mode)
@@ -193,11 +272,9 @@ struct ContentView: View {
             case .presetVoice:
                 rowDivider
                 optionRow(icon: "person.wave.2", label: "Speaker") {
-                    let available = engine.speakers.isEmpty
-                        ? defaultSpeakers : engine.speakers
                     Picker("Speaker", selection: $speaker) {
-                        ForEach(available, id: \.self) {
-                            Text($0.replacingOccurrences(of: "_", with: " "))
+                        ForEach(availableSpeakers, id: \.self) {
+                            Text(Self.speakerLabel($0))
                         }
                     }
                     .labelsHidden()
@@ -423,6 +500,12 @@ struct ContentView: View {
         isPlaying = false
         playbackTime = 0
         genTask?.cancel()
+        // Drop the previous run's audio the moment a new one starts: the
+        // playback controls disappear with it, so there is nothing offering to
+        // play the old result while a new one is being made. It also means a
+        // cancelled run leaves nothing to play, rather than quietly falling
+        // back to the file from before.
+        engine.clearLastOutput()
         genTask = Task {
             await engine.generate(
                 mode: mode,
@@ -439,7 +522,8 @@ struct ContentView: View {
                let auto = engine.lastReferenceTranscript {
                 referenceText = auto
             }
-            if engine.lastOutputURL != nil { startPlayback() }
+            guard !Task.isCancelled, engine.lastOutputURL != nil else { return }
+            startPlayback()
         }
     }
 
