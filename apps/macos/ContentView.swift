@@ -164,8 +164,16 @@ struct ContentView: View {
                     // outside this: SwiftUI's disabled() cannot be undone by a
                     // child, so anything that must stay live has to sit outside
                     // the disabled scope.
+                    // allowsHitTesting as well as disabled: TextEditor keeps
+                    // taking keystrokes through .disabled() on macOS, so the
+                    // script stayed editable during a run in every mode while
+                    // the pickers around it correctly greyed out. Refusing hits
+                    // is what actually stops typing; the opacity is what makes
+                    // it look refused.
                     textCard
                         .disabled(engine.status.isBusy)
+                        .allowsHitTesting(!engine.status.isBusy)
+                        .opacity(engine.status.isBusy ? 0.6 : 1)
                     optionsCard
                         .disabled(engine.status.isBusy)
                 }

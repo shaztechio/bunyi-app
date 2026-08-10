@@ -468,15 +468,41 @@ final class TTSEngine {
         guard fm.fileExists(atPath: dir.appendingPathComponent("config.json").path),
               let enumerator = fm.enumerator(at: dir, includingPropertiesForKeys: nil)
         else { return false }
-        var hasWeights = false
-        for case let url as URL in enumerator {
-            switch url.pathExtension {
-            case "safetensors": hasWeights = true
-            case "incomplete": return false
-            default: break
+
+        // "Any .safetensors" used to be enough, which was wrong in a way that
+        // only bites after an interrupted download: these models ship a second
+        // weights file at speech_tokenizer/model.safetensors, so a folder
+        // holding the tokenizer's weights and no model weights looked complete.
+        // The app would then skip the download entirely and fail at load, with
+        // nothing pointing at the real cause.
+        // Any .incomplete anywhere means an interrupted download.
+        for case let url as URL in enumerator where url.pathExtension == "incomplete" {
+            return false
+        }
+
+        // The model's own weights sit beside config.json; the tokenizer's live
+        // in a subfolder. Listing the top level directly avoids comparing URLs
+        // for equality, which is unreliable — /var against /private/var alone
+        // is enough to make a complete model look incomplete forever.
+        let topLevel = (try? fm.contentsOfDirectory(
+            at: dir, includingPropertiesForKeys: nil)) ?? []
+        guard topLevel.contains(where: { $0.pathExtension == "safetensors" }) else {
+            return false
+        }
+
+        // A sharded model is only complete when every shard named by its index
+        // is present — one shard of three passes every other check here.
+        let indexURL = dir.appendingPathComponent("model.safetensors.index.json")
+        if let data = try? Data(contentsOf: indexURL),
+           let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let map = root["weight_map"] as? [String: String] {
+            for shard in Set(map.values) {
+                if !fm.fileExists(atPath: dir.appendingPathComponent(shard).path) {
+                    return false
+                }
             }
         }
-        return hasWeights
+        return true
     }
 
     /// The Hub fraction only moves when a whole file completes, so during a

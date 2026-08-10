@@ -30,9 +30,19 @@ Root is the models folder (default per-user app data; user-relocatable).
 ### `hasCompleteModel` rule (identical everywhere)
 A model folder is "complete" and used offline when:
 1. `config.json` exists, **and**
-2. at least one weights file exists (`*.safetensors` for MLX, `*.onnx` for
-   the ONNX app), **and**
-3. no partial/incomplete download markers exist anywhere in the tree.
+2. a weights file exists **at the top level** (`*.safetensors` for MLX,
+   `*.onnx` for the ONNX app), **and**
+3. every shard named by a weights index (`model.safetensors.index.json`'s
+   `weight_map`) is present, if such an index exists, **and**
+4. no partial/incomplete download markers exist anywhere in the tree.
+
+Rule 2 says *top level* because these models ship a second weights file for
+the speech tokenizer in a subfolder. "Any weights file anywhere" counted that
+one, so a download interrupted before the model's own weights arrived left a
+folder that looked complete: the app skipped the download and failed at load,
+pointing at nothing.
+
+Rule 3 exists because one shard of three satisfies every other rule.
 
 ## Self-host `manifest.txt`
 
