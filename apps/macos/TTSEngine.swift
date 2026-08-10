@@ -152,6 +152,12 @@ final class TTSEngine {
     private var downloadStart = Date()
     private var downloadApproxBytes: Double = 0
     private var lastLoggedPercent = -1
+    /// When bytes last arrived. The stall detector needs this because a
+    /// download task buffers to the system temp directory and only moves the
+    /// finished file into the models folder — so folder size, which is all the
+    /// monitor could see, stays flat for minutes on a multi-gigabyte file and
+    /// a healthy transfer looks dead.
+    private var lastDownloadActivity = Date()
 
     /// Output lives in the app's own Application Support folder: the sandbox
     /// grants it without extra entitlements (unlike ~/Music), and "Show in
@@ -247,6 +253,7 @@ final class TTSEngine {
         downloadStart = Date()
         downloadApproxBytes = mode.approxDownloadBytes
         lastLoggedPercent = -1
+        lastDownloadActivity = Date()
         log.log("Checking model files (already-downloaded files are skipped)")
         let monitor = startDiskMonitor(at: base)
         defer { monitor.cancel() }
@@ -303,6 +310,7 @@ final class TTSEngine {
         downloadStart = Date()
         downloadApproxBytes = mode.approxDownloadBytes
         lastLoggedPercent = -1
+        lastDownloadActivity = Date()
 
         let files = try await fileList(base: base)
         log.log("Downloading \(files.count) files from \(base.absoluteString)")
@@ -440,7 +448,7 @@ final class TTSEngine {
     /// multi-GB safetensors file it looks frozen. Watching bytes on disk
     /// tells stalled and slow apart.
     private func startDiskMonitor(at dir: URL) -> Task<Void, Never> {
-        Task { [log] in
+        Task { [log, weak self] in
             var lastSize: Int64 = -1
             var lastChange = Date()
             while !Task.isCancelled {
@@ -451,6 +459,18 @@ final class TTSEngine {
                     lastSize = size
                     lastChange = Date()
                     log.log("\(size.formatted(.byteCount(style: .file))) on disk in the models folder")
+                    continue
+                }
+                // Bytes still arriving counts as progress even though the file
+                // has not landed yet. Without this the warning fires on every
+                // multi-gigabyte download, and a warning that cries wolf is
+                // worse than none — it trains people to ignore the real one.
+                let receiving = await MainActor.run {
+                    guard let self else { return false }
+                    return Date().timeIntervalSince(self.lastDownloadActivity) < 30
+                }
+                if receiving {
+                    lastChange = Date()
                 } else if Date().timeIntervalSince(lastChange) >= 30 {
                     lastChange = Date()
                     log.log("No new data for 30 s — the connection may be stalled")
@@ -474,6 +494,7 @@ final class TTSEngine {
 
     private func noteDownloadProgress(_ fraction: Double) {
         status = .downloading(fraction)
+        lastDownloadActivity = Date()
         let elapsed = Date().timeIntervalSince(downloadStart)
         guard fraction > 0.001, elapsed > 1 else { return }
 
