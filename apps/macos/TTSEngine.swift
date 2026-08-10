@@ -356,6 +356,13 @@ final class TTSEngine {
             let paths = text.split(whereSeparator: \.isNewline)
                 .map { $0.trimmingCharacters(in: .whitespaces) }
                 .filter { !$0.isEmpty && !$0.hasPrefix("#") }
+                .compactMap { line -> String? in
+                    guard let safe = Self.safeRelativePath(line) else {
+                        log.log("Ignoring unsafe manifest path: \(line)")
+                        return nil
+                    }
+                    return safe
+                }
             if !paths.isEmpty {
                 log.log("Using manifest.txt (\(paths.count) files)")
                 return paths
@@ -363,6 +370,43 @@ final class TTSEngine {
         }
         log.log("No manifest.txt — using the built-in Qwen3-TTS file list")
         return Self.defaultModelFiles
+    }
+
+    /// A manifest path, or nil if it would escape the model's folder.
+    ///
+    /// Entries go to `appendingPathComponent` and are then written to. Left
+    /// unchecked, `../../../../etc/passwd` or an absolute `/tmp/whatever` from
+    /// a server would put files outside the models directory entirely. The base
+    /// URL is whatever the user typed into Settings, so the server is not
+    /// necessarily one they audited — and a manifest is the one part of a
+    /// self-hosted model that chooses its own filenames.
+    ///
+    /// Unsafe entries are skipped rather than failing the download: one bad
+    /// line in a hand-built manifest should not cost someone a 3.4 GB refetch,
+    /// and the log says which line was dropped.
+    ///
+    /// Backslashes and colons go too, for the same reason in two shapes. Both
+    /// are legal in a POSIX filename and neither escapes anything here — but on
+    /// Windows `\` is a path separator and a leading `C:` is drive-rooted, so
+    /// `..\windows\system32` and `C:/Windows/System32` look inert on macOS and
+    /// traverse on the .NET app. `C:foo` is worse again: drive-*relative*, so
+    /// it lands wherever that drive's working directory happens to be.
+    ///
+    /// Colons are rejected anywhere, not only as a drive prefix. Windows
+    /// forbids them in filenames outright, so an entry containing one is either
+    /// an escape attempt or a file the .NET app could not create anyway — and a
+    /// rule the two apps can state identically beats one that needs a
+    /// position-dependent exception.
+    private static func safeRelativePath(_ path: String) -> String? {
+        guard !path.isEmpty,
+              !path.hasPrefix("/"), !path.hasPrefix("~"),
+              !path.contains("\\"), !path.contains(":"),
+              // Empty components catch `a//b` and a trailing slash; neither
+              // names a file, and both suggest a manifest built by hand.
+              path.split(separator: "/", omittingEmptySubsequences: false)
+                  .allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." })
+        else { return nil }
+        return path
     }
 
     /// Downloads one file, reporting progress within it.

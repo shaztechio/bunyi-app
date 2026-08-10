@@ -62,6 +62,30 @@ runtime. **Required** (404 = hard error): `config.json` and the primary
 weights file. Everything else is best-effort (single-shard repos lack a
 `.index.json`; a missing `tokenizer.json` is auto-fetched).
 
+### Path rules
+
+Paths are relative to `<base>`, and a client **must reject** an entry that
+could escape the model's folder. The entry is skipped and the rejection
+logged; the download continues. An entry is unsafe if it:
+
+- is empty, or begins with `/` or `~`;
+- contains a `\` or a `:`;
+- has any component that is empty, `.`, or `..` (which also rejects `a//b`
+  and a trailing `/`, neither of which names a file).
+
+`\` and `:` are rejected on **every** platform, not only Windows. Both are
+legal in a POSIX filename and neither escapes anything on macOS or Linux —
+but on Windows `\` is a path separator, `C:/Windows/System32` is
+drive-rooted, and `C:foo` is drive-*relative*, landing wherever that drive's
+working directory happens to be. An entry that looks inert on one
+implementation and traverses on another is the failure this rule exists to
+prevent, so both apps apply the same test rather than each guarding its own
+platform. Windows forbids `:` in filenames anyway, so an entry containing
+one is either an escape attempt or a file the .NET app could not create.
+
+These paths are used to build write destinations, and `<base>` is whatever
+the user typed into Settings — not necessarily a server they audited.
+
 ## `tokenizer.json` auto-fetch
 
 Some Qwen3-TTS conversions omit `tokenizer.json` (mlx-community ships
