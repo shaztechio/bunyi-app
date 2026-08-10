@@ -519,9 +519,7 @@ struct ContentView: View {
             .help(isPlaying ? "Pause" : "Play")
 
             VStack(spacing: 3) {
-                ProgressView(value: playbackProgress)
-                    // Ticks arrive 10×/s; tweening them looks like pulsing.
-                    .animation(nil, value: playbackProgress)
+                playbackBar
                 HStack {
                     Text(timeString(playbackTime))
                     Spacer()
@@ -540,9 +538,37 @@ struct ContentView: View {
         }
     }
 
+    /// The playback bar, drawn rather than delegated to `ProgressView`.
+    ///
+    /// `ProgressView` cannot do this. On macOS it is backed by an
+    /// `NSProgressIndicator`, which tweens its own value changes, and no
+    /// SwiftUI escape hatch reaches that: `.animation(nil, value:)` and a
+    /// transaction with `disablesAnimations` both govern SwiftUI's animations,
+    /// not AppKit's. Both were tried here and neither worked.
+    ///
+    /// The tween is invisible while a clip plays, because the value only creeps
+    /// forward a hundredth at a time. It is very visible at the end, where the
+    /// value drops the full width at once — which is what read as the bar
+    /// draining backwards instead of resetting.
+    ///
+    /// Two rounded rectangles have no opinion about how their frames change.
+    private var playbackBar: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule().fill(.quaternary)
+                Capsule()
+                    .fill(Color.accentColor)
+                    .frame(width: geo.size.width * playbackProgress)
+            }
+        }
+        .frame(height: 4)
+    }
+
+    /// Clamped: `currentTime` can overshoot `duration` slightly on the last
+    /// tick, and an unclamped fraction would push the fill past the track.
     private var playbackProgress: Double {
         guard let player, player.duration > 0 else { return 0 }
-        return playbackTime / player.duration
+        return min(max(playbackTime / player.duration, 0), 1)
     }
 
     @ViewBuilder
