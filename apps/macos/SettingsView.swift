@@ -203,7 +203,7 @@ struct SettingsView: View {
             titleVisibility: .visible
         ) {
             Button("Delete", role: .destructive) {
-                if let config = pendingConfigDeletion { configs.delete(config) }
+                if let config = pendingConfigDeletion { deleteConfig(config) }
                 pendingConfigDeletion = nil
             }
             Button("Cancel", role: .cancel) { pendingConfigDeletion = nil }
@@ -229,6 +229,15 @@ struct SettingsView: View {
                              presetVoice: presetRepo,
                              voiceDesign: designRepo,
                              voiceClone: cloneRepo)
+            configError = nil
+        } catch {
+            configError = error.localizedDescription
+        }
+    }
+
+    private func deleteConfig(_ config: ModelConfig) {
+        do {
+            try configs.delete(config)
             configError = nil
         } catch {
             configError = error.localizedDescription

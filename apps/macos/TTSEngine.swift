@@ -172,15 +172,28 @@ final class TTSEngine {
 
     var speakers: [String] { model?.supportedSpeakers ?? [] }
 
+    /// Held so the observer can be removed. NotificationCenter keeps the token
+    /// alive until it is, so dropping it on the floor leaks the registration
+    /// and stacks up another unload attempt for every engine ever created.
+    /// nonisolated so `deinit`, which is not main-actor isolated, can read it.
+    /// Only ever written once during init and read once during deinit.
+    private nonisolated(unsafe) var deletionObserver: (any NSObjectProtocol)?
+
     init() {
         // Settings can delete a model while it is loaded. Without this the app
         // keeps generating from memory with its folder gone, and the next
         // launch re-downloads with nothing having explained why.
-        NotificationCenter.default.addObserver(
+        deletionObserver = NotificationCenter.default.addObserver(
             forName: ModelStore.didDeleteModel, object: nil, queue: .main
         ) { [weak self] note in
             guard let deleted = note.object as? URL else { return }
             MainActor.assumeIsolated { self?.forgetModel(at: deleted) }
+        }
+    }
+
+    deinit {
+        if let deletionObserver {
+            NotificationCenter.default.removeObserver(deletionObserver)
         }
     }
 

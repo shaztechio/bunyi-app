@@ -41,7 +41,9 @@ struct ModelConfig: Identifiable, Codable, Hashable {
         })
         let blanks = values.filter(\.isEmpty).count
         let where_ = hosts.sorted().joined(separator: ", ")
-        return blanks == 0 ? where_ : "\(where_), \(blanks) on the default"
+        guard blanks > 0 else { return where_ }
+        let rest = blanks == 1 ? "1 on the default" : "\(blanks) on the defaults"
+        return "\(where_), \(rest)"
     }
 }
 
@@ -90,9 +92,18 @@ final class ModelConfigLibrary {
         return config
     }
 
-    func delete(_ config: ModelConfig) {
+    /// Throws if the change cannot be written. Swallowing that made the row
+    /// vanish from the list and reappear on the next launch, with nothing
+    /// having said the disk refused the write.
+    func delete(_ config: ModelConfig) throws {
+        let previous = configs
         configs.removeAll { $0.id == config.id }
-        try? persist()
+        do {
+            try persist()
+        } catch {
+            configs = previous
+            throw error
+        }
         log.log("Deleted model configuration \"\(config.name)\"")
     }
 

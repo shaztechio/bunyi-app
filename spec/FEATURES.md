@@ -176,12 +176,15 @@ in the models folder — see `DATA-FORMATS.md`.
   exists and is wrong.
 - **Offline reuse**: a complete model on disk is used without any network
   (`hasCompleteModel` rule in `DATA-FORMATS.md`).
-- **Progress must reflect bytes, not files.** A model is one enormous file and
-  a dozen small ones, so per-file progress sits still for minutes on the big
-  one — and any stall detector watching the destination folder reports a
-  healthy download as stalled if the transfer buffers elsewhere first. Both
-  were real on the self-hosted path: bytes are written into the models folder
-  as they arrive, and progress within a file counts toward the whole.
+- **Progress and stall detection must follow bytes received from the network**,
+  not completed files and not the size of the destination folder. A model is
+  one enormous file and a dozen small ones, so per-file progress sits still for
+  minutes on the big one; and a transfer that buffers elsewhere before moving
+  the finished file into place makes a folder-watching stall detector report a
+  healthy download as dead. Both were real on the self-hosted path. Where the
+  bytes are buffered is an implementation detail — what is required is that
+  progress within a file counts toward the whole, and that "no new data"
+  means no bytes arrived, not no growth on disk.
 - **Progress + ETA**: a fraction-based bar plus a human line
   ("42% — about 3.1 MB/s, ~6 min left"). Because per-file fraction can look
   frozen during a multi-GB file, a **disk monitor** logs bytes-on-disk
