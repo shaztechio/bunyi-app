@@ -29,14 +29,29 @@ Self-hosting is real infrastructure. If the goal is only "download faster
 once", there is a cheaper answer:
 
 ```sh
-pip install -U "huggingface_hub[hf_transfer]"
-HF_HUB_ENABLE_HF_TRANSFER=1 hf download <repo> --local-dir <models-folder>/models/<repo>
+uv tool install huggingface_hub      # or: pipx install huggingface_hub
+hf download <repo> --local-dir <models-folder>/models/<repo>
 ```
 
-`hf_transfer` parallelises chunks and is usually several times faster than the
-default client. **Settings → Storage** already shows this command per mode with
-your models folder filled in. Pre-fetch there and the app finds the files on
-first Generate, with no network access at all.
+**Settings → Storage** already shows the `hf download` line per mode with your
+models folder filled in. Pre-fetch there and the app finds the files on first
+Generate, with no network access at all.
+
+Do not reach for `pip install` on macOS without checking which Python you get:
+`/usr/bin/pip` is still Python 2.7 and fails with *"Could not find a version
+that satisfies the requirement"*, leaving no `hf` command behind. `uv` or
+`pipx` install it into `~/.local/bin` without touching any Python you depend
+on.
+
+Two pieces of advice that are widely repeated and now wrong:
+
+- **`huggingface_hub[hf_transfer]` no longer exists.** The extra was removed in
+  v1.0 and the Xet backend (`hf_xet`) ships by default, so
+  `HF_HUB_ENABLE_HF_TRANSFER=1` does nothing.
+- **Xet only accelerates repos stored that way.** All three Qwen3-TTS repos
+  report `xetEnabled: false`, so they come from the ordinary CDN at ordinary
+  speed. No client-side flag makes them faster — which is exactly why
+  self-hosting is worth the trouble for these models.
 
 Self-hosting earns its keep when you are serving other people or many
 machines — not for a one-off download.
