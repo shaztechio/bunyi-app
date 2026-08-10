@@ -78,11 +78,13 @@ Any static host works — see [Other hosts](#other-hosts).
 ### 1. Fetch the model once
 
 ```sh
-pip install -U "huggingface_hub[hf_transfer]"
-HF_HUB_ENABLE_HF_TRANSFER=1 hf download \
-  mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-bf16 \
+uv tool install huggingface_hub      # once; puts `hf` in ~/.local/bin
+hf download mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-bf16 \
   --local-dir ~/bunyi-models/customvoice
 ```
+
+This is the one slow download. Everything after it is served from your own
+host.
 
 ### 2. Generate the manifest
 
