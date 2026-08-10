@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import CryptoKit
 import Foundation
 
 /// Downloads one file, reporting bytes as they arrive.
@@ -30,6 +31,24 @@ import Foundation
 /// 200 MB in 23 s. So this uses a download task with a delegate, which keeps
 /// URLSession's own transfer performance and adds the progress callbacks that
 /// were missing.
+/// Why a download that arrived intact is still not usable.
+enum DownloadError: LocalizedError {
+    case checksumMismatch(file: String, expected: String, actual: String)
+
+    var errorDescription: String? {
+        switch self {
+        case .checksumMismatch(let file, let expected, let actual):
+            // The digests are truncated: twelve characters is plenty to tell
+            // two files apart by eye, and sixty-four in an alert is a wall.
+            // The log has already recorded them in full.
+            "\(file) downloaded but did not match the checksum your server "
+            + "published (expected \(expected.prefix(12))…, got "
+            + "\(actual.prefix(12))…). The file may be corrupt or still "
+            + "uploading. Try again, and re-check the manifest if it persists."
+        }
+    }
+}
+
 final class HTTPFileDownloader: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
     /// Written to while in flight, renamed on success — the same extension
     /// `hasCompleteModel` treats as an unfinished download, so an interrupted
@@ -37,6 +56,10 @@ final class HTTPFileDownloader: NSObject, URLSessionDownloadDelegate, @unchecked
     static let partialExtension = "incomplete"
 
     private let destination: URL
+    /// Lowercase hex SHA-256 the finished file must match, when the manifest
+    /// supplied one. nil means "no expectation" — a manifest.txt server, or a
+    /// file the manifest does not list a digest for.
+    private let expectedSHA256: String?
     private let onProgress: @Sendable (Int64, Int64) -> Void
 
     /// Guards the continuation. The delegate can report completion twice —
@@ -46,8 +69,10 @@ final class HTTPFileDownloader: NSObject, URLSessionDownloadDelegate, @unchecked
     private var continuation: CheckedContinuation<Int, Error>?
     private var session: URLSession?
 
-    private init(destination: URL, onProgress: @escaping @Sendable (Int64, Int64) -> Void) {
+    private init(destination: URL, expectedSHA256: String?,
+                 onProgress: @escaping @Sendable (Int64, Int64) -> Void) {
         self.destination = destination
+        self.expectedSHA256 = expectedSHA256?.lowercased()
         self.onProgress = onProgress
     }
 
@@ -59,10 +84,28 @@ final class HTTPFileDownloader: NSObject, URLSessionDownloadDelegate, @unchecked
     static func download(
         from url: URL,
         to destination: URL,
+        expectedSHA256: String? = nil,
         onProgress: @escaping @Sendable (Int64, Int64) -> Void
     ) async throws -> Int {
-        let downloader = HTTPFileDownloader(destination: destination, onProgress: onProgress)
+        let downloader = HTTPFileDownloader(destination: destination,
+                                            expectedSHA256: expectedSHA256,
+                                            onProgress: onProgress)
         return try await downloader.run(url: url)
+    }
+
+    /// SHA-256 of a file, read in chunks.
+    ///
+    /// Chunked because the weights are gigabytes: `Data(contentsOf:)` would
+    /// map the whole 3.86 GB file to hash it. 1 MB is large enough that the
+    /// read syscalls disappear against the hashing itself.
+    static func sha256Hex(of url: URL) throws -> String {
+        let handle = try FileHandle(forReadingFrom: url)
+        defer { try? handle.close() }
+        var hasher = SHA256()
+        while let chunk = try handle.read(upToCount: 1 << 20), !chunk.isEmpty {
+            hasher.update(data: chunk)
+        }
+        return hasher.finalize().map { String(format: "%02x", $0) }.joined()
     }
 
     private func run(url: URL) async throws -> Int {
@@ -124,6 +167,23 @@ final class HTTPFileDownloader: NSObject, URLSessionDownloadDelegate, @unchecked
             let partial = destination.appendingPathExtension(Self.partialExtension)
             if fm.fileExists(atPath: partial.path) { try fm.removeItem(at: partial) }
             try fm.moveItem(at: location, to: partial)
+            // The rename below is what declares this file trustworthy —
+            // `hasCompleteModel` treats anything still carrying .incomplete as
+            // an interrupted download. So the digest is checked here, in
+            // between: a file that fails is removed and never becomes a
+            // destination path, which means a retry re-fetches it rather than
+            // finding it already present and skipping it.
+            if let expected = expectedSHA256 {
+                let actual = try Self.sha256Hex(of: partial)
+                guard actual == expected else {
+                    try? fm.removeItem(at: partial)
+                    finish(.failure(DownloadError.checksumMismatch(
+                        file: destination.lastPathComponent,
+                        expected: expected,
+                        actual: actual)))
+                    return
+                }
+            }
             if fm.fileExists(atPath: destination.path) {
                 try fm.removeItem(at: destination)
             }

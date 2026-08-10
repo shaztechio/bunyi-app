@@ -332,9 +332,9 @@ final class TTSEngine {
         let monitor = startDiskMonitor(at: localDir)
         defer { monitor.cancel() }
 
-        for (index, relPath) in files.enumerated() {
+        for (index, entry) in files.enumerated() {
             try Task.checkCancellation()
-            try await downloadFile(relPath: relPath, base: base, into: localDir,
+            try await downloadFile(entry: entry, base: base, into: localDir,
                                    fileIndex: index, fileCount: files.count)
             noteDownloadProgress(Double(index + 1) / Double(files.count))
         }
@@ -347,29 +347,91 @@ final class TTSEngine {
         return localDir
     }
 
-    /// manifest.txt from the server if present, else the built-in file set.
-    private func fileList(base: URL) async throws -> [String] {
-        let manifestURL = base.appendingPathComponent("manifest.txt")
-        if let (data, response) = try? await URLSession.shared.data(from: manifestURL),
-           (response as? HTTPURLResponse)?.statusCode == 200,
-           let text = String(data: data, encoding: .utf8) {
-            let paths = text.split(whereSeparator: \.isNewline)
-                .map { $0.trimmingCharacters(in: .whitespaces) }
-                .filter { !$0.isEmpty && !$0.hasPrefix("#") }
-                .compactMap { line -> String? in
-                    guard let safe = Self.safeRelativePath(line) else {
-                        log.log("Ignoring unsafe manifest path: \(line)")
+    /// One file a self-hosted server publishes, and its digest if it published
+    /// one.
+    struct ManifestEntry {
+        let path: String
+        /// Lowercase hex SHA-256, or nil when the manifest does not carry one.
+        let sha256: String?
+    }
+
+    /// The file list from the server: `manifest.sha256` first, `manifest.txt`
+    /// second, the built-in set last.
+    ///
+    /// Two files rather than digests added to `manifest.txt`, because every
+    /// already-installed Bunyi parses each line of that file as a path. A line
+    /// reading `<digest>  model.safetensors` would be requested verbatim, 404,
+    /// and — for a required file — fail the whole download. Old clients never
+    /// ask for `manifest.sha256`, so a server can publish it whenever it likes
+    /// and nothing in the field breaks.
+    private func fileList(base: URL) async throws -> [ManifestEntry] {
+        if let entries = await manifest(at: base.appendingPathComponent("manifest.sha256")),
+           !entries.isEmpty {
+            let digests = entries.filter { $0.sha256 != nil }.count
+            log.log("Using manifest.sha256 (\(entries.count) files, \(digests) with checksums)")
+            return entries
+        }
+        if let entries = await manifest(at: base.appendingPathComponent("manifest.txt")),
+           !entries.isEmpty {
+            log.log("Using manifest.txt (\(entries.count) files, no checksums)")
+            return entries
+        }
+        log.log("No manifest — using the built-in Qwen3-TTS file list")
+        return Self.defaultModelFiles.map { ManifestEntry(path: $0, sha256: nil) }
+    }
+
+    /// Parses either manifest format; nil if the file is not served.
+    ///
+    /// A line is `<64 hex digits><whitespace><path>` — the output `shasum -a
+    /// 256` and `sha256sum` already produce, so the published manifest is also
+    /// a file `shasum -c` can verify — or a bare path. Anything that does not
+    /// start with a digest is treated as a path, which is what makes one parser
+    /// enough for both files.
+    private func manifest(at url: URL) async -> [ManifestEntry]? {
+        guard let (data, response) = try? await URLSession.shared.data(from: url),
+              (response as? HTTPURLResponse)?.statusCode == 200,
+              let text = String(data: data, encoding: .utf8) else { return nil }
+        return text.split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty && !$0.hasPrefix("#") }
+            .compactMap { line -> ManifestEntry? in
+                // Any whitespace, not just a space. `shasum` and `sha256sum`
+                // write two spaces, but the format is whitespace-separated and
+                // tools do emit tabs. Splitting on " " alone would read such a
+                // line as a bare path — and the failure would be silent, a file
+                // fetched with no verification while the manifest looked
+                // honoured.
+                let parts = line.split(maxSplits: 1, omittingEmptySubsequences: true,
+                                       whereSeparator: \.isWhitespace)
+                if parts.count == 2, Self.isSHA256Hex(parts[0]) {
+                    let path = parts[1].trimmingCharacters(in: .whitespaces)
+                    // `shasum` marks binary reads with a leading '*' on the
+                    // filename. Harmless to it, a 404 to us.
+                    let cleaned = path.hasPrefix("*") ? String(path.dropFirst()) : path
+                    guard let safe = Self.safeRelativePath(cleaned) else {
+                        log.log("Ignoring unsafe manifest path: \(cleaned)")
                         return nil
                     }
-                    return safe
+                    return ManifestEntry(path: safe, sha256: parts[0].lowercased())
                 }
-            if !paths.isEmpty {
-                log.log("Using manifest.txt (\(paths.count) files)")
-                return paths
+                // A line that is nothing but a digest is a checksum whose path
+                // went missing. Left alone it becomes a "file" named after the
+                // digest, requested and 404ing — a confusing way to report a
+                // malformed manifest.
+                guard !Self.isSHA256Hex(line[...]) else {
+                    log.log("Ignoring manifest line with a checksum but no path")
+                    return nil
+                }
+                guard let safe = Self.safeRelativePath(line) else {
+                    log.log("Ignoring unsafe manifest path: \(line)")
+                    return nil
+                }
+                return ManifestEntry(path: safe, sha256: nil)
             }
-        }
-        log.log("No manifest.txt — using the built-in Qwen3-TTS file list")
-        return Self.defaultModelFiles
+    }
+
+    private static func isSHA256Hex(_ s: Substring) -> Bool {
+        s.count == 64 && s.allSatisfy(\.isHexDigit)
     }
 
     /// A manifest path, or nil if it would escape the model's folder.
@@ -414,8 +476,9 @@ final class TTSEngine {
     /// `fileFraction` places this file in the whole job: without it the bar only
     /// moves when a file finishes, and one file is nearly the entire model, so
     /// it appeared frozen for minutes on end.
-    private func downloadFile(relPath: String, base: URL, into localDir: URL,
+    private func downloadFile(entry: ManifestEntry, base: URL, into localDir: URL,
                               fileIndex: Int, fileCount: Int) async throws {
+        let relPath = entry.path
         let fileURL = base.appendingPathComponent(relPath)
         let dest = localDir.appendingPathComponent(relPath)
 
@@ -424,16 +487,30 @@ final class TTSEngine {
         // re-transfer because the last one was interrupted. The Hugging Face
         // path has always been incremental; this one was not.
         //
-        // Size against the server's, not mere existence: a file interrupted
-        // mid-write is present and wrong, and "it exists" would keep it
-        // forever.
-        if let local = try? FileManager.default.attributesOfItem(atPath: dest.path)[.size] as? Int64,
-           let remote = await Self.remoteSize(of: fileURL), local == remote {
-            log.log("Have \(relPath) already (\(local.formatted(.byteCount(style: .file))))")
-            return
+        // With a digest, the digest decides. Matching sizes were the best test
+        // available before, but they are exactly the case a corrupt file
+        // survives: right length, wrong bytes, kept forever because "it exists
+        // and it is the right size". Hashing 11.6 GB costs a few seconds, and
+        // only on a re-download.
+        if FileManager.default.fileExists(atPath: dest.path) {
+            if let expected = entry.sha256 {
+                if let actual = try? HTTPFileDownloader.sha256Hex(of: dest),
+                   actual == expected {
+                    log.log("Have \(relPath) already (checksum matches)")
+                    return
+                }
+                log.log("Re-fetching \(relPath) — on disk but the checksum does not match")
+            } else if let local = try? FileManager.default
+                        .attributesOfItem(atPath: dest.path)[.size] as? Int64,
+                      let remote = await Self.remoteSize(of: fileURL), local == remote {
+                log.log("Have \(relPath) already (\(local.formatted(.byteCount(style: .file))))")
+                return
+            }
         }
 
-        let code = try await HTTPFileDownloader.download(from: fileURL, to: dest) {
+        let code = try await HTTPFileDownloader.download(
+            from: fileURL, to: dest, expectedSHA256: entry.sha256
+        ) {
             [weak self] received, expected in
             guard expected > 0 else { return }
             let within = Double(received) / Double(expected)
