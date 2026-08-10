@@ -647,19 +647,41 @@ struct ContentView: View {
         // Fresh clip, or one that played to the end → start over.
         if player == nil || player?.url != url
             || (player?.currentTime ?? 0) >= (player?.duration ?? 0) - 0.05 {
-            player = try? AVAudioPlayer(contentsOf: url)
+            let next = try? AVAudioPlayer(contentsOf: url)
+            next?.prepareToPlay()
+            player = next
             playbackTime = 0
         }
         player?.play()
         isPlaying = player != nil
     }
 
+    /// Auto-play once a generation finishes.
+    ///
+    /// Deliberately not the same shape as `togglePlayback`. Generation ending
+    /// sets `status = .idle`, which re-enables the whole form — `textCard` and
+    /// `optionsCard` drop `disabled`, `allowsHitTesting` and `opacity` — and
+    /// SwiftUI rebuilds all of it. Playing from here put the player's first
+    /// buffer refill in the middle of that rebuild, and it was audible: about a
+    /// second in, the clip stuttered once. The same file played from History,
+    /// which rebuilds nothing, never did.
+    ///
+    /// So: fill the buffers now, and start the hardware on the next runloop
+    /// turn, once the rebuild has been and gone.
     private func startPlayback() {
-        guard let url = engine.lastOutputURL else { return }
-        player = try? AVAudioPlayer(contentsOf: url)
+        guard let url = engine.lastOutputURL,
+              let next = try? AVAudioPlayer(contentsOf: url) else { return }
+        next.prepareToPlay()
+        player = next
         playbackTime = 0
-        player?.play()
-        isPlaying = player != nil
+        DispatchQueue.main.async {
+            // A second Generate, or the window closing, can replace or clear
+            // the player before this lands — starting it then would play over
+            // the top of whatever came after.
+            guard player === next else { return }
+            next.play()
+            isPlaying = true
+        }
     }
 
     private func timeString(_ time: TimeInterval) -> String {
