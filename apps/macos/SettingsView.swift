@@ -32,6 +32,14 @@ struct SettingsView: View {
     @State private var folderPath = ""
     @State private var folderError: String?
     @State private var copiedCommand = false
+    @State private var models: [DownloadedModel] = []
+    @State private var pendingDeletion: DownloadedModel?
+    @State private var deleteError: String?
+    @State private var configs = ModelConfigLibrary()
+    @State private var showSaveConfig = false
+    @State private var newConfigName = ""
+    @State private var configError: String?
+    @State private var pendingConfigDeletion: ModelConfig?
 
     /// One ready-to-run download line per mode, using each mode's current
     /// (possibly overridden) repo and the actual models-folder path.
@@ -55,6 +63,28 @@ struct SettingsView: View {
         }
         .frame(width: 560, height: 440)
         .onAppear(perform: refreshFolderPath)
+        // A real binding, not .constant: dismissing with Escape must clear the
+        // pending deletion, or the dialog reappears with no way out.
+        .confirmationDialog(
+            "Move this model to the Trash?",
+            isPresented: Binding(
+                get: { pendingDeletion != nil },
+                set: { if !$0 { pendingDeletion = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Move to Trash", role: .destructive) {
+                if let model = pendingDeletion { delete(model) }
+                pendingDeletion = nil
+            }
+            Button("Cancel", role: .cancel) { pendingDeletion = nil }
+        } message: {
+            if let pendingDeletion {
+                Text("\(pendingDeletion.name) — "
+                     + "\(pendingDeletion.byteCount.formatted(.byteCount(style: .file))). "
+                     + "It downloads again the next time you generate in that mode.")
+            }
+        }
         .fileImporter(isPresented: $showFolderPicker,
                       allowedContentTypes: [.folder]) { result in
             switch result {
@@ -115,8 +145,117 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+
+            Section("Configurations") {
+                HStack {
+                    Button("Save current…") {
+                        newConfigName = ""
+                        showSaveConfig = true
+                    }
+                    Button("Reset to defaults") { resetModelFields() }
+                        .disabled(presetRepo.isEmpty && designRepo.isEmpty
+                                  && cloneRepo.isEmpty)
+                }
+
+                if configs.configs.isEmpty {
+                    Text("Save the three fields above under a name, then switch "
+                        + "between them — a self-hosted mirror and the Hugging "
+                        + "Face defaults, say.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(configs.configs) { config in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(config.name)
+                                Text(config.summary)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                            }
+                            Spacer(minLength: 12)
+                            Button("Restore") { restore(config) }
+                            Button("Delete") { pendingConfigDeletion = config }
+                        }
+                    }
+                    Text("Restoring replaces all three fields. As with any "
+                        + "change here, it applies on the next generate.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                if let configError {
+                    Text(configError).font(.caption).foregroundStyle(.red)
+                }
+            }
         }
         .formStyle(.grouped)
+        // Unlike a model, a configuration cannot go to the Trash — it is a
+        // row in a JSON file. So confirm instead: the three URLs behind it are
+        // long enough that retyping them is the real cost.
+        .confirmationDialog(
+            "Delete this configuration?",
+            isPresented: Binding(
+                get: { pendingConfigDeletion != nil },
+                set: { if !$0 { pendingConfigDeletion = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                if let config = pendingConfigDeletion { deleteConfig(config) }
+                pendingConfigDeletion = nil
+            }
+            Button("Cancel", role: .cancel) { pendingConfigDeletion = nil }
+        } message: {
+            if let pendingConfigDeletion {
+                Text("\(pendingConfigDeletion.name) — \(pendingConfigDeletion.summary). "
+                     + "This removes the saved sources, not any downloaded model.")
+            }
+        }
+        .alert("Save this configuration", isPresented: $showSaveConfig) {
+            TextField("Name", text: $newConfigName)
+            Button("Save") { saveCurrentConfig() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Stores the three model sources above so you can switch back "
+                 + "to them later. Saving over an existing name replaces it.")
+        }
+    }
+
+    private func saveCurrentConfig() {
+        do {
+            try configs.save(name: newConfigName,
+                             presetVoice: presetRepo,
+                             voiceDesign: designRepo,
+                             voiceClone: cloneRepo)
+            configError = nil
+        } catch {
+            configError = error.localizedDescription
+        }
+    }
+
+    private func deleteConfig(_ config: ModelConfig) {
+        do {
+            try configs.delete(config)
+            configError = nil
+        } catch {
+            configError = error.localizedDescription
+        }
+    }
+
+    private func restore(_ config: ModelConfig) {
+        presetRepo = config.presetVoice
+        designRepo = config.voiceDesign
+        cloneRepo = config.voiceClone
+    }
+
+    /// Clearing the fields is what "default" means here — each mode falls back
+    /// to its built-in repo, which is also what the placeholder text shows.
+    private func resetModelFields() {
+        presetRepo = ""
+        designRepo = ""
+        cloneRepo = ""
     }
 
     private var storageTab: some View {
@@ -143,6 +282,41 @@ struct SettingsView: View {
                 }
                 if let folderError {
                     Text(folderError).font(.caption).foregroundStyle(.red)
+                }
+            }
+
+            Section("Downloaded models") {
+                if models.isEmpty {
+                    Text("Nothing downloaded yet. Models arrive the first time "
+                        + "you generate in each mode.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(models) { model in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(model.name)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                Text(model.isSelfHosted ? "Self-hosted" : "Hugging Face")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer(minLength: 12)
+                            Text(model.byteCount.formatted(.byteCount(style: .file)))
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                            Button("Delete") { pendingDeletion = model }
+                        }
+                    }
+                    Text("Deleting moves the folder to the Trash. The model "
+                        + "downloads again the next time you generate in that "
+                        + "mode.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if let deleteError {
+                    Text(deleteError).font(.caption).foregroundStyle(.red)
                 }
             }
 
@@ -270,6 +444,21 @@ struct SettingsView: View {
 
     private func refreshFolderPath() {
         folderPath = ModelsLocation.current().path
+        refreshModels()
+    }
+
+    private func refreshModels() {
+        models = ModelStore.all()
+    }
+
+    private func delete(_ model: DownloadedModel) {
+        do {
+            try ModelStore.delete(model)
+            deleteError = nil
+        } catch {
+            deleteError = error.localizedDescription
+        }
+        refreshModels()
     }
 }
 

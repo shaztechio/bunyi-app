@@ -142,12 +142,22 @@ final class TTSEngine {
     var lastReferenceTranscript: String?
 
     private var loadedRepo: String?
+    /// Where the loaded model was read from. Compared against a deletion rather
+    /// than matching repo-ID strings, which differ in shape between a Hub repo
+    /// and a self-hosted base URL.
+    private var loadedDir: URL?
     private var model: Qwen3TTSModel?
 
     private let log = LogStore.shared
     private var downloadStart = Date()
     private var downloadApproxBytes: Double = 0
     private var lastLoggedPercent = -1
+    /// When bytes last arrived. The stall detector needs this because a
+    /// download task buffers to the system temp directory and only moves the
+    /// finished file into the models folder — so folder size, which is all the
+    /// monitor could see, stays flat for minutes on a multi-gigabyte file and
+    /// a healthy transfer looks dead.
+    private var lastDownloadActivity = Date()
 
     /// Output lives in the app's own Application Support folder: the sandbox
     /// grants it without extra entitlements (unlike ~/Music), and "Show in
@@ -162,6 +172,42 @@ final class TTSEngine {
 
     var speakers: [String] { model?.supportedSpeakers ?? [] }
 
+    /// Held so the observer can be removed. NotificationCenter keeps the token
+    /// alive until it is, so dropping it on the floor leaks the registration
+    /// and stacks up another unload attempt for every engine ever created.
+    /// nonisolated so `deinit`, which is not main-actor isolated, can read it.
+    /// Only ever written once during init and read once during deinit.
+    private nonisolated(unsafe) var deletionObserver: (any NSObjectProtocol)?
+
+    init() {
+        // Settings can delete a model while it is loaded. Without this the app
+        // keeps generating from memory with its folder gone, and the next
+        // launch re-downloads with nothing having explained why.
+        deletionObserver = NotificationCenter.default.addObserver(
+            forName: ModelStore.didDeleteModel, object: nil, queue: .main
+        ) { [weak self] note in
+            guard let deleted = note.object as? URL else { return }
+            MainActor.assumeIsolated { self?.forgetModel(at: deleted) }
+        }
+    }
+
+    deinit {
+        if let deletionObserver {
+            NotificationCenter.default.removeObserver(deletionObserver)
+        }
+    }
+
+    /// Drops the in-memory model if it came from `dir`.
+    private func forgetModel(at dir: URL) {
+        guard let loadedDir,
+              loadedDir.standardizedFileURL == dir.standardizedFileURL else { return }
+        log.log("Unloading \(loadedRepo ?? "the model") — its files were deleted")
+        model = nil
+        loadedRepo = nil
+        self.loadedDir = nil
+        MLX.GPU.clearCache()
+    }
+
     // MARK: Model lifecycle
 
     /// Download (if needed) and load the model for `mode`.
@@ -173,6 +219,7 @@ final class TTSEngine {
         if loadedRepo != nil { log.log("Unloading previous model") }
         self.model = nil
         self.loadedRepo = nil
+        self.loadedDir = nil
         MLX.GPU.clearCache()
 
         log.log("Preparing \(mode.rawValue) — \(repoID)")
@@ -188,6 +235,7 @@ final class TTSEngine {
                        Date().timeIntervalSince(loadStart)))
         self.model = loaded
         self.loadedRepo = repoID
+        self.loadedDir = localDir
         return loaded
     }
 
@@ -218,6 +266,7 @@ final class TTSEngine {
         downloadStart = Date()
         downloadApproxBytes = mode.approxDownloadBytes
         lastLoggedPercent = -1
+        lastDownloadActivity = Date()
         log.log("Checking model files (already-downloaded files are skipped)")
         let monitor = startDiskMonitor(at: base)
         defer { monitor.cancel() }
@@ -274,6 +323,7 @@ final class TTSEngine {
         downloadStart = Date()
         downloadApproxBytes = mode.approxDownloadBytes
         lastLoggedPercent = -1
+        lastDownloadActivity = Date()
 
         let files = try await fileList(base: base)
         log.log("Downloading \(files.count) files from \(base.absoluteString)")
@@ -284,7 +334,8 @@ final class TTSEngine {
 
         for (index, relPath) in files.enumerated() {
             try Task.checkCancellation()
-            try await downloadFile(relPath: relPath, base: base, into: localDir)
+            try await downloadFile(relPath: relPath, base: base, into: localDir,
+                                   fileIndex: index, fileCount: files.count)
             noteDownloadProgress(Double(index + 1) / Double(files.count))
         }
 
@@ -314,10 +365,40 @@ final class TTSEngine {
         return Self.defaultModelFiles
     }
 
-    private func downloadFile(relPath: String, base: URL, into localDir: URL) async throws {
+    /// Downloads one file, reporting progress within it.
+    ///
+    /// `fileFraction` places this file in the whole job: without it the bar only
+    /// moves when a file finishes, and one file is nearly the entire model, so
+    /// it appeared frozen for minutes on end.
+    private func downloadFile(relPath: String, base: URL, into localDir: URL,
+                              fileIndex: Int, fileCount: Int) async throws {
         let fileURL = base.appendingPathComponent(relPath)
-        let (tmp, response) = try await URLSession.shared.download(from: fileURL)
-        let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+        let dest = localDir.appendingPathComponent(relPath)
+
+        // Already have it? Skip. Without this, stopping a download and starting
+        // again fetched every file from the beginning — several gigabytes to
+        // re-transfer because the last one was interrupted. The Hugging Face
+        // path has always been incremental; this one was not.
+        //
+        // Size against the server's, not mere existence: a file interrupted
+        // mid-write is present and wrong, and "it exists" would keep it
+        // forever.
+        if let local = try? FileManager.default.attributesOfItem(atPath: dest.path)[.size] as? Int64,
+           let remote = await Self.remoteSize(of: fileURL), local == remote {
+            log.log("Have \(relPath) already (\(local.formatted(.byteCount(style: .file))))")
+            return
+        }
+
+        let code = try await HTTPFileDownloader.download(from: fileURL, to: dest) {
+            [weak self] received, expected in
+            guard expected > 0 else { return }
+            let within = Double(received) / Double(expected)
+            let overall = (Double(fileIndex) + within) / Double(fileCount)
+            Task { @MainActor [weak self] in
+                self?.noteDownloadProgress(overall)
+            }
+        }
+
         guard code == 200 else {
             if Self.requiredModelFiles.contains(relPath) {
                 throw TTSError.selfHostFileMissing(relPath, code)
@@ -325,12 +406,27 @@ final class TTSEngine {
             log.log("Skipped \(relPath) (HTTP \(code))")
             return
         }
-        let dest = localDir.appendingPathComponent(relPath)
-        let fm = FileManager.default
-        try fm.createDirectory(at: dest.deletingLastPathComponent(),
-                               withIntermediateDirectories: true)
-        if fm.fileExists(atPath: dest.path) { try fm.removeItem(at: dest) }
-        try fm.moveItem(at: tmp, to: dest)
+    }
+
+    /// The server's size for a file, or nil if it will not say.
+    ///
+    /// A HEAD per file is a handful of small round trips against a download
+    /// measured in gigabytes — cheap enough to buy the ability to resume.
+    ///
+    /// Returns nil for compressed responses, and that is the point: URLSession
+    /// asks for gzip, so a server that compresses JSON reports a length that
+    /// does not match the file on disk. Rather than guess, those files are
+    /// simply fetched again — they are a few kilobytes. The multi-gigabyte
+    /// weights are served as octet-stream, uncompressed, and do report a
+    /// usable length, which is the case that matters.
+    nonisolated private static func remoteSize(of url: URL) async -> Int64? {
+        var request = URLRequest(url: url)
+        request.httpMethod = "HEAD"
+        guard let (_, response) = try? await URLSession.shared.data(for: request),
+              let http = response as? HTTPURLResponse,
+              http.statusCode == 200,
+              response.expectedContentLength > 0 else { return nil }
+        return response.expectedContentLength
     }
 
     /// Filesystem-safe folder name derived from a base URL.
@@ -385,22 +481,48 @@ final class TTSEngine {
         guard fm.fileExists(atPath: dir.appendingPathComponent("config.json").path),
               let enumerator = fm.enumerator(at: dir, includingPropertiesForKeys: nil)
         else { return false }
-        var hasWeights = false
-        for case let url as URL in enumerator {
-            switch url.pathExtension {
-            case "safetensors": hasWeights = true
-            case "incomplete": return false
-            default: break
+
+        // "Any .safetensors" used to be enough, which was wrong in a way that
+        // only bites after an interrupted download: these models ship a second
+        // weights file at speech_tokenizer/model.safetensors, so a folder
+        // holding the tokenizer's weights and no model weights looked complete.
+        // The app would then skip the download entirely and fail at load, with
+        // nothing pointing at the real cause.
+        // Any .incomplete anywhere means an interrupted download.
+        for case let url as URL in enumerator where url.pathExtension == "incomplete" {
+            return false
+        }
+
+        // The model's own weights sit beside config.json; the tokenizer's live
+        // in a subfolder. Listing the top level directly avoids comparing URLs
+        // for equality, which is unreliable — /var against /private/var alone
+        // is enough to make a complete model look incomplete forever.
+        let topLevel = (try? fm.contentsOfDirectory(
+            at: dir, includingPropertiesForKeys: nil)) ?? []
+        guard topLevel.contains(where: { $0.pathExtension == "safetensors" }) else {
+            return false
+        }
+
+        // A sharded model is only complete when every shard named by its index
+        // is present — one shard of three passes every other check here.
+        let indexURL = dir.appendingPathComponent("model.safetensors.index.json")
+        if let data = try? Data(contentsOf: indexURL),
+           let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let map = root["weight_map"] as? [String: String] {
+            for shard in Set(map.values) {
+                if !fm.fileExists(atPath: dir.appendingPathComponent(shard).path) {
+                    return false
+                }
             }
         }
-        return hasWeights
+        return true
     }
 
     /// The Hub fraction only moves when a whole file completes, so during a
     /// multi-GB safetensors file it looks frozen. Watching bytes on disk
     /// tells stalled and slow apart.
     private func startDiskMonitor(at dir: URL) -> Task<Void, Never> {
-        Task { [log] in
+        Task { [log, weak self] in
             var lastSize: Int64 = -1
             var lastChange = Date()
             while !Task.isCancelled {
@@ -411,6 +533,18 @@ final class TTSEngine {
                     lastSize = size
                     lastChange = Date()
                     log.log("\(size.formatted(.byteCount(style: .file))) on disk in the models folder")
+                    continue
+                }
+                // Bytes still arriving counts as progress even though the file
+                // has not landed yet. Without this the warning fires on every
+                // multi-gigabyte download, and a warning that cries wolf is
+                // worse than none — it trains people to ignore the real one.
+                let receiving = await MainActor.run {
+                    guard let self else { return false }
+                    return Date().timeIntervalSince(self.lastDownloadActivity) < 30
+                }
+                if receiving {
+                    lastChange = Date()
                 } else if Date().timeIntervalSince(lastChange) >= 30 {
                     lastChange = Date()
                     log.log("No new data for 30 s — the connection may be stalled")
@@ -434,6 +568,7 @@ final class TTSEngine {
 
     private func noteDownloadProgress(_ fraction: Double) {
         status = .downloading(fraction)
+        lastDownloadActivity = Date()
         let elapsed = Date().timeIntervalSince(downloadStart)
         guard fraction > 0.001, elapsed > 1 else { return }
 

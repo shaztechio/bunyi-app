@@ -62,6 +62,12 @@ struct ContentView: View {
 
     @State private var genTask: Task<Void, Never>?
 
+    /// Focus has to be taken away from the script when work starts. `.disabled`
+    /// and `.allowsHitTesting` both leave a TextEditor that already holds focus
+    /// still receiving keystrokes — hit testing is about the mouse, and the
+    /// keyboard goes to whatever is first responder regardless.
+    @FocusState private var scriptFocused: Bool
+
     private let languages = [
         "auto", "english", "chinese", "japanese", "korean", "german",
         "french", "russian", "portuguese", "spanish", "italian",
@@ -164,8 +170,16 @@ struct ContentView: View {
                     // outside this: SwiftUI's disabled() cannot be undone by a
                     // child, so anything that must stay live has to sit outside
                     // the disabled scope.
+                    // allowsHitTesting as well as disabled: TextEditor keeps
+                    // taking keystrokes through .disabled() on macOS, so the
+                    // script stayed editable during a run in every mode while
+                    // the pickers around it correctly greyed out. Refusing hits
+                    // is what actually stops typing; the opacity is what makes
+                    // it look refused.
                     textCard
                         .disabled(engine.status.isBusy)
+                        .allowsHitTesting(!engine.status.isBusy)
+                        .opacity(engine.status.isBusy ? 0.6 : 1)
                     optionsCard
                         .disabled(engine.status.isBusy)
                 }
@@ -203,6 +217,11 @@ struct ContentView: View {
         } message: {
             Text("Keeps this reference clip and transcript so you can pick the "
                  + "voice again from the menu.")
+        }
+        .onChange(of: engine.status.isBusy) { _, busy in
+            // Resign first, then the disabled modifier keeps it from coming
+            // back: a disabled view cannot take focus.
+            if busy { scriptFocused = false }
         }
         .onChange(of: availableSpeakers) { _, new in
             reconcileSpeaker(with: new)
@@ -275,6 +294,7 @@ struct ContentView: View {
 
     private var textCard: some View {
         TextEditor(text: $text)
+            .focused($scriptFocused)
             .font(.body)
             .scrollContentBackground(.hidden)
             .padding(8)

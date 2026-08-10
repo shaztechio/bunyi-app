@@ -152,6 +152,15 @@ Each mode has a configurable source (Settings → Models). A value is either:
 Scheme decides: `http://`/`https://` ⇒ base URL, else repo ID.
 Blank ⇒ the built-in default for that mode.
 
+**Configurations.** The three sources are saved and restored as a set, under a
+name — plus a reset that clears all three back to the defaults. They belong
+together: switching between the Hub and a self-hosted mirror means changing
+all three, the values are long and easy to mistype, and each must match its
+mode (CustomVoice, VoiceDesign, Base) or the app loads a model that runs and
+produces nonsense. Saving under an existing name replaces it rather than
+accumulating near-duplicates. Stored per-user alongside the saved voices, not
+in the models folder — see `DATA-FORMATS.md`.
+
 > Model **weights** differ per runtime: macOS uses MLX `.safetensors`
 > conversions (mlx-community); the .NET app uses **ONNX** exports of the
 > same Qwen3-TTS models. The *defaults differ per platform* but the
@@ -159,9 +168,23 @@ Blank ⇒ the built-in default for that mode.
 > See `DATA-FORMATS.md`.
 
 ### 3b. Download behavior (identical across platforms)
-- **Resumable & incremental**: already-present files are skipped.
+- **Resumable & incremental**: already-present files are skipped — on every
+  source, not only the Hub. Stopping a download and starting again must not
+  re-fetch what is already on disk; for a self-hosted model that is gigabytes
+  of pointless transfer. A file counts as present when its size matches the
+  server's, not merely when it exists: an interrupted write leaves a file that
+  exists and is wrong.
 - **Offline reuse**: a complete model on disk is used without any network
   (`hasCompleteModel` rule in `DATA-FORMATS.md`).
+- **Progress and stall detection must follow bytes received from the network**,
+  not completed files and not the size of the destination folder. A model is
+  one enormous file and a dozen small ones, so per-file progress sits still for
+  minutes on the big one; and a transfer that buffers elsewhere before moving
+  the finished file into place makes a folder-watching stall detector report a
+  healthy download as dead. Both were real on the self-hosted path. Where the
+  bytes are buffered is an implementation detail — what is required is that
+  progress within a file counts toward the whole, and that "no new data"
+  means no bytes arrived, not no growth on disk.
 - **Progress + ETA**: a fraction-based bar plus a human line
   ("42% — about 3.1 MB/s, ~6 min left"). Because per-file fraction can look
   frozen during a multi-GB file, a **disk monitor** logs bytes-on-disk
@@ -184,6 +207,14 @@ Blank ⇒ the built-in default for that mode.
 - Default: per-user app-data dir (macOS: App Support container). User can
   point it at any folder (external drive, etc.), persisted across launches
   (macOS: security-scoped bookmark). "Show in Finder/Explorer" + reset.
+- **Downloaded models are listed and deletable** in Settings → Storage: each
+  model, its source (Hub or self-hosted), its size, and a Delete button that
+  moves the folder to the Trash after confirming. Reclaiming several gigabytes
+  must not require knowing where the app keeps its container — on a sandboxed
+  platform that path is not somewhere a user can reasonably be sent.
+  Deleting the model that is currently loaded **evicts it from memory first**;
+  otherwise the app keeps generating from a model whose files are gone and
+  silently re-downloads on next launch.
 - Settings → Storage also shows copyable pre-download commands
   (`hf download <repo> --local-dir <folder>/models/<repo>`), one per mode,
   with the actual folder path filled in.
