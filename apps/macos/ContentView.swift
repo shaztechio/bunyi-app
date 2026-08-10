@@ -30,6 +30,10 @@ enum MainTab: Hashable {
 }
 
 struct ContentView: View {
+    /// Opens the `Window(id: "logs")` scene declared in BunyiApp. Focuses the
+    /// existing window if it is already open rather than making a second one.
+    @Environment(\.openWindow) private var openWindow
+
     @State private var engine = TTSEngine()
 
     @State private var tab: MainTab = .generate(.presetVoice)
@@ -272,20 +276,38 @@ struct ContentView: View {
 
                 Spacer(minLength: 12)
 
-                // The Help menu already opens this book; the button is here
-                // because the audience for this app does not go looking in
-                // menus. Deliberately not disabled while busy — reading the
-                // help during a long download is exactly when it is wanted.
-                Button {
-                    NSApplication.shared.showHelp(nil)
-                } label: {
-                    Image(systemName: "questionmark.circle")
-                        .imageScale(.large)
+                // Both of these are deliberately not disabled while busy. A
+                // long download is exactly when someone wants to read the help
+                // or watch the log, and neither touches the running job.
+                HStack(spacing: 10) {
+                    // Window → Logs (⌘L) already opens this. The button is here
+                    // for the same reason the help one is: when a run is slow or
+                    // fails, the log is the answer, and nobody finds it in a menu.
+                    Button {
+                        openWindow(id: "logs")
+                    } label: {
+                        Image(systemName: "list.bullet.rectangle")
+                            .imageScale(.large)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .help("Open the log (⌘L)")
+                    .accessibilityLabel("Open the log")
+
+                    // The Help menu already opens this book; the button is here
+                    // because the audience for this app does not go looking in
+                    // menus.
+                    Button {
+                        NSApplication.shared.showHelp(nil)
+                    } label: {
+                        Image(systemName: "questionmark.circle")
+                            .imageScale(.large)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .help("Open Bunyi Help")
+                    .accessibilityLabel("Open Bunyi Help")
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .help("Open Bunyi Help")
-                .accessibilityLabel("Open Bunyi Help")
             }
         }
     }
