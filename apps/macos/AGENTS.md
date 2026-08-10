@@ -144,6 +144,14 @@ certificate.
   `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGN_IDENTITY`, `APPLE_ID`,
   `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD`. Set them with
   `tools/packaging/set-release-secrets.sh`.
+- **Release notes**: if `release-notes/v<version>.md` exists it is used
+  verbatim; otherwise `release-notes.py` generates a changelog from the
+  commits. Hand-written notes exist because merges squash — a PR carrying two
+  features and five fixes becomes one changelog line, accurate and useless as
+  a description. Write the file before running the release.
+  Links inside them point at the **tag**, not `main`: notes are a record of
+  one release, and a `blob/main` link silently starts describing whatever the
+  file became later.
 - The version lives in `project.yml` (`MARKETING_VERSION` /
   `CURRENT_PROJECT_VERSION`), **not** `Info.plist`, which XcodeGen
   regenerates. The workflow bumps it there and fails a tag that disagrees

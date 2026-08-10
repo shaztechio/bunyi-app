@@ -286,10 +286,20 @@ jobs:
           set -euo pipefail
           name="${{ steps.version.outputs.name }}"
           notes="$(mktemp)"
+          # Hand-written notes win when they exist. Merges squash, so a PR
+          # carrying two features and five fixes becomes one changelog line —
+          # accurate, and a poor description of the release. The generator
+          # stays as the fallback so a release never ships with none.
+          handwritten="release-notes/${{ steps.mode.outputs.tag }}.md"
           {
             # What changed comes first. The install boilerplate is identical
             # every release and nobody reads it twice.
-            python3 apps/macos/tools/packaging/release-notes.py "${{ steps.mode.outputs.tag }}"
+            if [ -f "$handwritten" ]; then
+              echo "Using $handwritten" >&2
+              cat "$handwritten"
+            else
+              python3 apps/macos/tools/packaging/release-notes.py "${{ steps.mode.outputs.tag }}"
+            fi
             printf '\n---\n\n'
             printf 'Signed with a Developer ID certificate, notarized by Apple, and stapled.\n\n'
             printf 'Requires macOS 15 or later on an Apple silicon Mac.\n\n'
