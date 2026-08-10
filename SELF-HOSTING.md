@@ -154,13 +154,18 @@ rclone config create r2 s3 \
   acl=private
 ```
 
-Check it can see the bucket:
+Check it can reach the bucket:
 
 ```sh
-rclone lsd r2:
+rclone lsjson r2:bunyi-models
 ```
 
-You should see `bunyi-models`.
+An empty bucket prints `[]`. That is success.
+
+Do **not** check with `rclone lsd r2:` — that lists every bucket in the
+account, which the token from step 3 is scoped away from on purpose, so it
+fails with `AccessDenied` even though the token works perfectly for the
+bucket it is meant for.
 
 ### 5. Download the model once
 
@@ -289,6 +294,12 @@ and `model.safetensors` are required; the rest are best-effort.
 
 **The download never starts, and the log mentions ATS.** The base URL is
 `http://`. Use HTTPS.
+
+**`rclone` says `AccessDenied` on `ListBuckets` (HTTP 403).** Expected, and
+not a broken token: a bucket-scoped token cannot enumerate the account's
+buckets. Address the bucket directly — `rclone lsjson r2:bunyi-models` — and
+operations inside it will work. Only reach for an account-wide token if you
+genuinely need to list buckets.
 
 **It re-downloads every time.** A folder counts as complete when it holds a
 `config.json`, at least one `.safetensors`, and no `.incomplete` files. A
