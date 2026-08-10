@@ -161,6 +161,22 @@ produces nonsense. Saving under an existing name replaces it rather than
 accumulating near-duplicates. Stored per-user alongside the saved voices, not
 in the models folder — see `DATA-FORMATS.md`.
 
+**One built-in configuration: the project's own mirror.** It appears in the
+list above any saved ones, has no Delete button — nothing about it is on disk —
+and is overridden by saving a configuration of the same name. It exists because
+Hugging Face is unreachable on some networks, blocked outright in mainland
+China, which for a Qwen model is a substantial share of the likely audience.
+
+It is **not** the default and must not become one. Upstream is where the
+weights come from, and a default pointing at project-run infrastructure makes
+that infrastructure a single point of failure for every install. Nor is it an
+automatic fallback when the Hub is slow: the source is recorded in each
+output's metadata, so it must be one the user chose.
+
+A platform ships this only if its mirror publishes `manifest.sha256`
+(`DATA-FORMATS.md`). Offering a source the app itself endorses is a higher bar
+than documenting one a user picked, and unverified bytes do not clear it.
+
 > Model **weights** differ per runtime: macOS uses MLX `.safetensors`
 > conversions (mlx-community); the .NET app uses **ONNX** exports of the
 > same Qwen3-TTS models. The *defaults differ per platform* but the
