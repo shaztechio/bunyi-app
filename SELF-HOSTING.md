@@ -364,6 +364,20 @@ buckets. Address the bucket directly — `rclone lsjson r2:bunyi-models` — and
 operations inside it will work. Only reach for an account-wide token if you
 genuinely need to list buckets.
 
+**`rclone purge` says `AccessDenied` on `GetBucketVersioning`.** Same cause,
+and it is a warning wearing an error's clothes — read the rest of the line:
+*"assuming unversioned"*. `purge` asks whether the bucket keeps object
+versions so it knows whether to delete those too; a bucket-scoped token cannot
+read that setting, so rclone assumes not and deletes the objects anyway. The
+assumption is right: R2 buckets are unversioned unless you turn it on. Confirm
+it worked from outside rather than from the exit code:
+
+```sh
+curl -sI https://models.bunyi.app/customvoice/.cache/huggingface/download/config.json.lock | head -1
+```
+
+A `404` means gone.
+
 **It re-downloads every time.** A folder counts as complete when it holds a
 `config.json`, at least one `.safetensors`, and no `.incomplete` files. A
 partial download leaves `.incomplete` markers behind — delete the folder under
