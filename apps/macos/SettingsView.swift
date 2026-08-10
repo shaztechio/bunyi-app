@@ -39,6 +39,7 @@ struct SettingsView: View {
     @State private var showSaveConfig = false
     @State private var newConfigName = ""
     @State private var configError: String?
+    @State private var pendingConfigDeletion: ModelConfig?
 
     /// One ready-to-run download line per mode, using each mode's current
     /// (possibly overridden) repo and the actual models-folder path.
@@ -175,7 +176,7 @@ struct SettingsView: View {
                             }
                             Spacer(minLength: 12)
                             Button("Restore") { restore(config) }
-                            Button("Delete") { configs.delete(config) }
+                            Button("Delete") { pendingConfigDeletion = config }
                         }
                     }
                     Text("Restoring replaces all three fields. As with any "
@@ -190,6 +191,28 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+        // Unlike a model, a configuration cannot go to the Trash — it is a
+        // row in a JSON file. So confirm instead: the three URLs behind it are
+        // long enough that retyping them is the real cost.
+        .confirmationDialog(
+            "Delete this configuration?",
+            isPresented: Binding(
+                get: { pendingConfigDeletion != nil },
+                set: { if !$0 { pendingConfigDeletion = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                if let config = pendingConfigDeletion { configs.delete(config) }
+                pendingConfigDeletion = nil
+            }
+            Button("Cancel", role: .cancel) { pendingConfigDeletion = nil }
+        } message: {
+            if let pendingConfigDeletion {
+                Text("\(pendingConfigDeletion.name) — \(pendingConfigDeletion.summary). "
+                     + "This removes the saved sources, not any downloaded model.")
+            }
+        }
         .alert("Save this configuration", isPresented: $showSaveConfig) {
             TextField("Name", text: $newConfigName)
             Button("Save") { saveCurrentConfig() }
