@@ -60,6 +60,30 @@ Qwen3-TTS variants share one 151,643-token text tokenizer. When missing:
 1. try `<self-host base>/tokenizer.json` (if self-hosting), then
 2. a known-good fallback URL.
 
+## `configs.json` (saved model configurations)
+
+Stored in a `ModelConfigs` subfolder of app data. Each entry is one named set
+of the three per-mode sources; an empty string means that mode uses its
+built-in default, which is the same meaning a blank field has in Settings.
+
+```json
+[
+  {
+    "id": "<UUID>",
+    "name": "Self-hosted",
+    "presetVoice": "https://models.example.com/customvoice",
+    "voiceDesign": "https://models.example.com/voicedesign",
+    "voiceClone":  "https://models.example.com/voiceclone",
+    "savedAt": "2026-08-10T05:12:44Z"
+  }
+]
+```
+
+Names are unique case-insensitively — saving over one replaces it. Dates are
+ISO 8601. This lives with the app's own data rather than in the models folder:
+it describes *where models come from*, so it must survive relocating or
+deleting that folder.
+
 ## `voices.json` (saved voices library)
 
 Stored in a `Voices` subfolder of app data, alongside copied audio clips.

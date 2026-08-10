@@ -152,6 +152,15 @@ Each mode has a configurable source (Settings → Models). A value is either:
 Scheme decides: `http://`/`https://` ⇒ base URL, else repo ID.
 Blank ⇒ the built-in default for that mode.
 
+**Configurations.** The three sources are saved and restored as a set, under a
+name — plus a reset that clears all three back to the defaults. They belong
+together: switching between the Hub and a self-hosted mirror means changing
+all three, the values are long and easy to mistype, and each must match its
+mode (CustomVoice, VoiceDesign, Base) or the app loads a model that runs and
+produces nonsense. Saving under an existing name replaces it rather than
+accumulating near-duplicates. Stored per-user alongside the saved voices, not
+in the models folder — see `DATA-FORMATS.md`.
+
 > Model **weights** differ per runtime: macOS uses MLX `.safetensors`
 > conversions (mlx-community); the .NET app uses **ONNX** exports of the
 > same Qwen3-TTS models. The *defaults differ per platform* but the

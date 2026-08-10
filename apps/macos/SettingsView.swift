@@ -35,6 +35,10 @@ struct SettingsView: View {
     @State private var models: [DownloadedModel] = []
     @State private var pendingDeletion: DownloadedModel?
     @State private var deleteError: String?
+    @State private var configs = ModelConfigLibrary()
+    @State private var showSaveConfig = false
+    @State private var newConfigName = ""
+    @State private var configError: String?
 
     /// One ready-to-run download line per mode, using each mode's current
     /// (possibly overridden) repo and the actual models-folder path.
@@ -140,8 +144,86 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+
+            Section("Configurations") {
+                HStack {
+                    Button("Save current…") {
+                        newConfigName = ""
+                        showSaveConfig = true
+                    }
+                    Button("Reset to defaults") { resetModelFields() }
+                        .disabled(presetRepo.isEmpty && designRepo.isEmpty
+                                  && cloneRepo.isEmpty)
+                }
+
+                if configs.configs.isEmpty {
+                    Text("Save the three fields above under a name, then switch "
+                        + "between them — a self-hosted mirror and the Hugging "
+                        + "Face defaults, say.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(configs.configs) { config in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(config.name)
+                                Text(config.summary)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                            }
+                            Spacer(minLength: 12)
+                            Button("Restore") { restore(config) }
+                            Button("Delete") { configs.delete(config) }
+                        }
+                    }
+                    Text("Restoring replaces all three fields. As with any "
+                        + "change here, it applies on the next generate.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                if let configError {
+                    Text(configError).font(.caption).foregroundStyle(.red)
+                }
+            }
         }
         .formStyle(.grouped)
+        .alert("Save this configuration", isPresented: $showSaveConfig) {
+            TextField("Name", text: $newConfigName)
+            Button("Save") { saveCurrentConfig() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Stores the three model sources above so you can switch back "
+                 + "to them later. Saving over an existing name replaces it.")
+        }
+    }
+
+    private func saveCurrentConfig() {
+        do {
+            try configs.save(name: newConfigName,
+                             presetVoice: presetRepo,
+                             voiceDesign: designRepo,
+                             voiceClone: cloneRepo)
+            configError = nil
+        } catch {
+            configError = error.localizedDescription
+        }
+    }
+
+    private func restore(_ config: ModelConfig) {
+        presetRepo = config.presetVoice
+        designRepo = config.voiceDesign
+        cloneRepo = config.voiceClone
+    }
+
+    /// Clearing the fields is what "default" means here — each mode falls back
+    /// to its built-in repo, which is also what the placeholder text shows.
+    private func resetModelFields() {
+        presetRepo = ""
+        designRepo = ""
+        cloneRepo = ""
     }
 
     private var storageTab: some View {
