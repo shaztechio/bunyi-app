@@ -211,9 +211,18 @@ own, built from its own folder:
 ```sh
 for pair in "${MODELS[@]}"; do
   ( cd ~/bunyi-models/"${pair%%:*}" \
-    && find . -type f ! -name manifest.txt | sed 's|^\./||' > manifest.txt )
+    && find . -type f ! -name manifest.txt ! -path './.*' \
+       | sed 's|^\./||' > manifest.txt )
 done
 ```
+
+The `! -path './.*'` matters. `hf download` leaves a `.cache/huggingface/`
+tree of `.lock` and `.metadata` files behind, and without that exclusion the
+manifest lists about thirty of them — forty-three entries where fourteen are
+real. Bunyi would fetch every one. Harmless in itself, but it clutters the
+models folder and skews the progress bar, which counts files rather than
+bytes: the single 3.8 GB download becomes "1 of 43" and the bar barely moves
+until it finishes.
 
 Check they include the nested entries, not only top-level files:
 
@@ -239,7 +248,23 @@ means, and `rclone copy` does it by default.
 for pair in "${MODELS[@]}"; do
   echo "=== ${pair%%:*} ==="
   rclone copy ~/bunyi-models/"${pair%%:*}" \
-    r2:bunyi-models/"${pair%%:*}" --progress
+    r2:bunyi-models/"${pair%%:*}" \
+    --exclude '.*' --exclude '.*/**' --progress
+done
+```
+
+Same reason as the manifest: the two `--exclude` patterns keep `hf download`'s
+`.cache/huggingface/` tree out of the bucket. Nothing there is secret — locks
+and etags — but it is thirty-odd objects nobody will ever read.
+
+**Already uploaded them?** The manifest is what actually matters, so
+regenerate and re-upload that; then delete the stray objects at your leisure:
+
+```sh
+for pair in "${MODELS[@]}"; do
+  rclone purge r2:bunyi-models/"${pair%%:*}"/.cache
+  rclone copy ~/bunyi-models/"${pair%%:*}"/manifest.txt \
+    r2:bunyi-models/"${pair%%:*}"
 done
 ```
 
@@ -338,6 +363,20 @@ not a broken token: a bucket-scoped token cannot enumerate the account's
 buckets. Address the bucket directly — `rclone lsjson r2:bunyi-models` — and
 operations inside it will work. Only reach for an account-wide token if you
 genuinely need to list buckets.
+
+**`rclone purge` says `AccessDenied` on `GetBucketVersioning`.** Same cause,
+and it is a warning wearing an error's clothes — read the rest of the line:
+*"assuming unversioned"*. `purge` asks whether the bucket keeps object
+versions so it knows whether to delete those too; a bucket-scoped token cannot
+read that setting, so rclone assumes not and deletes the objects anyway. The
+assumption is right: R2 buckets are unversioned unless you turn it on. Confirm
+it worked from outside rather than from the exit code:
+
+```sh
+curl -sI https://models.bunyi.app/customvoice/.cache/huggingface/download/config.json.lock | head -1
+```
+
+A `404` means gone.
 
 **It re-downloads every time.** A folder counts as complete when it holds a
 `config.json`, at least one `.safetensors`, and no `.incomplete` files. A
