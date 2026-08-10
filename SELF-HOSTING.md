@@ -167,55 +167,92 @@ account, which the token from step 3 is scoped away from on purpose, so it
 fails with `AccessDenied` even though the token works perfectly for the
 bucket it is meant for.
 
-### 5. Download the model once
+### 5. Choose which modes to host
+
+Each mode uses a different model. Nothing is shared between them: each needs
+its own download, manifest, folder in the bucket, and base URL in Settings.
+
+Set the list once and the remaining steps follow from it:
+
+```sh
+MODELS=(
+  "customvoice:mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-bf16"
+  "voicedesign:mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16"
+  "voiceclone:mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16"
+)
+```
+
+**You do not have to host all three.** A Settings field left blank keeps using
+Hugging Face, so delete the lines you do not want — hosting only preset voice
+is 2.5 GB and stays inside R2's free tier, where all three is 11.6 GB and
+costs a few cents a month.
+
+The left half of each line is the folder name; the right half is the Hugging
+Face repo. Everything below reuses them, so run these in one shell session.
+
+### 6. Download them
 
 ```sh
 uv tool install huggingface_hub      # once; puts `hf` in ~/.local/bin
-hf download mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-bf16 \
-  --local-dir ~/bunyi-models/customvoice
+
+for pair in "${MODELS[@]}"; do
+  hf download "${pair#*:}" --local-dir ~/bunyi-models/"${pair%%:*}"
+done
 ```
 
-This is the one slow download. Everything after it is served from your own
-host.
+This is the slow part — up to 11.6 GB, once. Everything after it comes from
+your own host.
 
-### 6. Generate the manifest
+### 7. Generate a manifest for each
 
-`manifest.txt` is the list of files Bunyi should fetch. Build it from the
-folder you just downloaded:
+`manifest.txt` is the list of files Bunyi should fetch. Each model needs its
+own, built from its own folder:
 
 ```sh
-cd ~/bunyi-models/customvoice
-find . -type f ! -name manifest.txt | sed 's|^\./||' > manifest.txt
+for pair in "${MODELS[@]}"; do
+  ( cd ~/bunyi-models/"${pair%%:*}" \
+    && find . -type f ! -name manifest.txt | sed 's|^\./||' > manifest.txt )
+done
 ```
 
-Check it includes the nested entries, not only top-level files:
+Check they include the nested entries, not only top-level files:
 
 ```sh
-grep speech_tokenizer manifest.txt
+for pair in "${MODELS[@]}"; do
+  printf '%-12s %s nested entries\n' "${pair%%:*}" \
+    "$(grep -c speech_tokenizer ~/bunyi-models/"${pair%%:*}"/manifest.txt)"
+done
 ```
 
-Expect to see `speech_tokenizer/config.json` and friends. If that comes back
-empty, something flattened the folder and the upload will not work.
+Each should report several. A zero means something flattened that folder and
+the upload will not work.
 
-### 7. Upload, keeping the folders as folders
+### 8. Upload them, keeping the folders as folders
 
-The model is not a flat pile of files — it has a `speech_tokenizer/`
-subfolder, and Bunyi asks for those files by that path. So they have to arrive
-in the bucket at the same path: `customvoice/speech_tokenizer/config.json`,
-not `customvoice/config.json`. That is what "preserving directory structure"
+A model is not a flat pile of files — it has a `speech_tokenizer/` subfolder,
+and Bunyi asks for those files by that path. They have to arrive in the bucket
+at the same path (`customvoice/speech_tokenizer/config.json`, not
+`customvoice/config.json`). That is what "preserving directory structure"
 means, and `rclone copy` does it by default.
 
 ```sh
-rclone copy ~/bunyi-models/customvoice r2:bunyi-models/customvoice --progress
+for pair in "${MODELS[@]}"; do
+  echo "=== ${pair%%:*} ==="
+  rclone copy ~/bunyi-models/"${pair%%:*}" \
+    r2:bunyi-models/"${pair%%:*}" --progress
+done
 ```
 
-Confirm the nesting survived:
+Confirm the nesting survived the trip:
 
 ```sh
-rclone ls r2:bunyi-models/customvoice | grep speech_tokenizer
+for pair in "${MODELS[@]}"; do
+  printf '%-12s %s\n' "${pair%%:*}" \
+    "$(rclone ls r2:bunyi-models/"${pair%%:*}" | grep -c speech_tokenizer)"
+done
 ```
 
-### 8. Make the bucket readable over HTTPS
+### 9. Make the bucket readable over HTTPS
 
 The files exist but are private. Two ways to expose them:
 
@@ -234,65 +271,11 @@ bucket's **Settings → Custom Domains → Connect Domain**.
 > CNAME records, set to "DNS only". If you would rather not move DNS, use the
 > r2.dev URL.
 
-### 9. Point Bunyi at it
+One bucket serves every model; the folder name is what separates them.
 
-**Settings → Models**, in the field for that mode:
+### 10. Point Bunyi at them
 
-```
-https://models.bunyi.app/customvoice
-```
-
-or, with the quick option:
-
-```
-https://pub-xxxxxxxx.r2.dev/customvoice
-```
-
-The scheme decides how the value is read: anything starting `http://` or
-`https://` is a base URL, anything else is a Hugging Face repo ID. Clearing
-the field restores the built-in default.
-
-### 10. Verify before trusting it
-
-```sh
-curl -sI https://models.bunyi.app/customvoice/manifest.txt | head -1
-curl -sI https://models.bunyi.app/customvoice/config.json   | head -1
-curl -sI https://models.bunyi.app/customvoice/speech_tokenizer/config.json | head -1
-```
-
-All three must be `200` — the third is the one that catches a flattened
-upload. Then press Generate and watch **Window → Logs** (⌘L): it names every
-file as it downloads, and says exactly which one failed and with what status
-code.
-
-### 11. Do the other two modes
-
-Steps 5 to 7 covered **preset voice** only. Each mode uses a different model,
-so each needs its own download, its own manifest, its own prefix in the
-bucket, and its own base URL in Settings. Nothing is shared between them.
-
-This does all three — including the one you may already have done, which is
-harmless, since `hf download` and `rclone copy` both skip what is already
-there:
-
-```sh
-for pair in \
-  "customvoice:mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-bf16" \
-  "voicedesign:mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16" \
-  "voiceclone:mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16"
-do
-  prefix="${pair%%:*}"; repo="${pair#*:}"
-  echo "=== $prefix ==="
-  hf download "$repo" --local-dir ~/bunyi-models/"$prefix"
-  ( cd ~/bunyi-models/"$prefix" \
-    && find . -type f ! -name manifest.txt | sed 's|^\./||' > manifest.txt )
-  rclone copy ~/bunyi-models/"$prefix" r2:bunyi-models/"$prefix" --progress
-done
-```
-
-That is 11.6 GB downloaded and 11.6 GB uploaded. Leave it running.
-
-Then set all three fields in **Settings → Models**:
+**Settings → Models** has one field per mode. Fill in the ones you hosted:
 
 | Mode | Bunyi setting |
 |---|---|
@@ -300,18 +283,33 @@ Then set all three fields in **Settings → Models**:
 | Voice design | `https://models.bunyi.app/voicedesign` |
 | Voice clone | `https://models.bunyi.app/voiceclone` |
 
-And check each one answers, the way step 10 did:
+With the quick option, substitute `https://pub-xxxxxxxx.r2.dev` for
+`https://models.bunyi.app`.
+
+The scheme decides how the value is read: anything starting `http://` or
+`https://` is a base URL, anything else is a Hugging Face repo ID. Clearing a
+field restores the built-in default for that mode.
+
+### 11. Verify before trusting it
 
 ```sh
-for p in customvoice voicedesign voiceclone; do
-  printf '%-12s ' "$p"
-  curl -sI "https://models.bunyi.app/$p/config.json" | head -1
+BASE=https://models.bunyi.app
+
+for pair in "${MODELS[@]}"; do
+  for f in manifest.txt config.json speech_tokenizer/config.json; do
+    printf '%-12s %-28s ' "${pair%%:*}" "$f"
+    curl -sI "$BASE/${pair%%:*}/$f" | head -1
+  done
 done
 ```
 
-Three `200`s and you are done. You do not have to do all three — a mode you
-leave blank keeps using Hugging Face, so it is fine to self-host only the mode
-you use most.
+Every line must say `200`. The `speech_tokenizer/config.json` line is the one
+that catches a flattened upload — the other two can pass while the model is
+still unusable.
+
+Then press Generate in each mode you hosted, and watch **Window → Logs** (⌘L):
+it names every file as it downloads, and says exactly which one failed and
+with what status code.
 
 ## Other hosts
 
