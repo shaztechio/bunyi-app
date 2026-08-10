@@ -62,6 +62,21 @@ runtime. **Required** (404 = hard error): `config.json` and the primary
 weights file. Everything else is best-effort (single-shard repos lack a
 `.index.json`; a missing `tokenizer.json` is auto-fetched).
 
+### Path rules
+
+Paths are relative to `<base>`, and a client **must reject** an entry that
+could escape the model's folder. The entry is skipped and the rejection
+logged; the download continues. An entry is unsafe if it:
+
+- is empty, or begins with `/` or `~`;
+- contains a `\` — legal in a POSIX filename, a separator on Windows, so an
+  entry that traverses on one platform must not look inert on the other;
+- has any component that is empty, `.`, or `..` (which also rejects `a//b`
+  and a trailing `/`, neither of which names a file).
+
+These paths are used to build write destinations, and `<base>` is whatever
+the user typed into Settings — not necessarily a server they audited.
+
 ## `tokenizer.json` auto-fetch
 
 Some Qwen3-TTS conversions omit `tokenizer.json` (mlx-community ships

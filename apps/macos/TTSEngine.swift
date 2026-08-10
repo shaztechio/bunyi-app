@@ -356,6 +356,13 @@ final class TTSEngine {
             let paths = text.split(whereSeparator: \.isNewline)
                 .map { $0.trimmingCharacters(in: .whitespaces) }
                 .filter { !$0.isEmpty && !$0.hasPrefix("#") }
+                .compactMap { line -> String? in
+                    guard let safe = Self.safeRelativePath(line) else {
+                        log.log("Ignoring unsafe manifest path: \(line)")
+                        return nil
+                    }
+                    return safe
+                }
             if !paths.isEmpty {
                 log.log("Using manifest.txt (\(paths.count) files)")
                 return paths
@@ -363,6 +370,34 @@ final class TTSEngine {
         }
         log.log("No manifest.txt — using the built-in Qwen3-TTS file list")
         return Self.defaultModelFiles
+    }
+
+    /// A manifest path, or nil if it would escape the model's folder.
+    ///
+    /// Entries go to `appendingPathComponent` and are then written to. Left
+    /// unchecked, `../../../../etc/passwd` or an absolute `/tmp/whatever` from
+    /// a server would put files outside the models directory entirely. The base
+    /// URL is whatever the user typed into Settings, so the server is not
+    /// necessarily one they audited — and a manifest is the one part of a
+    /// self-hosted model that chooses its own filenames.
+    ///
+    /// Unsafe entries are skipped rather than failing the download: one bad
+    /// line in a hand-built manifest should not cost someone a 3.4 GB refetch,
+    /// and the log says which line was dropped.
+    ///
+    /// Backslashes go too. They are legal in a POSIX filename and a path
+    /// separator on Windows, so `..\windows\system32` would look inert here and
+    /// traverse on the .NET app. The two have to agree.
+    private static func safeRelativePath(_ path: String) -> String? {
+        guard !path.isEmpty,
+              !path.hasPrefix("/"), !path.hasPrefix("~"),
+              !path.contains("\\"),
+              // Empty components catch `a//b` and a trailing slash; neither
+              // names a file, and both suggest a manifest built by hand.
+              path.split(separator: "/", omittingEmptySubsequences: false)
+                  .allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." })
+        else { return nil }
+        return path
     }
 
     /// Downloads one file, reporting progress within it.

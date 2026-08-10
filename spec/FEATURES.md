@@ -174,6 +174,11 @@ in the models folder — see `DATA-FORMATS.md`.
   of pointless transfer. A file counts as present when its size matches the
   server's, not merely when it exists: an interrupted write leaves a file that
   exists and is wrong.
+- **Manifest paths are untrusted input.** A self-hosted manifest names its own
+  files, and those names become write destinations. Entries that could escape
+  the model's folder are skipped and logged, per the path rules in
+  `DATA-FORMATS.md` — the download continues rather than failing, since one bad
+  line should not cost a multi-gigabyte refetch.
 - **Offline reuse**: a complete model on disk is used without any network
   (`hasCompleteModel` rule in `DATA-FORMATS.md`).
 - **Progress and stall detection must follow bytes received from the network**,
