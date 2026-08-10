@@ -81,14 +81,19 @@ final class ModelConfigLibrary {
 
     /// What Settings lists: the built-in mirror first, then anything saved.
     ///
-    /// The mirror is not persisted, so it cannot be edited or deleted — saving
-    /// a config of your own under the same name is how you override it, and
-    /// that one wins because it is a real entry.
+    /// The mirror is not persisted, so it cannot be edited or deleted. Saving a
+    /// config of your own under the same name is how you override it: yours
+    /// then stands in for the built-in entirely, because a real entry the user
+    /// chose to write beats one the app shipped. Delete yours and the built-in
+    /// comes back, since it was never gone — only hidden.
+    ///
+    /// The override keeps its alphabetical place rather than being pinned to
+    /// the top. Once it is a saved config it behaves like every other one.
     var listed: [ModelConfig] {
-        let mine = configs.filter {
-            $0.name.caseInsensitiveCompare(Self.bunyiMirror.name) != .orderedSame
+        let overridden = configs.contains {
+            $0.name.caseInsensitiveCompare(Self.bunyiMirror.name) == .orderedSame
         }
-        return [Self.bunyiMirror] + mine
+        return overridden ? configs : [Self.bunyiMirror] + configs
     }
 
     /// Built-ins have no Delete button — there is nothing on disk to remove.

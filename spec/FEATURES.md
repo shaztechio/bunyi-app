@@ -162,8 +162,11 @@ accumulating near-duplicates. Stored per-user alongside the saved voices, not
 in the models folder — see `DATA-FORMATS.md`.
 
 **One built-in configuration: the project's own mirror.** It appears in the
-list above any saved ones, has no Delete button — nothing about it is on disk —
-and is overridden by saving a configuration of the same name. It exists because
+list above any saved ones and has no Delete button — nothing about it is on
+disk. Saving a configuration of the same name (case-insensitively) **replaces
+it in the list**: the user's entry stands in for the built-in entirely, keeps
+its ordinary alphabetical place, and is deletable like any other. Deleting it
+brings the built-in back, which was hidden rather than gone. It exists because
 Hugging Face is unreachable on some networks, blocked outright in mainland
 China, which for a Qwen model is a substantial share of the likely audience.
 
