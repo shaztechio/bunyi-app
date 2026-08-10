@@ -142,6 +142,10 @@ final class TTSEngine {
     var lastReferenceTranscript: String?
 
     private var loadedRepo: String?
+    /// Where the loaded model was read from. Compared against a deletion rather
+    /// than matching repo-ID strings, which differ in shape between a Hub repo
+    /// and a self-hosted base URL.
+    private var loadedDir: URL?
     private var model: Qwen3TTSModel?
 
     private let log = LogStore.shared
@@ -162,6 +166,29 @@ final class TTSEngine {
 
     var speakers: [String] { model?.supportedSpeakers ?? [] }
 
+    init() {
+        // Settings can delete a model while it is loaded. Without this the app
+        // keeps generating from memory with its folder gone, and the next
+        // launch re-downloads with nothing having explained why.
+        NotificationCenter.default.addObserver(
+            forName: ModelStore.didDeleteModel, object: nil, queue: .main
+        ) { [weak self] note in
+            guard let deleted = note.object as? URL else { return }
+            MainActor.assumeIsolated { self?.forgetModel(at: deleted) }
+        }
+    }
+
+    /// Drops the in-memory model if it came from `dir`.
+    private func forgetModel(at dir: URL) {
+        guard let loadedDir,
+              loadedDir.standardizedFileURL == dir.standardizedFileURL else { return }
+        log.log("Unloading \(loadedRepo ?? "the model") — its files were deleted")
+        model = nil
+        loadedRepo = nil
+        self.loadedDir = nil
+        MLX.GPU.clearCache()
+    }
+
     // MARK: Model lifecycle
 
     /// Download (if needed) and load the model for `mode`.
@@ -173,6 +200,7 @@ final class TTSEngine {
         if loadedRepo != nil { log.log("Unloading previous model") }
         self.model = nil
         self.loadedRepo = nil
+        self.loadedDir = nil
         MLX.GPU.clearCache()
 
         log.log("Preparing \(mode.rawValue) — \(repoID)")
@@ -188,6 +216,7 @@ final class TTSEngine {
                        Date().timeIntervalSince(loadStart)))
         self.model = loaded
         self.loadedRepo = repoID
+        self.loadedDir = localDir
         return loaded
     }
 
@@ -284,7 +313,8 @@ final class TTSEngine {
 
         for (index, relPath) in files.enumerated() {
             try Task.checkCancellation()
-            try await downloadFile(relPath: relPath, base: base, into: localDir)
+            try await downloadFile(relPath: relPath, base: base, into: localDir,
+                                   fileIndex: index, fileCount: files.count)
             noteDownloadProgress(Double(index + 1) / Double(files.count))
         }
 
@@ -314,10 +344,26 @@ final class TTSEngine {
         return Self.defaultModelFiles
     }
 
-    private func downloadFile(relPath: String, base: URL, into localDir: URL) async throws {
+    /// Downloads one file, reporting progress within it.
+    ///
+    /// `fileFraction` places this file in the whole job: without it the bar only
+    /// moves when a file finishes, and one file is nearly the entire model, so
+    /// it appeared frozen for minutes on end.
+    private func downloadFile(relPath: String, base: URL, into localDir: URL,
+                              fileIndex: Int, fileCount: Int) async throws {
         let fileURL = base.appendingPathComponent(relPath)
-        let (tmp, response) = try await URLSession.shared.download(from: fileURL)
-        let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+        let dest = localDir.appendingPathComponent(relPath)
+
+        let code = try await HTTPFileDownloader.download(from: fileURL, to: dest) {
+            [weak self] received, expected in
+            guard expected > 0 else { return }
+            let within = Double(received) / Double(expected)
+            let overall = (Double(fileIndex) + within) / Double(fileCount)
+            Task { @MainActor [weak self] in
+                self?.noteDownloadProgress(overall)
+            }
+        }
+
         guard code == 200 else {
             if Self.requiredModelFiles.contains(relPath) {
                 throw TTSError.selfHostFileMissing(relPath, code)
@@ -325,12 +371,6 @@ final class TTSEngine {
             log.log("Skipped \(relPath) (HTTP \(code))")
             return
         }
-        let dest = localDir.appendingPathComponent(relPath)
-        let fm = FileManager.default
-        try fm.createDirectory(at: dest.deletingLastPathComponent(),
-                               withIntermediateDirectories: true)
-        if fm.fileExists(atPath: dest.path) { try fm.removeItem(at: dest) }
-        try fm.moveItem(at: tmp, to: dest)
     }
 
     /// Filesystem-safe folder name derived from a base URL.

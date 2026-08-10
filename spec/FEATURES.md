@@ -162,6 +162,12 @@ Blank ⇒ the built-in default for that mode.
 - **Resumable & incremental**: already-present files are skipped.
 - **Offline reuse**: a complete model on disk is used without any network
   (`hasCompleteModel` rule in `DATA-FORMATS.md`).
+- **Progress must reflect bytes, not files.** A model is one enormous file and
+  a dozen small ones, so per-file progress sits still for minutes on the big
+  one — and any stall detector watching the destination folder reports a
+  healthy download as stalled if the transfer buffers elsewhere first. Both
+  were real on the self-hosted path: bytes are written into the models folder
+  as they arrive, and progress within a file counts toward the whole.
 - **Progress + ETA**: a fraction-based bar plus a human line
   ("42% — about 3.1 MB/s, ~6 min left"). Because per-file fraction can look
   frozen during a multi-GB file, a **disk monitor** logs bytes-on-disk
@@ -184,6 +190,14 @@ Blank ⇒ the built-in default for that mode.
 - Default: per-user app-data dir (macOS: App Support container). User can
   point it at any folder (external drive, etc.), persisted across launches
   (macOS: security-scoped bookmark). "Show in Finder/Explorer" + reset.
+- **Downloaded models are listed and deletable** in Settings → Storage: each
+  model, its source (Hub or self-hosted), its size, and a Delete button that
+  moves the folder to the Trash after confirming. Reclaiming several gigabytes
+  must not require knowing where the app keeps its container — on a sandboxed
+  platform that path is not somewhere a user can reasonably be sent.
+  Deleting the model that is currently loaded **evicts it from memory first**;
+  otherwise the app keeps generating from a model whose files are gone and
+  silently re-downloads on next launch.
 - Settings → Storage also shows copyable pre-download commands
   (`hf download <repo> --local-dir <folder>/models/<repo>`), one per mode,
   with the actual folder path filled in.

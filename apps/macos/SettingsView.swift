@@ -32,6 +32,9 @@ struct SettingsView: View {
     @State private var folderPath = ""
     @State private var folderError: String?
     @State private var copiedCommand = false
+    @State private var models: [DownloadedModel] = []
+    @State private var pendingDeletion: DownloadedModel?
+    @State private var deleteError: String?
 
     /// One ready-to-run download line per mode, using each mode's current
     /// (possibly overridden) repo and the actual models-folder path.
@@ -55,6 +58,28 @@ struct SettingsView: View {
         }
         .frame(width: 560, height: 440)
         .onAppear(perform: refreshFolderPath)
+        // A real binding, not .constant: dismissing with Escape must clear the
+        // pending deletion, or the dialog reappears with no way out.
+        .confirmationDialog(
+            "Move this model to the Trash?",
+            isPresented: Binding(
+                get: { pendingDeletion != nil },
+                set: { if !$0 { pendingDeletion = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Move to Trash", role: .destructive) {
+                if let model = pendingDeletion { delete(model) }
+                pendingDeletion = nil
+            }
+            Button("Cancel", role: .cancel) { pendingDeletion = nil }
+        } message: {
+            if let pendingDeletion {
+                Text("\(pendingDeletion.name) — "
+                     + "\(pendingDeletion.byteCount.formatted(.byteCount(style: .file))). "
+                     + "It downloads again the next time you generate in that mode.")
+            }
+        }
         .fileImporter(isPresented: $showFolderPicker,
                       allowedContentTypes: [.folder]) { result in
             switch result {
@@ -143,6 +168,41 @@ struct SettingsView: View {
                 }
                 if let folderError {
                     Text(folderError).font(.caption).foregroundStyle(.red)
+                }
+            }
+
+            Section("Downloaded models") {
+                if models.isEmpty {
+                    Text("Nothing downloaded yet. Models arrive the first time "
+                        + "you generate in each mode.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(models) { model in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(model.name)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                Text(model.isSelfHosted ? "Self-hosted" : "Hugging Face")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer(minLength: 12)
+                            Text(model.byteCount.formatted(.byteCount(style: .file)))
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                            Button("Delete") { pendingDeletion = model }
+                        }
+                    }
+                    Text("Deleting moves the folder to the Trash. The model "
+                        + "downloads again the next time you generate in that "
+                        + "mode.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if let deleteError {
+                    Text(deleteError).font(.caption).foregroundStyle(.red)
                 }
             }
 
@@ -270,6 +330,21 @@ struct SettingsView: View {
 
     private func refreshFolderPath() {
         folderPath = ModelsLocation.current().path
+        refreshModels()
+    }
+
+    private func refreshModels() {
+        models = ModelStore.all()
+    }
+
+    private func delete(_ model: DownloadedModel) {
+        do {
+            try ModelStore.delete(model)
+            deleteError = nil
+        } catch {
+            deleteError = error.localizedDescription
+        }
+        refreshModels()
     }
 }
 
