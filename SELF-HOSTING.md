@@ -265,13 +265,53 @@ upload. Then press Generate and watch **Window → Logs** (⌘L): it names every
 file as it downloads, and says exactly which one failed and with what status
 code.
 
-Repeat per mode, each with its own prefix and base URL:
+### 11. Do the other two modes
 
-| Mode | Repo |
+Steps 5 to 7 covered **preset voice** only. Each mode uses a different model,
+so each needs its own download, its own manifest, its own prefix in the
+bucket, and its own base URL in Settings. Nothing is shared between them.
+
+This does all three — including the one you may already have done, which is
+harmless, since `hf download` and `rclone copy` both skip what is already
+there:
+
+```sh
+for pair in \
+  "customvoice:mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-bf16" \
+  "voicedesign:mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16" \
+  "voiceclone:mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16"
+do
+  prefix="${pair%%:*}"; repo="${pair#*:}"
+  echo "=== $prefix ==="
+  hf download "$repo" --local-dir ~/bunyi-models/"$prefix"
+  ( cd ~/bunyi-models/"$prefix" \
+    && find . -type f ! -name manifest.txt | sed 's|^\./||' > manifest.txt )
+  rclone copy ~/bunyi-models/"$prefix" r2:bunyi-models/"$prefix" --progress
+done
+```
+
+That is 11.6 GB downloaded and 11.6 GB uploaded. Leave it running.
+
+Then set all three fields in **Settings → Models**:
+
+| Mode | Bunyi setting |
 |---|---|
-| Preset voice | `mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-bf16` |
-| Voice design | `mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16` |
-| Voice clone | `mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16` |
+| Preset voice | `https://models.bunyi.app/customvoice` |
+| Voice design | `https://models.bunyi.app/voicedesign` |
+| Voice clone | `https://models.bunyi.app/voiceclone` |
+
+And check each one answers, the way step 10 did:
+
+```sh
+for p in customvoice voicedesign voiceclone; do
+  printf '%-12s ' "$p"
+  curl -sI "https://models.bunyi.app/$p/config.json" | head -1
+done
+```
+
+Three `200`s and you are done. You do not have to do all three — a mode you
+leave blank keeps using Hugging Face, so it is fine to self-host only the mode
+you use most.
 
 ## Other hosts
 
