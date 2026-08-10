@@ -56,6 +56,12 @@
 
   a { color: #b3aefb; text-decoration: none; }
   a:hover { text-decoration: underline; }
+  /* A link sitting inside running text is underlined always, not only on
+     hover: colour on its own is not a signal everyone can see (WCAG 1.4.1),
+     and hover does not exist on a touchscreen. Standalone links — the nav,
+     the buttons, the footer row, the wordmark — are none of them inside a
+     sentence, so their position already distinguishes them. */
+  p a, td a { text-decoration: underline; text-underline-offset: .18em; text-decoration-thickness: from-font; }
 
   h1, h2, h3 { line-height: 1.2; letter-spacing: -0.02em; margin: 0 0 .5em; }
   h2 { font-size: clamp(1.5rem, 1.1rem + 1.6vw, 2.1rem); }
@@ -204,6 +210,7 @@
         api_host: 'https://us.i.posthog.com',
         defaults: '2026-05-30',
         person_profiles: 'identified_only', // or 'always' to create profiles for anonymous users as well
+        disable_surveys: true, // surveys are on per-project; this page has none, so skip the 33 KB
     })
 </script>
 </head>
@@ -211,7 +218,7 @@
 
 <header>
   <div class="wrap nav">
-    <a class="brand" href="./"><img src="assets/icon-256.png" alt=""> Bunyi</a>
+    <a class="brand" href="./"><img src="assets/icon-64.png" alt="" width="64" height="64"> Bunyi</a>
     <nav>
       <a href="#modes">Modes</a>
       <a href="#features">Features</a>
@@ -244,7 +251,10 @@
       </p>
     </div>
     <div class="hero-art">
-      <img src="assets/icon.png" alt="The Bunyi app icon: a white waveform on an indigo-to-violet gradient.">
+      <!-- 512px for a 240px slot: enough for a 2× display, and a quarter the
+           bytes of the 1024px original it used to load. width/height reserve
+           the square before the file arrives, so nothing below it jumps. -->
+      <img src="assets/icon-512.png" width="512" height="512" alt="The Bunyi app icon: a white waveform on an indigo-to-violet gradient.">
     </div>
   </div>
 </div>
@@ -449,7 +459,7 @@ xcodegen generate</code></pre>
 <footer>
   <div class="wrap foot-grid">
     <div>
-      <a class="brand" href="./"><img src="assets/icon-256.png" alt=""> Bunyi</a>
+      <a class="brand" href="./"><img src="assets/icon-64.png" alt="" width="64" height="64"> Bunyi</a>
       <p style="margin:.6rem 0 0">Local text-to-speech, no terminal required.</p>
     </div>
     <div class="foot-links">
