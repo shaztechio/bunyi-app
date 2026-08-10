@@ -362,6 +362,20 @@ final class TTSEngine {
         let fileURL = base.appendingPathComponent(relPath)
         let dest = localDir.appendingPathComponent(relPath)
 
+        // Already have it? Skip. Without this, stopping a download and starting
+        // again fetched every file from the beginning — several gigabytes to
+        // re-transfer because the last one was interrupted. The Hugging Face
+        // path has always been incremental; this one was not.
+        //
+        // Size against the server's, not mere existence: a file interrupted
+        // mid-write is present and wrong, and "it exists" would keep it
+        // forever.
+        if let local = try? FileManager.default.attributesOfItem(atPath: dest.path)[.size] as? Int64,
+           let remote = await Self.remoteSize(of: fileURL), local == remote {
+            log.log("Have \(relPath) already (\(local.formatted(.byteCount(style: .file))))")
+            return
+        }
+
         let code = try await HTTPFileDownloader.download(from: fileURL, to: dest) {
             [weak self] received, expected in
             guard expected > 0 else { return }
@@ -379,6 +393,27 @@ final class TTSEngine {
             log.log("Skipped \(relPath) (HTTP \(code))")
             return
         }
+    }
+
+    /// The server's size for a file, or nil if it will not say.
+    ///
+    /// A HEAD per file is a handful of small round trips against a download
+    /// measured in gigabytes — cheap enough to buy the ability to resume.
+    ///
+    /// Returns nil for compressed responses, and that is the point: URLSession
+    /// asks for gzip, so a server that compresses JSON reports a length that
+    /// does not match the file on disk. Rather than guess, those files are
+    /// simply fetched again — they are a few kilobytes. The multi-gigabyte
+    /// weights are served as octet-stream, uncompressed, and do report a
+    /// usable length, which is the case that matters.
+    nonisolated private static func remoteSize(of url: URL) async -> Int64? {
+        var request = URLRequest(url: url)
+        request.httpMethod = "HEAD"
+        guard let (_, response) = try? await URLSession.shared.data(for: request),
+              let http = response as? HTTPURLResponse,
+              http.statusCode == 200,
+              response.expectedContentLength > 0 else { return nil }
+        return response.expectedContentLength
     }
 
     /// Filesystem-safe folder name derived from a base URL.

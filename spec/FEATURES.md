@@ -168,7 +168,12 @@ in the models folder — see `DATA-FORMATS.md`.
 > See `DATA-FORMATS.md`.
 
 ### 3b. Download behavior (identical across platforms)
-- **Resumable & incremental**: already-present files are skipped.
+- **Resumable & incremental**: already-present files are skipped — on every
+  source, not only the Hub. Stopping a download and starting again must not
+  re-fetch what is already on disk; for a self-hosted model that is gigabytes
+  of pointless transfer. A file counts as present when its size matches the
+  server's, not merely when it exists: an interrupted write leaves a file that
+  exists and is wrong.
 - **Offline reuse**: a complete model on disk is used without any network
   (`hasCompleteModel` rule in `DATA-FORMATS.md`).
 - **Progress must reflect bytes, not files.** A model is one enormous file and
