@@ -31,6 +31,23 @@ site is reachable at `https://shaztechio.github.io/bunyi-app/`; delete
 | `CNAME` | Custom domain |
 | `.nojekyll` | Serve files as-is |
 
+## Analytics
+
+`index.html` loads [PostHog](https://posthog.com) to count visits to this
+site. **The apps do not.** Bunyi runs offline once the models are down, and
+instrumenting it would contradict the thing the page is selling — keep the
+snippet in `docs/` and nowhere else.
+
+The `phc_…` value in the snippet is a *public project key*. It belongs in
+client-side HTML, it is write-only (events in, nothing out), and it is not
+the personal API key that reads data back — that one never lands in the
+repository.
+
+Analytics load from `us-assets.i.posthog.com` and send to
+`us.i.posthog.com`, so a strict CSP or a blocklist will drop them. Nothing
+else on the page depends on the script: `p.onerror` gives up quietly and
+the site renders the same either way.
+
 ## Link previews
 
 `og:image` must be an **absolute** URL — scrapers do not resolve relative
