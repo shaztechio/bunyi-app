@@ -54,6 +54,9 @@ Any feature change updates the spec **and** every app.
   never been built. Pick it up on a Windows or Linux machine with the .NET
   SDK.
 
+Hosting the models yourself (when the Hub is slow, or you are serving a team):
+[`SELF-HOSTING.md`](SELF-HOSTING.md).
+
 CI: [`.github/workflows/`](.github/workflows/) builds macOS (green) and the
 .NET matrix for Windows + Linux (red until the app is implemented).
 [`release.yml`](.github/workflows/release.yml) builds, Developer ID signs,
