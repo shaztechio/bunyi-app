@@ -179,6 +179,13 @@ in the models folder — see `DATA-FORMATS.md`.
   the model's folder are skipped and logged, per the path rules in
   `DATA-FORMATS.md` — the download continues rather than failing, since one bad
   line should not cost a multi-gigabyte refetch.
+- **Checksums when the server publishes them.** A self-hosted server may serve
+  `manifest.sha256` (`DATA-FORMATS.md`). Where a digest exists it replaces the
+  size test above, both for verifying a fresh download before it counts as
+  complete and for deciding whether a file already on disk can be reused —
+  matching sizes are exactly what a truncated file has. A file that fails must
+  be discarded rather than left for a retry to find and skip. Servers without
+  the file keep working unchanged, and a client must not require it.
 - **Offline reuse**: a complete model on disk is used without any network
   (`hasCompleteModel` rule in `DATA-FORMATS.md`).
 - **Progress and stall detection must follow bytes received from the network**,

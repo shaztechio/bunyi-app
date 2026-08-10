@@ -211,7 +211,7 @@ own, built from its own folder:
 ```sh
 for pair in "${MODELS[@]}"; do
   ( cd ~/bunyi-models/"${pair%%:*}" \
-    && find . -type f ! -name manifest.txt ! -path './.*' \
+    && find . -type f ! -name 'manifest.*' ! -path './.*' \
        | sed 's|^\./||' > manifest.txt )
 done
 ```
@@ -235,6 +235,43 @@ for pair in "${MODELS[@]}"; do
     "$(grep -c speech_tokenizer ~/bunyi-models/"${pair%%:*}"/manifest.txt)"
 done
 ```
+
+### 7b. Add checksums (recommended)
+
+Also publish `manifest.sha256`, and Bunyi verifies every file it downloads
+against it. Without one, a truncated upload or a half-finished `rclone` run
+produces a model that loads and generates nonsense, with nothing to say why.
+
+```sh
+for pair in "${MODELS[@]}"; do
+  ( cd ~/bunyi-models/"${pair%%:*}" \
+    && find . -type f ! -name 'manifest.*' ! -path './.*' \
+       | sed 's|^\./||' | sort | tr '\n' '\0' \
+       | xargs -0 shasum -a 256 > manifest.sha256 )
+done
+```
+
+On Linux, `sha256sum` in place of `shasum -a 256` — the output format is the
+same, which is the point of using it. Verify before you upload anything:
+
+```sh
+for pair in "${MODELS[@]}"; do
+  ( cd ~/bunyi-models/"${pair%%:*}" && shasum -a 256 -c manifest.sha256 ) \
+    | grep -v ': OK$' || echo "${pair%%:*}: all files OK"
+done
+```
+
+Bunyi prefers `manifest.sha256` and falls back to `manifest.txt`, so keep
+both and regenerate them together. **Do not put the digests into
+`manifest.txt` instead.** Every released version of Bunyi reads each line of
+that file as a filename, so a `<digest>  model.safetensors` line is requested
+verbatim, 404s, and fails the download outright. A separate file is invisible
+to those versions, which is what makes it safe to add whenever you like.
+
+What this does and does not do: it catches corruption, truncation and partial
+uploads — the things that actually go wrong. It is not proof of authenticity.
+Anyone who can rewrite a model file on your server can rewrite the manifest
+next to it.
 
 Each should report several. A zero means something flattened that folder and
 the upload will not work.
@@ -266,10 +303,14 @@ regenerate and re-upload that; then delete the stray objects at your leisure:
 ```sh
 for pair in "${MODELS[@]}"; do
   rclone purge r2:bunyi-models/"${pair%%:*}"/.cache
-  rclone copy ~/bunyi-models/"${pair%%:*}"/manifest.txt \
-    r2:bunyi-models/"${pair%%:*}"
+  rclone copy ~/bunyi-models/"${pair%%:*}" r2:bunyi-models/"${pair%%:*}" \
+    --include 'manifest.*'
 done
 ```
+
+Both manifests, together — they describe the same file set, and a bucket
+where only one of them has been refreshed is a bucket where new clients and
+old clients disagree about what to download.
 
 Confirm the nesting survived the trip:
 
@@ -324,7 +365,7 @@ field restores the built-in default for that mode.
 BASE=https://models.bunyi.app
 
 for pair in "${MODELS[@]}"; do
-  for f in manifest.txt config.json speech_tokenizer/config.json; do
+  for f in manifest.txt manifest.sha256 config.json speech_tokenizer/config.json; do
     printf '%-12s %-28s ' "${pair%%:*}" "$f"
     curl -sI "$BASE/${pair%%:*}/$f" | head -1
   done

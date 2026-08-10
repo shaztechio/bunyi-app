@@ -84,7 +84,57 @@ platform. Windows forbids `:` in filenames anyway, so an entry containing
 one is either an escape attempt or a file the .NET app could not create.
 
 These paths are used to build write destinations, and `<base>` is whatever
-the user typed into Settings — not necessarily a server they audited.
+the user typed into Settings — not necessarily a server they audited. The
+rules apply to every manifest format below.
+
+## Self-host `manifest.sha256`
+
+Optional file at `<base>/manifest.sha256`, **preferred over `manifest.txt`
+when both are served**. Same rules for blank lines and `#` comments. Each
+line is the output format of `shasum -a 256` / `sha256sum`:
+
+```
+<64 lowercase hex digits><whitespace><relative path>
+```
+
+```
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  config.json
+5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03  model.safetensors
+9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08  speech_tokenizer/config.json
+```
+
+The separator is **any whitespace**, not the two spaces `shasum` happens to
+write — tools do emit tabs, and a client that splits on a literal space
+reads such a line as a bare path and skips verification silently.
+
+A line whose first token is not exactly 64 hex digits is read as a bare
+path, so one parser handles both files and a digest-less line is legal.
+A leading `*` on the path (how `shasum` marks a binary-mode read) is
+stripped. Digests are compared case-insensitively.
+
+The **path rules** above apply here unchanged — a digest does not make a
+path safe, and an entry is rejected before its digest is ever considered.
+
+**Two files rather than digests inside `manifest.txt`.** Every released
+client parses each line of `manifest.txt` as a path; a `<digest>  <path>`
+line would be requested verbatim, 404, and fail the download outright for a
+required file. Old clients never request `manifest.sha256`, so a server may
+publish it at any time without breaking anything already installed.
+
+Where a digest is present the client **must**:
+
+- verify the downloaded file against it before treating the file as
+  complete, and discard the file if it does not match — a failed file must
+  not be left where a retry would find it and skip it;
+- use the digest, not the file size, to decide whether a file already on
+  disk can be reused. Size equality is precisely the test a truncated or
+  corrupt file passes.
+
+Digests cover corruption, truncation and partial uploads. They are **not**
+an authenticity guarantee: a server that can rewrite a model file can
+rewrite the manifest beside it. Anchoring that would mean shipping expected
+digests in the client or signing the manifest, neither of which this format
+does.
 
 ## `tokenizer.json` auto-fetch
 
