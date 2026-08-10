@@ -60,6 +60,10 @@ at runtime, that step is the fix.
 
 ## Self-hosting the models
 
+> Step-by-step instructions, including which hosts work and which do not, are
+> in [`/SELF-HOSTING.md`](../../SELF-HOSTING.md). What follows is the mechanism.
+
+
 Each mode's field in **Settings → Models** accepts either a Hugging Face
 repo ID (default) **or** an `https://` base URL you control — the app
 decides by scheme. With a base URL it downloads the model files directly
