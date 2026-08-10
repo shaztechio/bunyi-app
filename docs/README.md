@@ -50,9 +50,24 @@ Analytics load from `us-assets.i.posthog.com` and send to
 else on the page depends on the script: `p.onerror` gives up quietly and
 the site renders the same either way.
 
-`disable_surveys: true` is deliberate. Surveys are enabled per PostHog
-project, and leaving them on made every visitor fetch a 33 KB `surveys.js`
-that this page never uses. Remove the flag if the site ever runs one.
+`posthog.init` carries two flags that exist only to stop PostHog fetching
+modules this page has no use for. Both were measured, not guessed — the
+check is to load the page and look at what comes back from
+`us-assets.i.posthog.com`.
+
+- `disable_surveys: true` — surveys are enabled per PostHog project, and
+  leaving them on made every visitor fetch a 33 KB `surveys.js`. Remove the
+  flag if the site ever runs a survey.
+- `capture_performance: false` — drops `web-vitals.js`. Real user timings
+  are not why this page has analytics, and Lighthouse measures it properly
+  on demand.
+
+`capture_dead_clicks` is deliberately **not** set. It looks like it should
+save the 7 KB `dead-clicks-autocapture.js`, and it does not: the project's
+remote config already reports `captureDeadClicks: false`, and the module is
+loaded by **heatmaps** instead. `enable_heatmaps: false` does remove it —
+at the cost of the click and scroll maps for the landing page, which are
+worth more than 7 KB of async script. Left on deliberately.
 
 Cloudflare Web Analytics is *also* on this page — `beacon.min.js`, injected
 by the proxy rather than by anything in this repository. So visits are
