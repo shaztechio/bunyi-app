@@ -24,8 +24,10 @@ site is reachable at `https://shaztechio.github.io/bunyi-app/`; delete
 | Path | What it is |
 |------|-----------|
 | `index.html` | The whole site — hero, modes, features, platform status, build steps |
-| `assets/icon.png` | 1024px app icon, copied from `apps/macos/Assets.xcassets` |
-| `assets/icon-256.png` | 256px copy, used as the favicon |
+| `assets/icon.png` | 1024px app icon — used by the **repository** README, not by this page |
+| `assets/icon-256.png` | 256px copy: favicon and `apple-touch-icon` |
+| `assets/icon-512.png` | 512px copy, the hero image |
+| `assets/icon-64.png` | 64px copy, the wordmark in the header and footer |
 | `assets/og-card.png` | 1200×630 link-preview image (`og:image`) |
 | `tools/generate-og-card.swift` | Renders `og-card.png` |
 | `CNAME` | Custom domain |
@@ -47,6 +49,15 @@ Analytics load from `us-assets.i.posthog.com` and send to
 `us.i.posthog.com`, so a strict CSP or a blocklist will drop them. Nothing
 else on the page depends on the script: `p.onerror` gives up quietly and
 the site renders the same either way.
+
+`disable_surveys: true` is deliberate. Surveys are enabled per PostHog
+project, and leaving them on made every visitor fetch a 33 KB `surveys.js`
+that this page never uses. Remove the flag if the site ever runs one.
+
+Cloudflare Web Analytics is *also* on this page — `beacon.min.js`, injected
+by the proxy rather than by anything in this repository. So visits are
+counted twice, by two systems. That is a Cloudflare dashboard setting, not
+a code change; turn one off if one is enough.
 
 ## Link previews
 
@@ -71,7 +82,21 @@ re-copy them:
 ```sh
 cp apps/macos/Assets.xcassets/AppIcon.appiconset/icon-512pt@2x.png docs/assets/icon.png
 cp apps/macos/Assets.xcassets/AppIcon.appiconset/icon-128pt@2x.png docs/assets/icon-256.png
+cp apps/macos/Assets.xcassets/AppIcon.appiconset/icon-256pt@2x.png docs/assets/icon-512.png
+cp apps/macos/Assets.xcassets/AppIcon.appiconset/icon-32pt@2x.png  docs/assets/icon-64.png
 ```
+
+There are four sizes because the page should send roughly what it displays.
+The hero renders at 240 CSS px and the wordmark at 26, so 512 and 64 cover a
+2× display with a little room and no more; serving the 1024px icon into a
+240px box cost 166 KB to show 170 KB of nothing. Every one is a plain copy
+of a file the icon generator already produces — resampling here would be a
+build step, and this folder deliberately has none.
+
+Each `<img>` also carries `width`/`height` attributes. They do not size
+anything (CSS does), they give the browser the aspect ratio up front so the
+space is reserved before the file lands and the page below it never jumps.
+Keep them in step with the file you point at.
 
 ## Keeping it honest
 
