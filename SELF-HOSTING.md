@@ -218,11 +218,14 @@ done
 
 The `! -path './.*'` matters. `hf download` leaves a `.cache/huggingface/`
 tree of `.lock` and `.metadata` files behind, and without that exclusion the
-manifest lists about thirty of them — forty-three entries where fourteen are
-real. Bunyi would fetch every one. Harmless in itself, but it clutters the
-models folder and skews the progress bar, which counts files rather than
-bytes: the single 3.8 GB download becomes "1 of 43" and the bar barely moves
-until it finishes.
+manifest lists about thirty of them — forty-three entries where thirteen are
+real. Bunyi would fetch every one: thirty pointless requests, and thirty stray
+files in the models folder.
+
+(Releases before this counted files rather than bytes for progress, so a
+manifest like that also reported "1 of 43" while the single 3.8 GB file
+downloaded, and the bar barely moved. Progress follows bytes now — but the
+clutter is reason enough to exclude the cache.)
 
 Check they include the nested entries, not only top-level files:
 
