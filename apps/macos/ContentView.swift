@@ -339,7 +339,22 @@ struct ContentView: View {
     /// comment had to defend. A toolbar is outside that scope by construction.
     @ToolbarContentBuilder
     private var windowToolbar: some ToolbarContent {
+        // Ordered by how far the answer is from the app: Doctor decides
+        // whether it can run at all, Logs says what it did, Help explains what
+        // it is. All three sit in this group and not beside Generate, because
+        // all three are wanted most while something is wrong — which is often
+        // while something is running. The group is outside the
+        // `.disabled(engine.status.isBusy)` scope, so that holds by
+        // construction rather than by remembering.
         ToolbarItemGroup(placement: .primaryAction) {
+            Button {
+                runDoctorOnDemand()
+            } label: {
+                Label("Doctor", systemImage: "stethoscope")
+            }
+            .help("Check whether this Mac can generate audio")
+            .disabled(doctorRunning)
+
             // Window → Logs (⌘L) already opens this. The button is here for
             // the same reason the help one is: when a run is slow or fails,
             // the log is the answer, and nobody finds it in a menu.
@@ -361,19 +376,6 @@ struct ContentView: View {
                 Label("Help", systemImage: "questionmark.circle")
             }
             .help("Open Bunyi Help")
-
-            // Deliberately in this group and not beside Generate: like Logs and
-            // Help, it is wanted most while something is wrong, which is often
-            // while something is running. The group is outside the
-            // `.disabled(engine.status.isBusy)` scope, so that holds by
-            // construction rather than by remembering.
-            Button {
-                runDoctorOnDemand()
-            } label: {
-                Label("Doctor", systemImage: "stethoscope")
-            }
-            .help("Check whether this Mac can generate audio")
-            .disabled(doctorRunning)
         }
     }
 

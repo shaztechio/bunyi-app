@@ -435,9 +435,10 @@ and are written to the Logs. When nothing is wrong, the run starts with no
 dialog and no interruption — a preflight the user notices on a healthy machine
 is a bug.
 
-**On demand**, from a stethoscope button in the window toolbar, beside Logs
-and Help, and available while work is in progress for the same reason they are
-(§8): a run behaving strangely is exactly when it is wanted. The on-demand run
+**On demand**, from a stethoscope button in the window toolbar. The three sit
+in one group, ordered **Doctor, Logs, Help** — by how far the answer is from
+the app: whether it can run at all, what it did, what it is. All are available
+while work is in progress for the same reason (§8): a run behaving strangely is exactly when it is wanted. The on-demand run
 reports **every** check in a dialog, passes included — "everything is fine" is
 the most common useful answer — and writes the same findings to the Logs so
 they can be copied into a bug report.
