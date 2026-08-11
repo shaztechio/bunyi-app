@@ -61,7 +61,7 @@ struct SettingsView: View {
     /// One ready-to-run download line per Hub-backed mode, using the actual
     /// models-folder path.
     private var preDownloadCommand: String {
-        hubModes.map { mode, repo in
+        hubModes.map { _, repo in
             "hf download \(repo) --local-dir \"\(folderPath)/models/\(repo)\""
         }.joined(separator: "\n")
     }
@@ -204,7 +204,7 @@ struct SettingsView: View {
                     }
                 }
 
-                Text("Restoring replaces all three fields. As with any change "
+                Text("Restoring replaces every field above. As with any change "
                     + "here, it applies on the next generate.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -363,8 +363,11 @@ struct SettingsView: View {
                 if hubModes.isEmpty {
                     // Every mode is on a base URL, so there is nothing here to
                     // pre-download with. Saying so beats an empty code block.
-                    Text("All three modes are set to a self-hosted server on "
-                        + "the Models tab, so there is nothing to fetch from "
+                    // No count in the wording. Everything else here is
+                    // driven by TTSMode.allCases, so a hardcoded "all three"
+                    // would quietly become wrong the day a mode is added.
+                    Text("Every mode is set to a self-hosted server on the "
+                        + "Models tab, so there is nothing to fetch from "
                         + "Hugging Face. Bunyi downloads those on first use. "
                         + "Point a mode back at a Hugging Face repo and its "
                         + "command appears here.")
