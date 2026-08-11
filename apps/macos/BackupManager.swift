@@ -123,7 +123,6 @@ final class BackupManager {
                 let monitor = startSizeMonitor(total: total, label: "Archiving") {
                     Self.directorySize(tempDir)
                 }
-                sizeMonitor = monitor
                 do {
                     try await Task.detached(priority: .utility) { [running] in
                         try Self.createZipStored(
@@ -203,10 +202,18 @@ final class BackupManager {
     /// Polls a growing output so a determinate bar can show real progress —
     /// the zip's working dir while archiving, or the destination file while
     /// copying to another volume. `measure` returns bytes written so far.
+    /// Starts a poller, and records it as the one `cancel()` should stop.
+    ///
+    /// Recorded here rather than by the caller, because leaving it to callers
+    /// is exactly what went wrong: only the archiving monitor was stored, so
+    /// pressing Stop during the cross-volume "Saving…" copy left that monitor
+    /// running — still logging, and still writing `progress` after `cancel()`
+    /// had cleared it. Doing it here means any monitor added later is tracked
+    /// without anyone remembering to.
     private func startSizeMonitor(
         total: Int64, label: String, measure: @escaping @Sendable () -> Int64
     ) -> Task<Void, Never> {
-        Task { [weak self, log] in
+        let task = Task { [weak self, log] in
             guard total > 0 else { return }
             var lastDecile = -1
             while !Task.isCancelled {
@@ -222,6 +229,8 @@ final class BackupManager {
                 try? await Task.sleep(for: .seconds(1))
             }
         }
+        sizeMonitor = task
+        return task
     }
 
     nonisolated private static func createZipStored(
