@@ -309,9 +309,12 @@ struct ContentView: View {
             Button {
                 openWindow(id: "logs")
             } label: {
-                Label("Log", systemImage: "list.bullet.rectangle")
+                // "Logs", matching the window it opens and the Window → Logs
+                // menu item. A toolbar shown with labels would otherwise offer
+                // "Log" for a window called "Logs".
+                Label("Logs", systemImage: "list.bullet.rectangle")
             }
-            .help("Open the log (⌘L)")
+            .help("Open Logs (⌘L)")
 
             // The Help menu already opens this book; the button is here
             // because the audience for this app does not go looking in menus.
