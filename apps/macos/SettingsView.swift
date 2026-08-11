@@ -41,13 +41,37 @@ struct SettingsView: View {
     @State private var configError: String?
     @State private var pendingConfigDeletion: ModelConfig?
 
-    /// One ready-to-run download line per mode, using each mode's current
-    /// (possibly overridden) repo and the actual models-folder path.
+    /// Modes currently pointed at a Hugging Face repo, and their repo IDs.
+    ///
+    /// A mode set to a self-hosted base URL has none. `effectiveRepoID` returns
+    /// whatever the field holds, so building a command from it unconditionally
+    /// produced `hf download https://models.example.com/customvoice
+    /// --local-dir ".../models/https://models.example.com/customvoice"` —
+    /// not a repo ID, not a usable path, and pointed at the wrong folder
+    /// besides, since self-hosted downloads land in `models/self-hosted/<slug>`.
+    /// Since the app ships a mirror configuration, all three modes being URLs
+    /// is a normal state, not a corner case.
+    private var hubModes: [(mode: TTSMode, repo: String)] {
+        TTSMode.allCases.compactMap { mode in
+            guard case .repo(let repo) = mode.effectiveSource else { return nil }
+            return (mode, repo)
+        }
+    }
+
+    /// One ready-to-run download line per Hub-backed mode, using the actual
+    /// models-folder path.
     private var preDownloadCommand: String {
-        TTSMode.allCases.map { mode in
-            let repo = mode.effectiveRepoID
-            return "hf download \(repo) --local-dir \"\(folderPath)/models/\(repo)\""
+        hubModes.map { _, repo in
+            "hf download \(repo) --local-dir \"\(folderPath)/models/\(repo)\""
         }.joined(separator: "\n")
+    }
+
+    /// The modes this section cannot help with, named so their absence from
+    /// the command list reads as deliberate rather than as a missing line.
+    private var selfHostedModeNames: [String] {
+        TTSMode.allCases
+            .filter { if case .baseURL = $0.effectiveSource { return true } else { return false } }
+            .map(\.rawValue)
     }
 
     var body: some View {
@@ -180,7 +204,7 @@ struct SettingsView: View {
                     }
                 }
 
-                Text("Restoring replaces all three fields. As with any change "
+                Text("Restoring replaces every field above. As with any change "
                     + "here, it applies on the next generate.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -335,36 +359,67 @@ struct SettingsView: View {
                     + "(install it with `pip install huggingface_hub`).")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Text("These commands fetch the three models the app uses — "
-                    + "one per mode, matching the repos on the Models tab. "
-                    + "Run them in Terminal (skip any you don't need); the app "
-                    + "then uses the files directly and skips its own download.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                HStack(alignment: .top, spacing: 8) {
-                    Text(preDownloadCommand)
-                        .font(.system(.caption, design: .monospaced))
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(8)
-                        .background(.quaternary,
-                                    in: RoundedRectangle(cornerRadius: 6))
-                    Button {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(
-                            preDownloadCommand, forType: .string)
-                        copiedCommand = true
-                        Task {
-                            try? await Task.sleep(for: .seconds(1.5))
-                            copiedCommand = false
-                        }
-                    } label: {
-                        Image(systemName: copiedCommand
-                            ? "checkmark" : "doc.on.doc")
-                            .frame(width: 16)
+
+                if hubModes.isEmpty {
+                    // Every mode is on a base URL, so there is nothing here to
+                    // pre-download with. Saying so beats an empty code block.
+                    // No count in the wording. Everything else here is
+                    // driven by TTSMode.allCases, so a hardcoded "all three"
+                    // would quietly become wrong the day a mode is added.
+                    Text("Every mode is set to a self-hosted server on the "
+                        + "Models tab, so there is nothing to fetch from "
+                        + "Hugging Face. Bunyi downloads those on first use. "
+                        + "Point a mode back at a Hugging Face repo and its "
+                        + "command appears here.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("These fetch the models the app uses, matching the "
+                        + "repos on the Models tab. Run them in Terminal (skip "
+                        + "any you don't need); the app then uses the files "
+                        + "directly and skips its own download.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    if !selfHostedModeNames.isEmpty {
+                        // Which modes are missing, and why — otherwise a list
+                        // with one line looks like two commands went astray.
+                        Text("\(selfHostedModeNames.formatted(.list(type: .and))) "
+                            + (selfHostedModeNames.count == 1 ? "is" : "are")
+                            + " set to a self-hosted server, so "
+                            + (selfHostedModeNames.count == 1 ? "it is" : "they are")
+                            + " not listed — Bunyi downloads those on first use.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
-                    .buttonStyle(.borderless)
-                    .help("Copy command")
+                }
+
+                if !hubModes.isEmpty {
+                    HStack(alignment: .top, spacing: 8) {
+                        Text(preDownloadCommand)
+                            .font(.system(.caption, design: .monospaced))
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(8)
+                            .background(.quaternary,
+                                        in: RoundedRectangle(cornerRadius: 6))
+                        Button {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(
+                                preDownloadCommand, forType: .string)
+                            copiedCommand = true
+                            Task {
+                                try? await Task.sleep(for: .seconds(1.5))
+                                copiedCommand = false
+                            }
+                        } label: {
+                            Image(systemName: copiedCommand
+                                ? "checkmark" : "doc.on.doc")
+                                .frame(width: 16)
+                        }
+                        .buttonStyle(.borderless)
+                        .help("Copy command")
+                    }
                 }
             }
         }
