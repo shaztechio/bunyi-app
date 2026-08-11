@@ -524,9 +524,7 @@ struct ContentView: View {
                 }
                 // Escape is what people press to abandon something.
                 .keyboardShortcut(.cancelAction)
-                .buttonStyle(.bordered)
-                .controlSize(.large)
-                .tint(.red)
+                .buttonStyle(ActionButtonStyle(role: .destructive))
                 .help("Stop the current operation")
             } else if tab != .history {
                 Button(action: generate) {
@@ -534,7 +532,7 @@ struct ContentView: View {
                         .frame(minWidth: 110)
                 }
                 .keyboardShortcut(.return, modifiers: .command)
-                .buttonStyle(GenerateButtonStyle())
+                .buttonStyle(ActionButtonStyle(role: .primary))
                 .disabled(!canGenerate)
                 // Still on hover, deliberately. `spec/FEATURES.md` §1 pins
                 // "says why on hover" — surfacing this inline is a behaviour
