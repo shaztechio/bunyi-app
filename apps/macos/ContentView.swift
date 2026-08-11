@@ -160,7 +160,7 @@ struct ContentView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: Space.card) {
                 modeBar
 
                 if tab == .history {
@@ -188,7 +188,7 @@ struct ContentView: View {
                         .disabled(engine.status.isBusy)
                 }
             }
-            .padding(20)
+            .padding(Space.window)
             // No `alignment: .topLeading`: the text card now grows to fill, so
             // pinning the stack to the top would leave the same gap the cap
             // used to. History supplies its own scrolling list and fills on
@@ -252,7 +252,7 @@ struct ContentView: View {
     // MARK: Mode bar
 
     private var modeBar: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Space.tight) {
             Picker("Mode", selection: $tab) {
                 ForEach(TTSMode.allCases) { mode in
                     Label(mode.rawValue, systemImage: mode.symbol)
@@ -270,6 +270,12 @@ struct ContentView: View {
             .disabled(engine.status.isBusy && tab != .history)
 
             HStack(alignment: .firstTextBaseline) {
+                // One line, not two. A heading here was tried and removed: the
+                // segmented control directly above already names the mode, so
+                // "Voice clone" / "Clone a voice from a clip" / "Copy a voice
+                // from a short reference clip" stacked three restatements of
+                // the same idea. The picker is the heading; this is the
+                // explanation under it.
                 Text(tab == .history
                      ? "Everything you have generated, newest first."
                      : mode.subtitle)
@@ -277,12 +283,12 @@ struct ContentView: View {
                     .foregroundStyle(.secondary)
                     .animation(.none, value: mode)
 
-                Spacer(minLength: 12)
+                Spacer(minLength: Space.row)
 
                 // Both of these are deliberately not disabled while busy. A
                 // long download is exactly when someone wants to read the help
                 // or watch the log, and neither touches the running job.
-                HStack(spacing: 10) {
+                HStack(spacing: Space.tight) {
                     // Window → Logs (⌘L) already opens this. The button is here
                     // for the same reason the help one is: when a run is slow or
                     // fails, the log is the answer, and nobody finds it in a menu.
@@ -320,31 +326,41 @@ struct ContentView: View {
     private var textCard: some View {
         TextEditor(text: $text)
             .focused($scriptFocused)
-            .font(.body)
+            .font(.bunyiEditor)
             .scrollContentBackground(.hidden)
-            .padding(8)
+            .padding(Space.tight)
             // Grows instead of capping at 220. The options card below is
             // intrinsically sized and the window is 580 pt tall at minimum, so
             // a fixed cap left the bottom third of the window empty.
             .frame(minHeight: 160, maxHeight: .infinity)
             .background(Color(nsColor: .textBackgroundColor),
-                        in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12)
+                        in: RoundedRectangle(cornerRadius: Radius.card))
+            .overlay(RoundedRectangle(cornerRadius: Radius.card)
                 .strokeBorder(Color.primary.opacity(0.08)))
             .overlay(alignment: .topLeading) {
                 if text.isEmpty {
+                    // Derived, not hand-tuned. The old 16/13 were eyeballed
+                    // against TextEditor's internals and did not sit on the
+                    // caret. The real offset is the padding we applied plus
+                    // NSTextView's own container inset, which is 5 across and
+                    // 0 down — SwiftUI adds no further top inset of its own.
                     Text("What should the voice say?")
+                        .font(.bunyiEditor)
                         .foregroundStyle(.tertiary)
-                        .padding(.top, 16).padding(.leading, 13)
+                        .padding(.top, Space.tight)
+                        .padding(.leading, Space.tight + 5)
                         .allowsHitTesting(false)
                 }
             }
             .overlay(alignment: .bottomTrailing) {
                 if !text.isEmpty {
+                    // monospacedDigit so the counter stops reflowing on every
+                    // keystroke as digits of different widths swap in.
                     Text("\(text.count) characters")
                         .font(.caption2)
+                        .monospacedDigit()
                         .foregroundStyle(.tertiary)
-                        .padding(10)
+                        .padding(Space.row)
                         .allowsHitTesting(false)
                 }
             }
@@ -429,7 +445,7 @@ struct ContentView: View {
                     Text(voiceError)
                         .font(.caption)
                         .foregroundStyle(.red)
-                        .padding(.horizontal, 12).padding(.bottom, 8)
+                        .padding(.horizontal, Space.row).padding(.bottom, Space.tight)
                 }
             }
         }
@@ -438,13 +454,13 @@ struct ContentView: View {
         // near-identical, so the card had no visible left or right edge — just
         // dividers hanging in white space.
         .background(Color(nsColor: .controlBackgroundColor),
-                    in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12)
+                    in: RoundedRectangle(cornerRadius: Radius.card))
+        .overlay(RoundedRectangle(cornerRadius: Radius.card)
             .strokeBorder(Color.primary.opacity(0.08)))
     }
 
     private var rowDivider: some View {
-        Divider().padding(.leading, 40)
+        Divider().padding(.leading, OptionRow.labelInset)
     }
 
     /// One labeled row inside the options card: icon + fixed-width label +
@@ -463,24 +479,24 @@ struct ContentView: View {
         icon: String, label: String,
         @ViewBuilder control: () -> Control
     ) -> some View {
-        HStack(spacing: 10) {
+        HStack(spacing: Space.tight) {
             Image(systemName: icon)
                 .foregroundStyle(.secondary)
-                .frame(width: 18)
+                .frame(width: OptionRow.iconColumn)
             Text(label)
                 .foregroundStyle(.secondary)
                 .frame(width: 76, alignment: .leading)
             control()
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, Space.row)
+        .padding(.vertical, Space.tight)
     }
 
     // MARK: Bottom bar (status + playback + generate)
 
     private var bottomBar: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: Space.card) {
             statusView
                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -524,22 +540,22 @@ struct ContentView: View {
                 .help(generateBlockedReason ?? "Generate audio (⌘↩)")
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, Space.card)
+        .padding(.vertical, Space.row)
         .frame(minHeight: 72)
         .background(.bar)
     }
 
     /// Play/pause toggle with a live progress bar and elapsed/total time.
     private var playbackControls: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: Space.tight) {
             Button(action: togglePlayback) {
                 Image(systemName: isPlaying ? "pause.fill" : "play.fill")
                     .frame(width: 14)
             }
             .help(isPlaying ? "Pause" : "Play")
 
-            VStack(spacing: 3) {
+            VStack(spacing: Space.hair) {
                 playbackBar
                 HStack {
                     Text(timeString(playbackTime))
@@ -596,11 +612,14 @@ struct ContentView: View {
     private var statusView: some View {
         switch engine.status {
         case .idle:
+            // .secondary, not .tertiary. This bar is the app's only feedback
+            // channel, and the faintest style SwiftUI offers is the wrong
+            // place to put the one line that says whether it is working.
             Label("Ready — press ⌘↩ to generate", systemImage: "checkmark.circle")
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.secondary)
                 .font(.callout)
         case .downloading(let fraction):
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: Space.hair) {
                 Label("Downloading voice model — one-time, a few GB",
                       systemImage: "arrow.down.circle")
                     .font(.callout).foregroundStyle(.secondary)
@@ -632,7 +651,7 @@ struct ContentView: View {
     }
 
     private func busyLine(_ message: String) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Space.tight) {
             ProgressView().controlSize(.small)
             Text(message).foregroundStyle(.secondary).monospacedDigit()
         }

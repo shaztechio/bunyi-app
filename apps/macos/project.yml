@@ -43,6 +43,7 @@ targets:
       - ReferenceTranscriber.swift
       - VoiceLibrary.swift
       - WindowCloseGuard.swift
+      - Theme.swift
     dependencies:
       - package: swift-qwen3-tts
         product: Qwen3TTS
