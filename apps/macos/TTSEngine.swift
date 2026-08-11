@@ -197,6 +197,46 @@ final class TTSEngine {
         }
     }
 
+    /// Hands MLX's buffer cache back after a generation.
+    ///
+    /// MLX keeps freed buffers in a cache rather than returning them, which is
+    /// the right default while work is ongoing — the next allocation reuses
+    /// them instead of asking the system. It is the wrong state to sit in
+    /// afterwards: on unified memory that cache is real RAM, held against a
+    /// generation that has already finished and been written to disk.
+    ///
+    /// `clearCache()` was only ever called when switching or forgetting a
+    /// model, so a long run's buffers stayed allocated until the next model
+    /// change — potentially for the rest of the session. The model itself
+    /// stays resident; only the cache goes.
+    ///
+    /// Called after the WAV is written, and before `status = .idle` triggers
+    /// auto-play, so the memory is back before playback needs any.
+    ///
+    /// Synchronous on the main actor, matching the two existing calls in
+    /// `prepare` and `forgetModel`. It frees buffers rather than computing, so
+    /// it is not the inference work §2 of the spec keeps off this thread — but
+    /// the logged numbers are there partly so a pause here would be visible
+    /// rather than mysterious.
+    private func releaseGenerationMemory() {
+        let cachedBefore = MLX.GPU.cacheMemory
+        let start = Date()
+        MLX.GPU.clearCache()
+        let elapsed = Date().timeIntervalSince(start)
+        let freed = cachedBefore - MLX.GPU.cacheMemory
+        guard freed > 0 else { return }
+        // The elapsed time is here to answer a specific question. Releasing
+        // gigabytes is real work for the kernel, and if playback stutters
+        // shortly after a generation, the two candidates are this call and the
+        // player's first read from disk. A number distinguishes them: hundreds
+        // of milliseconds here points at the release, single-digit
+        // milliseconds points elsewhere.
+        log.log(String(format: "Released %@ of MLX cache in %.0f ms (%@ still in use)",
+                       freed.formatted(.byteCount(style: .memory)),
+                       elapsed * 1000,
+                       MLX.GPU.activeMemory.formatted(.byteCount(style: .memory))))
+    }
+
     /// Drops the in-memory model if it came from `dir`.
     private func forgetModel(at dir: URL) {
         guard let loadedDir,
@@ -915,6 +955,7 @@ final class TTSEngine {
             }.value
             log.log(String(format: "Saved %@ (%.1f s total)", url.path,
                            Date().timeIntervalSince(generateStart)))
+            releaseGenerationMemory()
             lastOutputURL = url
             status = .idle
         } catch is CancellationError {

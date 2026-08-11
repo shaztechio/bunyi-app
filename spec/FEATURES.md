@@ -86,6 +86,14 @@ A segmented picker selects one of three modes. macOS source:
   froze the app at the end of every generation. Any runtime with deferred
   evaluation has the same trap in a different place — the rule is that the
   window stays responsive for the whole run, not that one named call is moved.
+- **The runtime's buffer cache is released once the output is written.** ML
+  runtimes keep freed buffers rather than returning them, which is right during
+  a run and wrong after one: on unified memory that cache is real RAM held
+  against work that has finished. The model stays resident — only the cache
+  goes. This matters most on the machines the app is aimed at: a multi-gigabyte
+  model plus a long generation's leftovers is enough to push a 16 GB machine
+  into swap, and a swapping machine stalls audio playback and freezes the
+  window for seconds at a time.
 - **Stop**: while any work is in progress — model download, transcription,
   model load, or generation — the Generate button is **replaced** by a Stop
   button (Escape). Not merely disabled: a model download runs for minutes,
