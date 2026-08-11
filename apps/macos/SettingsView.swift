@@ -132,6 +132,12 @@ struct SettingsView: View {
 
     private var generalTab: some View {
         Form {
+            // No eyebrow on this one. The tab is called General, the only
+            // section in it holds a row labelled Appearance, and a header
+            // between them could say nothing that is not already on screen
+            // twice — the same trap Stage 3 fell into with the mode heading.
+            // Backup, also a single unnamed section, is left alone for the
+            // same reason.
             Section {
                 Picker("Appearance", selection: $appearance) {
                     ForEach(AppAppearance.allCases) { mode in
@@ -143,6 +149,7 @@ struct SettingsView: View {
                     + "pin the app regardless. Applies immediately.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .calloutBlock()
             }
         }
         .formStyle(.grouped)
@@ -161,6 +168,7 @@ struct SettingsView: View {
                     + "default. Applies on the next generate.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .calloutBlock()
                 Text("To self-host, enter an https base URL holding the model "
                     + "files (e.g. https://example.com/qwen3-custom). The app "
                     + "reads manifest.sha256 there if present — and verifies "
@@ -170,9 +178,14 @@ struct SettingsView: View {
                     + "recommended.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .calloutBlock()
+            } header: {
+                // The three fields had no label of any kind above them, so the
+                // tab opened on an unheaded stack of text fields.
+                Text("Model sources").eyebrow()
             }
 
-            Section("Configurations") {
+            Section {
                 HStack {
                     Button("Save current…") {
                         newConfigName = ""
@@ -208,6 +221,7 @@ struct SettingsView: View {
                     + "here, it applies on the next generate.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .calloutBlock()
 
                 Text("The Bunyi mirror serves the same Hugging Face models "
                     + "(Apache-2.0) from models.bunyi.app, with checksums the "
@@ -216,10 +230,13 @@ struct SettingsView: View {
                     + "it is where the models come from.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .calloutBlock()
 
                 if let configError {
-                    Text(configError).font(.caption).foregroundStyle(.red)
+                    errorCallout(configError)
                 }
+            } header: {
+                Text("Configurations").eyebrow()
             }
         }
         .formStyle(.grouped)
@@ -313,16 +330,21 @@ struct SettingsView: View {
                     }
                 }
                 if let folderError {
-                    Text(folderError).font(.caption).foregroundStyle(.red)
+                    errorCallout(folderError)
                 }
+            } header: {
+                // Not "Models folder" — that is the label on the row directly
+                // below, and a header repeating its first row says nothing.
+                Text("Location").eyebrow()
             }
 
-            Section("Downloaded models") {
+            Section {
                 if models.isEmpty {
                     Text("Nothing downloaded yet. Models arrive the first time "
                         + "you generate in each mode.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .calloutBlock()
                 } else {
                     ForEach(models) { model in
                         HStack {
@@ -346,19 +368,23 @@ struct SettingsView: View {
                         + "mode.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .calloutBlock()
                 }
                 if let deleteError {
-                    Text(deleteError).font(.caption).foregroundStyle(.red)
+                    errorCallout(deleteError)
                 }
+            } header: {
+                Text("Downloaded models").eyebrow()
             }
 
-            Section("Pre-download") {
+            Section {
                 Text("Want the models in place ahead of time? Pre-download "
                     + "them with the Hugging Face CLI — the `hf` command "
                     + "from Hugging Face's `huggingface_hub` Python package "
                     + "(install it with `pip install huggingface_hub`).")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .calloutBlock()
 
                 if hubModes.isEmpty {
                     // Every mode is on a base URL, so there is nothing here to
@@ -373,6 +399,7 @@ struct SettingsView: View {
                         + "command appears here.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .calloutBlock()
                 } else {
                     Text("These fetch the models the app uses, matching the "
                         + "repos on the Models tab. Run them in Terminal (skip "
@@ -380,6 +407,7 @@ struct SettingsView: View {
                         + "directly and skips its own download.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .calloutBlock()
 
                     if !selfHostedModeNames.isEmpty {
                         // Which modes are missing, and why — otherwise a list
@@ -391,18 +419,19 @@ struct SettingsView: View {
                             + " not listed — Bunyi downloads those on first use.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                            .calloutBlock()
                     }
                 }
 
                 if !hubModes.isEmpty {
-                    HStack(alignment: .top, spacing: 8) {
+                    HStack(alignment: .top, spacing: Space.tight) {
                         Text(preDownloadCommand)
                             .font(.system(.caption, design: .monospaced))
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(8)
-                            .background(.quaternary,
-                                        in: RoundedRectangle(cornerRadius: 6))
+                            .padding(Space.tight)
+                            .background(.quaternary, in: RoundedRectangle(
+                                cornerRadius: Radius.control))
                         Button {
                             NSPasteboard.general.clearContents()
                             NSPasteboard.general.setString(
@@ -421,6 +450,8 @@ struct SettingsView: View {
                         .help("Copy command")
                     }
                 }
+            } header: {
+                Text("Pre-download").eyebrow()
             }
         }
         .formStyle(.grouped)
@@ -443,9 +474,44 @@ struct SettingsView: View {
                     + "models folder. Details in the Logs window (⌘L).")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .calloutBlock()
             }
         }
         .formStyle(.grouped)
+    }
+
+    /// An inline error, wearing the callout treatment with a red rule.
+    ///
+    /// These were bare red `.caption` lines: the same size, weight and
+    /// position as the explanatory prose beside them, differing only in hue —
+    /// so the app's failures were the quietest thing in the window, and
+    /// invisible to anyone who cannot separate red from grey. The rule and the
+    /// glyph carry it now, and the colour is corroboration rather than the
+    /// whole signal.
+    ///
+    /// Three of the four such strings are in this file. The fourth,
+    /// `voiceError`, is in `ContentView.swift` and stays as it is until that
+    /// view's own pass — deliberately, not by oversight.
+    private func errorCallout(_ message: String) -> some View {
+        iconLine("exclamationmark.triangle", message)
+            .font(.caption)
+            .foregroundStyle(.red)
+            .calloutBlock(.error)
+    }
+
+    /// A symbol beside a message, with the symbol hidden from accessibility.
+    ///
+    /// Not a `Label`: these symbols are decorative — colour, and in the error
+    /// case a red rule, already carry the meaning — but inside a `Label`
+    /// VoiceOver reads the symbol along with the text, so a failure would be
+    /// announced as "exclamationmark triangle" followed by the actual message.
+    /// Hidden, the message is spoken on its own.
+    private func iconLine(_ symbol: String, _ message: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: Space.hair) {
+            Image(systemName: symbol)
+                .accessibilityHidden(true)
+            Text(message)
+        }
     }
 
     @ViewBuilder
@@ -470,11 +536,11 @@ struct SettingsView: View {
                 }
             }
         case .done(let message):
-            Label(message, systemImage: "checkmark.circle.fill")
+            iconLine("checkmark.circle.fill", message)
                 .foregroundStyle(.green)
                 .font(.callout)
         case .error(let message):
-            Label(message, systemImage: "exclamationmark.triangle.fill")
+            iconLine("exclamationmark.triangle.fill", message)
                 .foregroundStyle(.red)
                 .font(.callout)
         }

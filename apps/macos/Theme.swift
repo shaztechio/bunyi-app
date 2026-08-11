@@ -63,6 +63,13 @@ enum OptionRow {
 /// Corner radii.
 enum Radius {
     static let card: CGFloat = 12
+
+    /// A block nested *inside* a card or a form section — Settings' copyable
+    /// command box. Smaller than a card on purpose: a box with the same radius
+    /// as the surface holding it reads as a second card lying on top of the
+    /// first. The box was at 6 while everything around it was 10 or 12, which
+    /// is the kind of difference nobody chose.
+    static let control: CGFloat = 8
 }
 
 /// The brand gradient, ported from `.btn-primary` on bunyi.app.
@@ -199,4 +206,93 @@ extension Font {
     /// The script editor. It is the content of the window; 13 pt made it
     /// look like a form field.
     static let bunyiEditor = Font.system(size: 15)
+}
+
+/// What a callout is saying, which decides the colour of its rule.
+enum CalloutTone {
+    /// Explanation. Accent rule — the same colour the rest of the app uses to
+    /// mean "this is Bunyi talking".
+    case explanation
+
+    /// Something went wrong. Red rule, paired by the caller with an
+    /// `exclamationmark.triangle`, because colour alone is the one channel
+    /// that cannot be relied on.
+    case error
+
+    var rule: Color {
+        switch self {
+        case .explanation: .accentColor
+        case .error:       .red
+        }
+    }
+}
+
+extension View {
+    /// The website's `.callout`: a rule down the leading edge over a faint
+    /// fill, marking a block as explanation rather than as a control.
+    ///
+    /// Settings needed this structurally rather than decoratively. Models is
+    /// three text fields followed by nine lines of caption prose, Storage
+    /// eight more, and all of it renders at the same size, weight and grey as
+    /// the field labels — so the tab reads as a README with text fields buried
+    /// in it. The rule does not shorten a word; it just stops the prose and
+    /// the controls from looking like the same kind of thing.
+    ///
+    /// **The rule is the load-bearing part**, which is Stage 1's lesson about
+    /// card borders again: `.quinary` over a grouped form's own surface is
+    /// nearly invisible in light appearance, and 3 pt of accent is not.
+    ///
+    /// The leading corners stay square so the rule reads as an edge of the
+    /// block rather than as a stripe floating beside it; only the trailing
+    /// pair take the card radius.
+    ///
+    /// Named `calloutBlock` rather than `callout`: `.font(.callout)` is a size
+    /// and this is a container, and the two would have been indistinguishable
+    /// at a glance in a file that uses both.
+    func calloutBlock(_ tone: CalloutTone = .explanation) -> some View {
+        modifier(CalloutBlock(tone: tone))
+    }
+
+    /// A section label, in the site's `.eyebrow`: 10 pt bold, uppercase,
+    /// tracked out, in the accent.
+    ///
+    /// Small and quiet on purpose. Its job is to say where one group of
+    /// controls ends and the next begins — at 13 pt semibold it would compete
+    /// with the controls it introduces, which is the opposite of the problem.
+    func eyebrow() -> some View {
+        self
+            .font(.system(size: 10, weight: .bold))
+            .textCase(.uppercase)
+            .tracking(0.9)
+            .foregroundStyle(Color.accentColor)
+    }
+}
+
+private struct CalloutBlock: ViewModifier {
+    /// 3 pt, from the site. Also part of the leading inset below, so the text
+    /// keeps its distance from the rule whatever the rule's width becomes.
+    private static let ruleWidth: CGFloat = 3
+
+    let tone: CalloutTone
+
+    func body(content: Content) -> some View {
+        content
+            // Without this a short line — an error, usually — would draw a
+            // rule only as tall as itself and a fill only as wide, which
+            // reads as a badge rather than as a block.
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, Space.tight)
+            .padding(.leading, Self.ruleWidth + Space.tight)
+            .padding(.trailing, Space.tight)
+            .background {
+                UnevenRoundedRectangle(bottomTrailingRadius: Radius.card,
+                                       topTrailingRadius: Radius.card)
+                    .fill(.quinary)
+                    .overlay(alignment: .leading) {
+                        Rectangle()
+                            .fill(tone.rule)
+                            .frame(width: Self.ruleWidth)
+                    }
+            }
+    }
 }
