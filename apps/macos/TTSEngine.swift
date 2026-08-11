@@ -210,8 +210,13 @@ final class TTSEngine {
     /// change — potentially for the rest of the session. The model itself
     /// stays resident; only the cache goes.
     ///
-    /// Called after the WAV is written, and before `status = .idle` triggers
-    /// auto-play, so the memory is back before playback needs any.
+    /// Called on every path out of a generation, not only the one that
+    /// produced a file: after the WAV is written and before `status = .idle`
+    /// triggers auto-play, so the memory is back before playback needs any;
+    /// after a stop, once the abandoned work has actually finished; and after a
+    /// failure. Releasing only on success was backwards — a run is stopped or
+    /// killed most often *because* the machine is short of memory, so the cache
+    /// stayed held in exactly the cases that needed it back.
     ///
     /// Synchronous on the main actor, matching the two existing calls in
     /// `prepare` and `forgetModel`. It frees buffers rather than computing, so
@@ -964,6 +969,11 @@ final class TTSEngine {
             await finishStopping()
         } catch {
             log.log("Error: \(String(describing: error))")
+            // A run that threw allocated just as much as one that succeeded.
+            // Releasing only on success left the cache held by exactly the runs
+            // most likely to have been killed by memory pressure in the first
+            // place.
+            releaseGenerationMemory()
             status = .error(error.localizedDescription)
         }
     }
@@ -1008,6 +1018,12 @@ final class TTSEngine {
             await pending.value
             pendingWork = nil
         }
+        // After the abandoned work has actually finished, never before it.
+        // Cancellation is cooperative and the model keeps computing on its own
+        // thread (see `EngineStatus.stopping`); clearing the cache while it is
+        // still allocating would hand back buffers it is about to ask for
+        // again, which is churn rather than a saving.
+        releaseGenerationMemory()
         status = .idle
         log.log("Stopped the current operation")
     }
