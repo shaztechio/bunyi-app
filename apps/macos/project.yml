@@ -87,6 +87,13 @@ targets:
         # MLX only runs on Apple Silicon — never build an Intel slice.
         ARCHS: arm64
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # Without this the AccentColor colorset is inert and Color.accentColor
+        # falls back to whatever accent the *user* has set in System Settings —
+        # so Generate, the playback bar, History's progress ring and every
+        # focus ring rendered in someone else's blue, and two people running
+        # Bunyi saw different apps. The colorset carries the same indigo the
+        # app icon and bunyi.app are built from.
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         PRODUCT_NAME: Bunyi
         # Changed from the original com.geppettoforge.Qwen3TTSStudio. The
         # sandbox container is keyed to this, so an existing install gets a
