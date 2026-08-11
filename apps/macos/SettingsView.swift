@@ -493,10 +493,25 @@ struct SettingsView: View {
     /// `voiceError`, is in `ContentView.swift` and stays as it is until that
     /// view's own pass — deliberately, not by oversight.
     private func errorCallout(_ message: String) -> some View {
-        Label(message, systemImage: "exclamationmark.triangle")
+        iconLine("exclamationmark.triangle", message)
             .font(.caption)
             .foregroundStyle(.red)
             .calloutBlock(.error)
+    }
+
+    /// A symbol beside a message, with the symbol hidden from accessibility.
+    ///
+    /// Not a `Label`: these symbols are decorative — colour, and in the error
+    /// case a red rule, already carry the meaning — but inside a `Label`
+    /// VoiceOver reads the symbol along with the text, so a failure would be
+    /// announced as "exclamationmark triangle" followed by the actual message.
+    /// Hidden, the message is spoken on its own.
+    private func iconLine(_ symbol: String, _ message: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: Space.hair) {
+            Image(systemName: symbol)
+                .accessibilityHidden(true)
+            Text(message)
+        }
     }
 
     @ViewBuilder
@@ -521,11 +536,11 @@ struct SettingsView: View {
                 }
             }
         case .done(let message):
-            Label(message, systemImage: "checkmark.circle.fill")
+            iconLine("checkmark.circle.fill", message)
                 .foregroundStyle(.green)
                 .font(.callout)
         case .error(let message):
-            Label(message, systemImage: "exclamationmark.triangle.fill")
+            iconLine("exclamationmark.triangle.fill", message)
                 .foregroundStyle(.red)
                 .font(.callout)
         }
