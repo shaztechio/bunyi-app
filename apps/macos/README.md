@@ -8,6 +8,13 @@ generation progress, playback, and outputs saved to the app's `Outputs`
 folder (Application Support, inside the sandbox container).
 Targets macOS 15+ (Apple Silicon).
 
+![The Bunyi window in Preset voice mode. A mode switcher across the top —
+Preset voice, Voice design, Voice clone, History — above an empty script field
+offering three example prompts to click. Below it, rows for Language, Speaker
+and Style, and a Generate button reading "Ready — press Command Return to
+generate". Doctor, Logs and Help sit in the window
+toolbar.](../../docs/assets/screenshot-macos.png)
+
 ## Build (Xcode 26, Apple Silicon)
 
 Requires **Xcode 26** — the app uses Swift 6.2 features and mlx-swift's
