@@ -65,6 +65,54 @@ enum Radius {
     static let card: CGFloat = 12
 }
 
+/// The brand gradient, ported from `.btn-primary` on bunyi.app.
+///
+/// The two stops are `--indigo` and `--violet` from `docs/index.html`, which
+/// are also the two stops `tools/generate-icon.swift` renders the app icon
+/// from. The site runs them at `100deg`; `.topLeading → .bottomTrailing` is
+/// the nearest SwiftUI expresses without a custom `UnitPoint`, and at button
+/// size the difference is not visible.
+///
+/// Deliberately used in one place only. A gradient that appears on every
+/// surface stops meaning "this is the action" and starts meaning nothing.
+extension LinearGradient {
+    static let bunyiBrand = LinearGradient(
+        colors: [Color(.sRGB, red: 0.36, green: 0.33, blue: 0.96),
+                 Color(.sRGB, red: 0.63, green: 0.24, blue: 0.89)],
+        startPoint: .topLeading, endPoint: .bottomTrailing)
+}
+
+/// The primary action button: Generate, and nothing else.
+///
+/// `.borderedProminent` was doing this job and could not do it disabled. macOS
+/// renders a disabled prominent button as its tint at low opacity with a white
+/// label — white on pale indigo, which is close to illegible and is the app's
+/// resting state on first launch, before any text is typed. A disabled control
+/// should read as unavailable, not as unreadable.
+struct GenerateButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(isEnabled ? AnyShapeStyle(.white)
+                                       : AnyShapeStyle(.secondary))
+            .padding(.horizontal, Space.row)
+            .padding(.vertical, Space.tight)
+            .background {
+                if isEnabled {
+                    Capsule().fill(LinearGradient.bunyiBrand)
+                } else {
+                    Capsule().fill(.quaternary)
+                }
+            }
+            // Pressed state has to be explicit: a custom ButtonStyle gets none
+            // of the system's own feedback, and a button that does not respond
+            // to a click reads as broken.
+            .opacity(configuration.isPressed ? 0.8 : 1)
+    }
+}
+
 /// Type, named by role rather than by size.
 ///
 /// The window had no hierarchy at all before this: `.body`, `.callout`,

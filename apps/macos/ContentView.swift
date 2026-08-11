@@ -534,9 +534,11 @@ struct ContentView: View {
                         .frame(minWidth: 110)
                 }
                 .keyboardShortcut(.return, modifiers: .command)
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
+                .buttonStyle(GenerateButtonStyle())
                 .disabled(!canGenerate)
+                // Still on hover, deliberately. `spec/FEATURES.md` §1 pins
+                // "says why on hover" — surfacing this inline is a behaviour
+                // change and needs the spec edited first, not a visual PR.
                 .help(generateBlockedReason ?? "Generate audio (⌘↩)")
             }
         }
