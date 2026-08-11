@@ -126,6 +126,16 @@
     box-shadow: 0 30px 70px -20px rgba(92, 84, 245, .6), 0 0 0 1px rgba(255,255,255,.06);
   }
 
+  /* ── screenshot ─────────────────────────────────────────── */
+  /* No frame, panel or border: the capture is transparent around a window
+     that already carries its own shadow, and a border would be a frame drawn
+     around a frame. */
+  .shot figure { margin: 0; }
+  .shot img { display: block; width: 100%; height: auto; }
+  .shot figcaption {
+    color: var(--muted); font-size: .9rem; text-align: center; margin-top: 1rem;
+  }
+
   .cta { display: flex; flex-wrap: wrap; gap: .7rem; margin-top: 1.6rem; }
   .btn {
     display: inline-flex; align-items: center; gap: .5rem;
@@ -247,7 +257,7 @@
         <a class="btn btn-ghost" href="https://github.com/shaztechio/bunyi-app">View source</a>
       </div>
       <p class="note">
-        Version 1.0.0 — a signed, notarized disk image for Apple Silicon, macOS 15 or later.
+        Version 1.1.0 — a signed, notarized disk image for Apple Silicon, macOS 15 or later.
         Open it and drag Bunyi to Applications. The Windows and Linux app is a scaffold, not a working build.
       </p>
     </div>
@@ -259,6 +269,21 @@
     </div>
   </div>
 </div>
+
+<section id="screenshot" class="shot">
+  <div class="wrap">
+    <figure>
+      <!-- 2120px is 2x the 1060px content column, so it stays sharp on a
+           Retina display without shipping the 2024px PNG the README uses:
+           WebP at q85 is a quarter of the bytes and the UI text stays crisp.
+           width/height reserve the box before the file lands, so nothing
+           below it jumps. -->
+      <img src="assets/screenshot-macos.webp" width="2120" height="1592"
+           alt="The Bunyi window in Preset voice mode. A mode switcher across the top — Preset voice, Voice design, Voice clone, History — above an empty script field offering three example prompts to click. Below it, rows for Language, Speaker and Style, and a Generate button reading &quot;Ready — press Command Return to generate&quot;. Doctor, Logs and Help sit in the window toolbar.">
+      <figcaption>Preset voice mode. Type or pick a prompt, choose a speaker, press&nbsp;⌘↩.</figcaption>
+    </figure>
+  </div>
+</section>
 
 <section id="modes">
   <div class="wrap">
@@ -305,6 +330,18 @@
 
     <div class="features">
       <div class="feature">
+        <h3>It tells you when it can’t run</h3>
+        <p>A stethoscope in the toolbar checks whether this Mac can actually finish a generation: is the model downloaded, is there room on the disk, is there memory to load it, is the server it comes from answering, can the output folder be written to. It reports every check, passes included. The same checks run before every generation, so a problem is caught <em>before</em> a multi-gigabyte download rather than after it.</p>
+      </div>
+      <div class="feature">
+        <h3>Manage models without leaving the app</h3>
+        <p>Settings lists every downloaded model with its size and deletes it to the Trash. Reclaiming ten gigabytes no longer means hunting through Library folders — and model sources can be saved as named configurations and switched between.</p>
+      </div>
+      <div class="feature">
+        <h3>A mirror when the Hub is slow</h3>
+        <p>One click points all three modes at <code>models.bunyi.app</code> instead of Hugging Face — useful when the Hub is slow, and the difference between working and not working where it’s blocked. The same Apache-2.0 models, and every file is checked against a published SHA-256 as it arrives, on the mirror or on your own server.</p>
+      </div>
+      <div class="feature">
         <h3>Everything you’ve made, kept</h3>
         <p>A History tab lists every clip, newest first — what it said, which voice, when. Play it back with the progress drawn around the button, save a copy anywhere, copy the details, or move it to the Trash. It reads the folder, so deleting a file in the Finder removes it from the list too.</p>
       </div>
@@ -342,7 +379,7 @@
       </div>
       <div class="feature">
         <h3>Bring your own model host</h3>
-        <p>Each mode takes a Hugging Face repo ID <em>or</em> an <code>https://</code> base URL you control. Bunyi reads <code>manifest.txt</code> from your server and pulls the files directly.</p>
+        <p>Each mode takes a Hugging Face repo ID <em>or</em> an <code>https://</code> base URL you control. Bunyi reads <code>manifest.txt</code> from your server and pulls the files directly. Publish a <code>manifest.sha256</code> beside it — exactly what <code>shasum -a 256</code> prints — and every file is verified as it downloads.</p>
       </div>
       <div class="feature">
         <h3>Your own models folder</h3>
@@ -406,7 +443,7 @@
     <p class="eyebrow">Get it running</p>
     <h2>Download it</h2>
     <p>
-      <a href="https://github.com/shaztechio/bunyi-app/releases/latest"><strong>Bunyi 1.0.0</strong></a> is a signed and notarized disk image for Apple
+      <a href="https://github.com/shaztechio/bunyi-app/releases/latest"><strong>Bunyi 1.1.0</strong></a> is a signed and notarized disk image for Apple
       Silicon Macs running macOS 15 or later. Open the <code>.dmg</code>, drag Bunyi to Applications, and
       launch it — no Gatekeeper warnings, no terminal. A <code>.zip</code> of the same app is there for
       scripted installs, alongside SHA-256 checksums for both.
