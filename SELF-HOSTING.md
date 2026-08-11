@@ -102,6 +102,11 @@ reason to use it.
 That 3.86 GB file is also the second reason GitHub Releases cannot work:
 assets are capped at 2 GB each.
 
+Requests are the other half of the bill, and they are what caching reduces —
+see [`CACHING.md`](CACHING.md) once your bucket is serving. Read it before
+turning caching on rather than after: with checksums published, a stale
+cached file stops a download instead of quietly degrading it.
+
 ## Step by step (Cloudflare R2)
 
 R2 is Cloudflare's object storage: somewhere to put files so they have URLs.
