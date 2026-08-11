@@ -75,6 +75,13 @@ struct DoctorView: View {
     @ViewBuilder
     private var header: some View {
         VStack(alignment: .leading, spacing: Space.hair) {
+            // Which mode was checked, stated up front. The History tab has no
+            // mode of its own — a run started there checks the last one
+            // generated with, and without this line the report would be about
+            // a model the window is not showing and does not name.
+            Text(report.mode.rawValue)
+                .eyebrow()
+
             Text(blockedRun ? "Bunyi cannot generate yet" : "Checkup")
                 .font(.system(size: 15, weight: .semibold))
 

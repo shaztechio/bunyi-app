@@ -57,6 +57,13 @@ struct DoctorFinding: Identifiable {
 
 /// Everything a run found.
 struct DoctorReport {
+    /// Which mode's model this is about.
+    ///
+    /// Carried rather than inferred because it is not always on screen. The
+    /// History tab has no mode of its own, so a run started there reports on
+    /// the last one generated with — perfectly sensible, and completely opaque
+    /// unless the report says so.
+    let mode: TTSMode
     let findings: [DoctorFinding]
 
     var blockers: [DoctorFinding] { findings.filter { $0.severity == .blocker } }
@@ -70,7 +77,7 @@ struct DoctorReport {
     /// window is what gets pasted into a bug report, and a report is only
     /// useful there if it survives being copied as plain text.
     var logLines: [String] {
-        findings.map { finding in
+        ["Doctor: checking \(mode.rawValue)"] + findings.map { finding in
             let mark = switch finding.severity {
             case .ok:      "ok"
             case .warning: "warning"
@@ -134,7 +141,9 @@ enum Doctor {
         findings.append(diskFinding(modelsRoot: modelsRoot,
                                     needsDownload: !isPresent,
                                     modelBytes: modelBytes))
-        findings.append(memoryFinding(modelBytes: modelBytes, isPresent: isPresent))
+        findings.append(memoryFinding(mode: mode,
+                                      modelBytes: modelBytes,
+                                      isPresent: isPresent))
 
         // Only worth asking when a run would actually reach for the network. A
         // reachability failure on a model already on disk is not a problem the
@@ -151,7 +160,7 @@ enum Doctor {
                                                    dir: modelDir))
         }
 
-        return DoctorReport(findings: findings)
+        return DoctorReport(mode: mode, findings: findings)
     }
 
     // MARK: - Individual checks
@@ -239,7 +248,8 @@ enum Doctor {
             severity: .ok)
     }
 
-    private static func memoryFinding(modelBytes: Int64,
+    private static func memoryFinding(mode: TTSMode,
+                                      modelBytes: Int64,
                                       isPresent: Bool) -> DoctorFinding {
         let needed = Int64(Double(modelBytes) * memoryWorkingFactor)
         let available = availableMemory()
@@ -253,8 +263,8 @@ enum Doctor {
             return DoctorFinding(
                 title: "Memory",
                 detail: """
-                    \(availableText) available, and this model wants about \
-                    \(neededText).
+                    \(availableText) available, and the \(mode.rawValue) model \
+                    wants about \(neededText).
                     """,
                 severity: .ok)
         }
@@ -262,8 +272,8 @@ enum Doctor {
         return DoctorFinding(
             title: "Memory",
             detail: """
-                \(availableText) available and this model wants about \
-                \(neededText)\(unknownSize). It will still run, but the Mac may \
+                \(availableText) available and the \(mode.rawValue) model wants \
+                about \(neededText)\(unknownSize). It will still run, but the Mac may \
                 swap, which can make generation slow and playback stutter. \
                 Quitting other apps first will help.
                 """,
@@ -370,7 +380,7 @@ enum Doctor {
                 title: "Model files",
                 detail: """
                     \(bad.count) file\(bad.count == 1 ? "" : "s") do not match \
-                    the published checksums: \(names)\(more). Delete this model \
+                    the published checksums: \(names)\(more). Delete \(mode.rawValue) \
                     in Settings → Storage and download it again.
                     """,
                 severity: .blocker)

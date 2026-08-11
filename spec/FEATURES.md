@@ -442,6 +442,13 @@ reports **every** check in a dialog, passes included — "everything is fine" is
 the most common useful answer — and writes the same findings to the Logs so
 they can be copied into a bug report.
 
+**Every report names the mode it is about.** The checks are per-mode — the
+three modes use different models, of different sizes, from sources that are
+configured separately — so "the model" is ambiguous unless it is named. It
+matters most where there is no mode on screen at all: History is not a
+generation mode, so a run started from it reports on the mode last generated
+with, which is only sensible behaviour if the report says which one that was.
+
 Findings follow §10: sizes are stated, and each says what to do.
 
 ---
