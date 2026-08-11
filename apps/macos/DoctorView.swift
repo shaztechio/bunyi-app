@@ -17,6 +17,7 @@
 //  Bunyi
 //
 
+import AppKit
 import SwiftUI
 
 /// A Doctor report, as a list rather than a paragraph.
