@@ -52,6 +52,55 @@ struct ModelConfig: Identifiable, Codable, Hashable {
 final class ModelConfigLibrary {
     private(set) var configs: [ModelConfig] = []
 
+    /// The Bunyi mirror, shipped with the app.
+    ///
+    /// Hugging Face is unreachable from some networks — blocked outright in
+    /// mainland China, which is not a footnote for a Qwen model whose second
+    /// language is Chinese and whose default speakers include Uncle_Fu and
+    /// Ono_Anna. For those users this is not a faster download, it is the
+    /// difference between the app working and not.
+    ///
+    /// Not the default, deliberately. Hugging Face is where the weights
+    /// actually come from, and a default pointing at one person's bucket makes
+    /// that bucket a single point of failure for every install. This is an
+    /// alternative someone chooses, and switching is a Restore away rather than
+    /// three long URLs typed by hand — which is the mistake this whole type
+    /// exists to prevent.
+    ///
+    /// Fixed UUID: the row must keep its identity across launches without being
+    /// written to disk, and a fresh UUID each time would make SwiftUI treat it
+    /// as a different row on every read.
+    static let bunyiMirror = ModelConfig(
+        id: UUID(uuidString: "B0000000-0000-4000-A000-000000000001")!,
+        name: "Bunyi mirror",
+        presetVoice: "https://models.bunyi.app/customvoice",
+        voiceDesign: "https://models.bunyi.app/voicedesign",
+        voiceClone: "https://models.bunyi.app/voiceclone",
+        savedAt: .distantPast
+    )
+
+    /// What Settings lists: the built-in mirror first, then anything saved.
+    ///
+    /// The mirror is not persisted, so it cannot be edited or deleted. Saving a
+    /// config of your own under the same name is how you override it: yours
+    /// then stands in for the built-in entirely, because a real entry the user
+    /// chose to write beats one the app shipped. Delete yours and the built-in
+    /// comes back, since it was never gone — only hidden.
+    ///
+    /// The override keeps its alphabetical place rather than being pinned to
+    /// the top. Once it is a saved config it behaves like every other one.
+    var listed: [ModelConfig] {
+        let overridden = configs.contains {
+            $0.name.caseInsensitiveCompare(Self.bunyiMirror.name) == .orderedSame
+        }
+        return overridden ? configs : [Self.bunyiMirror] + configs
+    }
+
+    /// Built-ins have no Delete button — there is nothing on disk to remove.
+    static func isBuiltIn(_ config: ModelConfig) -> Bool {
+        config.id == bunyiMirror.id
+    }
+
     private let log = LogStore.shared
 
     /// Application Support, not the models folder: these are a few hundred

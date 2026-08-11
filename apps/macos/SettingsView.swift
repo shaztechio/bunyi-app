@@ -139,9 +139,11 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
                 Text("To self-host, enter an https base URL holding the model "
                     + "files (e.g. https://example.com/qwen3-custom). The app "
-                    + "reads manifest.txt there if present, otherwise the "
-                    + "standard Qwen3-TTS file set. Plain http needs an App "
-                    + "Transport Security exception; https is recommended.")
+                    + "reads manifest.sha256 there if present — and verifies "
+                    + "every file against it — otherwise manifest.txt, "
+                    + "otherwise the standard Qwen3-TTS file set. Plain http "
+                    + "needs an App Transport Security exception; https is "
+                    + "recommended.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -157,33 +159,39 @@ struct SettingsView: View {
                                   && cloneRepo.isEmpty)
                 }
 
-                if configs.configs.isEmpty {
-                    Text("Save the three fields above under a name, then switch "
-                        + "between them — a self-hosted mirror and the Hugging "
-                        + "Face defaults, say.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(configs.configs) { config in
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(config.name)
-                                Text(config.summary)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                                    .truncationMode(.middle)
-                            }
-                            Spacer(minLength: 12)
-                            Button("Restore") { restore(config) }
+                ForEach(configs.listed) { config in
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(config.name)
+                            Text(config.summary)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                        Spacer(minLength: 12)
+                        Button("Restore") { restore(config) }
+                        // Nothing to delete: a built-in was never written to
+                        // disk. Saving your own config under the same name
+                        // replaces it in the list.
+                        if !ModelConfigLibrary.isBuiltIn(config) {
                             Button("Delete") { pendingConfigDeletion = config }
                         }
                     }
-                    Text("Restoring replaces all three fields. As with any "
-                        + "change here, it applies on the next generate.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
+
+                Text("Restoring replaces all three fields. As with any change "
+                    + "here, it applies on the next generate.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Text("The Bunyi mirror serves the same Hugging Face models "
+                    + "(Apache-2.0) from models.bunyi.app, with checksums the "
+                    + "app verifies as it downloads. Useful where Hugging Face "
+                    + "is slow or unreachable. Hugging Face stays the default — "
+                    + "it is where the models come from.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
 
                 if let configError {
                     Text(configError).font(.caption).foregroundStyle(.red)
