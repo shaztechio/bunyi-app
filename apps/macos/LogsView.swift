@@ -103,6 +103,10 @@ private struct LogTextView: NSViewRepresentable {
         text.isSelectable = true
         text.drawsBackground = false
         text.textContainerInset = NSSize(width: Space.card, height: Space.row)
+        // NSTextContainer adds 5 pt of its own on each side by default, which
+        // would sit on top of the inset above and make the gutter wider than
+        // the SwiftUI version's. One source of padding, not two.
+        text.textContainer?.lineFragmentPadding = 0
         // Wrap rather than scroll sideways: a log line can be a file path
         // hundreds of characters long, and a horizontal scrollbar makes every
         // other line harder to read to find it.
@@ -129,14 +133,19 @@ private struct LogTextView: NSViewRepresentable {
     private static func attributed(_ entries: [LogStore.Entry]) -> NSAttributedString {
         let font = NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)
         let out = NSMutableAttributedString()
-        for entry in entries {
+        for (index, entry) in entries.enumerated() {
             let time = entry.date.formatted(date: .omitted, time: .standard)
             out.append(NSAttributedString(
                 string: time.padding(toLength: max(13, time.count),
                                      withPad: " ", startingAt: 0) + "  ",
                 attributes: [.font: font, .foregroundColor: NSColor.tertiaryLabelColor]))
+            // Newline *between* entries, not after each. Appending one to the
+            // last line too would make ⌘A ⌘C end in a newline that the Copy
+            // button's string does not have — two ways to copy the same log,
+            // producing two different strings.
+            let isLast = index == entries.count - 1
             out.append(NSAttributedString(
-                string: entry.message + "\n",
+                string: entry.message + (isLast ? "" : "\n"),
                 attributes: [.font: font, .foregroundColor: NSColor.labelColor]))
         }
         return out
