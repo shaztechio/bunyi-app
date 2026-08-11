@@ -14,12 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -->
 
-# Caching the model bucket at Cloudflare
+# Caching and cost control for the model bucket
 
-A runbook for putting `models.bunyi.app` behind Cloudflare's cache. Written
-for the Bunyi mirror, but the shape applies to any R2 bucket on a custom
-domain — see [`SELF-HOSTING.md`](SELF-HOSTING.md) for how that bucket is
-built in the first place.
+A runbook for putting `models.bunyi.app` behind Cloudflare's cache, and then
+for making sure the bill can never surprise you. Written for the Bunyi mirror,
+but the shape applies to any R2 bucket on a custom domain — see
+[`SELF-HOSTING.md`](SELF-HOSTING.md) for how that bucket is built in the first
+place.
 
 Without any cache rule, every request reaches R2. Each model download is
 13 requests, so 39 for a full install. Nothing about that is expensive —
@@ -170,3 +171,151 @@ Small files also arrive from a nearby edge rather than the bucket's region.
 The number to watch, if this ever stops being academic, is Class B operations
 in the R2 dashboard. The free tier is 10 million a month. At 13 requests per
 download that is ~769,000 downloads; with these rules it is several million.
+
+Measured after the rules were applied: the small files return
+`cf-cache-status: HIT`, and **both large files return `BYPASS`** — they are
+over the 512 MB ceiling, so 6 of the 39 objects always reach R2. That is the
+dominant term in the operation count and no amount of tuning changes it.
+
+# Cost controls
+
+Caching reduces the bill. This section is about making sure it can never
+surprise you.
+
+## Size the risk before building anything
+
+Egress is free, so only two lines can bill:
+
+| | |
+|---|---|
+| **Storage** | 11.6 GB against a 10 GB free tier ≈ **$0.02/month**. Fixed while the objects exist; no traffic cutoff touches it. |
+| **Class B ops** | 10M/month free, then $0.36/million. A cold download is ~14 operations, a warm one ~2. |
+
+That puts the free tier somewhere between **770,000 and 5,000,000 model
+downloads a month**. Reaching $50 would take roughly 150 million operations
+beyond it. Class A is effectively zero — reads are Class B; you only generate
+Class A operations by uploading.
+
+The realistic worst case is a bill of a few dollars. Calibrate the machinery
+accordingly.
+
+**Bunyi issues one plain `GET` per file — no range requests.** That matters,
+because a resumable or chunked downloader turns one file into many billable
+reads. `HTTPFileDownloader` uses a single `URLSession` download task per file
+with no `Range` header, and publishing `manifest.sha256` removed the
+`HEAD`-per-file resume check as well. So the count really is ~14 cold and ~2
+warm, not a multiple of it.
+
+## Alerting
+
+**Budget alerts** are the useful one. Manage Account → Billing → Billable
+Usage → Budget alerts. Since June 2026 Cloudflare creates a $10 account-level
+alert by default on Pay-as-you-go accounts, so check whether one already
+exists before adding another.
+
+They are dollar-denominated, account-wide, fire **once per billing cycle** on
+*projected* spend, and are explicitly informational — they do not pause or cap
+anything. At the numbers above, a $10 alert firing means something genuinely
+anomalous.
+
+**There is no native alert on R2 Class B operations specifically.** The
+per-product usage notification requires Pro or higher, and R2 is not
+documented as a selectable product for it. An operations threshold is
+something you build (below) or check by eye in Billable Usage.
+
+## There is no hard spend cap
+
+Cloudflare does not offer one for R2, and budget alerts are documented as
+informational. The only true spend cap Cloudflare ships is for AI Gateway and
+does not generalise. **Any cutoff is one you build.**
+
+## The kill switch
+
+**A WAF custom rule returning 403.** WAF custom rules run *before* cache and
+before the origin fetch, so a blocked request costs **no R2 operation at
+all** — which is the property that makes this the right mechanism rather than
+a Cache Rule or a Worker.
+
+Security → WAF → Custom rules:
+
+- Expression: `http.host eq "models.bunyi.app"`
+- Action: **Block**, with a custom 403 body — the app surfaces the response,
+  so plain text saying downloads are unavailable beats a generic block page.
+
+**Create it disabled.** The point is that the emergency action is flipping one
+toggle rather than authoring a rule under pressure. Free plan allows five
+custom rules; effect is global within seconds; reversal is instant. It breaks
+everything on `models.bunyi.app` and nothing else — the S3 API, Workers
+bindings and the r2.dev URL are untouched.
+
+Two mechanisms that sound similar and are not:
+
+- **Disabling the R2 custom domain** (R2 → bucket → Settings → Custom Domains
+  → Disable) also works and breaks only that hostname, but takes minutes
+  rather than seconds. Prefer *Disable* over *Remove*: removing deletes the
+  CNAME, and re-adding means going through "Initializing" again.
+- **A Worker in front** is the wrong tool. It adds a Workers request charge on
+  top of R2 — a new billing line to police an existing one.
+
+## The control you actually want day to day
+
+**A rate limiting rule**, available on the Free plan. Same hostname
+expression, Block action, tuned generously — a legitimate download is ~14
+requests, so a few hundred per IP per minute leaves enormous headroom.
+
+This is the one that handles the realistic scenario. It degrades an abusive
+client instead of taking the app offline for everyone, and unlike the kill
+switch it needs no decision at the moment it matters.
+
+## Automating a cutoff
+
+Buildable, and worth it only if the reassurance is worth more than the hour —
+at these numbers it is insurance against a bill you would struggle to make
+reach $5.
+
+Reading usage: the GraphQL Analytics API dataset `r2OperationsAdaptiveGroups`
+gives per-bucket operation counts. **It exposes `actionType`, not a billing
+class**, so mapping operations to Class A/B is yours to maintain against the
+pricing page — and retention is 31 days, so month-to-date works but backfill
+does not. Storage comes from
+`GET /accounts/{account_id}/r2/buckets/{bucket}/metrics`.
+
+Flipping the switch: `PATCH /zones/{zone_id}/rulesets/{ruleset_id}/rules/
+{rule_id}` to enable the WAF rule, or `PUT /accounts/{account_id}/r2/buckets/
+{bucket}/domains/custom/{domain}` with `{"enabled": false}` for the domain.
+
+Run it from **outside** the account it watches — GitHub Actions on a cron
+rather than a Cloudflare Worker — so an account-level problem cannot disable
+the watchdog. Set the threshold well below anything you would care about:
+analytics lag by minutes, so a tight threshold is unsafe.
+
+## What this does not protect against
+
+- **The storage line.** Cutting all traffic leaves the ~$0.02/month. The only
+  lever is deleting objects; getting under 10 GB zeroes it.
+- **A bug in Bunyi itself.** A retry loop or a version check that re-downloads
+  on launch is far likelier than an attacker, comes from legitimate-looking
+  IPs, and is spread across installs so per-IP rate limits never trip. This is
+  the scenario to actually plan for, and it got more likely when the app
+  started shipping a built-in option pointing here. Checksums help: a failing
+  digest makes a retry loop loud rather than silent.
+- **Anything between checks.** An hourly cron has an hour of blind spot, plus
+  analytics lag on top.
+- **Deliberate mirroring.** Someone pointing a scraper at these URLs costs you
+  operations and gets free bandwidth. Cheap at this scale, but the kill switch
+  is all-or-nothing and takes real users down with them. Signed URLs are the
+  answer if it ever matters.
+- **Forgetting to re-arm.** If the kill switch trips, the app stays broken
+  until you disable the rule. Nothing resets it at the start of a billing
+  cycle.
+- **Products added later.** Cache Reserve in particular is separately billed
+  at real rates and would change this analysis. So would putting a Worker in
+  the path.
+- **A leaked API token** with R2 write access, which generates Class A
+  operations and storage without touching `models.bunyi.app` at all. Nothing
+  above sees it; the budget alert is the only backstop, and it fires once.
+
+## If you do only two things
+
+Confirm the default budget alert exists, and pre-create the WAF rule in a
+disabled state. Everything else here is refinement.
