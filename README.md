@@ -56,7 +56,8 @@ Any feature change updates the spec **and** every app.
 
 Hosting the models yourself (when the Hub is slow, or you are serving a team):
 [`SELF-HOSTING.md`](SELF-HOSTING.md), and [`CACHING.md`](CACHING.md) for
-putting that bucket behind a CDN once it is serving.
+putting that bucket behind a CDN once it is serving — plus what to set up so
+the bill cannot surprise you.
 
 CI: [`.github/workflows/`](.github/workflows/) builds macOS (green) and the
 .NET matrix for Windows + Linux (red until the app is implemented).
