@@ -748,8 +748,19 @@ struct ContentView: View {
     /// No `.mappedIfSafe` — a mapped file is still backed by disk and faults
     /// in on the same schedule as reading it would.
     private func makePlayer(for url: URL) -> AVAudioPlayer? {
-        guard let data = try? Data(contentsOf: url),
-              let player = try? AVAudioPlayer(data: data) else { return nil }
+        // Read on the calling actor here, unlike `startPlayback`. This path is
+        // a click on Play: nothing has just released gigabytes, the form is not
+        // rebuilding, and the file is one the user has already heard, so it is
+        // in the page cache. Deferring it would add a hop for no gain.
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return Self.makePlayer(from: data)
+    }
+
+    /// Both playback paths end here, so `prepareToPlay` cannot be forgotten on
+    /// one of them — which is what left the very first version streaming
+    /// unprepared and stuttering a second in.
+    private static func makePlayer(from data: Data) -> AVAudioPlayer? {
+        guard let player = try? AVAudioPlayer(data: data) else { return nil }
         player.prepareToPlay()
         return player
     }
@@ -767,16 +778,30 @@ struct ContentView: View {
     /// So: fill the buffers now, and start the hardware on the next runloop
     /// turn, once the rebuild has been and gone.
     private func startPlayback() {
-        guard let url = engine.lastOutputURL,
-              let next = makePlayer(for: url) else { return }
-        player = next
-        playerURL = url
-        playbackTime = 0
-        DispatchQueue.main.async {
-            // A second Generate, or the window closing, can replace or clear
-            // the player before this lands — starting it then would play over
-            // the top of whatever came after.
-            guard player === next else { return }
+        guard let url = engine.lastOutputURL else { return }
+        Task {
+            // The read is off the main actor. It is the one genuinely
+            // expensive step here — a long clip is megabytes — and it lands at
+            // the worst possible moment: the engine has just handed several
+            // gigabytes back to the system, so the kernel is still reclaiming,
+            // and SwiftUI is rebuilding the whole form because status went
+            // .idle. Doing file I/O on the main actor in that window is what
+            // §2 of the spec rules out for the write side, for the same
+            // reason.
+            //
+            // Data rather than the player crosses the boundary: AVAudioPlayer
+            // is not Sendable, and Data is.
+            let bytes = await Task.detached(priority: .userInitiated) {
+                try? Data(contentsOf: url)
+            }.value
+
+            guard let bytes,
+                  // A second Generate can finish while the read is in flight.
+                  engine.lastOutputURL == url,
+                  let next = Self.makePlayer(from: bytes) else { return }
+            player = next
+            playerURL = url
+            playbackTime = 0
             next.play()
             isPlaying = true
         }
