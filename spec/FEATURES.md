@@ -100,8 +100,9 @@ A segmented picker selects one of three modes. macOS source:
 macOS source: `HistoryView.swift`, `TTSEngine.generatedOutputs()`.
 
 A fourth segment beside the three generation modes lists **everything
-generated so far, newest first**: mode, date, size, with play/pause per row,
-a **Download** button, and reveal-in-file-manager.
+generated so far, newest first**: mode, date, size, with play/stop per row
+(see below — there is deliberately no pause), a **Download** button, and
+reveal-in-file-manager.
 
 - **The folder is the record**, not an in-app database. The list is read from
   the `Outputs` folder each time it is shown, so a file deleted outside the
@@ -301,9 +302,19 @@ macOS source: `BackupManager.swift`.
 
 Tabbed window (macOS: ⌘,). Tabs — the window title reflects the selected
 tab (platform convention). macOS source: `SettingsView.swift`.
+- **General**: appearance — **System / Light / Dark**. System follows the OS;
+  Light and Dark pin the app regardless of it. Applies immediately, to
+  **every** window the app owns, not only the one in front (macOS: the main
+  window, Logs, and Settings itself). Persisted per-user under the key
+  `appearance`, defaulting to System.
 - **Models**: the three per-mode source fields (repo ID or base URL) + help.
 - **Storage**: models-folder location controls + pre-download commands.
 - **Backup**: back up / restore / stop + status.
+
+The appearance setting is why the app's visual design cannot be built on a
+single fixed palette: any colour that only works against one background is a
+bug in the other two states. Brand colour belongs in an accent, a gradient and
+rule/badge treatments, which survive both — not in a window background.
 
 ## 8. Logs
 
@@ -355,5 +366,7 @@ macOS source: `WindowCloseGuard.swift`.
 - Saved voices → `VoiceLibrary.swift`
 - Backup/restore → `BackupManager.swift`
 - Settings tabs → `SettingsView.swift`
+- Appearance (System/Light/Dark) → `BunyiApp.swift` (`AppAppearance`),
+  `SettingsView.generalTab`
 - Logs → `LogStore.swift`, `LogsView.swift`
 - Busy-close → `WindowCloseGuard.swift`
