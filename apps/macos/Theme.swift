@@ -27,7 +27,11 @@ import SwiftUI
 /// `ContentView` alone used 2, 3, 6, 8, 10, 12, 13, 16, 18, 20, 40, 76, 110
 /// and 130 — fourteen values, most of them one pixel from another. A reader
 /// could not tell which differences were deliberate, and neither could the
-/// next person adding a row. Six values, each with a job:
+/// next person adding a row.
+///
+/// Five values, each with a job and each with a caller. A step nobody uses is
+/// a step nobody can check, so later stages add theirs when they need them
+/// rather than this growing a vocabulary in advance.
 enum Space {
     /// Inside a label/value pair.
     static let hair: CGFloat = 4
@@ -40,25 +44,25 @@ enum Space {
     /// Window inset. 20 is the macOS convention and the one value here that
     /// is not ours to pick.
     static let window: CGFloat = 20
-    /// Between major groups.
-    static let section: CGFloat = 24
-
-    /// The leading glyph column in an options row. Named because the row
-    /// divider's inset is derived from it: a bare `18` written in two places
-    /// drifts the moment one of them changes, which is exactly what left the
-    /// divider lined up with nothing before Stage 1.
-    static let iconColumn: CGFloat = 18
-
-    /// Where an options row's label starts, and therefore where its divider
-    /// starts. Derived rather than written as `40`.
-    static var rowLabelInset: CGFloat { row + iconColumn + tight }
 }
 
-/// Corner radii. Cards and the controls nested inside them differ so the
-/// nesting reads as nesting.
+/// Measurements of one options row. Not part of `Space`: a glyph column is a
+/// width and an inset is a position, neither of which is a gap between two
+/// things, and folding them in would make the scale above six-plus-whatever.
+enum OptionRow {
+    /// The leading glyph column.
+    static let iconColumn: CGFloat = 18
+
+    /// Where the label starts, and therefore where the divider starts.
+    /// Derived rather than written as `40` — a literal here silently stopped
+    /// matching whenever the padding, the glyph column or the gap changed,
+    /// which is what left the divider aligned with nothing before Stage 1.
+    static var labelInset: CGFloat { Space.row + iconColumn + Space.tight }
+}
+
+/// Corner radii.
 enum Radius {
     static let card: CGFloat = 12
-    static let control: CGFloat = 8
 }
 
 /// Type, named by role rather than by size.

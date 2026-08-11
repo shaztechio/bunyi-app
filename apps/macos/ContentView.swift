@@ -334,8 +334,8 @@ struct ContentView: View {
             // a fixed cap left the bottom third of the window empty.
             .frame(minHeight: 160, maxHeight: .infinity)
             .background(Color(nsColor: .textBackgroundColor),
-                        in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12)
+                        in: RoundedRectangle(cornerRadius: Radius.card))
+            .overlay(RoundedRectangle(cornerRadius: Radius.card)
                 .strokeBorder(Color.primary.opacity(0.08)))
             .overlay(alignment: .topLeading) {
                 if text.isEmpty {
@@ -454,13 +454,13 @@ struct ContentView: View {
         // near-identical, so the card had no visible left or right edge — just
         // dividers hanging in white space.
         .background(Color(nsColor: .controlBackgroundColor),
-                    in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12)
+                    in: RoundedRectangle(cornerRadius: Radius.card))
+        .overlay(RoundedRectangle(cornerRadius: Radius.card)
             .strokeBorder(Color.primary.opacity(0.08)))
     }
 
     private var rowDivider: some View {
-        Divider().padding(.leading, Space.rowLabelInset)
+        Divider().padding(.leading, OptionRow.labelInset)
     }
 
     /// One labeled row inside the options card: icon + fixed-width label +
@@ -482,7 +482,7 @@ struct ContentView: View {
         HStack(spacing: Space.tight) {
             Image(systemName: icon)
                 .foregroundStyle(.secondary)
-                .frame(width: Space.iconColumn)
+                .frame(width: OptionRow.iconColumn)
             Text(label)
                 .foregroundStyle(.secondary)
                 .frame(width: 76, alignment: .leading)
