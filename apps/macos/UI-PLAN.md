@@ -138,15 +138,11 @@ No behaviour change. No parity risk — plain box model, native in Avalonia.
 
 ### Stage 2 — Give the app its own colour · ½ day
 
-New `Assets.xcassets/AccentColor.colorset`, new `Theme.swift`, `project.yml`
+New `Assets.xcassets/AccentColor.colorset`, `project.yml`
 
 - `AccentColor.colorset`: Any `#5C54F5`, Dark `#7B72F0`, sRGB.
 - `project.yml` → `ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME:
   AccentColor`. **Required** — without it the colorset is inert.
-- `Theme.swift`: brand colours, gradient, radius and spacing constants, an
-  `.eyebrow()` modifier.
-- **`project.yml`'s `sources:` list is explicit.** Add `Theme.swift` to it and
-  re-run `xcodegen generate`, or it silently will not compile in.
 - Comment the colour values with *why*: they are the same two sRGB values
   `tools/generate-icon.swift` renders the icon from and `docs/index.html`
   declares. Three copies of a brand colour is already one too many; the
@@ -156,6 +152,18 @@ One colorset re-tints the segmented selection, Generate, the playback bar,
 History's ring, focus rings and every Settings picker. No behaviour change,
 and it makes parity *easier* — the .NET app can read the same hex from the
 spec instead of inheriting a different OS accent.
+
+> **`Theme.swift` was deliberately left out of this stage**, though earlier
+> drafts of this plan put it here. Its gradient, radius and spacing constants
+> are not referenced until Stage 3, and shipping constants nothing uses is
+> scaffolding that ages badly — it invites drift between the constant and the
+> literal that someone writes instead. It arrives in Stage 3, with its first
+> caller.
+>
+> When it does: **`project.yml`'s `sources:` list is explicit.** Add
+> `Theme.swift` to it and re-run `xcodegen generate`, or it silently will not
+> compile in. (`Assets.xcassets` is listed as a folder, so the colorset needed
+> no such entry.)
 
 ### Stage 3 — Type and spacing on the main window · 1 day
 
@@ -285,27 +293,20 @@ updated first, and both apps to follow.
 6. **Any custom mode control** separating History from the three modes — §1
    opens "A segmented picker selects one of three modes", §2a opens "A fourth
    segment beside the three generation modes".
-7. **Adopting the website's dark palette wholesale** — it would break the
-   System/Light/Dark setting the app ships (`AppAppearance` in
-   `BunyiApp.swift`, Settings → General). **That constraint is not in the
-   spec.** §7 lists Models, Storage and Backup only, and appearance appears
-   nowhere in `FEATURES.md` or `DATA-FORMATS.md` — a shipped feature with no
-   specification, which also means the .NET app has no way to know it needs
-   one. The constraint is real regardless; the gap is worth closing
-   separately.
+7. **Adopting the website's dark palette wholesale** — §7 specifies
+   System/Light/Dark under **General**, and says why it constrains design:
+   "an app with three appearance states cannot be designed against one fixed
+   palette. Any colour that only works on one background is a bug in the other
+   two."
 
 The identity transfers as accent, gradient, eyebrow, callout and pill. It does
 not transfer as a background colour.
 
-> **Two spec defects found while checking these citations**, both worth their
-> own PR rather than being fixed here:
->
-> 1. The appearance setting (§7 above) is implemented and shipped but
->    unspecified.
-> 2. §2a contradicts itself — its opening paragraph says "play/**pause** per
->    row" while its detailed bullet says "play/**stop** … **No pause**", with
->    reasons. The detailed bullet is what the app implements and is clearly
->    the intent; the summary line is stale.
+> Checking these citations turned up two spec defects, both since fixed in
+> #33: the appearance setting was implemented and shipped but unspecified —
+> which under the parity rule meant the .NET app had no way to know it needs
+> one — and §2a contradicted itself, its opening paragraph saying "play/pause
+> per row" against a detailed bullet specifying "play/stop … No pause".
 
 ## Parity notes
 
