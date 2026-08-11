@@ -45,6 +45,11 @@ struct BunyiApp: App {
             ContentView()
                 .preferredColorScheme(appearance.colorScheme)
         }
+        // Without this the main window opens at whatever SwiftUI derives from
+        // ContentView's 620×580 minimum — the smallest the app is allowed to
+        // be, as its first impression. The Logs window has had a defaultSize
+        // all along; the primary one never did.
+        .defaultSize(width: 760, height: 680)
         .windowResizability(.contentSize)
         .commands {
             // Replaces SwiftUI's default Help item, which opens a book that was

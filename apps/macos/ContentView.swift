@@ -189,8 +189,11 @@ struct ContentView: View {
                 }
             }
             .padding(20)
-            .frame(maxWidth: .infinity, maxHeight: .infinity,
-                   alignment: .topLeading)
+            // No `alignment: .topLeading`: the text card now grows to fill, so
+            // pinning the stack to the top would leave the same gap the cap
+            // used to. History supplies its own scrolling list and fills on
+            // its own.
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             // History has no Generate button, so an idle bar would read
             // "press ⌘↩ to generate" beside nothing that generates — and the
@@ -320,11 +323,14 @@ struct ContentView: View {
             .font(.body)
             .scrollContentBackground(.hidden)
             .padding(8)
-            .frame(minHeight: 140, maxHeight: 220)
+            // Grows instead of capping at 220. The options card below is
+            // intrinsically sized and the window is 580 pt tall at minimum, so
+            // a fixed cap left the bottom third of the window empty.
+            .frame(minHeight: 160, maxHeight: .infinity)
             .background(Color(nsColor: .textBackgroundColor),
-                        in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10)
-                .strokeBorder(.quaternary))
+                        in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(Color.primary.opacity(0.08)))
             .overlay(alignment: .topLeading) {
                 if text.isEmpty {
                     Text("What should the voice say?")
@@ -405,7 +411,6 @@ struct ContentView: View {
                     if let voice = library.voice(with: selectedVoiceID) {
                         Button("Delete") { deleteSavedVoice(voice) }
                     }
-                    Spacer()
                 }
                 rowDivider
                 optionRow(icon: "music.note", label: "Clip") {
@@ -414,7 +419,6 @@ struct ContentView: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.middle)
-                    Spacer()
                 }
                 rowDivider
                 optionRow(icon: "text.quote", label: "Transcript") {
@@ -429,8 +433,14 @@ struct ContentView: View {
                 }
             }
         }
+        // The border, not the fill, is what makes this read as a card.
+        // `controlBackgroundColor` against the window in light appearance is
+        // near-identical, so the card had no visible left or right edge — just
+        // dividers hanging in white space.
         .background(Color(nsColor: .controlBackgroundColor),
-                    in: RoundedRectangle(cornerRadius: 10))
+                    in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12)
+            .strokeBorder(Color.primary.opacity(0.08)))
     }
 
     private var rowDivider: some View {
@@ -439,6 +449,16 @@ struct ContentView: View {
 
     /// One labeled row inside the options card: icon + fixed-width label +
     /// the control.
+    ///
+    /// The trailing `Spacer` is what keeps the row left-aligned, and it is not
+    /// optional. `optionsCard` is a `VStack` with the default `.center`
+    /// alignment, so the widest row sets the card's width and every narrower
+    /// row is centered inside it. Style holds a greedy `TextField` and fills
+    /// the card; Language and Speaker hold `.fixedSize()` pickers and do not —
+    /// so those two floated in the middle of the window while Style started at
+    /// the left edge, in all three modes. `rowDivider`'s 40 pt leading inset,
+    /// which is 12 + 18 + 10 measured from a left-aligned row, then lined up
+    /// with nothing.
     private func optionRow<Control: View>(
         icon: String, label: String,
         @ViewBuilder control: () -> Control
@@ -451,6 +471,7 @@ struct ContentView: View {
                 .foregroundStyle(.secondary)
                 .frame(width: 76, alignment: .leading)
             control()
+            Spacer(minLength: 0)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
