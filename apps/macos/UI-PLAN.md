@@ -94,7 +94,7 @@ these, which are appearance-independent:
 |---|---|
 | `--indigo: #5c54f5` | `AccentColor` — Any `#5C54F5`, Dark `#7B72F0` (the site's own lifted variant) |
 | `.btn-primary` gradient | Generate, and nothing else that is a button |
-| `.steps li::before` badges | Progress surfaces only: download bar, playback bar, History ring |
+| `.steps li::before` badges | ~~Progress surfaces~~ — dropped in Stage 4; the accent already brands them, and a gradient on every surface stops meaning "this is the action" |
 | `.eyebrow` | Section labels: 10 pt bold, uppercase, `.tracking(0.9)`, accent |
 | `--radius: 14px` | 12 pt cards, 8 pt inner controls, capsule for pills |
 | `.callout` left rule | Long explanatory prose in Settings; every inline error |
@@ -202,6 +202,21 @@ nothing.
 spec edited first. It is probably the right change for a non-technical
 audience — a tooltip on a disabled button is close to undiscoverable — but it
 is a separate PR.
+
+> **Done.** The gradient landed on this button only, not on progress surfaces
+> as the identity table originally said. Two things were left unverified and
+> are worth an eye when someone next has the app in front of them:
+>
+> - **Dark appearance.** The container's preferences are not writable from
+>   outside the sandbox, and switching the whole machine to dark to check one
+>   button is not a fair trade. The disabled state uses `.quaternary` and
+>   `.secondary`, both of which adapt; the gradient is fixed, so the open
+>   question is only whether indigo-to-violet reads well against a dark `.bar`.
+> - **The Generate → Stop swap.** Reaching the busy state needs a real model
+>   download. The bar has a fixed `minHeight: 72` so nothing can shift, but the
+>   two buttons' own heights were never compared side by side — `Stop` is
+>   `.controlSize(.large)` and Generate is a custom capsule sized by its
+>   padding.
 
 ### Stage 5 — The header row · ½ day
 
