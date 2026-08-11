@@ -247,77 +247,83 @@ struct ContentView: View {
                 withTransaction(txn) { playbackTime = 0 }
             }
         }
+        .toolbar { windowToolbar }
     }
 
     // MARK: Mode bar
 
     private var modeBar: some View {
         VStack(alignment: .leading, spacing: Space.tight) {
+            // Text, not Label. macOS's segmented picker renders the title and
+            // discards the image, so the systemImage: these used to carry was
+            // never drawn. The per-mode SF Symbol that fed it had no other
+            // caller and went with it.
             Picker("Mode", selection: $tab) {
                 ForEach(TTSMode.allCases) { mode in
-                    Label(mode.rawValue, systemImage: mode.symbol)
-                        .tag(MainTab.generate(mode))
+                    Text(mode.rawValue).tag(MainTab.generate(mode))
                 }
-                Label("History", systemImage: "clock.arrow.circlepath")
-                    .tag(MainTab.history)
+                Text("History").tag(MainTab.history)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
+            .controlSize(.large)
             // History stays reachable mid-run — it only reads the folder, and
             // wanting to hear the previous result while waiting is reasonable.
             // The generation modes do not, because switching one evicts the
             // model the running job is using.
             .disabled(engine.status.isBusy && tab != .history)
 
-            HStack(alignment: .firstTextBaseline) {
-                // One line, not two. A heading here was tried and removed: the
-                // segmented control directly above already names the mode, so
-                // "Voice clone" / "Clone a voice from a clip" / "Copy a voice
-                // from a short reference clip" stacked three restatements of
-                // the same idea. The picker is the heading; this is the
-                // explanation under it.
-                Text(tab == .history
-                     ? "Everything you have generated, newest first."
-                     : mode.subtitle)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .animation(.none, value: mode)
+            // One line, not two. A heading here was tried and removed: the
+            // segmented control directly above already names the mode, so
+            // "Voice clone" / "Clone a voice from a clip" / "Copy a voice
+            // from a short reference clip" stacked three restatements of
+            // the same idea. The picker is the heading; this is the
+            // explanation under it.
+            Text(tab == .history
+                 ? "Everything you have generated, newest first."
+                 : mode.subtitle)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .animation(.none, value: mode)
+        }
+    }
 
-                Spacer(minLength: Space.row)
-
-                // Both of these are deliberately not disabled while busy. A
-                // long download is exactly when someone wants to read the help
-                // or watch the log, and neither touches the running job.
-                HStack(spacing: Space.tight) {
-                    // Window → Logs (⌘L) already opens this. The button is here
-                    // for the same reason the help one is: when a run is slow or
-                    // fails, the log is the answer, and nobody finds it in a menu.
-                    Button {
-                        openWindow(id: "logs")
-                    } label: {
-                        Image(systemName: "list.bullet.rectangle")
-                            .imageScale(.large)
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
-                    .help("Open the log (⌘L)")
-                    .accessibilityLabel("Open the log")
-
-                    // The Help menu already opens this book; the button is here
-                    // because the audience for this app does not go looking in
-                    // menus.
-                    Button {
-                        NSApplication.shared.showHelp(nil)
-                    } label: {
-                        Image(systemName: "questionmark.circle")
-                            .imageScale(.large)
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
-                    .help("Open Bunyi Help")
-                    .accessibilityLabel("Open Bunyi Help")
-                }
+    /// Logs and Help, in the window's toolbar.
+    ///
+    /// They used to float at the right of the subtitle row as two unlabelled
+    /// grey glyphs, which read as debris rather than as controls. In the
+    /// toolbar they get the platform's own treatment.
+    ///
+    /// The move also makes an invariant structural. Both must stay usable
+    /// while work is in progress — a long download is exactly when someone
+    /// wants to read the help or watch the log, and neither touches the
+    /// running job — and previously that held only because they sat outside
+    /// the `.disabled(engine.status.isBusy)` scope in the view tree, which a
+    /// comment had to defend. A toolbar is outside that scope by construction.
+    @ToolbarContentBuilder
+    private var windowToolbar: some ToolbarContent {
+        ToolbarItemGroup(placement: .primaryAction) {
+            // Window → Logs (⌘L) already opens this. The button is here for
+            // the same reason the help one is: when a run is slow or fails,
+            // the log is the answer, and nobody finds it in a menu.
+            Button {
+                openWindow(id: "logs")
+            } label: {
+                // "Logs", matching the window it opens and the Window → Logs
+                // menu item. A toolbar shown with labels would otherwise offer
+                // "Log" for a window called "Logs".
+                Label("Logs", systemImage: "list.bullet.rectangle")
             }
+            .help("Open Logs (⌘L)")
+
+            // The Help menu already opens this book; the button is here
+            // because the audience for this app does not go looking in menus.
+            Button {
+                NSApplication.shared.showHelp(nil)
+            } label: {
+                Label("Help", systemImage: "questionmark.circle")
+            }
+            .help("Open Bunyi Help")
         }
     }
 
@@ -793,16 +799,9 @@ struct ContentView: View {
     }
 }
 
-// MARK: - Mode presentation (SF Symbols + plain-language subtitle)
+// MARK: - Mode presentation (plain-language subtitle)
 
 private extension TTSMode {
-    var symbol: String {
-        switch self {
-        case .presetVoice: return "person.wave.2"
-        case .voiceDesign: return "wand.and.stars"
-        case .voiceClone: return "waveform.badge.mic"
-        }
-    }
 
     var subtitle: String {
         switch self {
