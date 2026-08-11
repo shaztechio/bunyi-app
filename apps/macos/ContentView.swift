@@ -86,6 +86,17 @@ struct ContentView: View {
         "Dylan", "Eric", "Ono_Anna", "Sohee",
     ]
 
+    /// Whether the script is effectively empty. Whitespace counts as nothing.
+    ///
+    /// Defined once because it was not: `canGenerate` and
+    /// `generateBlockedReason` trimmed, while `showExamples` used a plain
+    /// `isEmpty`. A single typed space therefore hid the examples and left
+    /// Generate disabled — restoring, with one keystroke, exactly the dead end
+    /// the examples exist to remove.
+    private var scriptIsBlank: Bool {
+        text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     /// Whether the current mode has everything it needs.
     ///
     /// Checked before the button is pressed rather than inside the engine: the
@@ -94,7 +105,7 @@ struct ContentView: View {
     /// download to be told a file is missing. Voice design had no check at all
     /// and would generate some arbitrary voice from an empty description.
     private var canGenerate: Bool {
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        guard !scriptIsBlank else {
             return false
         }
         switch mode {
@@ -110,7 +121,7 @@ struct ContentView: View {
     /// Why Generate is unavailable, shown on hover — a disabled button with no
     /// explanation is a dead end.
     private var generateBlockedReason: String? {
-        if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if scriptIsBlank {
             return "Enter some text to speak."
         }
         switch mode {
@@ -393,7 +404,7 @@ struct ContentView: View {
     /// Clone mode contributes no examples, so the strip is absent there
     /// without a third condition here — see `TTSMode.examples`.
     private var showExamples: Bool {
-        text.isEmpty && engine.lastOutputURL == nil && !mode.examples.isEmpty
+        scriptIsBlank && engine.lastOutputURL == nil && !mode.examples.isEmpty
     }
 
     /// The clickable examples under the editor.
