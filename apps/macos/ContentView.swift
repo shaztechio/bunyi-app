@@ -55,6 +55,9 @@ struct ContentView: View {
     @State private var showImporter = false
 
     @State private var player: AVAudioPlayer?
+    /// Which file `player` was built from. Tracked separately because a player
+    /// built from `Data` reports a nil `url`.
+    @State private var playerURL: URL?
     @State private var isPlaying = false
     @State private var playbackTime: TimeInterval = 0
 
@@ -717,15 +720,38 @@ struct ContentView: View {
             return
         }
         // Fresh clip, or one that played to the end → start over.
-        if player == nil || player?.url != url
+        //
+        // Compared against `playerURL`, not `player.url`: a player built from
+        // Data has no url, so `player?.url != url` was always true once
+        // playback started from memory — every Pause then Play would rebuild
+        // the player and restart the clip from zero instead of resuming.
+        if player == nil || playerURL != url
             || (player?.currentTime ?? 0) >= (player?.duration ?? 0) - 0.05 {
-            let next = try? AVAudioPlayer(contentsOf: url)
-            next?.prepareToPlay()
+            guard let next = makePlayer(for: url) else { return }
             player = next
+            playerURL = url
             playbackTime = 0
         }
         player?.play()
         isPlaying = player != nil
+    }
+
+    /// An `AVAudioPlayer` holding the clip in memory.
+    ///
+    /// `AVAudioPlayer(contentsOf:)` reads as it plays, so the first refill
+    /// after the prepared buffer runs out is a disk read a few seconds in —
+    /// which is where a stutter was reported, and when the system may still be
+    /// reclaiming the memory the engine released at the end of the run. These
+    /// are 24 kHz mono clips: a minute is under 3 MB, so holding one costs
+    /// less than risking the read.
+    ///
+    /// No `.mappedIfSafe` — a mapped file is still backed by disk and faults
+    /// in on the same schedule as reading it would.
+    private func makePlayer(for url: URL) -> AVAudioPlayer? {
+        guard let data = try? Data(contentsOf: url),
+              let player = try? AVAudioPlayer(data: data) else { return nil }
+        player.prepareToPlay()
+        return player
     }
 
     /// Auto-play once a generation finishes.
@@ -742,9 +768,9 @@ struct ContentView: View {
     /// turn, once the rebuild has been and gone.
     private func startPlayback() {
         guard let url = engine.lastOutputURL,
-              let next = try? AVAudioPlayer(contentsOf: url) else { return }
-        next.prepareToPlay()
+              let next = makePlayer(for: url) else { return }
         player = next
+        playerURL = url
         playbackTime = 0
         DispatchQueue.main.async {
             // A second Generate, or the window closing, can replace or clear

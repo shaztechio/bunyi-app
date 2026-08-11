@@ -220,11 +220,21 @@ final class TTSEngine {
     /// rather than mysterious.
     private func releaseGenerationMemory() {
         let cachedBefore = MLX.GPU.cacheMemory
+        let start = Date()
         MLX.GPU.clearCache()
+        let elapsed = Date().timeIntervalSince(start)
         let freed = cachedBefore - MLX.GPU.cacheMemory
         guard freed > 0 else { return }
-        log.log("Released \(freed.formatted(.byteCount(style: .memory))) of MLX cache "
-                + "(\(MLX.GPU.activeMemory.formatted(.byteCount(style: .memory))) still in use)")
+        // The elapsed time is here to answer a specific question. Releasing
+        // gigabytes is real work for the kernel, and if playback stutters
+        // shortly after a generation, the two candidates are this call and the
+        // player's first read from disk. A number distinguishes them: hundreds
+        // of milliseconds here points at the release, single-digit
+        // milliseconds points elsewhere.
+        log.log(String(format: "Released %@ of MLX cache in %.0f ms (%@ still in use)",
+                       freed.formatted(.byteCount(style: .memory)),
+                       elapsed * 1000,
+                       MLX.GPU.activeMemory.formatted(.byteCount(style: .memory))))
     }
 
     /// Drops the in-memory model if it came from `dir`.
