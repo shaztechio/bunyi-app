@@ -82,6 +82,62 @@ extension LinearGradient {
         startPoint: .topLeading, endPoint: .bottomTrailing)
 }
 
+/// One colour per generation mode, for the History pills.
+///
+/// Deliberately **not** the accent. In History the accent already means "this
+/// row is playing" — it is the progress ring — so a pill wearing it competes
+/// with the one colour in that view carrying state.
+///
+/// Violet is the brand's own second stop; teal and amber are not, and are the
+/// only invented colours in the app. They earn it by making a long list
+/// scannable without reading every row. The mode name stays spelled out inside
+/// the pill, so the colour is redundant rather than load-bearing — nothing is
+/// lost to anyone who cannot separate these hues.
+///
+/// Fixed sRGB rather than semantic colours: these must stay recognisably the
+/// same three in light and dark, which `.teal` and `.orange` do not guarantee.
+extension TTSMode {
+    var pillColor: Color {
+        switch self {
+        case .presetVoice: Color(.sRGB, red: 0.10, green: 0.55, blue: 0.55)
+        case .voiceDesign: Color(.sRGB, red: 0.63, green: 0.24, blue: 0.89)
+        case .voiceClone:  Color(.sRGB, red: 0.72, green: 0.45, blue: 0.05)
+        }
+    }
+}
+
+/// An icon button in a list row: no chrome until you point at it.
+///
+/// `.borderless` draws a bare glyph with no hover feedback at all, so a row of
+/// them gives no sign of being clickable until something happens. A tinted
+/// rounded square under the cursor is the least that reads as a control.
+///
+/// The hover state lives in a nested `View` rather than on the style itself:
+/// a `ButtonStyle` is re-created on every evaluation, so `@State` declared on
+/// it would be reset rather than remembered.
+struct RowIconButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HoverBody(configuration: configuration)
+    }
+
+    private struct HoverBody: View {
+        let configuration: Configuration
+        @State private var hovering = false
+
+        var body: some View {
+            configuration.label
+                .frame(width: 22, height: 22)
+                .background(
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(hovering ? AnyShapeStyle(.quaternary)
+                                       : AnyShapeStyle(Color.clear)))
+                .contentShape(RoundedRectangle(cornerRadius: 5))
+                .onHover { hovering = $0 }
+                .opacity(configuration.isPressed ? 0.55 : 1)
+        }
+    }
+}
+
 /// The bottom bar's one action, in its two forms.
 ///
 /// **One style for both** because Generate and Stop occupy the same slot and

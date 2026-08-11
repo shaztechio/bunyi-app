@@ -69,8 +69,12 @@ struct HistoryView: View {
             } else {
                 List(items) { item in
                     row(item)
-                        .listRowInsets(EdgeInsets(top: 6, leading: 8,
-                                                  bottom: 6, trailing: 8))
+                        // One rule for row height. Insets plus a vertical
+                        // padding inside the row were two mechanisms setting
+                        // the same rhythm, so changing either half-worked.
+                        .listRowInsets(EdgeInsets(top: 0, leading: 8,
+                                                  bottom: 0, trailing: 8))
+                        .frame(minHeight: 44)
                 }
                 .listStyle(.inset)
                 .alternatingRowBackgrounds()
@@ -146,11 +150,19 @@ struct HistoryView: View {
     }
 
     private var empty: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: Space.tight) {
+            // The gradient echoes the app icon and the Generate button, so an
+            // empty tab still looks like part of this app rather than a
+            // placeholder someone forgot to finish.
             Image(systemName: "waveform")
-                .font(.system(size: 34))
-                .foregroundStyle(.tertiary)
-            Text("Audio you generate will be listed here.")
+                .font(.system(size: 40))
+                .foregroundStyle(LinearGradient.bunyiBrand)
+
+            Text("Nothing here yet")
+                .font(.system(size: 15, weight: .semibold))
+
+            Text("Audio you generate is listed here, newest first.")
+                .font(.callout)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -185,25 +197,51 @@ struct HistoryView: View {
                 .frame(width: 22, height: 22)
                 .contentShape(Circle())
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(RowIconButtonStyle())
             .help(playingID == item.url ? "Stop" : "Play")
+            .accessibilityLabel(playingID == item.url ? "Stop" : "Play")
 
-            VStack(alignment: .leading, spacing: 2) {
-                // The prompt when the file carries one, the mode otherwise —
-                // "what did it say" identifies a clip far better than
-                // "Preset voice" repeated down the list. A prompt can be
-                // paragraphs long, so the row shows one line and the whole
-                // thing is on hover.
-                Text(metadata[item.url]?.title ?? item.mode)
-                    .fontWeight(.medium)
-                    .lineLimit(1)
-                Text(Self.subtitle(for: item, metadata: metadata[item.url]))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+            // The record tooltip covers the text and the empty middle, not
+            // the buttons. On the whole row it won every hover, so each
+            // button's own tooltip never appeared — the one exception being
+            // Copy, whose label changes state and re-registers its help.
+            HStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: 2) {
+                    // The prompt when the file carries one, the mode otherwise
+                    // — "what did it say" identifies a clip far better than
+                    // "Preset voice" repeated down the list. A prompt can be
+                    // paragraphs long, so the row shows one line and the whole
+                    // thing is on hover.
+                    Text(metadata[item.url]?.title ?? item.mode)
+                        .fontWeight(.medium)
+                        .lineLimit(1)
+                    HStack(spacing: 6) {
+                        // The mode as a pill, ported from `.tag` on
+                        // bunyi.app. It is the one value in this line that is
+                        // a category rather than a detail, so it earns a shape
+                        // instead of a share of a run-on string.
+                        let name = metadata[item.url]?.mode ?? item.mode
+                        let tint = Self.mode(named: name)?.pillColor
+                            ?? Color.secondary
+                        Text(name.uppercased())
+                            .font(.system(size: 9, weight: .bold))
+                            .tracking(0.6)
+                            .foregroundStyle(tint)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(tint.opacity(0.14), in: Capsule())
+
+                        Text(Self.subtitle(for: item, metadata: metadata[item.url]))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+
+                Spacer(minLength: 8)
             }
-
-            Spacer(minLength: 8)
+            .contentShape(Rectangle())
+            .help(Self.tooltip(for: item, metadata: metadata[item.url]))
 
             // Copying beats hover for anything you want to keep: a tooltip
             // cannot be pasted into a note, a bug report, or back into the app
@@ -214,41 +252,48 @@ struct HistoryView: View {
                 Image(systemName: copiedID == item.url
                       ? "checkmark" : "doc.on.doc")
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(RowIconButtonStyle())
             .foregroundStyle(copiedID == item.url ? .green : .primary)
             .help("Copy details")
+            .accessibilityLabel("Copy details")
 
             Button {
                 save(item)
             } label: {
-                Label("Download", systemImage: "square.and.arrow.down")
+                // Icon only, like the three buttons beside it. A Label renders
+                // icon *and* text here, so this was the one wide element in
+                // every row and the cluster never lined up. The tooltip and
+                // the accessibility label carry the word instead.
+                Image(systemName: "square.and.arrow.down")
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(RowIconButtonStyle())
             .help("Save a copy elsewhere")
+            .accessibilityLabel("Download")
 
             Button {
                 NSWorkspace.shared.activateFileViewerSelecting([item.url])
             } label: {
                 Image(systemName: "folder")
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(RowIconButtonStyle())
             .help("Show in Finder")
+            .accessibilityLabel("Show in Finder")
 
             Button {
                 pendingDeletion = item
             } label: {
                 Image(systemName: "trash")
             }
-            .buttonStyle(.borderless)
-            .foregroundStyle(.red)
+            .buttonStyle(RowIconButtonStyle())
+            // Secondary, not red. Unconditional red put a warning-coloured
+            // column down the whole list, which reads as a list of problems
+            // rather than a list of recordings. The confirmation dialog is
+            // what protects the file; the colour was never doing that work.
+            .foregroundStyle(.secondary)
             .help("Move to Trash")
+            .accessibilityLabel("Move to Trash")
         }
-        .padding(.vertical, 2)
         .contentShape(Rectangle())
-        // On the whole row, not just the label: hovering anywhere in the row is
-        // what people do, and a tooltip that only appears over the text reads
-        // as no tooltip at all.
-        .help(Self.tooltip(for: item, metadata: metadata[item.url]))
     }
 
     // MARK: Behaviour
@@ -355,17 +400,36 @@ struct HistoryView: View {
         }
     }
 
+    /// The mode a row's label names, or nil for a file Bunyi did not write.
+    ///
+    /// Two spellings reach here. Embedded metadata carries the raw value
+    /// ("Voice clone"); the filename fallback carries a dash, and
+    /// `GeneratedOutput.mode` splits on the first one — so a
+    /// `Voice-clone-2026….wav` with no metadata yields just "Voice".
+    /// Normalising dashes to spaces makes the first case exact and the second
+    /// fail cleanly to a neutral pill rather than mislabelling it.
+    private static func mode(named name: String) -> TTSMode? {
+        let normalized = name.replacingOccurrences(of: "-", with: " ")
+        return TTSMode.allCases.first {
+            $0.rawValue.caseInsensitiveCompare(normalized) == .orderedSame
+        }
+    }
+
     private static func subtitle(for item: GeneratedOutput,
                                  metadata: OutputMetadata?) -> String {
         let date = item.created.formatted(date: .abbreviated, time: .shortened)
         let size = ByteCountFormatter.string(fromByteCount: item.byteCount,
                                              countStyle: .file)
-        var parts = [metadata?.mode ?? item.mode, date, size]
+        // The mode is no longer in here — it is the pill in front of this
+        // line. Joining four values with " · " gave all four the same weight,
+        // which is why a column of them read as noise rather than as a list
+        // you can scan.
+        var parts = [date, size]
         // The voice, whichever way this mode picked one — a speaker name, a
         // designed-voice description, or a clone. Showing only `speaker` left
         // every Voice design row with nothing identifying its voice.
         if let voice = metadata?.voiceSummary {
-            parts.insert(Self.trimmed(voice), at: 1)
+            parts.insert(Self.trimmed(voice), at: 0)
         }
         return parts.joined(separator: " · ")
     }
