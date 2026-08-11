@@ -67,8 +67,15 @@ A segmented picker selects one of three modes. macOS source:
   speaker, style, reference clip, saved voice, and the mode picker. Their
   values were already handed to the engine when the run started, so leaving
   them editable invited changes that silently did not apply to the audio
-  being produced. Help stays reachable: a long download is exactly when
-  someone reads it.
+  being produced. **Help and the log stay reachable**: a long download is
+  exactly when someone wants to read the help or watch the log, and neither
+  touches the running job.
+- **Help and the log are one click from the main window**, not only in menus —
+  the audience does not go looking in a menu bar. *Where* they sit is a
+  platform choice: macOS puts them in the window toolbar, which also places
+  them outside the disabled scope by construction; a toolkit without a native
+  window toolbar (Avalonia) keeps them in a header row beside the mode
+  subtitle. Same two actions, same always-available guarantee, same tooltips.
 - Live progress: a token counter during generation. macOS uses
   `generateStream` (preset/design) and an `onToken` callback bridged over a
   stream (clone). Any backend must surface incremental progress.
