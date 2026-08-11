@@ -463,6 +463,7 @@ struct SettingsView: View {
                 HStack {
                     if backup.status.isBusy {
                         Button("Stop", role: .destructive) { backup.cancel() }
+                            .disabled(!backup.status.canCancel)
                     } else {
                         Button("Back up models…") { chooseBackupDestination() }
                         Button("Restore from backup…") { chooseRestoreArchive() }
@@ -519,6 +520,15 @@ struct SettingsView: View {
         switch backup.status {
         case .idle:
             EmptyView()
+        case .stopping:
+            // Stop does not end the work instantly — the child process has to
+            // die and a partial archive has to be removed. Without a state of
+            // its own the window looked identical to a second before, so Stop
+            // got pressed again.
+            HStack(spacing: Space.tight) {
+                ProgressView().controlSize(.small)
+                Text("Stopping — finishing up…").foregroundStyle(.secondary)
+            }
         case .working(let message):
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 8) {
