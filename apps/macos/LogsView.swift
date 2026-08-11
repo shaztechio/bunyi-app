@@ -48,16 +48,7 @@ struct LogsView: View {
         .navigationTitle("Logs")
     }
 
-    /// One entry: a fixed timestamp column, then the message.
-    ///
-    /// Two views rather than one interpolated string. As one string the column
-    /// could not align — the timestamp and the message were a single run of
-    /// text — and a message longer than the window wrapped back under the
-    /// timestamp instead of hanging beneath its own first word.
-    ///
-    /// `LogStore.text` still builds the clipboard string the old way, with two
-    /// spaces, and is deliberately untouched: this is what the window looks
-    /// like, not what Copy produces.
+    /// Shown until the first message arrives.
     private var empty: some View {
         VStack(spacing: Space.tight) {
             // Same treatment as History's empty tab, for the same reason: an
