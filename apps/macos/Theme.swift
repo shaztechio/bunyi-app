@@ -69,18 +69,7 @@ enum Radius {
 /// Sizes are macOS points, not web rem — the website's scale does not
 /// transfer, only its intent.
 extension Font {
-    /// The mode heading. `-0.3` tracking echoes the site's `-0.02em` on
-    /// headings, which is what stops a semibold line looking loose.
-    static let bunyiTitle = Font.system(size: 15, weight: .semibold)
     /// The script editor. It is the content of the window; 13 pt made it
     /// look like a form field.
     static let bunyiEditor = Font.system(size: 15)
-}
-
-extension View {
-    /// The mode heading treatment, kept with the font it belongs to so the
-    /// tracking cannot drift away from the size.
-    func bunyiTitleStyle() -> some View {
-        font(.bunyiTitle).tracking(-0.3)
-    }
 }

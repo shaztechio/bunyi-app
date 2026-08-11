@@ -270,21 +270,18 @@ struct ContentView: View {
             .disabled(engine.status.isBusy && tab != .history)
 
             HStack(alignment: .firstTextBaseline) {
-                // A heading, then the explanation under it. Before this the
-                // subtitle was the largest text in the window, so there was
-                // nothing for the eye to land on first.
-                VStack(alignment: .leading, spacing: Space.hair) {
-                    Text(tab == .history ? "History" : mode.title)
-                        .bunyiTitleStyle()
-                        .animation(.none, value: mode)
-
-                    Text(tab == .history
-                         ? "Everything you have generated, newest first."
-                         : mode.subtitle)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .animation(.none, value: mode)
-                }
+                // One line, not two. A heading here was tried and removed: the
+                // segmented control directly above already names the mode, so
+                // "Voice clone" / "Clone a voice from a clip" / "Copy a voice
+                // from a short reference clip" stacked three restatements of
+                // the same idea. The picker is the heading; this is the
+                // explanation under it.
+                Text(tab == .history
+                     ? "Everything you have generated, newest first."
+                     : mode.subtitle)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .animation(.none, value: mode)
 
                 Spacer(minLength: Space.row)
 
@@ -804,17 +801,6 @@ private extension TTSMode {
         case .presetVoice: return "person.wave.2"
         case .voiceDesign: return "wand.and.stars"
         case .voiceClone: return "waveform.badge.mic"
-        }
-    }
-
-    /// The heading above the subtitle. Short on purpose: it is there to give
-    /// the window a first line the eye lands on, not to repeat the segment
-    /// that is already selected directly above it.
-    var title: String {
-        switch self {
-        case .presetVoice: return "Speak with a built-in voice"
-        case .voiceDesign: return "Design a voice from a description"
-        case .voiceClone:  return "Clone a voice from a clip"
         }
     }
 

@@ -109,8 +109,7 @@ control and its caption, 4 inside a label/value pair.
 
 | Role | Spec |
 |---|---|
-| Mode title (new) | 15 semibold, `.tracking(-0.3)` |
-| Mode subtitle | 12 secondary |
+| Mode subtitle | 12 secondary — the only line under the picker |
 | Script editor | 15 regular — it is the content, it should not be 13 |
 | Row label | 13 secondary, fixed 76 pt column (unchanged) |
 | Section eyebrow | 10 bold uppercase, `.tracking(0.9)`, accent |
@@ -167,13 +166,27 @@ spec instead of inheriting a different OS accent.
 
 ### Stage 3 — Type and spacing on the main window · 1 day
 
-Apply the scales above. Add a 15 pt semibold **mode title** above the existing
-subtitle so the window has a heading (`TTSMode` already has `subtitle`; add a
-`title` sibling). Status line `.tertiary` → `.secondary`. Derive the editor
-placeholder inset from the editor's own padding plus `NSTextView`'s 5 pt
+Apply the scales above. Status line `.tertiary` → `.secondary`. Derive the
+editor placeholder inset from the editor's own padding plus `NSTextView`'s 5 pt
 container inset rather than the hand-tuned 16/13 that does not sit on the
 caret. Give the character counter `monospacedDigit` so it stops reflowing as
 you type.
+
+> **A mode heading was tried here and removed. Do not re-add it.** This plan
+> originally called for a 15 pt semibold title above the subtitle, on the
+> grounds that the window had nothing for the eye to land on first. Built, it
+> read as clutter: the segmented control directly above already names the
+> mode, so the result was three restatements stacked —
+> *Voice clone* / *Clone a voice from a clip* / *Copy a voice from a short
+> reference clip.*
+>
+> **The picker is the heading.** A macOS window with a segmented control and
+> one line of explanation under it is a finished pattern, not a missing one.
+> The diagnosis was right that the window lacked hierarchy; the remedy was
+> wrong, because it added a level that duplicated the level above it. What
+> actually supplies hierarchy here is contrast between chrome and content —
+> the 15 pt editor, the accent, and Stage 4's button — not another line of
+> prose.
 
 ### Stage 4 — Generate/Stop and the bottom bar · 1 day
 
