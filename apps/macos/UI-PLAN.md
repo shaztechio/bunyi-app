@@ -94,7 +94,7 @@ these, which are appearance-independent:
 |---|---|
 | `--indigo: #5c54f5` | `AccentColor` — Any `#5C54F5`, Dark `#7B72F0` (the site's own lifted variant) |
 | `.btn-primary` gradient | Generate, and nothing else that is a button |
-| `.steps li::before` badges | Progress surfaces only: download bar, playback bar, History ring |
+| `.steps li::before` badges | ~~Progress surfaces~~ — dropped in Stage 4; the accent already brands them, and a gradient on every surface stops meaning "this is the action" |
 | `.eyebrow` | Section labels: 10 pt bold, uppercase, `.tracking(0.9)`, accent |
 | `--radius: 14px` | 12 pt cards, 8 pt inner controls, capsule for pills |
 | `.callout` left rule | Long explanatory prose in Settings; every inline error |
@@ -190,11 +190,15 @@ you type.
 
 ### Stage 4 — Generate/Stop and the bottom bar · 1 day
 
-A `GenerateButtonStyle`: brand-gradient capsule when enabled, `.quaternary`
-fill with a `.secondary` label when disabled. The current disabled state is
-white-on-pale-blue — illegible, and the first thing a new user sees. Keep Stop
-at the same `minWidth: 110` and `.controlSize(.large)` so the swap shifts
-nothing.
+An `ActionButtonStyle` with two roles: brand-gradient capsule for Generate,
+`.quaternary` fill with a `.secondary` label when it is unavailable, and a
+filled red capsule for Stop. The old disabled state was white-on-pale-blue —
+illegible, and the first thing a new user sees.
+
+*This originally said "keep Stop at the same `minWidth: 110` and
+`.controlSize(.large)` so the swap shifts nothing". Both buttons share one
+style now, which is a stronger guarantee than matching two — see the note
+below.*
 
 **Contains a behaviour change — do not include it here.** §1 says Generate
 "says why on hover". Restyling the disabled state is fine; surfacing
@@ -202,6 +206,27 @@ nothing.
 spec edited first. It is probably the right change for a non-technical
 audience — a tooltip on a disabled button is close to undiscoverable — but it
 is a separate PR.
+
+> **Done.** The gradient landed on this button only, not on progress surfaces
+> as the identity table originally said.
+>
+> **Stop changed too, against this plan's instruction to leave it alone.**
+> Keeping it `.bordered` with `.tint(.red)` was fine while Generate was also a
+> system button. Once Generate became a solid gradient capsule, the outline
+> beside it read as barely there in light appearance and all but vanished
+> against a dark `.bar` — reported from use, not caught here. The button that
+> abandons a running job is the last one that should be hard to find.
+>
+> So both share one `ActionButtonStyle`, differing only by role: gradient for
+> Generate, filled red for Stop. That settles by construction the thing this
+> note previously listed as unverified — the two cannot differ in size, since
+> they are one style with one set of metrics.
+>
+> Verified in both appearances by probing the two states that cannot be reached
+> from outside the app — the busy branch, and `preferredColorScheme` — then
+> reverting the probes. Worth knowing for later stages: a probe build left
+> running looks exactly like a bug. This one had Stop showing on launch and was
+> reported as backwards behaviour before the clean build replaced it.
 
 ### Stage 5 — The header row · ½ day
 
