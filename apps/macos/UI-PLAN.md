@@ -286,6 +286,27 @@ book — `HELP.md` is already built and shipped — with a "Learn more" would be
 the better product, but §7 specifies "the three per-mode source fields + help".
 Spec first, separate PR.
 
+> **Done.** Not every section got an eyebrow, against this stage's
+> instruction. Models and Storage did — those are the two the stage names, and
+> the two with more than one section. General and Backup have exactly one
+> unnamed section each, holding a row already labelled *Appearance* and a pair
+> of buttons already labelled *Back up* and *Restore*, under tabs already
+> called General and Backup. A header there restates a name that is on screen
+> twice, which is Stage 3's mode-heading mistake in a smaller window.
+>
+> Three of the four bare-red error strings are in `SettingsView.swift` and got
+> the treatment. The fourth, `voiceError`, is in `ContentView.swift` and was
+> left for that view's own change rather than reached into from here.
+>
+> **Not seen running.** Settings cannot be opened from outside the app without
+> Accessibility permission, which this machine does not grant, so ⌘, is not
+> reachable and there is no screenshot behind any of this. Assessed from
+> source and from a clean build. The specific things a first look should check
+> are the accent eyebrow inside a grouped `Form`'s own header slot, which
+> macOS styles itself, and whether `.quinary` under a section's surface reads
+> as a fill or as nothing at all in light appearance — the rule is drawn to
+> carry the block on its own if it does not.
+
 ### Stage 8 — Logs · ½ day · *source-only*
 
 Each line is a single interpolated `Text("\(time)  \(message)")`, so the
