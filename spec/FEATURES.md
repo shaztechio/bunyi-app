@@ -391,6 +391,59 @@ macOS source: `WindowCloseGuard.swift`.
   required model file: config.json (HTTP 404). Check the URL…").
 - Full technical error text goes to the Logs, not the status line.
 
+## 11. Doctor (preflight checks)
+
+macOS source: `Doctor.swift`, surfaced from `ContentView.swift`.
+
+Doctor answers one question: **can this machine finish a generation right
+now?** It is not a settings panel and it does not fix anything — every finding
+names what is wrong and what would resolve it.
+
+Each check reports *ok*, *warning*, or *blocker*.
+
+1. **Model present.** Is the selected mode's model completely downloaded, by
+   §3b's definition of complete (config plus weights, no partial files)? A
+   missing model is **not** itself a failure — a generation downloads it. It
+   changes what the other checks are about: checks 2 and 4 then apply to that
+   download rather than to a model already on disk.
+2. **Disk space**, measured on the volume holding the models folder, which
+   §3d allows to be a volume the user chose. When a download is required:
+   *blocker* if free space is below the model's size, *warning* if it is
+   below that plus 5 GB. When the model is already present, only the space a
+   generation's own output needs.
+3. **Memory.** Available RAM against the size of the model that must be
+   resident. **Warning only, never a blocker** — it is a prediction about a
+   run that has not started, the figure moves the moment another app quits,
+   and a machine under pressure still finishes, only slowly. Blocking on it
+   would refuse runs that would have worked.
+4. **Model source reachable.** Only when a download is required: does the
+   source configured for the mode (§3a) answer? *Blocker* if not, so a dead
+   self-hosted server is reported as a dead server rather than as a missing
+   model.
+5. **Output folder writable.** *Blocker* if the folder generations are
+   written to cannot be written to.
+6. **Model files intact**, against the published `manifest.sha256` (§3c)
+   where the server offers one. **On demand only** — hashing gigabytes before
+   every generation would be a worse problem than the one it detects. This is
+   the check that catches a truncated or half-synced model, the failure that
+   otherwise loads and speaks nonsense.
+
+**Before every generation.** Doctor runs before any download begins, because
+the point is not to discover after 3.4 GB that there was never room for it.
+Blockers stop the run and are reported in a dialog. Warnings do not stop it
+and are written to the Logs. When nothing is wrong, the run starts with no
+dialog and no interruption — a preflight the user notices on a healthy machine
+is a bug.
+
+**On demand**, from a stethoscope button in the window toolbar, beside Logs
+and Help, and available while work is in progress for the same reason they are
+(§8): a run behaving strangely is exactly when it is wanted. The on-demand run
+reports **every** check in a dialog, passes included — "everything is fine" is
+the most common useful answer — and writes the same findings to the Logs so
+they can be copied into a bug report.
+
+Findings follow §10: sizes are stated, and each says what to do.
+
 ---
 
 ## Feature → macOS source map (parity checklist)
@@ -409,3 +462,4 @@ macOS source: `WindowCloseGuard.swift`.
   `SettingsView.generalTab`
 - Logs → `LogStore.swift`, `LogsView.swift`
 - Busy-close → `WindowCloseGuard.swift`
+- Doctor / preflight checks → `Doctor.swift`, `ContentView.generate`

@@ -288,10 +288,46 @@ final class TTSEngine {
         }
     }
 
+    /// Where a mode's model lives, whether or not it has been downloaded yet.
+    ///
+    /// Both download paths derive this, and Doctor has to ask the same question
+    /// before a run. Worked out separately in three places it would eventually
+    /// disagree, and the symptom is nasty in both directions: Doctor reporting
+    /// a model missing that the engine then loads, or reporting one present
+    /// that the engine then re-downloads.
+    static func modelDirectory(for mode: TTSMode) -> URL {
+        let root = ModelsLocation.current()
+        switch mode.effectiveSource {
+        case .repo(let repoID):
+            return root.appendingPathComponent("models/\(repoID)", isDirectory: true)
+        case .baseURL(let base):
+            return root.appendingPathComponent("models/self-hosted/\(slug(for: base))",
+                                               isDirectory: true)
+        }
+    }
+
+    /// Whether that folder holds a model that can actually be loaded — the same
+    /// test the download path uses to decide it has nothing to do.
+    static func isModelComplete(for mode: TTSMode) -> Bool {
+        hasCompleteModel(at: modelDirectory(for: mode))
+    }
+
+    /// The digests a self-hosted server publishes, if it publishes any.
+    ///
+    /// Exposed for Doctor's on-demand integrity check, which needs the parsed
+    /// manifest rather than a copy of the parser — the format has enough edge
+    /// cases (tabs, `*` markers, unsafe paths) that a second reader of it would
+    /// be a second set of bugs.
+    func publishedDigests(for mode: TTSMode) async -> [ManifestEntry]? {
+        guard case .baseURL(let base) = mode.effectiveSource else { return nil }
+        return await manifest(at: base.appendingPathComponent("manifest.sha256"))
+    }
+
     private func downloadFromHub(mode: TTSMode, repoID: String) async throws -> URL {
+        // The models root, which HubApi and the disk monitor both want; the
+        // model's own folder sits under it.
         let base = ModelsLocation.current()
-        let localDir = base.appendingPathComponent("models/\(repoID)",
-                                                   isDirectory: true)
+        let localDir = Self.modelDirectory(for: mode)
 
         // Pre-downloaded (or previously completed) models are used as-is,
         // without touching the network — this also makes the app fully
@@ -350,9 +386,7 @@ final class TTSEngine {
     private static let requiredModelFiles: Set<String> = ["config.json", "model.safetensors"]
 
     private func downloadFromBaseURL(mode: TTSMode, base: URL) async throws -> URL {
-        let root = ModelsLocation.current()
-        let localDir = root.appendingPathComponent(
-            "models/self-hosted/\(Self.slug(for: base))", isDirectory: true)
+        let localDir = Self.modelDirectory(for: mode)
 
         if Self.hasCompleteModel(at: localDir) {
             log.log("Using existing model files at \(localDir.path)")

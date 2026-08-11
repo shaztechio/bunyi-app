@@ -87,7 +87,10 @@ enum ModelStore {
         (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true
     }
 
-    private static func size(of dir: URL) -> Int64 {
+    /// Bytes a model folder occupies. Internal rather than private because
+    /// Doctor sizes the same folders to work out how much memory a run will
+    /// want, and a third copy of this walk is a third thing to keep in step.
+    nonisolated static func size(of dir: URL) -> Int64 {
         let keys: [URLResourceKey] = [.totalFileAllocatedSizeKey, .fileSizeKey]
         guard let files = FileManager.default.enumerator(
             at: dir, includingPropertiesForKeys: keys
