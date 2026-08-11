@@ -217,7 +217,12 @@ minimum row height.
 **Three things §2a pins:** the ring-as-progress play button, play/**stop** with
 no pause, and Copy details acknowledging the copy. Also **do not** hide the
 row buttons behind hover — tempting, and wrong here: §2a enumerates them as
-visible affordances for an explicitly non-technical audience.
+affordances for an explicitly non-technical audience.
+
+Note that §2a's opening paragraph says "play/pause per row", contradicting its
+own detailed bullet ("play/stop … No pause", with reasons). The detailed
+bullet is what the app implements and is the intent; the summary line is
+stale. Do not read the opener as licence to add a pause.
 
 ### Stage 7 — Settings · 1–1½ days · *source-only*
 
@@ -262,16 +267,45 @@ non-technical first-time user it is probably the highest-value item here.
 Each of these looks like styling and is not. All need `spec/FEATURES.md`
 updated first, and both apps to follow.
 
-1. **Surfacing `generateBlockedReason` inline** — §1 pins "says why on hover".
-2. **Hover-revealed History row buttons** — §2a enumerates them as visible.
-3. **Moving Settings prose into the help book** — §7 says "fields + help".
-4. **Log severity colours** — needs a `LogStore.Entry` field; changes §8.
-5. **First-run example prompts** — a new feature.
+1. **Surfacing `generateBlockedReason` inline** — §1, verbatim: "Generate is
+   unavailable until the mode has what it needs, **and says why on hover**".
+2. **Hover-revealed History row buttons** — §2a enumerates play, Download,
+   reveal-in-file-manager and Copy details as row affordances for an
+   explicitly non-technical audience. It does not literally say they must be
+   *visible*, so this one is an inference rather than a quotation — but hiding
+   four enumerated affordances behind hover is a change to argue in a PR, not
+   to slip into a tidy-up.
+3. **Moving Settings prose into the help book** — §7, verbatim: "**Models**:
+   the three per-mode source fields (repo ID or base URL) + help".
+4. **Log severity colours** — §8 specifies "timestamped, selectable,
+   monospaced lines" and has no concept of a level; `LogStore.Entry` carries
+   only `date` and `message`. Adding one changes both.
+5. **First-run example prompts** — a new feature. Nothing in the spec covers
+   it, which is the point: it needs adding there first.
 6. **Any custom mode control** separating History from the three modes — §1
-   and §2a both say segmented picker / fourth segment.
-7. **Adopting the website's dark palette wholesale** — breaks §7's
-   System/Light/Dark. The identity transfers as accent, gradient, eyebrow,
-   callout and pill; it does not transfer as a background colour.
+   opens "A segmented picker selects one of three modes", §2a opens "A fourth
+   segment beside the three generation modes".
+7. **Adopting the website's dark palette wholesale** — it would break the
+   System/Light/Dark setting the app ships (`AppAppearance` in
+   `BunyiApp.swift`, Settings → General). **That constraint is not in the
+   spec.** §7 lists Models, Storage and Backup only, and appearance appears
+   nowhere in `FEATURES.md` or `DATA-FORMATS.md` — a shipped feature with no
+   specification, which also means the .NET app has no way to know it needs
+   one. The constraint is real regardless; the gap is worth closing
+   separately.
+
+The identity transfers as accent, gradient, eyebrow, callout and pill. It does
+not transfer as a background colour.
+
+> **Two spec defects found while checking these citations**, both worth their
+> own PR rather than being fixed here:
+>
+> 1. The appearance setting (§7 above) is implemented and shipped but
+>    unspecified.
+> 2. §2a contradicts itself — its opening paragraph says "play/**pause** per
+>    row" while its detailed bullet says "play/**stop** … **No pause**", with
+>    reasons. The detailed bullet is what the app implements and is clearly
+>    the intent; the summary line is stale.
 
 ## Parity notes
 
