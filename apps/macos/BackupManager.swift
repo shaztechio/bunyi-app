@@ -34,10 +34,27 @@ final class BackupManager {
     enum Status: Equatable {
         case idle
         case working(String)
+        /// Stop was pressed and the child process is being torn down. A
+        /// distinct state because the work does not end the instant Stop is
+        /// pressed: `zip` has to die, a partial archive has to be removed, and
+        /// on a 23 GB backup that gap was long enough that nothing appeared to
+        /// happen — so Stop got pressed again. The engine already models this
+        /// for generation (`EngineStatus.stopping`); backup did not.
+        case stopping
         case done(String)
         case error(String)
 
         var isBusy: Bool {
+            switch self {
+            case .working, .stopping: true
+            default: false
+            }
+        }
+
+        /// Whether Stop can still do anything. False once stopping, so the
+        /// button can be disabled rather than inviting a second press that
+        /// only logs a second "Stopping…".
+        var canCancel: Bool {
             if case .working = self { return true }
             return false
         }
@@ -49,13 +66,25 @@ final class BackupManager {
 
     private let log = LogStore.shared
     private var currentTask: Task<Void, Never>?
+    /// The running progress poller, held so `cancel()` can stop it reporting.
+    private var sizeMonitor: Task<Void, Never>?
     /// Lets `cancel()` (main actor) terminate the child zip/ditto process
     /// created inside a detached task.
     private let running = RunningProcess()
 
     func cancel() {
-        guard status.isBusy else { return }
+        guard status.canCancel else { return }
         log.log("Stopping…")
+        status = .stopping
+        // The size monitor polls a directory the child process is in the
+        // middle of abandoning, so left running it reports the archive
+        // shrinking — "Archiving 0% — Zero kB" moments after Stop, which reads
+        // as the backup starting over rather than ending. It is an unstructured
+        // Task, so cancelling `currentTask` does not reach it; it has to be
+        // cancelled by hand.
+        sizeMonitor?.cancel()
+        sizeMonitor = nil
+        progress = nil
         running.cancel()
         currentTask?.cancel()
     }
@@ -94,6 +123,7 @@ final class BackupManager {
                 let monitor = startSizeMonitor(total: total, label: "Archiving") {
                     Self.directorySize(tempDir)
                 }
+                sizeMonitor = monitor
                 do {
                     try await Task.detached(priority: .utility) { [running] in
                         try Self.createZipStored(
