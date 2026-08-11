@@ -113,12 +113,18 @@ struct LogsView: View {
     private static func paddedTime(_ date: Date) -> String {
         let time = date.formatted(date: .omitted, time: .standard)
         // Long enough for a 12-hour clock with a spaced meridiem ("9:18:18
-        // p. m."); anything longer simply pushes its own line out rather than
+        // p. m."); anything longer pushes its own line out rather than
         // wrapping, which is the lesser failure.
         let width = 13
-        return time.count >= width
-            ? time + "  "
+        // Pad to the column, then always the same separator. The first draft
+        // branched — pad to `width` when short, append two spaces when not —
+        // which meant a timestamp of exactly `width` produced two more columns
+        // than one of `width - 1`, shifting its message right and breaking the
+        // alignment this exists to keep.
+        let padded = time.count >= width
+            ? time
             : time + String(repeating: " ", count: width - time.count)
+        return padded + "  "
     }
 
     private var empty: some View {
