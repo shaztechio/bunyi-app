@@ -86,6 +86,17 @@ struct ContentView: View {
         "Dylan", "Eric", "Ono_Anna", "Sohee",
     ]
 
+    /// Whether the script is effectively empty. Whitespace counts as nothing.
+    ///
+    /// Defined once because it was not: `canGenerate` and
+    /// `generateBlockedReason` trimmed, while `showExamples` used a plain
+    /// `isEmpty`. A single typed space therefore hid the examples and left
+    /// Generate disabled — restoring, with one keystroke, exactly the dead end
+    /// the examples exist to remove.
+    private var scriptIsBlank: Bool {
+        text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     /// Whether the current mode has everything it needs.
     ///
     /// Checked before the button is pressed rather than inside the engine: the
@@ -94,7 +105,7 @@ struct ContentView: View {
     /// download to be told a file is missing. Voice design had no check at all
     /// and would generate some arbitrary voice from an empty description.
     private var canGenerate: Bool {
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        guard !scriptIsBlank else {
             return false
         }
         switch mode {
@@ -110,7 +121,7 @@ struct ContentView: View {
     /// Why Generate is unavailable, shown on hover — a disabled button with no
     /// explanation is a dead end.
     private var generateBlockedReason: String? {
-        if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if scriptIsBlank {
             return "Enter some text to speak."
         }
         switch mode {
@@ -183,10 +194,13 @@ struct ContentView: View {
                     // the pickers around it correctly greyed out. Refusing hits
                     // is what actually stops typing; the opacity is what makes
                     // it look refused.
-                    textCard
-                        .disabled(engine.status.isBusy)
-                        .allowsHitTesting(!engine.status.isBusy)
-                        .opacity(engine.status.isBusy ? 0.6 : 1)
+                    VStack(alignment: .leading, spacing: Space.tight) {
+                        textCard
+                        exampleStrip
+                    }
+                    .disabled(engine.status.isBusy)
+                    .allowsHitTesting(!engine.status.isBusy)
+                    .opacity(engine.status.isBusy ? 0.6 : 1)
                     optionsCard
                         .disabled(engine.status.isBusy)
                 }
@@ -373,6 +387,78 @@ struct ContentView: View {
                         .allowsHitTesting(false)
                 }
             }
+    }
+
+    // MARK: First-run examples
+
+    /// Whether the examples are on screen (`FEATURES.md` §1).
+    ///
+    /// Two conditions, and the second is the one that is easy to miss. Empty
+    /// script is not by itself a first run: clearing the box after a
+    /// generation leaves the result playing in the bottom bar, and offering
+    /// "try one of these" beside audio the user just made reads as the app
+    /// forgetting what it just did. `lastOutputURL` is nil until a run
+    /// succeeds and is cleared again when the next one starts, so it is
+    /// exactly "there is no result on screen".
+    ///
+    /// Clone mode contributes no examples, so the strip is absent there
+    /// without a third condition here — see `TTSMode.examples`.
+    private var showExamples: Bool {
+        scriptIsBlank && engine.lastOutputURL == nil && !mode.examples.isEmpty
+    }
+
+    /// The clickable examples under the editor.
+    ///
+    /// `ViewThatFits` rather than a fixed row: the descriptions in voice
+    /// design are phrases, not words, and three of them do not fit across a
+    /// 620 pt window at the minimum size. One row when there is room, stacked
+    /// when there is not — truncating an example prompt would leave something
+    /// unreadable to click.
+    @ViewBuilder
+    private var exampleStrip: some View {
+        if showExamples {
+            VStack(alignment: .leading, spacing: Space.tight) {
+                Text(mode.examplePrompt)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: Space.tight) { exampleChips }
+                    VStack(alignment: .leading, spacing: Space.tight) {
+                        exampleChips
+                    }
+                }
+            }
+            // Left-aligned with the cards above and below, whichever branch
+            // ViewThatFits picks.
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    @ViewBuilder
+    private var exampleChips: some View {
+        ForEach(mode.examples, id: \.self) { example in
+            Button(example) { apply(example: example) }
+                .buttonStyle(ExampleChipStyle())
+        }
+    }
+
+    /// Fills the field the current mode's examples are for.
+    ///
+    /// Preset voice fills the script; **voice design fills `instruct`**, the
+    /// voice description, because that is the input that mode adds and the one
+    /// whose shape nobody guesses — the sentence to speak is the easy half.
+    /// So a design example leaves the script empty on purpose, and the strip
+    /// stays up until the user writes one.
+    private func apply(example: String) {
+        switch mode {
+        case .presetVoice:
+            text = example
+        case .voiceDesign:
+            instruct = example
+        case .voiceClone:
+            break   // no examples to click; see TTSMode.examples
+        }
     }
 
     // MARK: Per-mode options card
@@ -862,6 +948,95 @@ private extension TTSMode {
             return "Describe a brand-new voice in words."
         case .voiceClone:
             return "Copy a voice from a short reference clip."
+        }
+    }
+
+    /// One-click examples for an unused window (`FEATURES.md` §1).
+    ///
+    /// Preset voice offers sentences to speak. Voice design offers voice
+    /// *descriptions*, which is a different field — see `apply(example:)`.
+    ///
+    /// **Voice clone offers none, deliberately.** Its missing input on a first
+    /// run is a reference recording, and no example the app ships can be one.
+    /// A sentence to speak would fill the only input clone mode already has
+    /// and leave Generate exactly as unavailable, which teaches the wrong
+    /// thing about why the button is off. The Clip row says what to supply
+    /// instead ("5–10 s of clean speech").
+    ///
+    /// None of these repeat the placeholder text of the field they fill. A
+    /// suggestion that is word-for-word the grey text already on screen looks
+    /// like the app failed to have a second idea.
+    var examples: [String] {
+        switch self {
+        case .presetVoice:
+            return ["Hello! We'll begin in just a few minutes.",
+                    "Your table is ready — please follow me.",
+                    "Once upon a time, in a village by the sea…"]
+        case .voiceDesign:
+            return ["Warm documentary narrator, unhurried",
+                    "Bright young podcast host",
+                    "Calm late-night radio DJ"]
+        case .voiceClone:
+            return []
+        }
+    }
+
+    /// The line above the examples. It names the field they fill, since in
+    /// voice design that is not the box they sit under.
+    var examplePrompt: String {
+        switch self {
+        case .presetVoice: return "Not sure what to say? Try one:"
+        case .voiceDesign: return "Or describe a voice like one of these:"
+        // Never drawn — clone mode has no examples to introduce.
+        case .voiceClone:  return ""
+        }
+    }
+}
+
+// MARK: - Example chip
+
+/// One clickable example prompt.
+///
+/// A capsule rather than plain accent-coloured text: these sit directly under
+/// a text box, and words under a text box read as a caption unless something
+/// draws an edge around them. Filled only on hover, so three of them do not
+/// compete with the two cards or the Generate button for attention while the
+/// user reads the window.
+///
+/// Local to this file on purpose for now — `Theme.swift` is being changed in
+/// parallel, and a chip with exactly one caller does not need to be shared
+/// before it has a second. It belongs there once the two land, along with the
+/// hover-body pattern it duplicates from `RowIconButtonStyle`.
+private struct ExampleChipStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HoverBody(configuration: configuration)
+    }
+
+    /// `@State` on the style itself would be reset on every evaluation, since
+    /// a `ButtonStyle` is re-created each time — same reason
+    /// `RowIconButtonStyle` nests a view.
+    private struct HoverBody: View {
+        let configuration: Configuration
+        @State private var hovering = false
+
+        var body: some View {
+            configuration.label
+                .font(.caption)
+                .foregroundStyle(hovering ? AnyShapeStyle(.primary)
+                                          : AnyShapeStyle(.secondary))
+                .lineLimit(1)
+                .padding(.horizontal, Space.row)
+                .padding(.vertical, Space.hair)
+                .background {
+                    Capsule().fill(hovering ? AnyShapeStyle(.quaternary)
+                                            : AnyShapeStyle(Color.clear))
+                }
+                .overlay {
+                    Capsule().strokeBorder(Color.primary.opacity(0.12))
+                }
+                .contentShape(Capsule())
+                .onHover { hovering = $0 }
+                .opacity(configuration.isPressed ? 0.55 : 1)
         }
     }
 }

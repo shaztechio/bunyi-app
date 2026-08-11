@@ -37,6 +37,30 @@ A segmented picker selects one of three modes. macOS source:
   which on a first run means waiting out a multi-gigabyte download to be told
   a file is missing. Voice design had no check at all and would generate an
   arbitrary voice from an empty description.
+- **An unused window suggests something to click.** The first frame is
+  otherwise an empty box, a "ready" line and a button that does not work —
+  which for a non-technical audience is a dead end rather than a starting
+  point. So while the script is empty and no result is on screen, the mode
+  offers two or three example prompts, one click each:
+  - **Preset voice** offers short sentences and fills the script with the one
+    clicked.
+  - **Voice design** offers voice descriptions and fills the **voice
+    description** field, not the script. That field is what the mode adds and
+    is the one input whose shape nobody guesses; the script is a sentence
+    anyone can write.
+  - **Voice clone** gets none. What it lacks on a first run is a reference
+    recording, which the app cannot supply, so filling in the one input it
+    already has would leave Generate exactly as unavailable — an example that
+    does not unblock anything teaches the wrong thing about why the button is
+    off.
+
+  An example is ordinary prefilled text, editable afterwards: not a preset, not
+  a mode, and nothing is recorded about which one was used. They disappear as
+  soon as the script has anything in it, and **do not return over a generated
+  result** — an invitation to try something belongs to a window that has not
+  been used yet, not beside audio the user just made. They are inputs, so §2's
+  rule covers them: disabled while work is in progress.
+
 - **Emotion for clones is not supported** by the 12 Hz Base model. Do not
   add an emotion field to clone mode. Emotion for a cloned voice must come
   from the reference clip's own delivery. (Tracked upstream: 25 Hz models.)

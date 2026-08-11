@@ -329,6 +329,29 @@ prompts when `text.isEmpty` and nothing has been generated would fix it.
 implement it. Listed last for that reason, not because it is low value — for a
 non-technical first-time user it is probably the highest-value item here.
 
+> **Done**, spec first: `FEATURES.md` §1 now carries the behaviour, and the
+> .NET app inherits it from there.
+>
+> Three decisions this section did not pin. **The examples differ per mode**,
+> because the modes do not want the same thing: preset voice offers sentences
+> and fills the script, voice design offers voice *descriptions* and fills
+> `instruct` — the field that mode adds, and the one whose shape nobody
+> guesses — so a design example deliberately leaves the script empty.
+> **Voice clone gets none at all**: what it is missing on a first run is a
+> reference recording, which no shipped example can be, so filling its script
+> would leave Generate exactly as unavailable and misdirect the user about
+> why.
+>
+> **"Nothing generated yet" is a real condition, not a restatement of
+> `text.isEmpty`.** Clearing the box after a run leaves the result in the
+> bottom bar, and suggestions beside audio the user just made read as the app
+> forgetting what it did — so the strip also requires `lastOutputURL == nil`.
+>
+> The chips sit inside the editor's `.disabled` group rather than carrying
+> their own copy of the condition, which is the same by-construction argument
+> Stage 5 made for the toolbar, pointed the other way: inputs belong inside the
+> scope, always-available actions outside it.
+
 ## Behaviour changes in visual clothing
 
 Each of these looks like styling and is not. All need `spec/FEATURES.md`
