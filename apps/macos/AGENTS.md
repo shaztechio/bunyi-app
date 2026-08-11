@@ -204,6 +204,12 @@ certificate.
 
 ## Roadmap
 
+0. Make the window look designed. [`UI-PLAN.md`](UI-PLAN.md) is a staged plan,
+   one PR per stage, starting with three layout bugs — centered option rows,
+   cards with no visible edge, and no accent colour, so the app renders in
+   whatever accent the user's System Settings happen to carry. Read its last
+   two sections before touching anything: several changes that look like
+   styling are behaviour changes the spec pins, and a few are parity traps.
 1. Batch mode: one WAV per line from a dropped .txt script.
 2. Optional smaller default model for distribution
    (`AtomGradient/Qwen3-TTS-0.6B-CustomVoice-4bit-pruned-vocab-lite`, 808 MB)
