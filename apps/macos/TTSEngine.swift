@@ -1023,6 +1023,15 @@ final class TTSEngine {
         // thread (see `EngineStatus.stopping`); clearing the cache while it is
         // still allocating would hand back buffers it is about to ask for
         // again, which is churn rather than a saving.
+        //
+        // A nil `pendingWork` is not a gap in that. Only two other points can
+        // throw cancellation, and neither leaves MLX working: the check before
+        // the save runs after the stream has ended, with the audio still an
+        // unevaluated graph nothing is touching; and a cancellation during the
+        // detached save cannot arrive here at all, because `try await
+        // task.value` on an unstructured task does not throw when the awaiting
+        // task is cancelled — it waits for the save, and the success path
+        // below releases the cache once it is done.
         releaseGenerationMemory()
         status = .idle
         log.log("Stopped the current operation")
