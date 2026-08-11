@@ -12,6 +12,13 @@ models auto-download with a progress bar, three modes (preset voices, voice
 design, voice cloning), and outputs are playable WAVs. Built to run natively
 on **macOS, Windows, and Linux**.
 
+![The Bunyi window in Preset voice mode. A mode switcher across the top —
+Preset voice, Voice design, Voice clone, History — above an empty script field
+offering three example prompts to click. Below it, rows for Language, Speaker
+and Style, and a Generate button reading "Ready — press Command Return to
+generate". Doctor, Logs and Help sit in the window
+toolbar.](docs/assets/screenshot-macos.png)
+
 Home: [bunyi.app](https://bunyi.app)
 
 **Download:** [Bunyi 1.0.0](https://github.com/shaztechio/bunyi-app/releases/latest)
