@@ -36,6 +36,14 @@ struct ContentView: View {
 
     @State private var engine = TTSEngine()
 
+    /// The report being shown, if any. Nil means no dialog — including the
+    /// common case of a clean preflight, which must be invisible.
+    @State private var doctorReport: DoctorReport?
+    /// Set when the report is the reason a generation did not start, so the
+    /// dialog can say so rather than looking like an unprompted health check.
+    @State private var doctorBlockedRun = false
+    @State private var doctorRunning = false
+
     @State private var tab: MainTab = .generate(.presetVoice)
 
     /// The generation mode the rest of the view works with. Selecting History
@@ -234,6 +242,18 @@ struct ContentView: View {
                 selectedVoiceID = nil   // a fresh clip is no longer a saved voice
             }
         }
+        // A real binding, matching History's: dismissing with Escape clears the
+        // report, so it does not reappear the moment anything redraws.
+        .sheet(isPresented: Binding(
+            get: { doctorReport != nil },
+            set: { if !$0 { doctorReport = nil } }
+        )) {
+            if let report = doctorReport {
+                DoctorView(report: report, blockedRun: doctorBlockedRun) {
+                    doctorReport = nil
+                }
+            }
+        }
         .alert("Save this voice", isPresented: $showSaveVoice) {
             TextField("Name", text: $newVoiceName)
             Button("Save") { saveCurrentVoice() }
@@ -319,7 +339,22 @@ struct ContentView: View {
     /// comment had to defend. A toolbar is outside that scope by construction.
     @ToolbarContentBuilder
     private var windowToolbar: some ToolbarContent {
+        // Ordered by how far the answer is from the app: Doctor decides
+        // whether it can run at all, Logs says what it did, Help explains what
+        // it is. All three sit in this group and not beside Generate, because
+        // all three are wanted most while something is wrong — which is often
+        // while something is running. The group is outside the
+        // `.disabled(engine.status.isBusy)` scope, so that holds by
+        // construction rather than by remembering.
         ToolbarItemGroup(placement: .primaryAction) {
+            Button {
+                runDoctorOnDemand()
+            } label: {
+                Label("Doctor", systemImage: "stethoscope")
+            }
+            .help("Check whether this Mac can generate audio")
+            .disabled(doctorRunning)
+
             // Window → Logs (⌘L) already opens this. The button is here for
             // the same reason the help one is: when a run is slow or fails,
             // the log is the answer, and nobody finds it in a menu.
@@ -754,6 +789,20 @@ struct ContentView: View {
 
     // MARK: Actions
 
+    /// The toolbar run: every finding, passes included, and the slow integrity
+    /// check that the pre-generation run cannot afford.
+    private func runDoctorOnDemand() {
+        guard !doctorRunning else { return }
+        doctorRunning = true
+        Task {
+            let report = await Doctor.run(mode: mode, engine: engine, deep: true)
+            for line in report.logLines { LogStore.shared.log(line) }
+            doctorBlockedRun = false
+            doctorReport = report
+            doctorRunning = false
+        }
+    }
+
     private func generate() {
         player?.stop()
         isPlaying = false
@@ -766,6 +815,24 @@ struct ContentView: View {
         // back to the file from before.
         engine.clearLastOutput()
         genTask = Task {
+            // Before `engine.generate`, so a blocker is reported before a
+            // download starts rather than after several gigabytes of one. Deep
+            // checks are left out: hashing the weights ahead of every run would
+            // cost more than the corruption it catches.
+            let report = await Doctor.run(mode: mode, engine: engine)
+            guard report.isClear else {
+                for line in report.logLines { LogStore.shared.log(line) }
+                doctorBlockedRun = true
+                doctorReport = report
+                return
+            }
+            // Warnings do not stop anything, but they are the explanation when
+            // a run is slow later, so they go to the log where that question
+            // gets asked.
+            for warning in report.warnings {
+                LogStore.shared.log(
+                    "Doctor: [warning] \(warning.title) — \(warning.detail)")
+            }
             await engine.generate(
                 mode: mode,
                 text: text,

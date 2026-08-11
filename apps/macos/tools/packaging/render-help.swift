@@ -48,9 +48,13 @@ func replacingMatches(in value: String, pattern: String, template: String) -> St
 
 func inlineMarkdown(_ value: String) -> String {
     var rendered = escapeHTML(value)
+    // Fragments as well as absolute URLs. Without the second alternative a
+    // link to another section of this book renders as literal brackets in the
+    // finished page — silently, since nothing here fails, and the only way to
+    // notice is to read the built book rather than the Markdown.
     rendered = replacingMatches(
         in: rendered,
-        pattern: #"\[([^\]]+)\]\((https?://[^\s\)]+)\)"#,
+        pattern: #"\[([^\]]+)\]\((https?://[^\s\)]+|#[A-Za-z0-9\-]+)\)"#,
         template: #"<a href="$2">$1</a>"#
     )
     rendered = replacingMatches(in: rendered, pattern: #"`([^`]+)`"#, template: #"<code>$1</code>"#)

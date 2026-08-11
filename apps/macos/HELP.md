@@ -127,11 +127,27 @@ This tab also shows ready-made download commands, one per mode, if you would rat
 
 Both show progress and can be stopped part way.
 
+## Doctor
+
+The **stethoscope** in the toolbar checks whether this Mac can finish a generation, and tells you what it found.
+
+It looks at whether the model for the current mode is downloaded, whether there is room on the disk for it, whether there is memory to load it, whether the server it comes from is answering, and whether Bunyi can write into the folder it saves to. Ask it directly and it also checks the files you have already downloaded against the checksums your server publishes — this is what catches a model that arrived incomplete and would otherwise load and produce nonsense.
+
+Every check is reported, including the ones that passed. **Copy** puts the findings on the clipboard, and they are written to the Logs as well, so they are easy to include when you describe a problem to somebody.
+
+The report names the mode it checked, because the three modes use different models. The History tab is not a generation mode, so a check started there reports on the mode you generated with last.
+
+Doctor stays available while Bunyi is working, which is usually when you want it.
+
+**Bunyi also runs these checks by itself before every generation** — without the checksum one, which is too slow to run every time. If something would stop the run, such as no room on the disk or a server that is not answering, it says so before the download starts rather than after several gigabytes of it. Running low on memory never stops a generation: it is noted in the Logs instead, because a Mac short of memory still finishes, just more slowly. When nothing is wrong you will not see anything at all.
+
 ## Logs
 
 **Window → Logs**, or **⌘L**, opens a running account of what Bunyi is doing: downloads, transcription, generation progress, where each file was saved, and the full text of any error. Select and copy from it when you want to report a problem.
 
 ## If something goes wrong
+
+**Start with the stethoscope.** It checks the things that most often stop a generation — disk space, memory, a model that has not downloaded, a server that is not answering — and says which one it is. See [Doctor](#doctor).
 
 **A download seems stuck.** Model files are big, and the progress bar can look frozen while a single multi-gigabyte file is being written. Bunyi watches the bytes actually arriving on disk and says so in the status line if nothing new has arrived for a while. Check the Logs window for detail.
 

@@ -35,6 +35,8 @@ targets:
       - HistoryView.swift
       - HTTPFileDownloader.swift
       - DownloadedModels.swift
+      - Doctor.swift
+      - DoctorView.swift
       - ModelConfigLibrary.swift
       - OutputMetadata.swift
       - ModelSettings.swift
