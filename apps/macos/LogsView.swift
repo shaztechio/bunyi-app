@@ -23,22 +23,6 @@ import SwiftUI
 struct LogsView: View {
     private let store = LogStore.shared
 
-    /// The timestamp column.
-    ///
-    /// `UI-PLAN.md` says 62. Measured, 62 truncates: this view draws the
-    /// monospaced 10 pt caption, in which "10:04:37 PM" is 68 pt wide, so a
-    /// 62 pt column would clip the meridiem off every afternoon line in a
-    /// 12-hour locale — and a timestamp reading "10:04:37 P…" is worse than the
-    /// misalignment this column exists to fix. 70 clears the widest form with a
-    /// hair to spare. A 24-hour locale needs only 50 and simply gets a wider
-    /// gutter; the column is fixed so that the messages line up, which is the
-    /// whole point, and that rules out sizing it to the content.
-    ///
-    /// Local to this file because `Theme.swift` is being changed elsewhere this
-    /// round. If a second view ever needs a timestamp column, this belongs
-    /// beside `OptionRow` as a measurement rather than in `Space`.
-    private static let timeColumn: CGFloat = 70
-
     var body: some View {
         Group {
             if store.entries.isEmpty {
@@ -96,32 +80,51 @@ struct LogsView: View {
     /// spaces, and is deliberately untouched: this is what the window looks
     /// like, not what Copy produces.
     private func line(_ entry: LogStore.Entry) -> some View {
-        // First-text-baseline so the timestamp sits on the message's *first*
-        // line once the message wraps, rather than being centred against the
-        // whole block.
-        HStack(alignment: .firstTextBaseline, spacing: Space.tight) {
-            Text(entry.date.formatted(date: .omitted, time: .standard))
-                // `design: .monospaced` is a request, not a guarantee — where
-                // the face is substituted, monospacedDigit still pins 1 to the
-                // width of 8, which is what keeps the column a column. Tertiary
-                // so the eye can skip a timestamp it is not reading.
-                .monospacedDigit()
-                .foregroundStyle(.tertiary)
-                // One line, always. The column was measured against "10:04:37
-                // PM"; a locale with a longer meridiem — Spanish writes
-                // "p. m." — can exceed it, and without this the timestamp
-                // wraps onto a second line, growing the row and pulling the
-                // message's first line out of alignment with it. Truncating a
-                // time nobody is reading character-by-character is the better
-                // failure of the two.
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .frame(width: Self.timeColumn, alignment: .leading)
+        // One `Text`, not two in an HStack.
+        //
+        // Splitting the line gave the timestamp its own column and let a long
+        // message hang-indent under itself — but it also gave each half its
+        // own selection scope, so dragging across the window selected a single
+        // line, or just its timestamp. This window exists to be copied out of;
+        // losing that costs more than the indent was worth.
+        //
+        // Concatenating with `+` produces a single `Text` with two styled
+        // runs, which selects and drags as one piece the way it did before.
+        // The column survives because the whole line is monospaced and the
+        // time is padded to a fixed width — with every glyph the same width,
+        // equal characters mean equal columns. What does not survive is the
+        // hanging indent: a wrapped message returns to the left edge.
+        (Text(Self.paddedTime(entry.date))
+            .foregroundStyle(.tertiary)
+         + Text(entry.message))
+            .font(.system(.caption, design: .monospaced))
+            .monospacedDigit()
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
 
-            Text(entry.message)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .font(.system(.caption, design: .monospaced))
+    /// The timestamp, padded to a fixed width so the messages line up.
+    ///
+    /// Padded rather than framed: a frame needs two views, and two views is
+    /// what broke selection. Trailing spaces are part of the copied text, but
+    /// `LogStore.text` builds the clipboard string itself and is untouched, so
+    /// the Copy button is unaffected — this only affects a manual drag, where
+    /// a couple of spaces before each message is what the old single-`Text`
+    /// version produced anyway.
+    private static func paddedTime(_ date: Date) -> String {
+        let time = date.formatted(date: .omitted, time: .standard)
+        // Long enough for a 12-hour clock with a spaced meridiem ("9:18:18
+        // p. m."); anything longer pushes its own line out rather than
+        // wrapping, which is the lesser failure.
+        let width = 13
+        // Pad to the column, then always the same separator. The first draft
+        // branched — pad to `width` when short, append two spaces when not —
+        // which meant a timestamp of exactly `width` produced two more columns
+        // than one of `width - 1`, shifting its message right and breaking the
+        // alignment this exists to keep.
+        let padded = time.count >= width
+            ? time
+            : time + String(repeating: " ", count: width - time.count)
+        return padded + "  "
     }
 
     private var empty: some View {
