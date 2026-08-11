@@ -107,6 +107,15 @@ struct LogsView: View {
                 // so the eye can skip a timestamp it is not reading.
                 .monospacedDigit()
                 .foregroundStyle(.tertiary)
+                // One line, always. The column was measured against "10:04:37
+                // PM"; a locale with a longer meridiem — Spanish writes
+                // "p. m." — can exceed it, and without this the timestamp
+                // wraps onto a second line, growing the row and pulling the
+                // message's first line out of alignment with it. Truncating a
+                // time nobody is reading character-by-character is the better
+                // failure of the two.
+                .lineLimit(1)
+                .truncationMode(.tail)
                 .frame(width: Self.timeColumn, alignment: .leading)
 
             Text(entry.message)
