@@ -29,6 +29,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 {
     private readonly ITtsEngine _engine;
     private readonly IAudioPlayer _player;
+    private readonly IBatchTimer? _ticker;
     private readonly ILogSink _log;
 
     [ObservableProperty] private TtsMode _mode = TtsMode.PresetVoice;
@@ -43,6 +44,40 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string? _lastOutputPath;
     [ObservableProperty] private bool _isPlaying;
 
+    /// <summary>How far through the clip playback is, from 0 to 1.</summary>
+    [ObservableProperty] private double _playProgress;
+
+    /// <summary>How far into the clip playback has reached.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ElapsedText))]
+    private TimeSpan _elapsed;
+
+    /// <summary>The clip's length.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DurationText))]
+    private TimeSpan _duration;
+
+    /// <summary>The position, as minutes and seconds.</summary>
+    public string ElapsedText => Clock(Elapsed);
+
+    /// <summary>The length, as minutes and seconds.</summary>
+    public string DurationText => Clock(Duration);
+
+    /// <summary>
+    /// A duration as <c>m:ss</c>, matching macOS.
+    /// </summary>
+    /// <remarks>
+    /// Rounded down rather than to nearest, so the elapsed time never shows a
+    /// second the clip has not reached — and never briefly reads past the
+    /// total at the end.
+    /// </remarks>
+    internal static string Clock(TimeSpan time)
+    {
+        var total = (int)Math.Max(0, Math.Floor(time.TotalSeconds));
+        return string.Create(
+            System.Globalization.CultureInfo.InvariantCulture, $"{total / 60}:{total % 60:00}");
+    }
+
     /// <summary>
     /// Whether History is showing instead of a generation mode (spec §2a).
     /// </summary>
@@ -53,11 +88,21 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty] private bool _showingHistory;
 
     public MainViewModel(
-        ITtsEngine engine, IAudioPlayer player, ILogSink log, Func<string>? outputFolder = null)
+        ITtsEngine engine,
+        IAudioPlayer player,
+        ILogSink log,
+        Func<string>? outputFolder = null,
+        IBatchTimerFactory? timers = null)
     {
         _engine = engine ?? throw new ArgumentNullException(nameof(engine));
         _player = player ?? throw new ArgumentNullException(nameof(player));
         _log = log ?? throw new ArgumentNullException(nameof(log));
+
+        // Ten times a second: fast enough that the bar moves smoothly, slow
+        // enough to cost nothing. Stopped whenever nothing is playing.
+        _ticker = (timers ?? new DispatcherTimerFactory())
+            .Create(TimeSpan.FromMilliseconds(100), TickPlayback);
+        _ticker.Stop();
 
         History = new HistoryViewModel(
             player, log, outputFolder ?? (() => Core.Infrastructure.AppPaths.Outputs));
@@ -65,7 +110,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         Speakers = [.. FallbackSpeakers.All];
 
         _engine.StatusChanged += OnEngineStatusChanged;
-        _player.Finished += (_, _) => UiThread.Post(() => IsPlaying = false);
+        _player.Finished += (_, _) => UiThread.Post(StopPlayback);
     }
 
     /// <summary>
@@ -92,6 +137,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// because the report says which mode it is about.
     /// </remarks>
     public Func<TtsMode, bool, CancellationToken, Task<DoctorReport>>? Doctor { get; init; }
+
+    /// <summary>The Logs window's state, or null when there is no log to show.</summary>
+    public LogsViewModel? Logs { get; init; }
 
     /// <summary>Shows a report, supplied by the view.</summary>
     public Func<DoctorReport, Task>? ShowReport { get; set; }
@@ -299,13 +347,52 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         if (IsPlaying)
         {
-            _player.Stop();
-            IsPlaying = false;
+            StopPlayback();
             return;
         }
 
         IsPlaying = true;
         _player.Play(LastOutputPath);
+        _ticker?.Start();
+    }
+
+    /// <summary>
+    /// Moves the playback bar, and notices a clip that reached its end.
+    /// </summary>
+    /// <remarks>
+    /// Read from the player rather than counted off a timer started beside it,
+    /// so a clip that stalls does not leave the bar advancing over audio that
+    /// is not moving. History does the same for its ring.
+    /// </remarks>
+    internal void TickPlayback()
+    {
+        if (!IsPlaying)
+        {
+            _ticker?.Stop();
+            return;
+        }
+
+        var duration = _player.Duration;
+        Elapsed = _player.Position;
+        Duration = duration;
+
+        // Clamped: Position can overshoot Duration slightly on the last tick,
+        // and an unclamped fraction pushes the fill past the end of the track.
+        PlayProgress = duration > TimeSpan.Zero
+            ? Math.Clamp(_player.Position / duration, 0, 1)
+            : 0;
+
+        if (!_player.IsPlaying && PlayProgress > 0) StopPlayback();
+    }
+
+    private void StopPlayback()
+    {
+        _ticker?.Stop();
+        if (_player.IsPlaying) _player.Stop();
+
+        IsPlaying = false;
+        PlayProgress = 0;
+        Elapsed = TimeSpan.Zero;
     }
 
     [RelayCommand]

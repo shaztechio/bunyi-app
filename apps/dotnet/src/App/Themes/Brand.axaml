@@ -42,14 +42,29 @@ limitations under the License.
   <CornerRadius x:Key="BunyiPillRadius">999</CornerRadius>
   <sys:Double x:Key="BunyiIconButtonSize">32</sys:Double>
 
+  <!--
+    The monospaced face, for the Logs window and for code in Help.
+
+    A stack rather than one name, because no single monospaced font ships on
+    both Windows and Linux: Consolas is Windows', DejaVu Sans Mono is on
+    essentially every desktop Linux, and "monospace" is the last resort the
+    font manager resolves itself. §8 asks for monospaced by name — timestamps
+    are read down a column, and proportional digits make that harder than it
+    needs to be.
+  -->
+  <FontFamily x:Key="BunyiMono">Consolas, DejaVu Sans Mono, Menlo, monospace</FontFamily>
+
   <ResourceDictionary.ThemeDictionaries>
     <ResourceDictionary x:Key="Default">
       <SolidColorBrush x:Key="BunyiAccent" Color="#5C54F5" />
       <SolidColorBrush x:Key="BunyiCardBorder" Color="#22000000" />
+      <!-- A recessed panel: the log reads as something the window contains. -->
+      <SolidColorBrush x:Key="BunyiSurface" Color="#08000000" />
     </ResourceDictionary>
     <ResourceDictionary x:Key="Dark">
       <SolidColorBrush x:Key="BunyiAccent" Color="#7B72F0" />
       <SolidColorBrush x:Key="BunyiCardBorder" Color="#33FFFFFF" />
+      <SolidColorBrush x:Key="BunyiSurface" Color="#14FFFFFF" />
     </ResourceDictionary>
   </ResourceDictionary.ThemeDictionaries>
 </ResourceDictionary>

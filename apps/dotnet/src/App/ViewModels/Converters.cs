@@ -92,6 +92,46 @@ public sealed class PlayGlyph : IValueConverter
 }
 
 /// <summary>
+/// The play button's tooltip, which says what pressing it will do.
+/// </summary>
+public sealed class PlayTip : IValueConverter
+{
+    public static PlayTip Instance { get; } = new();
+
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        value is true ? "Stop" : "Play the result again";
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
+}
+
+/// <summary>
+/// A 0-to-1 fraction as a width in pixels.
+/// </summary>
+/// <remarks>
+/// The filled half of the playback bar, drawn as a plain Border rather than a
+/// ProgressBar — see MainWindow.axaml for why. Clamped, because a fraction
+/// slightly over 1 on the last tick would draw past the end of the track.
+/// </remarks>
+public sealed class BarWidth : IValueConverter
+{
+    public static BarWidth Instance { get; } = new();
+
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+    {
+        var fraction = value is double d ? d : 0;
+        var full = parameter is string s && double.TryParse(s, NumberStyles.Float, culture, out var w)
+            ? w
+            : 0;
+
+        return Math.Clamp(fraction, 0, 1) * full;
+    }
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
+}
+
+/// <summary>
 /// The copy button's label, which acknowledges the copy.
 /// </summary>
 /// <remarks>

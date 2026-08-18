@@ -77,11 +77,11 @@ limitations under the License.
                 ToolTip.Tip="Doctor — can this machine generate right now?">
           <Path Data="{DynamicResource IconDoctor}" />
         </Button>
-        <Button Classes="icon" Name="LogsButton"
+        <Button Classes="icon" Click="OnLogsClicked" Name="LogsButton"
                 ToolTip.Tip="Logs — what Bunyi has been doing">
           <Path Data="{DynamicResource IconLogs}" />
         </Button>
-        <Button Classes="icon" Name="HelpButton"
+        <Button Classes="icon" Click="OnHelpClicked" Name="HelpButton"
                 ToolTip.Tip="Help — how to use Bunyi">
           <Path Data="{DynamicResource IconHelp}" />
         </Button>
@@ -109,11 +109,55 @@ limitations under the License.
                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
           <Button Classes="icon" Name="PlayButton" Command="{Binding PlayCommand}"
-                  IsVisible="{Binding HasResult}" ToolTip.Tip="Play the result again">
-            <Path Data="{DynamicResource IconPlayRound32}"
-                  Fill="{Binding $parent[Button].Foreground}" Stroke="{x:Null}"
-                  Stretch="None" Width="32" Height="32" />
+                  IsVisible="{Binding HasResult}"
+                  ToolTip.Tip="{Binding IsPlaying, Converter={x:Static vm:PlayTip.Instance}}">
+            <Panel>
+              <!--
+                Play is replaced by Stop while a clip runs, as in History and
+                on macOS. A button whose picture never changes gives no way to
+                tell a clip that is playing from one that has finished.
+
+                Both are drawn at final size with the centre of area already on
+                the button's centre; see Icons.axaml for why Stretch cannot do
+                this for a triangle.
+              -->
+              <Path Data="{DynamicResource IconPlayRound32}"
+                    Fill="{Binding $parent[Button].Foreground}" Stroke="{x:Null}"
+                    Stretch="None" Width="32" Height="32"
+                    IsVisible="{Binding !IsPlaying}" />
+              <Path Data="{DynamicResource IconStopRound32}"
+                    Fill="{Binding $parent[Button].Foreground}" Stroke="{x:Null}"
+                    Stretch="None" Width="32" Height="32"
+                    IsVisible="{Binding IsPlaying}" />
+            </Panel>
           </Button>
+
+          <!--
+            §2's playback progress, as on macOS: a thin bar with the elapsed
+            and total time under it. Only while something is playing — a bar
+            sitting at zero next to a finished clip reads as a stalled one.
+
+            Two Borders rather than a ProgressBar. A ProgressBar animates
+            between values, which is invisible while the fraction creeps
+            forward and very visible at the end, where it drops the full width
+            at once and reads as the bar draining backwards. The macOS app
+            reached the same conclusion for the same reason.
+          -->
+          <StackPanel Name="PlaybackBar" Width="130" VerticalAlignment="Center" Spacing="3"
+                      IsVisible="{Binding IsPlaying}">
+            <Border Height="4" CornerRadius="2" Background="{DynamicResource BunyiSurface}">
+              <Border Height="4" CornerRadius="2" HorizontalAlignment="Left"
+                      Background="{DynamicResource BunyiAccent}"
+                      Width="{Binding PlayProgress, Converter={x:Static vm:BarWidth.Instance},
+                                      ConverterParameter=130}" />
+            </Border>
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <TextBlock Grid.Column="0" Text="{Binding ElapsedText}" FontSize="10" Opacity="0.7"
+                         FontFamily="{DynamicResource BunyiMono}" />
+              <TextBlock Grid.Column="2" Text="{Binding DurationText}" FontSize="10" Opacity="0.7"
+                         FontFamily="{DynamicResource BunyiMono}" />
+            </Grid>
+          </StackPanel>
           <Button Classes="icon" Name="RevealButton" Command="{Binding RevealCommand}"
                   IsVisible="{Binding HasResult}" ToolTip.Tip="Show the file on disk">
             <Path Data="{DynamicResource IconFolder}" />

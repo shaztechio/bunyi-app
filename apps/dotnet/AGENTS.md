@@ -2,11 +2,10 @@
 
 > **Status: preset voice works end to end; two of the three modes do not
 > exist yet.**
-> Spec sections §1 (preset voice only), §2, §2a, §3, §7, §8, §9 and §11 are
-> implemented, with the main window, History, Settings and Doctor. Voice design
-> (§1, §8 of the plan's M8), transcription (§4), voice clone, the saved voices
-> library (§5), backup and restore (§6), the logs and help windows (§8, §10)
-> and packaging are still to come.
+> Spec sections §1 (preset voice only), §2, §2a, §3, §7, §8, §9, §10 and §11
+> are implemented, with the main window, History, Settings, Doctor, Logs and
+> Help. Voice design, transcription (§4), voice clone, the saved voices library
+> (§5), backup and restore (§6) and packaging are still to come.
 >
 > `dotnet build`, `dotnet test` and a self-contained `dotnet publish` are green
 > on Windows and Linux, and CI runs all three on both. The research gate is
@@ -134,6 +133,23 @@ versions are already pinned centrally for when they do.
 | §1/§2 main window | `ContentView.swift` | `ViewModels.MainViewModel`, `Views.MainWindow` |
 | §1 readiness + examples | `ContentView.canGenerate` | `Engine.GenerationReadiness`, `ExamplePrompts` |
 | §2 playback | `AVAudioPlayer` | `Audio.IAudioPlayer` / `SoundFlowAudioPlayer` |
+
+## Help text
+
+`HELP.md` is the only copy of the user-facing help text, and it is an
+**EmbeddedResource** in `Bunyi.App` rather than a file beside the executable —
+a portable build is a folder someone copies about, and help that lives outside
+the assembly is help that goes missing.
+
+- `src/Core/Help/HelpDocument.cs` parses it: headings, paragraphs, bulleted and
+  numbered lists, fenced code, and inline bold/italic/code/links. That is the
+  whole subset, and it matches what the macOS renderer supports. Keep `HELP.md`
+  inside it.
+- The parse lives in Core so it is testable with no UI. `HelpWindow` only turns
+  blocks into controls.
+- It is **not** a copy of `apps/macos/HELP.md`. This app has one working mode,
+  so the text describes what exists here and says plainly what does not — a
+  test fails on Finder/-Command-/"your Mac" wording.
 
 ## Rules
 
