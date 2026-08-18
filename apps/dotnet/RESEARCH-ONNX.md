@@ -290,7 +290,94 @@ That has three consequences:
 2. §2's "release the runtime's working memory once the output is written" is
    load-bearing here, not housekeeping.
 3. A 16 GB machine is marginal for long text even at 0.6B. The 1.7B design
-   model at `int4` needs measuring before any promise is made about it.
+   model at `int4` has now been measured — see below — and costs less, not
+   more.
+
+### The 1.7B `int4` design model costs *less* than the 0.6B we already ship
+
+Measured 2026-08-18, on the same machine and by the same method as the table
+above: every session the reference pipeline creates, plus every embedding it
+loads, held at once and nothing released. That is the floor a generation starts
+from, not its peak — there is no C# design pipeline to run yet, which is M8.
+
+| | 0.6B CustomVoice (shipping) | 1.7B VoiceDesign `int4` |
+|---|---|---|
+| Download | 5.88 GB (4.46 GB required) | **5.85 GB** |
+| 4 ONNX sessions, resident | 4.56 GB | **2.25 GB** |
+| Embeddings loaded as arrays | none — they are inside the graphs | 1.56 GB |
+| **Static floor** | **4.56 GB** | **3.82 GB** |
+
+**The bigger model is 0.74 GB cheaper.** `int4` more than pays for 2.8x the
+parameters: the design export's four graphs carry 4.26 GB of external data but
+sit at 2.25 GB resident, because ONNX external data is memory-mapped and only
+what is touched becomes resident. The 0.6B export is not quantised, so its
+weights cost what they weigh.
+
+The download is the same size either way — 5.85 GB against 5.88 GB — so design
+mode is no larger a first-run ask than the mode already shipping. Only the
+`int4/` subfolder is fetched; `fp32/` is 12.70 GB and is never touched.
+
+### Long text will cost the same in both modes
+
+The static floor is only half the question, because §11's real problem is that
+memory grows with output length. That growth is the KV cache, and its size per
+token is set by `layers x kv_heads x head_dim` — **not** by hidden size:
+
+| | 0.6B CustomVoice | 1.7B VoiceDesign |
+|---|---|---|
+| `num_hidden_layers` | 28 | 28 |
+| `num_key_value_heads` | 8 | 8 |
+| `head_dim` | 128 | 128 |
+| `hidden_size` | 1024 | **2048** |
+
+The three terms that drive the cache are identical; only `hidden_size` doubles,
+and that lands in the weights, which is a one-off already counted above. So the
+per-frame growth measured for preset voice should apply unchanged to design,
+and the difference between the two modes is the static delta:
+
+```
+peak_design(n frames)  ~=  peak_preset(n frames) - 0.74 GB
+```
+
+Against the peaks measured earlier, that puts design mode at roughly **8.0 GB
+for a short clip and 17 GB for 22 s of audio** — a little better than the mode
+that ships today.
+
+**So the answer to "is design mode usable on 16 GB" is: exactly as usable as
+preset voice already is, which is to say fine for short text and marginal for
+long.** That was the open question blocking M8; it is not a reason to change
+scope. The risk that design mode would need a machine class of its own is
+closed.
+
+Two caveats worth keeping:
+
+- **These are floors, not peaks.** Memory-mapped weights become resident as
+  inference touches them, so the design floor will rise during a real run. The
+  comparison holds because both exports were measured the same way, and both
+  are mapped; the absolute figures are not generation peaks.
+- **The growth term is assumed, not measured, for 1.7B.** It rests on the
+  configs matching, which they do exactly. M8 should re-measure a real
+  generation and correct this if it does not hold.
+
+### Where the growth actually comes from, and an experiment for M8
+
+Per-frame growth for the 0.6B works out at ~44 MB/frame on Windows (8.73 GB at
+64 frames, 17.68 GB at 267) and ~43 MB/frame on Linux — reproducible, and far
+too large to be the KV cache itself, which is 0.229 MB/token at this geometry.
+
+The likely explanation is the arena. ONNX has no in-place KV cache: every
+decode step takes the whole cache in and hands a new one back, one token
+longer, so **every step allocates a block of a size no previous step used**. An
+arena that grows rather than reuses would then hold the sum of every step's
+allocation, which is quadratic in frames. That sum comes to 0.48 GB at 64
+frames and 8.21 GB at 267 — the right shape, and the right order of magnitude,
+though it leaves a residual of a couple of GB that varies by run, so it is a
+hypothesis rather than a finding.
+
+If it is right, it is worth money: ORT's CPU arena can be configured or
+disabled per session, and doing so would cut the long-text peak substantially
+for **both** modes. M8 should try it before accepting 17 GB as the cost of 22
+seconds of audio.
 
 ## Linux
 
@@ -417,8 +504,10 @@ than as a project of its own.
    proven on WSL2 and NAudio is not a problem; the playback library is still
    untested on either, and WSL2 is not a substitute for a real distro on the
    audio path.
-2. **1.7B `int4` memory and speed**, for both wavekat exports. If design mode
-   cannot run in a reasonable footprint, that is a scope decision, not a bug.
+2. **1.7B `int4` speed.** Memory is answered above: the design export's floor
+   is 0.74 GB *below* the shipping model's, and its KV geometry is identical,
+   so long text costs the same in both modes. Speed is still unmeasured, and
+   cannot be until M8 can run the pipeline.
 3. **Whether wavekat's graphs can be driven through `TtsPipeline`** rather than
    hand-ported. Their file convention matches; the graph I/O has not been
    compared. If they match, M8 shrinks a great deal.
