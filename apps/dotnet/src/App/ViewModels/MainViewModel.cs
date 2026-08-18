@@ -80,6 +80,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>History (spec §2a).</summary>
     public HistoryViewModel History { get; }
 
+    /// <summary>Settings (spec §7), or null when the app did not supply one.</summary>
+    public SettingsViewModel? Settings { get; init; }
+
     /// <summary>Languages offered in every mode (spec §1).</summary>
     public IReadOnlyList<string> AllLanguages { get; } = Languages.All;
 

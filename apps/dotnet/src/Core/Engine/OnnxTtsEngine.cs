@@ -97,6 +97,16 @@ public sealed class OnnxTtsEngine : ITtsEngine
     public void ClearLastOutput() => LastOutputPath = null;
 
     /// <inheritdoc />
+    public async Task UnloadAsync()
+    {
+        await _synth.UnloadAsync().ConfigureAwait(false);
+
+        // Forget which folder was loaded too, or the next run skips loading and
+        // generates against a model that is no longer there.
+        _loadedFolder = null;
+    }
+
+    /// <inheritdoc />
     public async Task<GenerateResult> GenerateAsync(
         GenerateRequest request,
         IProgress<EngineStatus>? progress,

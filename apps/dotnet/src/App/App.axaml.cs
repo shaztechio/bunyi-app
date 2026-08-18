@@ -57,7 +57,28 @@ public partial class App : Application
                 () => Bunyi.Core.Infrastructure.AppPaths.Outputs,
                 typeof(App).Assembly.GetName().Version?.ToString(3) ?? "0.1.0");
 
-            var viewModel = new MainViewModel(engine, new SoundFlowAudioPlayer(log), log);
+            var settingsViewModel = new SettingsViewModel(
+                settingsStore,
+                new ModelConfigLibrary(log),
+                log,
+                ApplyAppearance,
+                DefaultSourceFor);
+
+            var viewModel = new MainViewModel(engine, new SoundFlowAudioPlayer(log), log)
+            {
+                Settings = settingsViewModel,
+            };
+
+            // §3d: a model being deleted is evicted from memory first,
+            // otherwise the app keeps generating from files that are gone — and
+            // on Windows the delete simply fails, because a loaded session
+            // holds its weights open.
+            settingsViewModel.EvictLoadedModel = async () =>
+            {
+                engine.RequestStop();
+                await engine.WaitForIdleAsync(TimeSpan.FromSeconds(15));
+                await engine.UnloadAsync();
+            };
 
             desktop.MainWindow = new MainWindow { DataContext = viewModel };
             desktop.ShutdownRequested += async (_, _) => await engine.DisposeAsync();

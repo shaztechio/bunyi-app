@@ -73,6 +73,18 @@ public interface ISpeechSynthesizer : IAsyncDisposable
     /// <summary>Loads a model from a folder, replacing any already loaded.</summary>
     Task LoadAsync(string modelFolder, CancellationToken ct);
 
+    /// <summary>
+    /// Releases the model entirely, not just its working memory.
+    /// </summary>
+    /// <remarks>
+    /// §3d deletes a model from Settings, and requires the loaded one to be
+    /// evicted first: otherwise the app keeps generating from files that are
+    /// gone and silently re-downloads on the next launch. On Windows it is not
+    /// merely tidy — a loaded session holds its weights open, so the delete
+    /// fails outright.
+    /// </remarks>
+    Task UnloadAsync();
+
     /// <summary>Generates audio. Long-running and CPU-bound.</summary>
     Task<SynthesisResult> SynthesizeAsync(GenerateRequest request, CancellationToken ct);
 

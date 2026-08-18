@@ -109,6 +109,22 @@ public sealed class QwenSpeechSynthesizer(ILogSink log) : ISpeechSynthesizer
     }
 
     /// <inheritdoc />
+    public async Task UnloadAsync()
+    {
+        await _lock.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            if (_pipeline is null) return;
+            Unload();
+            _log.Log("Released the model.");
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    /// <inheritdoc />
     public async Task<SynthesisResult> SynthesizeAsync(GenerateRequest request, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(request);

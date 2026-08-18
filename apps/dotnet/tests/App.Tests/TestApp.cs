@@ -70,6 +70,14 @@ public sealed class FakeEngine : ITtsEngine
 
     public void ClearLastOutput() => LastOutputPath = null;
 
+    public int Unloads { get; private set; }
+
+    public Task UnloadAsync()
+    {
+        Unloads++;
+        return Task.CompletedTask;
+    }
+
     public Task<GenerateResult> GenerateAsync(
         GenerateRequest request, IProgress<EngineStatus>? progress, CancellationToken ct)
     {

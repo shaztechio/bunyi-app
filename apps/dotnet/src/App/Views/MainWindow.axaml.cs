@@ -71,6 +71,30 @@ public partial class MainWindow : Window
 
     private ITtsEngine? Engine => (DataContext as MainViewModel)?.Engine;
 
+    /// <summary>Opens Settings, or brings the open one forward.</summary>
+    private SettingsWindow? _settings;
+
+    private void OnSettingsClicked(object? sender, RoutedEventArgs e)
+    {
+        if (_settings is not null)
+        {
+            _settings.Activate();
+            return;
+        }
+
+        if (DataContext is not MainViewModel { Settings: not null } model) return;
+
+        _settings = new SettingsWindow { DataContext = model.Settings };
+        _settings.Closed += (_, _) =>
+        {
+            _settings = null;
+
+            // A source or folder may have changed under the engine.
+            model.Settings!.Reload();
+        };
+        _settings.Show(this);
+    }
+
     /// <summary>
     /// Busy-close confirmation (spec §9).
     /// </summary>

@@ -74,6 +74,36 @@ public static class Trash
         }
     }
 
+    /// <summary>Moves a whole folder to the platform's trash.</summary>
+    /// <remarks>
+    /// §3d deletes a model, which is a folder of gigabytes. Same guarantee as a
+    /// file: recoverable, because someone who deletes the wrong one should not
+    /// have to download it again.
+    /// </remarks>
+    public static bool TryMoveFolderToTrash(string folder, ILogSink log)
+    {
+        ArgumentNullException.ThrowIfNull(log);
+
+        if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder))
+        {
+            log.Log($"Cannot move {folder} to the Trash: it is not there.");
+            return false;
+        }
+
+        try
+        {
+            var full = Path.GetFullPath(folder);
+            return OperatingSystem.IsWindows()
+                ? MoveToRecycleBin(full)
+                : MoveFolderToFreedesktopTrash(full);
+        }
+        catch (Exception ex)
+        {
+            log.Log($"Could not move {Path.GetFileName(folder)} to the Trash: {ex.Message}");
+            return false;
+        }
+    }
+
     // ---- Windows -----------------------------------------------------------
 
     private const int FO_DELETE = 0x0003;
@@ -116,16 +146,7 @@ public static class Trash
 
     private static bool MoveToFreedesktopTrash(string path)
     {
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var dataHome = Environment.GetEnvironmentVariable("XDG_DATA_HOME");
-        if (string.IsNullOrWhiteSpace(dataHome) || !Path.IsPathRooted(dataHome))
-        {
-            dataHome = Path.Combine(home, ".local", "share");
-        }
-
-        var trash = Path.Combine(dataHome, "Trash");
-        var files = Directory.CreateDirectory(Path.Combine(trash, "files")).FullName;
-        var info = Directory.CreateDirectory(Path.Combine(trash, "info")).FullName;
+        var (files, info) = TrashFolders();
 
         // A name that is free in both places. The spec requires the pair to
         // stay together, so a name taken in either is taken in both.
@@ -133,14 +154,7 @@ public static class Trash
 
         // The .trashinfo goes first: a file in files/ with no info/ entry is
         // unrestorable, which is exactly what this exists to avoid.
-        var deletionDate = DateTime.Now.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture);
-        var trashInfo = new StringBuilder()
-            .AppendLine("[Trash Info]")
-            .AppendLine(CultureInfo.InvariantCulture, $"Path={EncodePath(path)}")
-            .AppendLine(CultureInfo.InvariantCulture, $"DeletionDate={deletionDate}")
-            .ToString();
-
-        File.WriteAllText(Path.Combine(info, name + ".trashinfo"), trashInfo);
+        File.WriteAllText(Path.Combine(info, name + ".trashinfo"), TrashInfoFor(path));
 
         try
         {
@@ -154,6 +168,51 @@ public static class Trash
         }
 
         return true;
+    }
+
+    private static bool MoveFolderToFreedesktopTrash(string folder)
+    {
+        var (files, info) = TrashFolders();
+        var name = UniqueName(files, info, Path.GetFileName(folder.TrimEnd(
+            Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)));
+
+        File.WriteAllText(Path.Combine(info, name + ".trashinfo"), TrashInfoFor(folder));
+
+        try
+        {
+            Directory.Move(folder, Path.Combine(files, name));
+        }
+        catch
+        {
+            TryDelete(Path.Combine(info, name + ".trashinfo"));
+            throw;
+        }
+
+        return true;
+    }
+
+    private static (string Files, string Info) TrashFolders()
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var dataHome = Environment.GetEnvironmentVariable("XDG_DATA_HOME");
+        if (string.IsNullOrWhiteSpace(dataHome) || !Path.IsPathRooted(dataHome))
+        {
+            dataHome = Path.Combine(home, ".local", "share");
+        }
+
+        var trash = Path.Combine(dataHome, "Trash");
+        return (Directory.CreateDirectory(Path.Combine(trash, "files")).FullName,
+                Directory.CreateDirectory(Path.Combine(trash, "info")).FullName);
+    }
+
+    private static string TrashInfoFor(string original)
+    {
+        var deletionDate = DateTime.Now.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture);
+        return new StringBuilder()
+            .AppendLine("[Trash Info]")
+            .AppendLine(CultureInfo.InvariantCulture, $"Path={EncodePath(original)}")
+            .AppendLine(CultureInfo.InvariantCulture, $"DeletionDate={deletionDate}")
+            .ToString();
     }
 
     private static string UniqueName(string files, string info, string name)

@@ -117,7 +117,9 @@ versions are already pinned centrally for when they do.
 | §4 auto-transcribe | `ReferenceTranscriber` | `IReferenceTranscriber` / `WhisperTranscriber` |
 | §5 saved voices | `VoiceLibrary` | `VoiceLibrary`, `SavedVoice` |
 | §6 backup/restore | `BackupManager` | `BackupManager` |
-| §7 settings | `SettingsView` | `SettingsViewModel` |
+| §7 settings | `SettingsView` | `ViewModels.SettingsViewModel`, `Views.SettingsWindow` |
+| §3a saved configurations | `ModelConfigLibrary` | `Settings.ModelConfigLibrary`, `ModelConfig` |
+| §3d downloaded models | `DownloadedModels.swift` | `Models.DownloadedModels` |
 | §8 logs | `LogStore` | `Diagnostics.LogStore` / `ILogSink` |
 | §2/§3d data locations | (Application Support) | `Infrastructure.AppPaths` |
 | §7 settings storage | (`UserDefaults`) | `Settings.SettingsStore`, `AppSettings` |
