@@ -27,8 +27,20 @@ limitations under the License.
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
   <!-- Rounding, from the scale in Brand.axaml. -->
+  <!--
+    Centred content on every button.
+
+    Avalonia's Fluent theme leaves HorizontalContentAlignment at Stretch, so a
+    button's label fills the whole width and the text inside it sits at the
+    left. On a button whose word nearly fills it that is invisible; on a short
+    word in a wide button it is plainly wrong, which is how "Stop" ended up
+    against the left edge of a 110-wide button while "Generate" beside it
+    looked fine.
+  -->
   <Style Selector="Button">
     <Setter Property="CornerRadius" Value="{DynamicResource BunyiControlRadius}" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
   </Style>
   <Style Selector="ToggleButton">
     <Setter Property="CornerRadius" Value="{DynamicResource BunyiControlRadius}" />
@@ -53,6 +65,56 @@ limitations under the License.
   </Style>
 
   <!-- Icon buttons: circular, with the glyph comfortably inside. -->
+  <!--
+    The two action buttons, Generate and Stop.
+
+    Their colour has to be restated for every visual state, which is not
+    decoration: Fluent styles the button's inner presenter directly on hover and
+    press, and that beats a Background set on the Button itself. So a brand
+    button set the plain way looks right until the pointer touches it and then
+    turns grey — which Generate did.
+
+    macOS keeps the same fill throughout and only dims on press
+    (Theme.swift, ActionButtonStyle), so these do the same rather than inventing
+    hover shades the other app does not have.
+  -->
+  <Style Selector="Button.primary /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource BunyiAccent}" />
+    <Setter Property="Foreground" Value="White" />
+  </Style>
+  <Style Selector="Button.primary:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource BunyiAccent}" />
+    <Setter Property="Foreground" Value="White" />
+  </Style>
+  <Style Selector="Button.primary:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource BunyiAccent}" />
+    <Setter Property="Foreground" Value="White" />
+    <Setter Property="Opacity" Value="0.8" />
+  </Style>
+
+  <!--
+    Stop is red, as on macOS, and never a disabled grey — it only exists while
+    there is something to stop, so it is always live and always the way out.
+  -->
+  <Style Selector="Button.danger /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource BunyiDanger}" />
+    <Setter Property="Foreground" Value="White" />
+  </Style>
+  <Style Selector="Button.danger:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource BunyiDanger}" />
+    <Setter Property="Foreground" Value="White" />
+  </Style>
+  <Style Selector="Button.danger:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource BunyiDanger}" />
+    <Setter Property="Foreground" Value="White" />
+    <Setter Property="Opacity" Value="0.8" />
+  </Style>
+
+  <!-- Both carry the weight macOS gives them. -->
+  <Style Selector="Button.primary, Button.danger">
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+
   <Style Selector="Button.icon">
     <Setter Property="Width" Value="{DynamicResource BunyiIconButtonSize}" />
     <Setter Property="Height" Value="{DynamicResource BunyiIconButtonSize}" />

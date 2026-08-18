@@ -58,12 +58,20 @@ limitations under the License.
     <ResourceDictionary x:Key="Default">
       <SolidColorBrush x:Key="BunyiAccent" Color="#5C54F5" />
       <SolidColorBrush x:Key="BunyiCardBorder" Color="#22000000" />
+      <!--
+        Stop. macOS fills it with the system red and Theme.swift explains why it
+        is never a disabled grey: the button only exists while there is
+        something to stop, so it is always live and always the way out.
+        These are the system's own reds, light and dark.
+      -->
+      <SolidColorBrush x:Key="BunyiDanger" Color="#FF3B30" />
       <!-- A recessed panel: the log reads as something the window contains. -->
       <SolidColorBrush x:Key="BunyiSurface" Color="#08000000" />
     </ResourceDictionary>
     <ResourceDictionary x:Key="Dark">
       <SolidColorBrush x:Key="BunyiAccent" Color="#7B72F0" />
       <SolidColorBrush x:Key="BunyiCardBorder" Color="#33FFFFFF" />
+      <SolidColorBrush x:Key="BunyiDanger" Color="#FF453A" />
       <SolidColorBrush x:Key="BunyiSurface" Color="#14FFFFFF" />
     </ResourceDictionary>
   </ResourceDictionary.ThemeDictionaries>
