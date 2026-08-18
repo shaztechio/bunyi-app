@@ -105,7 +105,9 @@ versions are already pinned centrally for when they do.
 |---|---|---|
 | §1 modes / §2 output | `TTSEngine.generate` | `ITtsEngine` / `OnnxTtsEngine` |
 | §3 model source | `ModelSettings.effectiveSource` | `ModelSource`, `ModelSettings` |
-| §3b download, resume, progress | `TTSEngine.download*` | `ModelDownloader` |
+| §3b download, resume, progress | `TTSEngine.download*` | `Models.ModelDownloader`, `HttpFileDownloader`, `StallMonitor` |
+| §3b/§3c manifests and path rules | `manifest`, `safeRelativePath` | `Models.ManifestParser`, `ManifestPath` |
+| DATA-FORMATS completeness | `hasCompleteModel` | `ModelDownloader.Inspect`, `ModelLayout` |
 | §3c self-host + manifest | `downloadFromBaseURL` | `ModelDownloader.DownloadFromBaseUrl` |
 | §3 tokenizer auto-fetch | `ensureTokenizerJSON` | `ModelDownloader.EnsureTokenizer` |
 | §4 resample 24k mono | `loadReferenceAudio` | `AudioIO.LoadReferenceMono24k` |
