@@ -162,7 +162,13 @@ public sealed class HistoryTests : IDisposable
 
         var history = window.GetLogicalDescendants().OfType<HistoryView>().Single();
         Assert.True(history.IsEffectivelyEnabled);
-        Assert.False(window.GetLogicalDescendants().OfType<ListBox>().First().IsEffectivelyEnabled);
+
+        // The three mode segments go dead; the History one does not, which is
+        // how the user gets back out of a run they started.
+        var containers = window.GetLogicalDescendants().OfType<ListBox>().First()
+            .GetRealizedContainers().OfType<ListBoxItem>().ToList();
+        Assert.All(containers.Take(3), c => Assert.False(c.IsEffectivelyEnabled));
+        Assert.True(containers[3].IsEffectivelyEnabled);
     }
 
     [AvaloniaFact]

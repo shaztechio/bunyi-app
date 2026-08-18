@@ -203,14 +203,43 @@ public class MainWindowTests
     }
 
     [AvaloniaFact]
-    public void The_mode_picker_offers_the_three_generation_modes()
+    public void The_picker_offers_the_three_modes_and_History()
     {
-        // §1 opens "A segmented picker selects one of three modes".
+        // §1 opens "A segmented picker selects one of three modes"; §2a adds "A
+        // fourth segment beside the three generation modes". One control.
         var (window, model, _, _) = Open();
 
         var picker = Find<ListBox>(window, _ => true);
-        Assert.Equal(3, picker.ItemCount);
+        Assert.Equal(4, picker.ItemCount);
         Assert.Equal(TtsMode.PresetVoice, model.Mode);
+        Assert.False(model.ShowingHistory);
+    }
+
+    [AvaloniaFact]
+    public void Choosing_a_mode_leaves_History()
+    {
+        // It was a list plus a separate toggle, so picking a mode left History
+        // showing and the toggle was the only way out — which is not what a
+        // segment is.
+        var (_, model, _, _) = Open();
+        model.SelectedSegment = HistorySegment.Instance;
+        Assert.True(model.ShowingHistory);
+
+        model.SelectedSegment = TtsMode.VoiceDesign;
+
+        Assert.False(model.ShowingHistory);
+        Assert.Equal(TtsMode.VoiceDesign, model.Mode);
+    }
+
+    [AvaloniaFact]
+    public void Selecting_History_shows_it()
+    {
+        var (_, model, _, _) = Open();
+
+        model.SelectedSegment = HistorySegment.Instance;
+
+        Assert.True(model.ShowingHistory);
+        Assert.Same(HistorySegment.Instance, model.SelectedSegment);
     }
 
     [AvaloniaFact]
@@ -300,31 +329,49 @@ public class MainWindowTests
     }
 
     [AvaloniaFact]
-    public void Progress_animates_when_there_is_no_fraction_to_show()
+    public void A_spinner_shows_when_there_is_no_fraction_and_a_bar_when_there_is()
     {
-        // Generating reports no fraction, and it is the long phase. A
-        // determinate bar pinned at zero for half a minute reads as an app that
-        // has hung.
-        var (window, _, engine, _) = Open(m => m.Script = "Hello there.");
+        // Generating reports no fraction and it is the long phase, so something
+        // must move — but a bar pulsing across the window implies a measurement
+        // it does not have. macOS shows a spinner for exactly these phases.
+        var (window, model, engine, _) = Open(m => m.Script = "Hello there.");
         var bar = Find<ProgressBar>(window, _ => true);
 
         engine.Publish(new EngineStatus(EngineState.Generating));
-        Assert.True(bar.IsIndeterminate);
+        Assert.True(model.ShowSpinner);
+        Assert.False(bar.IsEffectivelyVisible);
 
-        // A download does know, so it measures rather than animating.
+        // A download does know how far along it is, so it measures.
         engine.Publish(new EngineStatus(EngineState.Downloading, 0.42, "42%"));
-        Assert.False(bar.IsIndeterminate);
+        Assert.False(model.ShowSpinner);
+        Assert.True(bar.IsEffectivelyVisible);
         Assert.Equal(0.42, bar.Value, 3);
     }
 
     [AvaloniaFact]
-    public void Progress_is_not_shown_at_all_when_nothing_is_running()
+    public void Neither_spinner_nor_bar_shows_when_nothing_is_running()
     {
-        var (window, _, _, _) = Open();
+        var (window, model, _, _) = Open();
 
-        var bar = Find<ProgressBar>(window, _ => true);
+        Assert.False(Find<ProgressBar>(window, _ => true).IsEffectivelyVisible);
+        Assert.False(model.ShowSpinner);
+    }
 
-        Assert.False(bar.IsEffectivelyVisible);
+    [AvaloniaFact]
+    public void The_mode_segments_go_dead_while_work_runs_but_History_does_not()
+    {
+        // §2 disables the inputs, and switching mode mid-run would evict the
+        // model the running job is using. §2a keeps History reachable, since it
+        // only reads a folder. One control, two rules.
+        var (window, _, engine, _) = Open(m => m.Script = "Hello there.");
+        var picker = Find<ListBox>(window, _ => true);
+
+        engine.Publish(new EngineStatus(EngineState.Generating));
+
+        var containers = picker.GetRealizedContainers().OfType<ListBoxItem>().ToList();
+        Assert.Equal(4, containers.Count);
+        Assert.All(containers.Take(3), c => Assert.False(c.IsEffectivelyEnabled));
+        Assert.True(containers[3].IsEffectivelyEnabled);
     }
 
     [AvaloniaFact]
