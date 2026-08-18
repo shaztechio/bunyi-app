@@ -16,12 +16,14 @@
 // reuse, progress/ETA, tokenizer auto-fetch. Mirrors macOS TTSEngine
 // download* / downloadFromBaseURL / ensureTokenizerJSON.
 // Spec: /spec/FEATURES.md §3, /spec/DATA-FORMATS.md.
+using Bunyi.Core.Diagnostics;
+
 namespace Bunyi.Core;
 
-public sealed class ModelDownloader(HttpClient http, LogStore log)
+public sealed class ModelDownloader(HttpClient http, ILogSink log)
 {
     private readonly HttpClient _http = http ?? throw new ArgumentNullException(nameof(http));
-    private readonly LogStore _log = log ?? throw new ArgumentNullException(nameof(log));
+    private readonly ILogSink _log = log ?? throw new ArgumentNullException(nameof(log));
 
     // Standard file set when a self-hosted server has no manifest.txt.
     // ONNX variant — differs from the macOS .safetensors list. TODO: confirm

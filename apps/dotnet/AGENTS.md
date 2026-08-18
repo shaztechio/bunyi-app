@@ -113,7 +113,10 @@ versions are already pinned centrally for when they do.
 | §5 saved voices | `VoiceLibrary` | `VoiceLibrary`, `SavedVoice` |
 | §6 backup/restore | `BackupManager` | `BackupManager` |
 | §7 settings | `SettingsView` | `SettingsViewModel` |
-| §8 logs | `LogStore` | `LogStore` |
+| §8 logs | `LogStore` | `Diagnostics.LogStore` / `ILogSink` |
+| §2/§3d data locations | (Application Support) | `Infrastructure.AppPaths` |
+| §7 settings storage | (`UserDefaults`) | `Settings.SettingsStore`, `AppSettings` |
+| §2/§2a reveal in file manager | `NSWorkspace` | `Platform.FileReveal` |
 | §9 busy-close | `WindowCloseGuard` | `MainWindow.OnClosing` |
 
 ## Rules
