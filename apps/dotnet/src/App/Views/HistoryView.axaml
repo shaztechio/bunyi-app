@@ -60,18 +60,21 @@ limitations under the License.
                           HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                           ToolTip.Tip="Play or stop this clip">
                     <Panel>
-                      <Path Data="{DynamicResource IconPlay}"
+                      <!--
+                        Stretch="None": the geometry is already drawn at 28px
+                        with its centre of area on the button's centre, so any
+                        scaling or alignment would move it back off.
+                      -->
+                      <Path Data="{DynamicResource IconPlayRound28}"
                             Fill="{Binding $parent[Button].Foreground}"
-                            Stroke="{x:Null}"
-                            Width="13" Height="13" Stretch="Uniform"
-                            IsVisible="{Binding !IsPlaying}"
-                            HorizontalAlignment="Center" VerticalAlignment="Center" />
-                      <Path Data="{DynamicResource IconStop}"
+                            Stroke="{x:Null}" Stretch="None"
+                            Width="28" Height="28"
+                            IsVisible="{Binding !IsPlaying}" />
+                      <Path Data="{DynamicResource IconStopRound28}"
                             Fill="{Binding $parent[Button].Foreground}"
-                            Stroke="{x:Null}"
-                            Width="11" Height="11" Stretch="Uniform"
-                            IsVisible="{Binding IsPlaying}"
-                            HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            Stroke="{x:Null}" Stretch="None"
+                            Width="28" Height="28"
+                            IsVisible="{Binding IsPlaying}" />
                     </Panel>
                   </Button>
                 </Panel>
