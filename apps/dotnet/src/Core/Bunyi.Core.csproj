@@ -24,11 +24,14 @@ limitations under the License.
     <RootNamespace>Bunyi.Core</RootNamespace>
   </PropertyGroup>
 
-  <!--
-    No package references yet. The stubs here compile against the BCL alone,
-    and each milestone adds its own dependency with the code that uses it
-    (ONNX with the engine, Whisper with transcription, and so on). Versions for
-    all of them are already pinned in ../../Directory.Packages.props.
-  -->
+  <ItemGroup>
+    <!--
+      Preset-voice inference. This brings ONNX Runtime with it, and NAudio,
+      whose Windows-only assemblies are inert on Linux — verified, see
+      ../../RESEARCH-ONNX.md. Its downloader is deliberately unused: it
+      implements none of spec §3b.
+    -->
+    <PackageReference Include="ElBruno.QwenTTS" />
+  </ItemGroup>
 
 </Project>

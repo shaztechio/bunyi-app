@@ -103,7 +103,9 @@ versions are already pinned centrally for when they do.
 
 | Spec section | macOS source | .NET type (in `src/Core`) |
 |---|---|---|
-| §1 modes / §2 output | `TTSEngine.generate` | `ITtsEngine` / `OnnxTtsEngine` |
+| §1 modes / §2 output | `TTSEngine.generate` | `Engine.ITtsEngine` / `OnnxTtsEngine` |
+| §1 preset-voice inference | `swift-qwen3-tts` | `Engine.QwenSpeechSynthesizer` (`ISpeechSynthesizer`) |
+| §2 output WAV + metadata | `OutputMetadata.swift` | `Audio.WavWriter`, `Audio.WavMetadata` |
 | §3 model source | `ModelSettings.effectiveSource` | `ModelSource`, `ModelSettings` |
 | §3b download, resume, progress | `TTSEngine.download*` | `Models.ModelDownloader`, `HttpFileDownloader`, `StallMonitor` |
 | §3b/§3c manifests and path rules | `manifest`, `safeRelativePath` | `Models.ManifestParser`, `ManifestPath` |

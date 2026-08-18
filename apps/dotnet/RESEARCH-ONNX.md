@@ -349,6 +349,43 @@ which are Windows-only. It restores on any platform; whether any code path we
 reach calls into it on Linux is the open question below. `apps/dotnet/AGENTS.md`
 bans NAudio as a *chosen* dependency; this one is inherited.
 
+## The 0.6B preset-voice export ignores style instructions
+
+Found while wiring the engine (M4), not during the gate. The library says so
+plainly at generation time:
+
+```
+Warning: Instruction text ignored - Qwen06B model does not support
+instruction control. Use 1.7B for style instructions.
+```
+
+**This is a parity gap.** FEATURES §1 gives preset voice an "optional style
+instruction" and marks emotion/style as supported for that mode. The default
+ONNX export for it does not support one — it generates, and discards the
+instruction.
+
+It is the same shape of problem as the ICL clone trap: an input the UI presents
+as meaningful that changes nothing. The engine therefore refuses to record a
+style the model ignored, so an output file never claims a delivery it did not
+have, and logs the reason. `ISpeechSynthesizer.SupportsInstruct` carries the
+capability, and the library answers it per variant.
+
+That keeps the app honest but does not close the gap. Three ways out, in
+rough order of preference:
+
+1. **Default preset voice to `elbruno/Qwen3-TTS-12Hz-1.7B-CustomVoice-ONNX`**,
+   which supports instructions. It is roughly 10 GB against 5.88 GB, which is a
+   real cost for the audience §'s tone describes, and the 1.7B memory figures
+   are unmeasured.
+2. **Ship 0.6B and hide the style field** when the loaded model cannot use it,
+   with a spec note that the ONNX family's preset mode is style-less at the
+   default model.
+3. **Offer both**, since §3a already lets the user choose the source per mode —
+   the smaller model as the default and the larger as a documented option.
+
+Whichever is chosen belongs in `/spec` first, because it changes what a mode
+offers.
+
 ## Open questions
 
 1. **Bare-metal Linux**, and **SoundFlow's `linux-x64` natives**. Inference is
