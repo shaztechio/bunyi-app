@@ -15,19 +15,78 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Styling;
+using Bunyi.App.ViewModels;
+using Bunyi.App.Views;
+using Bunyi.Core;
+using Bunyi.Core.Audio;
+using Bunyi.Core.Diagnostics;
+using Bunyi.Core.Engine;
+using Bunyi.Core.Models;
+using Bunyi.Core.Settings;
 
 namespace Bunyi.App;
 
+/// <summary>
+/// The composition root: the one place that builds everything and wires it
+/// together.
+/// </summary>
 public partial class App : Application
 {
+    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromMinutes(30) };
+
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
     public override void OnFrameworkInitializationCompleted()
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            desktop.MainWindow = new MainWindow();
+            var log = LogStore.Shared;
+            var settingsStore = new SettingsStore(log);
+            var settings = settingsStore.Load();
+
+            ApplyAppearance(settings.Appearance);
+
+            var engine = new OnnxTtsEngine(
+                new QwenSpeechSynthesizer(log),
+                new ModelDownloader(Http, log),
+                log,
+                mode => ModelSource.Parse(settings.SourceFor(mode), DefaultSourceFor(mode)),
+                _ => ModelLayout.PresetVoice,
+                () => settingsStore.ResolveModelsFolder(settings),
+                () => Bunyi.Core.Infrastructure.AppPaths.Outputs,
+                typeof(App).Assembly.GetName().Version?.ToString(3) ?? "0.1.0");
+
+            var viewModel = new MainViewModel(engine, new SoundFlowAudioPlayer(log), log);
+
+            desktop.MainWindow = new MainWindow { DataContext = viewModel };
+            desktop.ShutdownRequested += async (_, _) => await engine.DisposeAsync();
+
+            log.Log("Bunyi started.");
         }
+
         base.OnFrameworkInitializationCompleted();
     }
+
+    /// <summary>
+    /// Applies the appearance to every window the app owns (spec §7).
+    /// </summary>
+    private void ApplyAppearance(Appearance appearance) =>
+        RequestedThemeVariant = appearance switch
+        {
+            Appearance.Light => ThemeVariant.Light,
+            Appearance.Dark => ThemeVariant.Dark,
+            _ => ThemeVariant.Default,   // System
+        };
+
+    /// <summary>
+    /// The built-in source for a mode when Settings leaves it blank (spec §3a).
+    /// </summary>
+    private static string DefaultSourceFor(TtsMode mode) => mode switch
+    {
+        TtsMode.PresetVoice => "elbruno/Qwen3-TTS-12Hz-0.6B-CustomVoice-ONNX",
+        TtsMode.VoiceDesign => "wavekat/Qwen3-TTS-1.7B-VoiceDesign-ONNX",
+        TtsMode.VoiceClone => "wavekat/Qwen3-TTS-0.6B-Base-ONNX",
+        _ => string.Empty,
+    };
 }

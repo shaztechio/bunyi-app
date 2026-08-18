@@ -1,0 +1,179 @@
+<!--
+Copyright 2026 Shazron Abdullah and Bunyi contributors
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:Bunyi.App.ViewModels"
+        x:Class="Bunyi.App.Views.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Width="760" Height="680" MinWidth="620" MinHeight="580"
+        Title="Bunyi">
+
+  <Window.Styles>
+    <Style Selector="TextBlock.eyebrow">
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="Foreground" Value="{DynamicResource BunyiAccent}" />
+      <Setter Property="Margin" Value="0,0,0,4" />
+    </Style>
+    <Style Selector="Border.card">
+      <Setter Property="CornerRadius" Value="12" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="BorderBrush" Value="{DynamicResource BunyiCardBorder}" />
+      <Setter Property="Padding" Value="12" />
+    </Style>
+    <Style Selector="TextBlock.rowLabel">
+      <Setter Property="Width" Value="76" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Opacity" Value="0.75" />
+    </Style>
+  </Window.Styles>
+
+  <!-- 20 window inset, 16 between cards: the spacing scale from UI-PLAN.md. -->
+  <DockPanel Margin="20">
+
+    <!--
+      Header. §2 requires Help and the log to be one click from the main window
+      and to STAY REACHABLE while work is in progress: a long download is
+      exactly when someone wants to read the help or watch the log, and neither
+      touches the running job. macOS gets that for free from a window toolbar;
+      Avalonia has none, so they live here, outside the disabled scope by
+      construction.
+    -->
+    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,16">
+      <StackPanel>
+        <TextBlock Text="BUNYI" Classes="eyebrow" />
+        <TextBlock Text="{Binding ModeSubtitle}" FontSize="12" Opacity="0.75" />
+      </StackPanel>
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+        <Button Content="Logs" IsEnabled="True" ToolTip.Tip="What Bunyi has been doing" />
+        <Button Content="Help" IsEnabled="True" ToolTip.Tip="How to use Bunyi" />
+      </StackPanel>
+    </Grid>
+
+    <!--
+      Bottom bar: status, progress, and the Generate/Stop swap. Outside the
+      disabled group so Stop stays pressable.
+    -->
+    <StackPanel DockPanel.Dock="Bottom" Spacing="8" Margin="0,16,0,0">
+      <ProgressBar Minimum="0" Maximum="1" Value="{Binding Progress}"
+                   IsVisible="{Binding IsBusy}" Height="4" />
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBlock Text="{Binding Status}" FontSize="12" Opacity="0.75"
+                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+          <Button Content="Play" Command="{Binding PlayCommand}"
+                  IsVisible="{Binding HasResult}" ToolTip.Tip="Play the result again" />
+          <Button Content="Show file" Command="{Binding RevealCommand}"
+                  IsVisible="{Binding HasResult}" ToolTip.Tip="Show the file on disk" />
+
+          <!--
+            §2: Generate is REPLACED by Stop, not merely disabled. A model
+            download runs for minutes, and without Stop the only way out is
+            closing the window.
+          -->
+          <Button Content="Generate" Command="{Binding GenerateCommand}"
+                  IsEnabled="{Binding CanGenerate}" IsVisible="{Binding !IsBusy}"
+                  ToolTip.Tip="{Binding BlockedReason}"
+                  IsDefault="True" MinWidth="110"
+                  Background="{DynamicResource BunyiAccent}" Foreground="White" />
+          <Button Content="Stop" Command="{Binding StopCommand}"
+                  IsVisible="{Binding IsBusy}" IsCancel="True" MinWidth="110" />
+        </StackPanel>
+      </Grid>
+    </StackPanel>
+
+    <!--
+      Everything the run was started from. §2: while work is in progress the
+      inputs are disabled — their values were handed to the engine when the run
+      began, so leaving them editable invites changes that silently do not apply
+      to the audio being produced.
+    -->
+    <StackPanel Spacing="16" IsEnabled="{Binding !IsBusy}">
+
+      <ListBox ItemsSource="{Binding AllModes}" SelectedItem="{Binding Mode}"
+               SelectionMode="Single" Height="36">
+        <ListBox.ItemsPanel>
+          <ItemsPanelTemplate>
+            <UniformGrid Rows="1" />
+          </ItemsPanelTemplate>
+        </ListBox.ItemsPanel>
+      </ListBox>
+
+      <Border Classes="card">
+        <DockPanel>
+          <TextBlock DockPanel.Dock="Top" Text="SCRIPT" Classes="eyebrow" />
+
+          <!--
+            The examples. They vanish once the script has anything in it and do
+            not return over a generated result — an invitation to try something
+            belongs to a window that has not been used yet, not beside audio the
+            user just made.
+          -->
+          <StackPanel DockPanel.Dock="Bottom" IsVisible="{Binding ShowExamples}"
+                      Margin="0,8,0,0" Spacing="4">
+            <TextBlock Text="{Binding ExamplePrompt}" FontSize="11" Opacity="0.7" />
+            <ItemsControl ItemsSource="{Binding Examples}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Button Content="{Binding}" Margin="0,0,8,4" FontSize="12"
+                          Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).UseExampleCommand}"
+                          CommandParameter="{Binding}" />
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+
+          <TextBox Text="{Binding Script}" AcceptsReturn="True" TextWrapping="Wrap"
+                   MinHeight="140" FontSize="15"
+                   PlaceholderText="Type or paste what you would like spoken." />
+        </DockPanel>
+      </Border>
+
+      <Border Classes="card">
+        <StackPanel Spacing="12">
+          <TextBlock Text="OPTIONS" Classes="eyebrow" />
+
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <TextBlock Text="Language" Classes="rowLabel" />
+            <ComboBox ItemsSource="{Binding AllLanguages}" SelectedItem="{Binding Language}"
+                      MinWidth="180" />
+          </StackPanel>
+
+          <StackPanel Orientation="Horizontal" Spacing="10"
+                      IsVisible="{Binding ModeIsAvailable}">
+            <TextBlock Text="Speaker" Classes="rowLabel" />
+            <ComboBox ItemsSource="{Binding Speakers}" SelectedItem="{Binding Speaker}"
+                      MinWidth="180" />
+          </StackPanel>
+
+          <StackPanel Orientation="Horizontal" Spacing="10"
+                      IsVisible="{Binding ShowInstruct}">
+            <TextBlock Text="{Binding InstructLabel}" Classes="rowLabel" />
+            <TextBox Text="{Binding Instruct}" MinWidth="320"
+                     PlaceholderText="Optional — how it should be said" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <TextBlock Text="Voice design and voice clone are not implemented yet."
+                 IsVisible="{Binding !ModeIsAvailable}"
+                 FontSize="12" Opacity="0.75" />
+    </StackPanel>
+  </DockPanel>
+</Window>

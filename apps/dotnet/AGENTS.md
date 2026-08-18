@@ -121,7 +121,10 @@ versions are already pinned centrally for when they do.
 | §2/§3d data locations | (Application Support) | `Infrastructure.AppPaths` |
 | §7 settings storage | (`UserDefaults`) | `Settings.SettingsStore`, `AppSettings` |
 | §2/§2a reveal in file manager | `NSWorkspace` | `Platform.FileReveal` |
-| §9 busy-close | `WindowCloseGuard` | `MainWindow.OnClosing` |
+| §9 busy-close | `WindowCloseGuard` | `Views.MainWindow.OnClosing` |
+| §1/§2 main window | `ContentView.swift` | `ViewModels.MainViewModel`, `Views.MainWindow` |
+| §1 readiness + examples | `ContentView.canGenerate` | `Engine.GenerationReadiness`, `ExamplePrompts` |
+| §2 playback | `AVAudioPlayer` | `Audio.IAudioPlayer` / `SoundFlowAudioPlayer` |
 
 ## Rules
 

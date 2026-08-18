@@ -17,7 +17,28 @@ limitations under the License.
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="Bunyi.App.App"
              RequestedThemeVariant="Default">
-    <Application.Styles>
-        <FluentTheme />
-    </Application.Styles>
+  <Application.Resources>
+    <ResourceDictionary>
+      <!--
+        The brand indigo, and the lifted variant for dark. The same two sRGB
+        values the macOS accent colorset and the website use. §7 makes three
+        appearance states a requirement, so a colour that only works against one
+        background is a bug in the other two.
+      -->
+      <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Default">
+          <SolidColorBrush x:Key="BunyiAccent" Color="#5C54F5" />
+          <SolidColorBrush x:Key="BunyiCardBorder" Color="#22000000" />
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Dark">
+          <SolidColorBrush x:Key="BunyiAccent" Color="#7B72F0" />
+          <SolidColorBrush x:Key="BunyiCardBorder" Color="#33FFFFFF" />
+        </ResourceDictionary>
+      </ResourceDictionary.ThemeDictionaries>
+    </ResourceDictionary>
+  </Application.Resources>
+
+  <Application.Styles>
+    <FluentTheme />
+  </Application.Styles>
 </Application>
