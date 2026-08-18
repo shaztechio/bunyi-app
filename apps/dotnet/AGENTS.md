@@ -1,11 +1,15 @@
 # AGENTS.md — Windows + Linux app (.NET + Avalonia + ONNX)
 
-> **Status: SCAFFOLD — the app is not implemented.**
-> The stubs have never been filled in. What *has* happened is the research
-> gate: ONNX inference is proven to work for preset voice on Windows, and the
-> stack is chosen. See [`RESEARCH-ONNX.md`](RESEARCH-ONNX.md). Build and
-> implement on a Windows or Linux machine with the .NET SDK, filling the stubs
-> against `/spec/FEATURES.md`.
+> **Status: the app is not implemented; the build and the groundwork are.**
+> `dotnet build`, `dotnet test` and a self-contained `dotnet publish` are green
+> on Windows and Linux, and CI runs all three on both. The research gate is
+> also behind us: ONNX inference is proven for preset voice and the stack is
+> chosen — see [`RESEARCH-ONNX.md`](RESEARCH-ONNX.md), which is the first thing
+> to read before touching the engine or its dependencies.
+>
+> What is missing is the product. Most of `src/Core` is still a stub that
+> throws, and `src/App` is a placeholder window. Fill them in against
+> `/spec/FEATURES.md`.
 
 One C#/.NET application that targets **both Windows and Linux** from a single
 codebase. It must implement the exact behavior in `/spec/FEATURES.md` and
@@ -55,25 +59,45 @@ the on-disk formats in `/spec/DATA-FORMATS.md`. The macOS app
 
 ## Build / run (on Windows or Linux)
 
+Needs the **.NET 10 SDK**.
+
 ```sh
 cd apps/dotnet
 dotnet restore
-dotnet build
+dotnet build -c Release
+dotnet test  -c Release
 dotnet run --project src/App
-# Publish self-contained:
-dotnet publish src/App -c Release -r win-x64   --self-contained
-dotnet publish src/App -c Release -r linux-x64 --self-contained
+# Publish self-contained — what a release ships (see /spec, M15):
+dotnet publish src/App -c Release -r win-x64   --self-contained -o artifacts/win-x64
+dotnet publish src/App -c Release -r linux-x64 --self-contained -o artifacts/linux-x64
 ```
+
+A self-contained publish is ~206 MB on Windows and ~104 MB on Linux before a
+single model is downloaded. Worth knowing before promising a small download.
 
 ## Layout
 
 ```
 apps/dotnet/
-  Qwen3TtsStudio.sln
+  Bunyi.sln
+  Directory.Build.props      settings every project inherits (net10.0,
+                             nullable, warnings-as-errors, version)
+  Directory.Packages.props   every package version, in one place
+  NuGet.config               nuget.org only
   src/Core/    class library — engine, model mgmt, backup, voices, download,
                transcription. Platform-agnostic; no UI refs.
   src/App/     Avalonia UI (views + viewmodels) referencing Core.
+  tests/Core.Tests/   xUnit tests for src/Core.
 ```
+
+**Package versions are managed centrally.** A `PackageReference` here carries no
+`Version` attribute; add the version to `Directory.Packages.props` instead. The
+scaffold used to carry per-project versions under a comment admitting they were
+unverified, which is exactly the state this prevents.
+
+**Add a dependency with the code that uses it, not before.** `src/Core` has no
+package references at all today, because nothing in it needs one yet; the
+versions are already pinned centrally for when they do.
 
 ## Spec feature → C# type (target design)
 
@@ -95,7 +119,13 @@ apps/dotnet/
 ## Rules
 
 - Keep `src/Core` UI-framework-free (mirrors "keep TTSEngine
-  UI-framework-free"). UI lives only in `src/App`.
+  UI-framework-free"). UI lives only in `src/App`. **CI enforces this** — it
+  fails on a `using Avalonia` or an Avalonia package reference under
+  `src/Core`, because the rule is easy to break with an editor's
+  using-completion and hard to spot in review.
+- **Warnings are errors.** If a stub's injected dependency is unread, hold it
+  in a field with a null check rather than suppressing the warning: that is the
+  code the implementation needs anyway.
 - On-disk formats (`models/<org>/<repo>`, `manifest.txt`, `voices.json`,
   backup zip, output WAV) MUST match `/spec/DATA-FORMATS.md` so folders and
   backups are interchangeable within the ONNX runtime family.
