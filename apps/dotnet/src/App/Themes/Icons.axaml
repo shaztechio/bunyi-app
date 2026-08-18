@@ -1,0 +1,66 @@
+<!--
+Copyright 2026 Shazron Abdullah and Bunyi contributors
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+
+<!--
+  The icon set.
+
+  apps/macos/UI-PLAN.md records that SF Symbols have no Avalonia counterpart and
+  that a symbol-to-icon mapping belongs in the spec. This is that mapping for
+  this app: one geometry per action, named for the action rather than the
+  picture, so a caller asks for "the trash icon" and not "the bin-shaped path".
+
+  Drawn on a 24x24 grid so they can be scaled by setting Width and Height on the
+  Path, and authored as outlines with a consistent visual weight rather than
+  borrowed from an icon font — a font would be another dependency to ship, and
+  the set needed here is small.
+
+  Every icon-only button keeps a ToolTip. The audience is non-technical, and an
+  unlabelled glyph is only obvious to whoever chose it.
+-->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- Settings: a gear. -->
+  <StreamGeometry x:Key="IconSettings">M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z M19.4 13a7.6 7.6 0 0 0 0-2l2-1.6a.5.5 0 0 0 .1-.6l-1.9-3.3a.5.5 0 0 0-.6-.2l-2.4 1a7.4 7.4 0 0 0-1.7-1l-.4-2.5a.5.5 0 0 0-.5-.4h-3.8a.5.5 0 0 0-.5.4l-.4 2.5a7.4 7.4 0 0 0-1.7 1l-2.4-1a.5.5 0 0 0-.6.2L2.5 8.8a.5.5 0 0 0 .1.6L4.6 11a7.6 7.6 0 0 0 0 2l-2 1.6a.5.5 0 0 0-.1.6l1.9 3.3a.5.5 0 0 0 .6.2l2.4-1a7.4 7.4 0 0 0 1.7 1l.4 2.5a.5.5 0 0 0 .5.4h3.8a.5.5 0 0 0 .5-.4l.4-2.5a7.4 7.4 0 0 0 1.7-1l2.4 1a.5.5 0 0 0 .6-.2l1.9-3.3a.5.5 0 0 0-.1-.6z</StreamGeometry>
+
+  <!-- Logs: stacked lines, like a running account. -->
+  <StreamGeometry x:Key="IconLogs">M4 6h16 M4 10h16 M4 14h11 M4 18h7</StreamGeometry>
+
+  <!-- Help: a question mark in a circle. -->
+  <StreamGeometry x:Key="IconHelp">M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z M9.5 9.2a2.6 2.6 0 0 1 5 .9c0 1.7-2.5 2.2-2.5 4 M12 17.2v.01</StreamGeometry>
+
+  <!-- Play: a triangle. -->
+  <StreamGeometry x:Key="IconPlay">M8 5.5v13l11-6.5z</StreamGeometry>
+
+  <!-- Stop: a square, matching Play's visual weight. -->
+  <StreamGeometry x:Key="IconStop">M7.5 7.5h9v9h-9z</StreamGeometry>
+
+  <!-- Save a copy: an arrow into a tray. -->
+  <StreamGeometry x:Key="IconSave">M12 3v11 M8 10.5l4 4 4-4 M4 17v2.5h16V17</StreamGeometry>
+
+  <!-- Copy details: two overlapping sheets. -->
+  <StreamGeometry x:Key="IconCopy">M9 9h10v12H9z M15 9V3H5v12h4</StreamGeometry>
+
+  <!-- Copied: a tick, the acknowledgement §2a asks for. -->
+  <StreamGeometry x:Key="IconTick">M5 12.5l4.5 4.5L19 7.5</StreamGeometry>
+
+  <!-- Show file: a folder. -->
+  <StreamGeometry x:Key="IconFolder">M3 6.5h6l2 2.5h10v11H3z</StreamGeometry>
+
+  <!-- Trash: a bin with a lid. -->
+  <StreamGeometry x:Key="IconTrash">M5 7h14 M9.5 7V4.5h5V7 M6.5 7l.8 13h9.4l.8-13 M10.5 10.5v6 M13.5 10.5v6</StreamGeometry>
+
+</ResourceDictionary>

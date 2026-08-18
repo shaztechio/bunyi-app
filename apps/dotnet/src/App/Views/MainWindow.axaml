@@ -29,8 +29,57 @@ limitations under the License.
       <Setter Property="Foreground" Value="{DynamicResource BunyiAccent}" />
       <Setter Property="Margin" Value="0,0,0,4" />
     </Style>
+    <!--
+      Icon buttons: square footprint, circular hit area, and a tooltip without
+      exception. The audience is non-technical, so an unlabelled glyph is only
+      obvious to whoever picked it.
+    -->
+    <Style Selector="Button.icon">
+      <Setter Property="Width" Value="{DynamicResource BunyiIconButtonSize}" />
+      <Setter Property="Height" Value="{DynamicResource BunyiIconButtonSize}" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="CornerRadius" Value="{DynamicResource BunyiPillRadius}" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.icon > Path">
+      <Setter Property="Stroke" Value="{Binding $parent[Button].Foreground}" />
+      <Setter Property="StrokeThickness" Value="1.6" />
+      <Setter Property="StrokeLineCap" Value="Round" />
+      <Setter Property="StrokeJoin" Value="Round" />
+      <Setter Property="Width" Value="18" />
+      <Setter Property="Height" Value="18" />
+      <Setter Property="Stretch" Value="Uniform" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- Everything else gets the softer corners too, so nothing looks sharper
+         than its neighbour. -->
+    <Style Selector="Button">
+      <Setter Property="CornerRadius" Value="{DynamicResource BunyiControlRadius}" />
+    </Style>
+    <Style Selector="ToggleButton">
+      <Setter Property="CornerRadius" Value="{DynamicResource BunyiControlRadius}" />
+    </Style>
+    <Style Selector="TextBox">
+      <Setter Property="CornerRadius" Value="{DynamicResource BunyiControlRadius}" />
+    </Style>
+    <Style Selector="ComboBox">
+      <Setter Property="CornerRadius" Value="{DynamicResource BunyiControlRadius}" />
+    </Style>
+    <Style Selector="ListBox">
+      <Setter Property="CornerRadius" Value="{DynamicResource BunyiControlRadius}" />
+    </Style>
+    <Style Selector="ListBoxItem">
+      <Setter Property="CornerRadius" Value="{DynamicResource BunyiControlRadius}" />
+    </Style>
+    <Style Selector="ProgressBar">
+      <Setter Property="CornerRadius" Value="{DynamicResource BunyiPillRadius}" />
+    </Style>
+
     <Style Selector="Border.card">
-      <Setter Property="CornerRadius" Value="12" />
+      <Setter Property="CornerRadius" Value="{DynamicResource BunyiCardRadius}" />
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="BorderBrush" Value="{DynamicResource BunyiCardBorder}" />
       <Setter Property="Padding" Value="12" />
@@ -59,10 +108,18 @@ limitations under the License.
         <TextBlock Text="{Binding ModeSubtitle}" FontSize="12" Opacity="0.75" />
       </StackPanel>
       <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-        <Button Content="Settings" Click="OnSettingsClicked"
-                ToolTip.Tip="Models, storage and appearance" />
-        <Button Content="Logs" IsEnabled="True" ToolTip.Tip="What Bunyi has been doing" />
-        <Button Content="Help" IsEnabled="True" ToolTip.Tip="How to use Bunyi" />
+        <Button Classes="icon" Click="OnSettingsClicked" Name="SettingsButton"
+                ToolTip.Tip="Settings — models, storage and appearance">
+          <Path Data="{DynamicResource IconSettings}" />
+        </Button>
+        <Button Classes="icon" Name="LogsButton"
+                ToolTip.Tip="Logs — what Bunyi has been doing">
+          <Path Data="{DynamicResource IconLogs}" />
+        </Button>
+        <Button Classes="icon" Name="HelpButton"
+                ToolTip.Tip="Help — how to use Bunyi">
+          <Path Data="{DynamicResource IconHelp}" />
+        </Button>
       </StackPanel>
     </Grid>
 
@@ -83,22 +140,27 @@ limitations under the License.
         <TextBlock Text="{Binding Status}" FontSize="12" Opacity="0.75"
                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-          <Button Content="Play" Command="{Binding PlayCommand}"
-                  IsVisible="{Binding HasResult}" ToolTip.Tip="Play the result again" />
-          <Button Content="Show file" Command="{Binding RevealCommand}"
-                  IsVisible="{Binding HasResult}" ToolTip.Tip="Show the file on disk" />
+          <Button Classes="icon" Name="PlayButton" Command="{Binding PlayCommand}"
+                  IsVisible="{Binding HasResult}" ToolTip.Tip="Play the result again">
+            <Path Data="{DynamicResource IconPlay}" Fill="{Binding $parent[Button].Foreground}"
+                  Stroke="{x:Null}" />
+          </Button>
+          <Button Classes="icon" Name="RevealButton" Command="{Binding RevealCommand}"
+                  IsVisible="{Binding HasResult}" ToolTip.Tip="Show the file on disk">
+            <Path Data="{DynamicResource IconFolder}" />
+          </Button>
 
           <!--
             §2: Generate is REPLACED by Stop, not merely disabled. A model
             download runs for minutes, and without Stop the only way out is
             closing the window.
           -->
-          <Button Content="Generate" Command="{Binding GenerateCommand}"
+          <Button Content="Generate" Name="GenerateButton" Command="{Binding GenerateCommand}"
                   IsEnabled="{Binding CanGenerate}" IsVisible="{Binding ShowGenerate}"
                   ToolTip.Tip="{Binding BlockedReason}"
                   IsDefault="True" MinWidth="110"
                   Background="{DynamicResource BunyiAccent}" Foreground="White" />
-          <Button Content="Stop" Command="{Binding StopCommand}"
+          <Button Content="Stop" Name="StopButton" Command="{Binding StopCommand}"
                   IsVisible="{Binding IsBusy}" IsCancel="True" MinWidth="110" />
         </StackPanel>
       </Grid>
