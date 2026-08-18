@@ -63,6 +63,13 @@ limitations under the License.
     <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="9.10.0" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageVersion Include="xunit" Version="2.9.3" />
+    <!--
+      Lets a test skip itself at run time rather than fail or silently pass.
+      The voice-design tests need a 5.85 GB export that CI has no business
+      downloading, and "passed because it did not run" is the outcome worth
+      avoiding.
+    -->
+    <PackageVersion Include="Xunit.SkippableFact" Version="1.5.61" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.1" />
     <!-- Avalonia.Headless.XUnit requires xunit v3, so the UI tests use it. -->
     <PackageVersion Include="xunit.v3" Version="3.2.2" />

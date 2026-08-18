@@ -1,0 +1,403 @@
+{
+ "empty": {
+  "text": "",
+  "ids": []
+ },
+ "plain": {
+  "text": "Hello world",
+  "ids": [
+   9707,
+   1879
+  ]
+ },
+ "sentence": {
+  "text": "Give every small business the voice of a big one.",
+  "ids": [
+   35127,
+   1449,
+   2613,
+   2562,
+   279,
+   7743,
+   315,
+   264,
+   2409,
+   825,
+   13
+  ]
+ },
+ "leading_space": {
+  "text": " leading",
+  "ids": [
+   6388
+  ]
+ },
+ "trailing_space": {
+  "text": "trailing ",
+  "ids": [
+   376,
+   14277,
+   220
+  ]
+ },
+ "two_spaces": {
+  "text": "a  b",
+  "ids": [
+   64,
+   220,
+   293
+  ]
+ },
+ "many_spaces": {
+  "text": "a     b",
+  "ids": [
+   64,
+   257,
+   293
+  ]
+ },
+ "tab": {
+  "text": "a\tb",
+  "ids": [
+   64,
+   2233
+  ]
+ },
+ "newline": {
+  "text": "one\ntwo",
+  "ids": [
+   603,
+   198,
+   19789
+  ]
+ },
+ "blank_line": {
+  "text": "one\n\ntwo",
+  "ids": [
+   603,
+   271,
+   19789
+  ]
+ },
+ "crlf": {
+  "text": "one\r\ntwo",
+  "ids": [
+   603,
+   319,
+   19789
+  ]
+ },
+ "numbers": {
+  "text": "call 123 now",
+  "ids": [
+   6659,
+   220,
+   16,
+   17,
+   18,
+   1431
+  ]
+ },
+ "decimal": {
+  "text": "costs 45.99 dollars",
+  "ids": [
+   16440,
+   82,
+   220,
+   19,
+   20,
+   13,
+   24,
+   24,
+   11192
+  ]
+ },
+ "contraction": {
+  "text": "don't it's we're I'll they've I'd can't",
+  "ids": [
+   15007,
+   944,
+   432,
+   594,
+   582,
+   2299,
+   358,
+   3278,
+   807,
+   3003,
+   358,
+   4172,
+   646,
+   944
+  ]
+ },
+ "caps_contraction": {
+  "text": "DON'T IT'S",
+  "ids": [
+   84641,
+   17323,
+   8700,
+   13272
+  ]
+ },
+ "punct_run": {
+  "text": "wait... really?!",
+  "ids": [
+   11489,
+   1112,
+   2167,
+   25984
+  ]
+ },
+ "chinese": {
+  "text": "让每一家小企业，都拥有大企业的声音。",
+  "ids": [
+   99258,
+   73157,
+   101949,
+   30709,
+   99304,
+   3837,
+   71268,
+   103926,
+   26288,
+   104385,
+   102274,
+   1773
+  ]
+ },
+ "japanese": {
+  "text": "こんにちは世界",
+  "ids": [
+   89015,
+   99489
+  ]
+ },
+ "korean": {
+  "text": "안녕하세요 세계",
+  "ids": [
+   126246,
+   144370,
+   91145,
+   133196
+  ]
+ },
+ "emoji": {
+  "text": "hi 👋 there",
+  "ids": [
+   6023,
+   61804,
+   233,
+   1052
+  ]
+ },
+ "accents": {
+  "text": "café naïve résumé",
+  "ids": [
+   924,
+   58858,
+   94880,
+   586,
+   9333,
+   1242,
+   963
+  ]
+ },
+ "mixed": {
+  "text": "Hello 世界 123!",
+  "ids": [
+   9707,
+   220,
+   99489,
+   220,
+   16,
+   17,
+   18,
+   0
+  ]
+ },
+ "im_start": {
+  "text": "<|im_start|>",
+  "ids": [
+   151644
+  ]
+ },
+ "im_end": {
+  "text": "<|im_end|>",
+  "ids": [
+   151645
+  ]
+ },
+ "endoftext": {
+  "text": "<|endoftext|>",
+  "ids": [
+   151643
+  ]
+ },
+ "chat_full": {
+  "text": "<|im_start|>assistant\nGive every small business the voice of a big one.<|im_end|>\n<|im_start|>assistant\n",
+  "ids": [
+   151644,
+   77091,
+   198,
+   35127,
+   1449,
+   2613,
+   2562,
+   279,
+   7743,
+   315,
+   264,
+   2409,
+   825,
+   13,
+   151645,
+   198,
+   151644,
+   77091,
+   198
+  ]
+ },
+ "instruct_full": {
+  "text": "<|im_start|>user\nSpeak in a warm and friendly female voice<|im_end|>\n",
+  "ids": [
+   151644,
+   872,
+   198,
+   95845,
+   304,
+   264,
+   8205,
+   323,
+   11657,
+   8778,
+   7743,
+   151645,
+   198
+  ]
+ },
+ "special_in_text": {
+  "text": "before <|im_start|> after",
+  "ids": [
+   14801,
+   220,
+   151644,
+   1283
+  ]
+ },
+ "tts_special": {
+  "text": "<tts_text_bos>",
+  "ids": [
+   151672
+  ]
+ },
+ "nearly_special": {
+  "text": "<|im_start|",
+  "ids": [
+   27,
+   91,
+   318,
+   4906,
+   91
+  ]
+ },
+ "long": {
+  "text": "The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. ",
+  "ids": [
+   785,
+   3974,
+   13876,
+   38835,
+   34208,
+   916,
+   279,
+   15678,
+   5562,
+   13,
+   576,
+   3974,
+   13876,
+   38835,
+   34208,
+   916,
+   279,
+   15678,
+   5562,
+   13,
+   576,
+   3974,
+   13876,
+   38835,
+   34208,
+   916,
+   279,
+   15678,
+   5562,
+   13,
+   576,
+   3974,
+   13876,
+   38835,
+   34208,
+   916,
+   279,
+   15678,
+   5562,
+   13,
+   576,
+   3974,
+   13876,
+   38835,
+   34208,
+   916,
+   279,
+   15678,
+   5562,
+   13,
+   576,
+   3974,
+   13876,
+   38835,
+   34208,
+   916,
+   279,
+   15678,
+   5562,
+   13,
+   220
+  ]
+ },
+ "url": {
+  "text": "see https://example.com/path?q=1",
+  "ids": [
+   4060,
+   3703,
+   1110,
+   8687,
+   905,
+   50976,
+   43782,
+   28,
+   16
+  ]
+ },
+ "quotes": {
+  "text": "she said \"hello\" and left",
+  "ids": [
+   31058,
+   1053,
+   330,
+   14990,
+   1,
+   323,
+   2115
+  ]
+ },
+ "nfc": {
+  "text": "éclair",
+  "ids": [
+   963,
+   48172
+  ]
+ }
+}
