@@ -110,17 +110,22 @@ public sealed class FakePlayer : IAudioPlayer
 {
     public List<string> Played { get; } = [];
     public bool IsPlaying { get; private set; }
+    public TimeSpan Position { get; set; }
+    public TimeSpan Duration { get; set; } = TimeSpan.FromSeconds(4);
+    public string? CurrentPath { get; private set; }
     public event EventHandler? Finished;
 
     public void Play(string path)
     {
         Played.Add(path);
+        CurrentPath = path;
         IsPlaying = true;
     }
 
     public void Stop()
     {
         IsPlaying = false;
+        CurrentPath = null;
         Finished?.Invoke(this, EventArgs.Empty);
     }
 

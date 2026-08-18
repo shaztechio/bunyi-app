@@ -34,6 +34,22 @@ public interface IAudioPlayer : IDisposable
     /// <summary>Whether audio is playing now.</summary>
     bool IsPlaying { get; }
 
+    /// <summary>How far into the clip playback has reached.</summary>
+    /// <remarks>
+    /// §2a draws progress as a ring around the play button rather than a
+    /// separate bar — the control and its progress are the same object, which
+    /// is what a list row has space for. Taken from the player rather than a
+    /// timer started alongside it, so a clip that stalls does not leave the ring
+    /// advancing over audio that is not moving.
+    /// </remarks>
+    TimeSpan Position { get; }
+
+    /// <summary>The clip's length, or zero when nothing is loaded.</summary>
+    TimeSpan Duration { get; }
+
+    /// <summary>The file currently loaded, or null.</summary>
+    string? CurrentPath { get; }
+
     /// <summary>Raised when playback finishes or is stopped, on any thread.</summary>
     event EventHandler? Finished;
 
@@ -62,6 +78,7 @@ public sealed class SoundFlowAudioPlayer : IAudioPlayer
     private MiniAudioEngine? _engine;
     private AudioPlaybackDevice? _device;
     private SoundPlayer? _player;
+    private string? _currentPath;
 
     public SoundFlowAudioPlayer(ILogSink log) => _log = log ?? throw new ArgumentNullException(nameof(log));
 
@@ -69,6 +86,24 @@ public sealed class SoundFlowAudioPlayer : IAudioPlayer
     public bool IsPlaying
     {
         get { lock (_gate) return _player?.State == PlaybackState.Playing; }
+    }
+
+    /// <inheritdoc />
+    public TimeSpan Position
+    {
+        get { lock (_gate) return TimeSpan.FromSeconds(_player?.Time ?? 0); }
+    }
+
+    /// <inheritdoc />
+    public TimeSpan Duration
+    {
+        get { lock (_gate) return TimeSpan.FromSeconds(_player?.Duration ?? 0); }
+    }
+
+    /// <inheritdoc />
+    public string? CurrentPath
+    {
+        get { lock (_gate) return _currentPath; }
     }
 
     /// <inheritdoc />
@@ -109,6 +144,7 @@ public sealed class SoundFlowAudioPlayer : IAudioPlayer
                 _device.MasterMixer.AddComponent(_player);
                 _device.Start();
                 _player.Play();
+                _currentPath = path;
             }
         }
         catch (Exception ex)
@@ -145,6 +181,7 @@ public sealed class SoundFlowAudioPlayer : IAudioPlayer
         finally
         {
             _player = null;
+            _currentPath = null;
         }
     }
 

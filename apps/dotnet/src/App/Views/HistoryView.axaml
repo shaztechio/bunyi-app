@@ -1,0 +1,96 @@
+<!--
+Copyright 2026 Shazron Abdullah and Bunyi contributors
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:Bunyi.App.ViewModels"
+             x:Class="Bunyi.App.Views.HistoryView"
+             x:DataType="vm:HistoryViewModel">
+
+  <Panel>
+    <TextBlock Text="{Binding EmptyMessage}" IsVisible="{Binding IsEmpty}"
+               HorizontalAlignment="Center" VerticalAlignment="Center"
+               Opacity="0.7" TextWrapping="Wrap" MaxWidth="360"
+               TextAlignment="Center" />
+
+    <ScrollViewer IsVisible="{Binding !IsEmpty}">
+      <ItemsControl ItemsSource="{Binding Rows}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:HistoryRow">
+            <Border BorderThickness="0,0,0,1" Padding="4,10"
+                    BorderBrush="{DynamicResource BunyiCardBorder}"
+                    ToolTip.Tip="{Binding Details}">
+              <Grid ColumnDefinitions="Auto,*,Auto">
+
+                <!--
+                  §2a: progress is drawn as a ring around the play button
+                  itself rather than a separate bar — the control and its
+                  progress are the same object, which is what the row has space
+                  for. Play/stop only; there is deliberately no pause.
+                -->
+                <Panel Grid.Column="0" Width="36" Height="36" Margin="0,0,10,0">
+                  <Path Data="{Binding PlayProgress, Converter={x:Static vm:ProgressRing.Instance}}"
+                        Stroke="{DynamicResource BunyiAccent}" StrokeThickness="2.5"
+                        StrokeLineCap="Round" IsVisible="{Binding IsPlaying}"
+                        Width="34" Height="34"
+                        HorizontalAlignment="Center" VerticalAlignment="Center" />
+                  <Button Command="{Binding $parent[ItemsControl].((vm:HistoryViewModel)DataContext).TogglePlayCommand}"
+                          CommandParameter="{Binding}"
+                          Width="30" Height="30" Padding="0"
+                          HorizontalAlignment="Center" VerticalAlignment="Center"
+                          Content="{Binding IsPlaying, Converter={x:Static vm:PlayGlyph.Instance}}"
+                          ToolTip.Tip="Play or stop this clip" />
+                </Panel>
+
+                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Border Background="{DynamicResource BunyiAccent}" CornerRadius="8"
+                            Padding="6,1" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding Mode}" FontSize="10" Foreground="White" />
+                    </Border>
+                    <TextBlock Text="{Binding Summary}" TextTrimming="CharacterEllipsis"
+                               VerticalAlignment="Center" />
+                  </StackPanel>
+                  <TextBlock Text="{Binding Subtitle}" FontSize="11" Opacity="0.7" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4"
+                            VerticalAlignment="Center">
+                  <Button Content="Save a copy" FontSize="11"
+                          Command="{Binding $parent[ItemsControl].((vm:HistoryViewModel)DataContext).DownloadCommand}"
+                          CommandParameter="{Binding}"
+                          ToolTip.Tip="Save this clip somewhere else" />
+                  <Button FontSize="11"
+                          Content="{Binding Copied, Converter={x:Static vm:CopyLabel.Instance}}"
+                          Command="{Binding $parent[ItemsControl].((vm:HistoryViewModel)DataContext).CopyDetailsCommand}"
+                          CommandParameter="{Binding}"
+                          ToolTip.Tip="Copy everything about this clip" />
+                  <Button Content="Show file" FontSize="11"
+                          Command="{Binding $parent[ItemsControl].((vm:HistoryViewModel)DataContext).RevealCommand}"
+                          CommandParameter="{Binding}"
+                          ToolTip.Tip="Show this file on disk" />
+                  <Button Content="Trash" FontSize="11"
+                          Command="{Binding $parent[ItemsControl].((vm:HistoryViewModel)DataContext).TrashCommand}"
+                          CommandParameter="{Binding}"
+                          ToolTip.Tip="Move this clip to the Trash" />
+                </StackPanel>
+              </Grid>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </ScrollViewer>
+  </Panel>
+</UserControl>
