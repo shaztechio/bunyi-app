@@ -21,6 +21,7 @@ using Bunyi.App.Views;
 using Bunyi.Core;
 using Bunyi.Core.Audio;
 using Bunyi.Core.Diagnostics;
+using Bunyi.Core.Design;
 using Bunyi.Core.Engine;
 using Bunyi.Core.Models;
 using Bunyi.Core.Settings;
@@ -50,29 +51,54 @@ public partial class App : Application
             var probe = new SystemProbe();
             var downloader = new ModelDownloader(Http, log);
 
+            ModelSource SourceFor(TtsMode mode) =>
+                ModelSource.Parse(settings.SourceFor(mode), DefaultSourceFor(mode));
+
             // Doctor needs the same view of sources and folders the engine has,
             // so it is built from the same functions rather than a second copy.
-            Task<DoctorReport> RunDoctor(TtsMode mode, bool deep, CancellationToken ct) =>
-                Bunyi.Core.Diagnostics.Doctor.RunAsync(
+            Task<DoctorReport> RunDoctor(TtsMode mode, bool deep, CancellationToken ct)
+            {
+                // A mode with no export yet has nothing to check, and reporting
+                // on the preset-voice model instead would answer a question
+                // nobody asked — with the wrong size, about the wrong download.
+                if (!ModelLayout.Exists(mode))
+                {
+                    return Task.FromResult(new DoctorReport(mode, [
+                        new DoctorFinding(
+                            "Mode",
+                            $"{mode.DisplayName()} is not available in this version yet. "
+                            + "Preset voice and voice design both work.",
+                            DoctorSeverity.Blocker),
+                    ]));
+                }
+
+                var layout = ModelLayout.For(mode);
+
+                return Bunyi.Core.Diagnostics.Doctor.RunAsync(
                     mode,
-                    ModelSource.Parse(settings.SourceFor(mode), DefaultSourceFor(mode)),
-                    ModelLayout.PresetVoice,
+                    SourceFor(mode),
+                    layout,
                     settingsStore.ResolveModelsFolder(settings),
                     Bunyi.Core.Infrastructure.AppPaths.Outputs,
                     probe,
                     Reachable,
-                    (folder, token) => downloader.VerifyAsync(
-                        ModelSource.Parse(settings.SourceFor(mode), DefaultSourceFor(mode)),
-                        ModelLayout.PresetVoice, folder, token),
+                    (folder, token) => downloader.VerifyAsync(SourceFor(mode), layout, folder, token),
                     deep,
                     ct);
+            }
+
+            // One synthesizer per mode. They are different pipelines over
+            // different exports, and the engine unloads whichever is being left
+            // behind when the mode changes.
+            var preset = new QwenSpeechSynthesizer(log);
+            var design = new DesignSpeechSynthesizer(log);
 
             var engine = new OnnxTtsEngine(
-                new QwenSpeechSynthesizer(log),
+                mode => mode == TtsMode.VoiceDesign ? design : preset,
                 downloader,
                 log,
-                mode => ModelSource.Parse(settings.SourceFor(mode), DefaultSourceFor(mode)),
-                _ => ModelLayout.PresetVoice,
+                SourceFor,
+                ModelLayout.For,
                 () => settingsStore.ResolveModelsFolder(settings),
                 () => Bunyi.Core.Infrastructure.AppPaths.Outputs,
                 typeof(App).Assembly.GetName().Version?.ToString(3) ?? "0.1.0",

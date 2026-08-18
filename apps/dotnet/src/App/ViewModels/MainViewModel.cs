@@ -18,6 +18,7 @@ using Bunyi.Core;
 using Bunyi.Core.Audio;
 using Bunyi.Core.Diagnostics;
 using Bunyi.Core.Engine;
+using Bunyi.Core.Models;
 using Bunyi.Core.Platform;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -230,13 +231,28 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         !ShowingHistory && ExamplePrompts.ShouldShow(Mode, Script, LastOutputPath is not null);
 
     /// <summary>Only preset voice is implemented so far.</summary>
-    public bool ModeIsAvailable => Mode == TtsMode.PresetVoice;
+    public bool ModeIsAvailable => ModelLayout.Exists(Mode);
+
+    /// <summary>
+    /// Whether to offer a speaker list.
+    /// </summary>
+    /// <remarks>
+    /// Design mode has none — the voice comes from the description instead —
+    /// and a picker that changes nothing is the trap §1 refuses for clone
+    /// mode's emotion field.
+    /// </remarks>
+    public bool ShowSpeakers => ModeIsAvailable && Mode != TtsMode.VoiceDesign;
+
+    /// <summary>What the style or voice field suggests, which differs by mode.</summary>
+    public string InstructPlaceholder => Mode == TtsMode.VoiceDesign
+        ? "Describe the voice, e.g. a warm older man with a slight rasp"
+        : "Optional — how it should be said";
 
     /// <summary>What the mode picker's subtitle says.</summary>
     public string ModeSubtitle => Mode switch
     {
         TtsMode.PresetVoice => "Choose a voice the model already knows.",
-        TtsMode.VoiceDesign => "Describe a voice and the model builds it. Not implemented yet.",
+        TtsMode.VoiceDesign => "Describe a voice and the model builds it.",
         TtsMode.VoiceClone => "Clone a voice from a recording. Not implemented yet.",
         _ => string.Empty,
     };
@@ -494,8 +510,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(ExamplePrompt));
         OnPropertyChanged(nameof(ModeSubtitle));
         OnPropertyChanged(nameof(ModeIsAvailable));
+        OnPropertyChanged(nameof(ShowSpeakers));
         OnPropertyChanged(nameof(ShowInstruct));
         OnPropertyChanged(nameof(InstructLabel));
+        OnPropertyChanged(nameof(InstructPlaceholder));
         Refresh();
     }
 

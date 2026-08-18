@@ -82,6 +82,103 @@ public sealed record ModelLayout(
             new ModelFile("tokenizer/merges.txt", Required: true),
         ],
         ApproxDownloadBytes: 5_880_000_000);
+
+    /// <summary>
+    /// The voice-design export: <c>wavekat/Qwen3-TTS-1.7B-VoiceDesign-ONNX</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Verified against the published repository by downloading it, not
+    /// assumed. Two things differ from the preset-voice export and both matter.
+    /// </para>
+    /// <para>
+    /// <b>The graphs live under a precision subfolder.</b> Only <c>int4/</c> is
+    /// fetched; <c>fp32/</c> is another 12.70 GB of the same model and would
+    /// quadruple the download to use none of it. A layout that assumed a flat
+    /// export would pull 18.55 GB to use 4.27 GB.
+    /// </para>
+    /// <para>
+    /// <b>The embeddings are files rather than graph initialisers.</b> Fifteen
+    /// codebook tables, a text embedding of 1.24 GB, and the projection weights
+    /// — all required, because the pipeline reads them directly. The
+    /// preset-voice export carries its equivalents inside the graphs, which is
+    /// why its list is so much shorter.
+    /// </para>
+    /// <para>
+    /// 5.85 GB in total, measured from the repository listing. Almost exactly
+    /// the preset export's 5.88 GB: <c>int4</c> more than pays for 2.8x the
+    /// parameters, and RESEARCH-ONNX.md records that it is the cheaper of the
+    /// two to hold in memory as well.
+    /// </para>
+    /// </remarks>
+    public static ModelLayout VoiceDesign { get; } = new(
+        "wavekat-voicedesign-1.7b-int4",
+        [
+            new ModelFile("config.json", Required: true),
+
+            new ModelFile("int4/talker_prefill.onnx", Required: true),
+            new ModelFile("int4/talker_prefill.onnx.data", Required: true),
+            new ModelFile("int4/talker_decode.onnx", Required: true),
+            new ModelFile("int4/talker_decode.onnx.data", Required: true),
+            new ModelFile("int4/code_predictor.onnx", Required: true),
+            new ModelFile("int4/code_predictor.onnx.data", Required: true),
+            new ModelFile("int4/vocoder.onnx", Required: true),
+            new ModelFile("int4/vocoder.onnx.data", Required: true),
+
+            new ModelFile("embeddings/text_embedding.npy", Required: true),
+            new ModelFile("embeddings/talker_codec_embedding.npy", Required: true),
+            new ModelFile("embeddings/text_projection_fc1_weight.npy", Required: true),
+            new ModelFile("embeddings/text_projection_fc1_bias.npy", Required: true),
+            new ModelFile("embeddings/text_projection_fc2_weight.npy", Required: true),
+            new ModelFile("embeddings/text_projection_fc2_bias.npy", Required: true),
+            new ModelFile("embeddings/small_to_mtp_projection_weight.npy", Required: true),
+            new ModelFile("embeddings/small_to_mtp_projection_bias.npy", Required: true),
+
+            new ModelFile("embeddings/cp_codec_embedding_0.npy", Required: true),
+            new ModelFile("embeddings/cp_codec_embedding_1.npy", Required: true),
+            new ModelFile("embeddings/cp_codec_embedding_2.npy", Required: true),
+            new ModelFile("embeddings/cp_codec_embedding_3.npy", Required: true),
+            new ModelFile("embeddings/cp_codec_embedding_4.npy", Required: true),
+            new ModelFile("embeddings/cp_codec_embedding_5.npy", Required: true),
+            new ModelFile("embeddings/cp_codec_embedding_6.npy", Required: true),
+            new ModelFile("embeddings/cp_codec_embedding_7.npy", Required: true),
+            new ModelFile("embeddings/cp_codec_embedding_8.npy", Required: true),
+            new ModelFile("embeddings/cp_codec_embedding_9.npy", Required: true),
+            new ModelFile("embeddings/cp_codec_embedding_10.npy", Required: true),
+            new ModelFile("embeddings/cp_codec_embedding_11.npy", Required: true),
+            new ModelFile("embeddings/cp_codec_embedding_12.npy", Required: true),
+            new ModelFile("embeddings/cp_codec_embedding_13.npy", Required: true),
+            new ModelFile("embeddings/cp_codec_embedding_14.npy", Required: true),
+
+            new ModelFile("tokenizer/tokenizer.json", Required: true),
+            new ModelFile("tokenizer/vocab.json", Required: true),
+            new ModelFile("tokenizer/merges.txt", Required: true),
+            new ModelFile("tokenizer/added_tokens.json"),
+        ],
+        ApproxDownloadBytes: 5_850_000_000);
+
+    /// <summary>Whether a mode has an export to download at all.</summary>
+    /// <remarks>
+    /// Asked before <see cref="For" />, so a caller that can cope with an
+    /// unimplemented mode — Doctor, which is asked about whatever tab is on
+    /// screen — does not have to catch an exception to find out.
+    /// </remarks>
+    public static bool Exists(TtsMode mode) =>
+        mode is TtsMode.PresetVoice or TtsMode.VoiceDesign;
+
+    /// <summary>The export a mode uses.</summary>
+    /// <remarks>
+    /// Clone has none yet, and answering with the preset-voice layout would
+    /// have the app download 5.88 GB for a mode that cannot run — so it says so
+    /// instead.
+    /// </remarks>
+    public static ModelLayout For(TtsMode mode) => mode switch
+    {
+        TtsMode.PresetVoice => PresetVoice,
+        TtsMode.VoiceDesign => VoiceDesign,
+        _ => throw new NotSupportedException(
+            $"{mode.DisplayName()} is not implemented yet, so it has no model to download."),
+    };
 }
 
 /// <summary>Why a model folder is not usable yet.</summary>
