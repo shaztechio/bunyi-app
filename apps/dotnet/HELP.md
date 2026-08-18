@@ -47,7 +47,9 @@ Choose a speaker from the list that comes with the model, and Bunyi reads your t
 
 There is a **style instruction** box — a short phrase describing how the text should be said, such as "cheerful and quick" or "calm, like a bedtime story". Leave it blank for a neutral reading.
 
-**On this version the instruction is currently ignored.** The library Bunyi uses for speech treats this model as one that cannot take instructions, although the people who made the model say it can. The box is still there because the setting is saved with each clip, and it will start working when that is fixed upstream.
+**The instruction has no effect in this version.** The speech library this app currently uses does not pass it to the small preset-voice model, so it changes nothing — and rather than pretend otherwise, Bunyi leaves the style out of the file's saved details when that happens, so a clip never claims a delivery it did not have.
+
+This is a difference from the Mac version, where the instruction does reach the model, and it is being worked on. In the meantime, **Voice design** takes a description and acts on it.
 
 ## Language
 

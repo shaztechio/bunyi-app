@@ -168,13 +168,21 @@ limitations under the License.
             download runs for minutes, and without Stop the only way out is
             closing the window.
           -->
-          <Button Content="Generate" Name="GenerateButton" Command="{Binding GenerateCommand}"
+          <Button Content="Generate" Name="GenerateButton" Classes="primary"
+                  Command="{Binding GenerateCommand}"
                   IsEnabled="{Binding CanGenerate}" IsVisible="{Binding ShowGenerate}"
                   ToolTip.Tip="{Binding BlockedReason}"
-                  IsDefault="True" MinWidth="110"
-                  Background="{DynamicResource BunyiAccent}" Foreground="White" />
-          <Button Content="Stop" Name="StopButton" Command="{Binding StopCommand}"
-                  IsVisible="{Binding IsBusy}" IsCancel="True" MinWidth="110" />
+                  IsDefault="True" MinWidth="130" />
+          <!--
+            The same width as Generate, not merely a similar one. §2 replaces
+            one button with the other, and 110 was enough for "Stop" but not for
+            "Generate" — so the row resized on every swap, drawing the eye to
+            the layout at exactly the moment it should be on the status line.
+          -->
+          <Button Content="Stop" Name="StopButton" Classes="danger"
+                  Command="{Binding StopCommand}"
+                  IsVisible="{Binding IsBusy}" IsCancel="True" MinWidth="130"
+                  ToolTip.Tip="Stop the current operation" />
         </StackPanel>
       </Grid>
     </StackPanel>

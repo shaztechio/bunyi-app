@@ -600,16 +600,15 @@ Warning: Instruction text ignored - Qwen06B model does not support
 instruction control. Use 1.7B for style instructions.
 ```
 
-**That message is wrong about the model, and it cost an hour of wrong
-conclusions.** It reads as a capability of the checkpoint, and was first written
-up here as a parity gap for `/spec` to settle. It is not one.
+**That message is right, and this file said for a while that it was wrong.**
 
-Qwen's own model card for `Qwen3-TTS-12Hz-0.6B-CustomVoice` says the opposite:
+The reasoning was: Qwen's own model card for
+`Qwen3-TTS-12Hz-0.6B-CustomVoice` says the opposite —
 
 > allows for fine-grained style control over target voices via natural language
 > instructions
 
-with an `instruct=` argument in its usage example. The restriction is a
+— with an `instruct=` argument in its usage example, while the restriction is a
 hardcoded per-variant flag in `ElBruno.QwenTTS`:
 
 ```
@@ -617,9 +616,56 @@ Qwen06B    SupportsInstruct=False   repo=elbruno/...0.6B-CustomVoice-ONNX
 Qwen17B    SupportsInstruct=True    repo=elbruno/...1.7B-CustomVoice-ONNX
 ```
 
-So **FEATURES §1 is correct** — preset voice does take a style instruction — and
-macOS, which defaults to the MLX build of the same 0.6B checkpoint, is
-unaffected. Nothing here needs a spec change.
+A model card and a flag disagreeing looked like the flag being wrong. It was
+not. The library's author closed
+[#64](https://github.com/elbruno/ElBruno.QwenTTS/issues/64) with the answer:
+
+> Authoritative upstream 0.6B inference discards instruction conditioning, so
+> `SupportsInstruct=false` is correct despite the model-card wording.
+
+**Then macOS was checked, and the picture changed again.** This section has now
+been wrong in both directions, so what follows is the evidence rather than a
+conclusion.
+
+`AtomGradient/swift-qwen3-tts`, which the macOS app ships, **does** feed the
+instruction to the 0.6B CustomVoice checkpoint. `Qwen3+Streaming.swift`
+dispatches `custom_voice` to `generateCustomVoice(… instruct: instruct …)`, and
+`Qwen3.swift` builds it into the sequence:
+
+```swift
+// 7. Instruct embedding (VoiceDesign/CustomVoice mode)
+let instructText = "<|im_start|>user\n\(instruct)<|im_end|>\n"
+instructEmbed = talker.textProjection(talker.embedText(instructIds))
+…
+inputEmbeds = MLX.concatenated([instructEmbed, roleEmbed, combinedEmbed], axis: 1)
+```
+
+That is the same construction wavekat's reference script uses, and the same one
+`PrefillBuilder` here does for voice design. The package treats it as
+deliberate: the `base` path passes `instruct: nil` with the comment "Base model
+doesn't support instruct", while `custom_voice` passes it through.
+
+So three implementations disagree about one checkpoint:
+
+| | Feeds the instruction to 0.6B CustomVoice? |
+|---|---|
+| Qwen's model card | says yes |
+| `swift-qwen3-tts` (macOS ships it) | **yes**, shown above |
+| wavekat's ONNX reference construction | yes, for its own export |
+| `ElBruno.QwenTTS` (this app uses it) | **no**, by a per-variant flag |
+
+**This is a parity break rather than a spec question.** §1's style instruction
+reaches the model on macOS and does not here, and the difference is the
+dependency rather than the checkpoint. Whether the audio audibly changes is a
+separate, unmeasured question — but "the app quietly drops the input on one
+platform" does not need that answer to be a problem.
+
+**The way out is already built.** Our own pipeline makes this exact prefill and
+is validated against the reference (below), and the graphs are identical between
+the two exports apart from hidden width. Driving preset voice through it would
+close the gap, remove the `ElBruno.QwenTTS` dependency, and put both modes on
+one driver. That is a real change and belongs in its own milestone, not in a
+footnote here.
 
 **What was done.** The engine refuses to record a style that was not applied,
 and says why. That is a safety net whatever the reason, and it stays: an input
@@ -634,12 +680,19 @@ the model.
 poor trade for the audience this app is aimed at, and it would not fix the
 smaller model.
 
-**Reported upstream:**
-[elbruno/ElBruno.QwenTTS#64](https://github.com/elbruno/ElBruno.QwenTTS/issues/64)
-— "Qwen3-TTS-12Hz-0.6B-CustomVoice does support instructions". If the flag is
-corrected there, `SupportsInstruct` starts returning true on its own and the
-engine stops suppressing the style, with no change needed here: the capability
-is asked of the synthesizer rather than assumed, precisely so that can happen.
+**Reported upstream and answered:**
+[elbruno/ElBruno.QwenTTS#64](https://github.com/elbruno/ElBruno.QwenTTS/issues/64),
+closed as correct behaviour. Nothing will change there, so nothing changes here
+either — but the seam earns its keep anyway. `SupportsInstruct` is asked of the
+synthesizer rather than assumed, and voice design answers **true** through the
+same seam, because there the description is the whole mechanism rather than a
+hint the model may drop.
+
+**What is still unmeasured.** Nobody here has compared audio from the 0.6B with
+and without an instruction. macOS feeds it, so the field is live there, but
+"reaches the model" and "changes the delivery" are different claims and only the
+first is established. Measuring it is the first thing to do before promising
+anything about style control in preset voice.
 
 The issue leaves open the one thing we could not determine from outside — whether
 the ONNX export itself carries the conditioning path, or only the library's flag

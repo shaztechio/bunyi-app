@@ -50,16 +50,29 @@ namespace Bunyi.App.Tests;
 /// <remarks>
 /// Not <see cref="Bunyi.App.App"/> itself, because that is the composition root:
 /// it builds the real ONNX engine and audio device, neither of which belongs in
-/// a test. It loads the same theme and the same brand resources, so what the
-/// tests exercise is the real window against the real styles.
+/// a test. It loads the same theme, the same brand resources and the same
+/// control styles, in the same order, so what the tests exercise is the real
+/// window as it is actually drawn.
 /// </remarks>
 public sealed class TestApp : Application
 {
     public override void Initialize()
     {
         Styles.Add(new FluentTheme());
+
         Resources.MergedDictionaries.Add(
             new ResourceInclude((Uri?)null) { Source = new Uri("avares://Bunyi.App/Themes/Brand.axaml") });
+
+        // The app's own control styles, in the same order App.axaml adds them.
+        // Without this the tests ran against bare Fluent, so anything the app
+        // restyles — corner radii, icon buttons, centred button labels — was
+        // invisible to them. That is the gap that let "Stop" sit against the
+        // left edge of its button, and the dialog buttons ship square, with a
+        // green suite either time.
+        Styles.Add(new StyleInclude((Uri?)null)
+        {
+            Source = new Uri("avares://Bunyi.App/Themes/Controls.axaml"),
+        });
     }
 }
 
