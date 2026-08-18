@@ -64,6 +64,9 @@ public sealed record DesignConfig
     /// <summary>Code-predictor head size.</summary>
     public required int CodePredictorHeadDim { get; init; }
 
+    /// <summary>How many codes each of the later codebooks can hold.</summary>
+    public required int CodePredictorVocabSize { get; init; }
+
     /// <summary>Padding in the text stream.</summary>
     public required int TtsPadTokenId { get; init; }
 
@@ -147,6 +150,8 @@ public sealed record DesignConfig
                 Int(root, source, "cp_num_kv_heads", "code_predictor", "num_key_value_heads"),
             CodePredictorHeadDim =
                 Int(root, source, "cp_head_dim", "code_predictor", "head_dim"),
+            CodePredictorVocabSize =
+                Int(root, source, "cp_vocab_size", "code_predictor", "vocab_size"),
 
             TtsPadTokenId = Int(root, source, "tts_pad_token_id"),
             TtsBosTokenId = Int(root, source, "tts_bos_token_id"),

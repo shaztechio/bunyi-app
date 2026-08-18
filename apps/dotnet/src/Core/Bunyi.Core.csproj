@@ -43,6 +43,7 @@ limitations under the License.
       implements none of spec §3b.
     -->
     <PackageReference Include="ElBruno.QwenTTS" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" />
 
     <!--
       Playback, through miniaudio: identical on Windows and Linux, and the
