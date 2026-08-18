@@ -40,3 +40,4 @@ __pycache__/
 
 # .NET publish output
 artifacts/
+publish/

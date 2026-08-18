@@ -1,0 +1,301 @@
+# Copyright 2026 Shazron Abdullah and Bunyi contributors
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: Windows + Linux release
+
+# Its own tag namespace, because the two apps release separately and are not
+# expected to march in step — apps/dotnet/Directory.Build.props says so, and
+# macOS already owns `v*`. A `dotnet-v*` tag does not match `v*`, so cutting one
+# here cannot start a signed macOS release.
+on:
+  push:
+    tags: ['dotnet-v*']
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Cut a release? "none" builds without publishing.'
+        type: choice
+        default: none
+        options: [none, patch, minor, major]
+      version:
+        description: 'Exact version x.y.z. Overrides the bump choice.'
+        type: string
+        default: ''
+
+# Needed to create the Release and to push the version bump when one is cut
+# from the browser. Nothing here handles a signing certificate — see the note
+# on signing in the release body — but the token is still worth keeping away
+# from a fork's pull request, which is why there is no pull_request trigger.
+permissions:
+  contents: write
+
+concurrency:
+  group: dotnet-release
+  cancel-in-progress: false
+
+jobs:
+  # Deciding the version once, before anything is built, so both platforms
+  # stamp the same number and the tag cannot disagree with the binaries.
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.pick.outputs.version }}
+      tag: ${{ steps.pick.outputs.tag }}
+      publish: ${{ steps.pick.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: true
+          # Release notes read the commits since the previous tag, so a shallow
+          # clone would produce an empty changelog.
+          fetch-depth: 0
+
+      - name: Decide the version
+        id: pick
+        run: |
+          set -euo pipefail
+          props="apps/dotnet/Directory.Build.props"
+          current="$(sed -n 's|.*<VersionPrefix>\(.*\)</VersionPrefix>.*|\1|p' "$props" | head -1)"
+
+          if [ "${{ github.event_name }}" = "push" ]; then
+            # The tag is the authority on a tag-triggered run.
+            version="${GITHUB_REF_NAME#dotnet-v}"
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+
+            if [ "$version" != "$current" ]; then
+              echo "Tag $GITHUB_REF_NAME does not match VersionPrefix $current in $props." >&2
+              echo "Bump the file and tag the commit that changed it." >&2
+              exit 1
+            fi
+          elif [ -n "${{ inputs.version }}" ] || [ "${{ inputs.bump }}" != "none" ]; then
+            requested="${{ inputs.version }}"
+            if [ -n "$requested" ]; then
+              version="${requested#v}"
+            else
+              major="${current%%.*}"; rest="${current#*.}"
+              minor="${rest%%.*}"; patch="${rest#*.}"
+              case "${{ inputs.bump }}" in
+                patch) version="$major.$minor.$((patch + 1))" ;;
+                minor) version="$major.$((minor + 1)).0" ;;
+                major) version="$((major + 1)).0.0" ;;
+              esac
+            fi
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            # A dry run: build everything, publish nothing.
+            version="$current"
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          case "$version" in
+            [0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "$version is not a valid x.y.z version" >&2; exit 1 ;;
+          esac
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=dotnet-v$version" >> "$GITHUB_OUTPUT"
+          echo "Building $version"
+
+      # Only when the run started from the browser: a tag-triggered run is
+      # already sitting on the commit that carries the version.
+      - name: Bump the version and tag
+        if: github.event_name == 'workflow_dispatch' && steps.pick.outputs.publish == 'true'
+        run: |
+          set -euo pipefail
+          version="${{ steps.pick.outputs.version }}"
+          tag="${{ steps.pick.outputs.tag }}"
+          props="apps/dotnet/Directory.Build.props"
+
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+            echo "Tag $tag already exists." >&2
+            exit 1
+          fi
+
+          sed -i "s|<VersionPrefix>.*</VersionPrefix>|<VersionPrefix>$version</VersionPrefix>|" "$props"
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "$props"
+          git commit -m "chore(dotnet): release $version"
+          git tag "$tag"
+
+          # Pushing with GITHUB_TOKEN raises no workflow events, so this does
+          # not start a second run of this file.
+          git push origin HEAD:"${GITHUB_REF_NAME}" "$tag"
+
+  build:
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+            archive: zip
+          - os: ubuntu-latest
+            rid: linux-x64
+            archive: tar.gz
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+
+    steps:
+      # The tag when there is one — the bump commit may have landed a moment
+      # ago, and building anything but the tagged tree would ship binaries the
+      # tag does not describe.
+      - uses: actions/checkout@v7
+        if: needs.version.outputs.publish == 'true'
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+          fetch-depth: 0
+
+      # A dry run has no tag to check out.
+      - uses: actions/checkout@v7
+        if: needs.version.outputs.publish == 'false'
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      # The tests are not the release gate — dotnet.yml already runs them on
+      # every pull request — but a release built from a tree that cannot pass
+      # them is not one worth publishing.
+      - name: Test
+        working-directory: apps/dotnet
+        run: dotnet test -c Release
+
+      - name: Publish
+        working-directory: apps/dotnet
+        run: >
+          dotnet publish src/App -c Release -r ${{ matrix.rid }} --self-contained
+          -p:Version=${{ needs.version.outputs.version }}
+          -o publish/${{ matrix.rid }}
+
+      # Self-contained, so the folder is the whole app: no runtime to install
+      # and nothing to unpack into Program Files. §15's "portable build" is
+      # this, and the archive keeps the folder rather than scattering it.
+      - name: Package (zip)
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        working-directory: apps/dotnet
+        run: |
+          $name = "Bunyi-${{ needs.version.outputs.version }}-${{ matrix.rid }}"
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Compress-Archive -Path "publish/${{ matrix.rid }}/*" -DestinationPath "dist/$name.zip"
+          (Get-FileHash "dist/$name.zip" -Algorithm SHA256).Hash.ToLower() + "  $name.zip" |
+            Out-File -Encoding ascii "dist/$name.zip.sha256"
+
+      - name: Package (tar.gz)
+        if: matrix.archive == 'tar.gz'
+        working-directory: apps/dotnet
+        run: |
+          set -euo pipefail
+          name="Bunyi-${{ needs.version.outputs.version }}-${{ matrix.rid }}"
+          mkdir -p dist
+          # The executable bit does not survive a zip on Linux, which is half of
+          # why this one is a tarball.
+          chmod +x "publish/${{ matrix.rid }}/Bunyi.App"
+          tar -czf "dist/$name.tar.gz" -C "publish/${{ matrix.rid }}" .
+          sha256sum "dist/$name.tar.gz" | sed "s|dist/||" > "dist/$name.tar.gz.sha256"
+
+      # A smoke check that the archive holds an app rather than an empty folder,
+      # which a mistyped publish path would otherwise produce silently.
+      - name: Check the archive
+        shell: bash
+        working-directory: apps/dotnet
+        run: |
+          set -euo pipefail
+          ls -l dist/
+          archive="$(ls dist/*.zip dist/*.tar.gz 2>/dev/null | head -1)"
+          test -n "$archive"
+          # wc -c rather than stat, whose flags differ between the runners.
+          size="$(wc -c < "$archive")"
+          echo "$archive is $size bytes"
+          # A self-contained Avalonia app is tens of megabytes. Anything near
+          # empty means the publish wrote somewhere else and the archive would
+          # ship as a folder of nothing.
+          test "$size" -gt 20000000
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.rid }}
+          path: apps/dotnet/dist/*
+          if-no-files-found: error
+
+  release:
+    needs: [version, build]
+    if: needs.version.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="${{ needs.version.outputs.tag }}"
+          version="${{ needs.version.outputs.version }}"
+          notes="$(mktemp)"
+
+          # Hand-written notes win when they exist, for the reason the macOS
+          # workflow gives: merges squash, so a PR carrying a feature and five
+          # fixes becomes one changelog line — accurate, and a poor description.
+          handwritten="release-notes/$tag.md"
+          {
+            if [ -f "$handwritten" ]; then
+              cat "$handwritten"
+            else
+              # Scoped to this app and the shared spec. A release listing the
+              # other app's commits would describe work this download does not
+              # contain.
+              python3 tools/release-notes.py "$tag" \
+                --tags 'dotnet-v*' --path apps/dotnet --path spec
+            fi
+
+            printf '\n---\n\n'
+            printf '### Installing\n\n'
+            printf '**Windows** — unzip and run `Bunyi.App.exe`.\n'
+            printf '**Linux** — untar and run `./Bunyi.App`.\n\n'
+            printf 'Self-contained: there is no .NET runtime to install, and nothing is '
+            printf 'written outside the folder you unpack plus your own app-data directory.\n\n'
+            printf '**These builds are not code-signed.** Windows SmartScreen will warn on '
+            printf 'first run — "More info" then "Run anyway". Checksums are below, and '
+            printf 'signing is tracked as future work.\n\n'
+            printf '### What works\n\n'
+            printf 'Preset voice and voice design. Voice clone is not implemented yet, and '
+            printf 'the tab says so.\n\n'
+            printf 'The first generation in each mode downloads that mode s model '
+            printf '(about 5.9 GB) with a progress bar and a time estimate; after that it '
+            printf 'runs offline. Doctor checks there is room before the download starts.\n\n'
+            printf '### Requirements\n\n'
+            printf 'A 64-bit Windows or Linux machine. Generation runs on the CPU; long '
+            printf 'text can reach about 17 GB of memory, so 16 GB is workable for short '
+            printf 'clips and tight for long ones.\n\n'
+            printf 'SHA-256:\n\n```\n'
+            cat dist/*.sha256
+            printf '```\n'
+          } > "$notes"
+
+          gh release create "$tag" dist/* \
+            --title "Bunyi for Windows and Linux $version" \
+            --notes-file "$notes" \
+            --verify-tag

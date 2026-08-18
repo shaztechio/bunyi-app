@@ -161,6 +161,50 @@ the assembly is help that goes missing.
   so the text describes what exists here and says plainly what does not — a
   test fails on Finder/-Command-/"your Mac" wording.
 
+## Releasing
+
+`.github/workflows/dotnet-release.yml`, triggered by a **`dotnet-v*`** tag or
+run from the browser.
+
+Its own tag namespace on purpose. macOS owns `v*`, and
+`Directory.Build.props` records that the two apps release separately and are not
+expected to march in step — so `dotnet-v1.2.0` cuts this app's release and
+cannot start a signed macOS one.
+
+```
+Actions -> Windows + Linux release -> Run workflow
+  bump: patch | minor | major     (or an exact version)
+  bump: none                      builds both platforms and publishes nothing
+```
+
+Choosing a bump edits `VersionPrefix`, commits, tags, and pushes. A tag-triggered
+run instead **refuses to build** if the tag disagrees with `VersionPrefix`,
+because a release whose binaries carry a different number from its tag is worse
+than one that failed to build.
+
+What ships, per release:
+
+- `Bunyi-<version>-win-x64.zip`
+- `Bunyi-<version>-linux-x64.tar.gz`, which is a tarball rather than a zip
+  because the executable bit does not survive the latter
+- a `.sha256` beside each
+
+Both are **self-contained**: no .NET runtime to install, and nothing written
+outside the unpacked folder plus the app-data directories in
+`/spec/DATA-FORMATS.md`.
+
+- **Not code-signed.** There is no certificate for either platform, so Windows
+  SmartScreen warns on first run. The release notes say so rather than leaving
+  people to guess, and signing is future work.
+- **CPU only.** `RESEARCH-ONNX.md` measured DirectML as slower than plain CPU
+  and CUDA as worth an opt-in — but CUDA needs a user-installed toolkit, which
+  is the wrong trade for this audience. Anyone who wants it can publish with the
+  GPU package themselves.
+- Release notes come from `tools/release-notes.py`, scoped with
+  `--path apps/dotnet --path spec` so a release does not list the other app's
+  commits. A hand-written `release-notes/dotnet-v<version>.md` wins when present,
+  because squashed merges make one line out of a PR that carried five changes.
+
 ## Rules
 
 - Keep `src/Core` UI-framework-free (mirrors "keep TTSEngine

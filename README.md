@@ -34,7 +34,7 @@ a shared spec**, not shared code.
 | Path | Target | Stack | Status |
 |------|--------|-------|--------|
 | [`apps/macos/`](apps/macos/) | macOS (Apple Silicon) | Swift + MLX + SwiftUI | **working** |
-| [`apps/dotnet/`](apps/dotnet/) | Windows **and** Linux | C# .NET + Avalonia + ONNX Runtime | **scaffold** |
+| [`apps/dotnet/`](apps/dotnet/) | Windows **and** Linux | C# .NET + Avalonia + ONNX Runtime | **working** — preset voice and voice design |
 | [`spec/`](spec/) | all | — | source of truth |
 
 Three operating systems, two codebases, one spec.
@@ -56,10 +56,9 @@ Any feature change updates the spec **and** every app.
 - **macOS** → [`apps/macos/README.md`](apps/macos/README.md) /
   [`apps/macos/AGENTS.md`](apps/macos/AGENTS.md) (XcodeGen + xcodebuild).
 - **Windows / Linux** → [`apps/dotnet/AGENTS.md`](apps/dotnet/AGENTS.md)
-  (`dotnet build`). Note: the .NET app is currently a **scaffold** —
-  structure, build docs, and stubs only; it is not yet implemented and has
-  never been built. Pick it up on a Windows or Linux machine with the .NET
-  SDK.
+  (`dotnet build`, .NET 10 SDK). Preset voice and voice design work; voice
+  clone is not implemented yet and says so in the app. Releases are portable
+  self-contained builds — unzip and run, with no runtime to install.
 
 Hosting the models yourself (when the Hub is slow, or you are serving a team):
 [`SELF-HOSTING.md`](SELF-HOSTING.md), and [`CACHING.md`](CACHING.md) for
