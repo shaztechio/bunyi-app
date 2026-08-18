@@ -298,7 +298,8 @@ jobs:
               echo "Using $handwritten" >&2
               cat "$handwritten"
             else
-              python3 apps/macos/tools/packaging/release-notes.py "${{ steps.mode.outputs.tag }}"
+              python3 tools/release-notes.py "${{ steps.mode.outputs.tag }}" \
+                --path apps/macos --path spec
             fi
             printf '\n---\n\n'
             printf 'Signed with a Developer ID certificate, notarized by Apple, and stapled.\n\n'

@@ -15,10 +15,14 @@
 
 """Builds release notes from the Conventional Commit history since the last tag.
 
-    release-notes.py <current-tag> [previous-tag]
+    release-notes.py <current-tag> [previous-tag] [--tags PATTERN] [--path PATH ...]
 
-Without a previous tag it finds the closest preceding `v*` tag, and falls back to
-the whole history when there is none.
+Without a previous tag it finds the closest preceding tag matching --tags,
+which defaults to `v*`, and falls back to the whole history when there is none.
+
+--path narrows the history to one part of the tree. The two apps in this
+repository release separately, so a release of one that listed the other's
+commits would be describing work the download does not contain.
 
 Subjects that are not conventional are kept under "Other changes" rather than
 dropped. Everything before the convention was adopted looks like that, and a
@@ -58,20 +62,23 @@ def git(*args):
     return result.stdout
 
 
-def previous_tag(current):
+def previous_tag(current, pattern="v*"):
     """The tag before `current`, or None when this is the first release."""
-    tags = [t for t in git("tag", "--list", "v*", "--sort=-v:refname").split() if t]
+    tags = [t for t in git("tag", "--list", pattern, "--sort=-v:refname").split() if t]
     if current in tags:
         after = tags[tags.index(current) + 1 :]
         return after[0] if after else None
     return tags[0] if tags else None
 
 
-def commits(current, previous):
+def commits(current, previous, paths=()):
     span = f"{previous}..{current}" if previous else current
     # A null byte separates records: commit bodies contain blank lines, so any
     # newline-based delimiter eventually splits one in half.
-    raw = git("log", "--no-merges", "--format=%s%x1f%b%x00", span)
+    args = ["log", "--no-merges", "--format=%s%x1f%b%x00", span]
+    if paths:
+        args += ["--", *paths]
+    raw = git(*args)
     for record in raw.split("\0"):
         record = record.strip("\n")
         if not record:
@@ -111,9 +118,9 @@ def breaking_note(body):
     return " ".join(part for part in lines if part).strip()
 
 
-def classify(current, previous):
+def classify(current, previous, paths=()):
     breaking, buckets, other = [], {t: [] for t, _ in SECTIONS}, []
-    for subject, body in commits(current, previous):
+    for subject, body in commits(current, previous, paths):
         if SKIP.match(subject):
             continue
         match = SUBJECT.match(subject)
@@ -128,8 +135,8 @@ def classify(current, previous):
     return breaking, buckets, other
 
 
-def render(current, previous):
-    breaking, buckets, other = classify(current, previous)
+def render(current, previous, paths=()):
+    breaking, buckets, other = classify(current, previous, paths)
     out = []
 
     # First, and never in a list. A guest-side change means every existing user
@@ -168,12 +175,30 @@ def render(current, previous):
 
 
 def main(argv):
-    if len(argv) < 2:
+    args = argv[1:]
+    pattern = "v*"
+    paths = []
+
+    positional = []
+    i = 0
+    while i < len(args):
+        if args[i] == "--tags" and i + 1 < len(args):
+            pattern = args[i + 1]
+            i += 2
+        elif args[i] == "--path" and i + 1 < len(args):
+            paths.append(args[i + 1])
+            i += 2
+        else:
+            positional.append(args[i])
+            i += 1
+
+    if not positional:
         sys.stderr.write(__doc__)
         return 64
-    current = argv[1]
-    previous = argv[2] if len(argv) > 2 else previous_tag(current)
-    sys.stdout.write(render(current, previous))
+
+    current = positional[0]
+    previous = positional[1] if len(positional) > 1 else previous_tag(current, pattern)
+    sys.stdout.write(render(current, previous, paths))
     return 0
 
 
