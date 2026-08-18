@@ -107,6 +107,39 @@ public class IconGeometryTests
     }
 
     [AvaloniaFact]
+    public void Every_brand_token_the_app_asks_for_resolves()
+    {
+        // A DynamicResource that names nothing resolves to nothing, silently:
+        // no warning at build, no error at run, just a control drawn without
+        // the value. That is how the Copy icon spent a release invisible, and
+        // how the Logs window was written against two tokens that did not
+        // exist. Enumerated here so adding a token to a view without adding it
+        // to Brand.axaml fails a test rather than shipping.
+        foreach (var key in new[]
+                 {
+                     "BunyiAccent", "BunyiCardBorder", "BunyiCardRadius",
+                     "BunyiControlRadius", "BunyiPillRadius", "BunyiIconButtonSize",
+                     "BunyiSurface", "BunyiMono",
+                 })
+        {
+            Assert.True(Application.Current!.TryFindResource(key, out var value), $"missing {key}");
+            Assert.NotNull(value);
+        }
+    }
+
+    [AvaloniaFact]
+    public void The_monospaced_face_names_more_than_one_font()
+    {
+        // No one monospaced font ships on both Windows and Linux, so a single
+        // name would silently fall back to the proportional default on one of
+        // the two — which §8 asks it not to.
+        Assert.True(Application.Current!.TryFindResource("BunyiMono", out var value));
+        var family = Assert.IsType<FontFamily>(value);
+
+        Assert.True(family.FamilyNames.Count() > 1, "one name is one platform");
+    }
+
+    [AvaloniaFact]
     public void Every_icon_in_the_set_resolves()
     {
         // A missing geometry draws nothing and reports nothing, which is how

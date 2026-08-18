@@ -37,6 +37,15 @@ limitations under the License.
   </ItemGroup>
 
   <ItemGroup>
+    <!--
+      HELP.md is the only copy of the help text, and it ships inside the
+      assembly so a self-contained build has nothing to lose on the way out.
+      Named Bunyi.App.HELP.md by the default resource naming.
+    -->
+    <EmbeddedResource Include="..\..\HELP.md" Link="HELP.md" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- The view is the unit under test for the dialogs it builds in code. -->
     <InternalsVisibleTo Include="Bunyi.App.Tests" />
   </ItemGroup>

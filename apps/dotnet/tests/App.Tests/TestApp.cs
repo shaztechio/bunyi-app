@@ -117,7 +117,7 @@ public sealed class FakeEngine : ITtsEngine
 public sealed class FakePlayer : IAudioPlayer
 {
     public List<string> Played { get; } = [];
-    public bool IsPlaying { get; private set; }
+    public bool IsPlaying { get; set; }
     public TimeSpan Position { get; set; }
     public TimeSpan Duration { get; set; } = TimeSpan.FromSeconds(4);
     public string? CurrentPath { get; private set; }
@@ -134,6 +134,13 @@ public sealed class FakePlayer : IAudioPlayer
     {
         IsPlaying = false;
         CurrentPath = null;
+        Finished?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>Ends the clip the way the real device does: on its own.</summary>
+    public void RaiseFinished()
+    {
+        IsPlaying = false;
         Finished?.Invoke(this, EventArgs.Empty);
     }
 

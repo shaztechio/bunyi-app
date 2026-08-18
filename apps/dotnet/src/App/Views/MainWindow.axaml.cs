@@ -195,6 +195,50 @@ public partial class MainWindow : Window
         await dialog.ShowDialog(this);
     }
 
+    /// <summary>
+    /// Opens the Logs, or brings the open one forward (spec §8).
+    /// </summary>
+    /// <remarks>
+    /// One window, reused. A second Logs window would be a second subscription
+    /// to the same store and two lists drifting apart, and there is nothing to
+    /// compare between them anyway.
+    /// </remarks>
+    private LogsWindow? _logs;
+
+    private void OnLogsClicked(object? sender, RoutedEventArgs e)
+    {
+        if (_logs is not null)
+        {
+            _logs.Activate();
+            return;
+        }
+
+        if (DataContext is not MainViewModel { Logs: not null } model) return;
+
+        _logs = new LogsWindow { DataContext = model.Logs };
+        _logs.Closed += (_, _) => _logs = null;
+        _logs.Show(this);
+
+        // Opened to read the newest thing that happened, so start there.
+        _logs.ScrollToEnd();
+    }
+
+    /// <summary>Opens Help, or brings the open one forward (spec §10).</summary>
+    private HelpWindow? _help;
+
+    private void OnHelpClicked(object? sender, RoutedEventArgs e)
+    {
+        if (_help is not null)
+        {
+            _help.Activate();
+            return;
+        }
+
+        _help = new HelpWindow();
+        _help.Closed += (_, _) => _help = null;
+        _help.Show(this);
+    }
+
     /// <summary>Opens Settings, or brings the open one forward.</summary>
     private SettingsWindow? _settings;
 

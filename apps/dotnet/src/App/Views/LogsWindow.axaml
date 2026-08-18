@@ -1,0 +1,79 @@
+<!--
+Copyright 2026 Shazron Abdullah and Bunyi contributors
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:Bunyi.App.ViewModels"
+        xmlns:diag="clr-namespace:Bunyi.Core.Diagnostics;assembly=Bunyi.Core"
+        x:Class="Bunyi.App.Views.LogsWindow"
+        x:DataType="vm:LogsViewModel"
+        Width="760" Height="520" MinWidth="480" MinHeight="320"
+        WindowStartupLocation="CenterOwner"
+        Title="Logs">
+
+  <DockPanel Margin="16">
+
+    <!--
+      §8: Copy and Clear. The row sits at the bottom so the log itself gets
+      every pixel above it, and so Clear is nowhere near where the eye lands
+      when reading.
+    -->
+    <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto,Auto" Margin="0,12,0,0">
+      <TextBlock Grid.Column="0" VerticalAlignment="Center" Opacity="0.7" FontSize="12"
+                 Text="{Binding Lines.Count, StringFormat='{}{0} lines'}" />
+      <Button Grid.Column="1" Name="CopyButton" Content="Copy" MinWidth="90"
+              Click="OnCopyClicked"
+              ToolTip.Tip="Copy the whole log" />
+      <Button Grid.Column="2" Name="ClearButton" Content="Clear" MinWidth="90" Margin="8,0,0,0"
+              Command="{Binding ClearCommand}"
+              ToolTip.Tip="Empty the log" />
+    </Grid>
+
+    <Border Background="{DynamicResource BunyiSurface}"
+            CornerRadius="{DynamicResource BunyiControlRadius}"
+            Padding="2">
+      <Panel>
+        <!--
+          §8: timestamped, selectable, monospaced. Selectable per line rather
+          than one big text block, so copying a single line out of a long run
+          does not mean dragging through everything above it — and Copy takes
+          the lot in one go anyway.
+        -->
+        <ScrollViewer Name="Scroller" HorizontalScrollBarVisibility="Auto">
+          <ItemsControl ItemsSource="{Binding Lines}" Margin="10,8">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="diag:LogEntry">
+                <SelectableTextBlock Text="{Binding}"
+                                     FontFamily="{DynamicResource BunyiMono}"
+                                     FontSize="12"
+                                     TextWrapping="NoWrap" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+
+        <!--
+          An empty log is normal on a fresh launch, so it says so rather than
+          looking like a window that failed to load.
+        -->
+        <TextBlock Text="Nothing logged yet."
+                   Opacity="0.6"
+                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                   IsVisible="{Binding IsEmpty}" />
+      </Panel>
+    </Border>
+
+  </DockPanel>
+</Window>

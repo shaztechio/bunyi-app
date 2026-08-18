@@ -90,6 +90,7 @@ public partial class App : Application
             {
                 Settings = settingsViewModel,
                 Doctor = RunDoctor,
+                Logs = new LogsViewModel(log),
             };
 
             // §3d: a model being deleted is evicted from memory first,

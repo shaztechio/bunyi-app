@@ -76,6 +76,7 @@ limitations under the License.
 
   <!-- 32px button: centre of area at (16, 16). -->
   <StreamGeometry x:Key="IconPlayRound32">M12.33 9.5 L23.33 16 L12.33 22.5 Z</StreamGeometry>
+  <StreamGeometry x:Key="IconStopRound32">M11 11 h10 v10 h-10 z</StreamGeometry>
 
   <!-- Save a copy: an arrow into a tray. -->
   <StreamGeometry x:Key="IconSave">M12 3v11 M8 10.5l4 4 4-4 M4 17v2.5h16V17</StreamGeometry>
