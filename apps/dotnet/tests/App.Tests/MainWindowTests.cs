@@ -357,11 +357,14 @@ public class MainWindowTests : HeadlessWindows
     }
 
     [AvaloniaFact]
-    public void The_mode_segments_go_dead_while_work_runs_but_History_does_not()
+    public void The_whole_picker_locks_while_work_runs()
     {
         // §2 disables the inputs, and switching mode mid-run would evict the
-        // model the running job is using. §2a keeps History reachable, since it
-        // only reads a folder. One control, two rules.
+        // model the next run wants. History locks too, and that is the point:
+        // reported from using the app, going to History mid-run left every way
+        // back disabled, so the only exits were stopping the work or closing
+        // the window. macOS locks the whole control for the same reason —
+        // .disabled(isBusy && tab != .history).
         var (window, _, engine, _) = Open(m => m.Script = "Hello there.");
         var picker = Find<ListBox>(window, _ => true);
 
@@ -369,8 +372,24 @@ public class MainWindowTests : HeadlessWindows
 
         var containers = picker.GetRealizedContainers().OfType<ListBoxItem>().ToList();
         Assert.Equal(4, containers.Count);
-        Assert.All(containers.Take(3), c => Assert.False(c.IsEffectivelyEnabled));
-        Assert.True(containers[3].IsEffectivelyEnabled);
+        Assert.All(containers, c => Assert.False(c.IsEffectivelyEnabled));
+    }
+
+    [AvaloniaFact]
+    public void From_History_the_picker_stays_usable_so_a_run_can_be_returned_to()
+    {
+        // The other half of the rule. Someone already in History when a run
+        // starts has to be able to get back to it — that is where the text,
+        // the status line and the mode they chose are.
+        var (window, model, engine, _) = Open(m => m.Script = "Hello there.");
+        model.ShowingHistory = true;
+
+        engine.Publish(new EngineStatus(EngineState.Generating));
+
+        var containers = Find<ListBox>(window, _ => true)
+            .GetRealizedContainers().OfType<ListBoxItem>().ToList();
+
+        Assert.All(containers, c => Assert.True(c.IsEffectivelyEnabled));
     }
 
     [AvaloniaFact]

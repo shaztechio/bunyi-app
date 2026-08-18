@@ -162,12 +162,14 @@ public sealed class HistoryTests : HeadlessWindows
         var history = window.GetLogicalDescendants().OfType<HistoryView>().Single();
         Assert.True(history.IsEffectivelyEnabled);
 
-        // The three mode segments go dead; the History one does not, which is
-        // how the user gets back out of a run they started.
+        // From History, every segment is live — including the modes, which is
+        // the only way back to the run that is going. This test used to assert
+        // the reverse and was asserting a bug: it had the modes dead and
+        // History live, so from a mode tab you could enter History mid-run and
+        // then had no way out but stopping the work.
         var containers = window.GetLogicalDescendants().OfType<ListBox>().First()
             .GetRealizedContainers().OfType<ListBoxItem>().ToList();
-        Assert.All(containers.Take(3), c => Assert.False(c.IsEffectivelyEnabled));
-        Assert.True(containers[3].IsEffectivelyEnabled);
+        Assert.All(containers, c => Assert.True(c.IsEffectivelyEnabled));
     }
 
     [AvaloniaFact]
