@@ -230,7 +230,7 @@ public class PrefillTests
         const string flat = """
             {"talker_hidden_size":2048,"talker_num_layers":28,"talker_num_kv_heads":8,
              "talker_head_dim":128,"talker_vocab_size":3072,"talker_num_code_groups":16,
-             "cp_num_layers":5,"cp_num_kv_heads":8,"cp_head_dim":128,
+             "cp_num_layers":5,"cp_num_kv_heads":8,"cp_head_dim":128,"cp_vocab_size":2048,
              "tts_pad_token_id":151671,"tts_bos_token_id":151672,"tts_eos_token_id":151673,
              "codec_eos_token_id":2150,"codec_pad_id":2148,"codec_bos_id":2149,
              "codec_think_id":2154,"codec_nothink_id":2155,
@@ -240,7 +240,8 @@ public class PrefillTests
         const string nested = """
             {"talker":{"hidden_size":2048,"num_hidden_layers":28,"num_key_value_heads":8,
               "head_dim":128,"vocab_size":3072,"num_code_groups":16},
-             "code_predictor":{"num_hidden_layers":5,"num_key_value_heads":8,"head_dim":128},
+             "code_predictor":{"num_hidden_layers":5,"num_key_value_heads":8,"head_dim":128,
+               "vocab_size":2048},
              "tts_pad_token_id":151671,"tts_bos_token_id":151672,"tts_eos_token_id":151673,
              "codec_eos_token_id":2150,"codec_pad_id":2148,"codec_bos_id":2149,
              "codec_think_id":2154,"codec_nothink_id":2155,

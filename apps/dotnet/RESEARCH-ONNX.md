@@ -479,6 +479,61 @@ pipeline.** Three levers are now known to exist and to be ours to set:
 None of these should be built blind. The first thing M8's pipeline needs is the
 same measurement against itself, where every allocation is attributable.
 
+### The port is correct, and it cannot match the reference exactly
+
+Voice design runs. Measured against the export's own `generate_onnx.py`, both
+driven **greedily** — `top_k=1` leaves the softmax with all its mass on one
+token, so nothing is sampled and both sides are reproducible. That makes the
+**codes** comparable rather than the audio: sixteen integers a frame, against a
+waveform that could be approximately right for the wrong reasons.
+
+| | Reference | Ours |
+|---|---|---|
+| Frames | 12 | **12** |
+| Audio samples | 23,040 | **23,040** |
+| Prefill positions | 22 | **22** |
+| Frame 0, codes 0-6 | — | **identical** |
+
+The frame count is the model's own decision — generation ends when it emits its
+stop token, not when a cap is hit — so matching it means the run took the same
+shape.
+
+**Then code 7 differs, and the difference is accounted for.** Instrumenting the
+reference to record how close each of its fifteen code-predictor decisions was:
+
+```
+group  chosen  runner-up   margin
+    5    1186        301    0.161
+    6    1789       1241    0.024   <- we chose 1241
+    7    1146       1562    0.195
+```
+
+The one group where we differ is the **closest decision of the whole run**, and
+our choice is exactly its runner-up. Every group we agreed on was decided by
+0.16 or more.
+
+**The mechanism, measured rather than assumed.** Our prefill embeddings differ
+from the reference's by **2 to 7 x 10^-9 per value** — about one ULP of float32.
+A dot product over 2048 terms does not give the same last bits under two
+different summation orders, and both are correct. Twenty-eight layers of
+attention amplify that until it can cross a margin of two parts in a thousand.
+
+So **bit-exact agreement is not achievable**, and chasing it would mean
+reproducing NumPy's summation order and pinning us to it forever. Our own runs
+are byte-identical to each other, so what is being compared is a stable
+difference rather than noise.
+
+Correctness is therefore asserted as: the same frame count, the same audio
+length, agreement up to the first close decision, and — the part that separates
+*unlucky* from *wrong* — that the **first** difference falls on the closest
+decision of the run and picks its runner-up. The rule applies only to the first:
+after one code differs, the predictor is fed a different embedding and makes its
+later choices from a state the reference never had.
+
+Anyone re-checking this should expect the same shape of result rather than an
+exact match, and should treat a divergence at a **wide** margin as the signal
+that something is genuinely wrong.
+
 ## Linux
 
 Measured on WSL2, Ubuntu 24.04.2, 46 GB RAM, 32 cores — **not bare metal**, so

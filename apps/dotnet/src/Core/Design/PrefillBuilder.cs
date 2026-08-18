@@ -57,6 +57,19 @@ public sealed class PrefillBuilder(
     public int HiddenSize => _config.HiddenSize;
 
     /// <summary>
+    /// The text stream's padding, which every generated frame carries.
+    /// </summary>
+    /// <remarks>
+    /// Once the words are in the sequence the text stream has nothing left to
+    /// say, so every frame from then on pairs its codes with this. Held rather
+    /// than recomputed: it is the same projection every frame, and there can be
+    /// thousands.
+    /// </remarks>
+    public float[] TrailingHidden => _trailingHidden ??= _text.Project(_config.TtsPadTokenId);
+
+    private float[]? _trailingHidden;
+
+    /// <summary>
     /// The codec tokens that open the sequence.
     /// </summary>
     /// <remarks>
