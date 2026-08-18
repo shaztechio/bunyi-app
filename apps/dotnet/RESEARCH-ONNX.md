@@ -19,8 +19,8 @@ limitations under the License.
 **Verdict: GO for preset voice. Voice design and voice clone need their own
 inference code.** Measured on Windows 11, RTX 4090, .NET 10.0.400, 2026-08-18.
 CUDA with the vocoder on CPU is 3.7x faster than CPU-only and is worth shipping
-as an opt-in; DirectML is not.
-Linux is **not yet measured** — see [Open questions](#open-questions).
+as an opt-in; DirectML is not. **Linux works**, at Windows-comparable speed and
+memory.
 
 This file exists so none of it has to be rediscovered. Where a number is
 measured it says so; where something is assumed it says that too.
@@ -186,6 +186,9 @@ RTF = wall-clock / audio duration; **lower is better, 1.0 is realtime**.
 | CUDA | short / long | — | — | — | **crashed** |
 | **CUDA talker + CPU vocoder** | short | 58 | 8.6 s | **1.86** | 5.32 GB |
 | **CUDA talker + CPU vocoder** | long | 210 | 22.8 s | **1.36** | **11.87 GB** |
+| Linux CPU (WSL2) | short | 45 | 29.9 s | 8.30 | 8.35 GB |
+| Linux CPU (WSL2) | long | 224 | 99.4 s | **5.54** | 16.03 GB |
+| Linux CPU, models on `/mnt/c` | short | 59 | 52.7 s | 11.16 | 8.66 GB |
 
 Frame counts vary between runs of the same text because sampling is stochastic;
 RTF is the comparable figure, and the gaps here are far larger than that noise.
@@ -277,6 +280,45 @@ That has three consequences:
 3. A 16 GB machine is marginal for long text even at 0.6B. The 1.7B design
    model at `int4` needs measuring before any promise is made about it.
 
+## Linux
+
+Measured on WSL2, Ubuntu 24.04.2, 46 GB RAM, 32 cores — **not bare metal**, so
+treat the timings as indicative rather than definitive.
+
+**It works.** 24 kHz mono 16-bit, and the audio is real: the short clip is
+4.72 s at RMS 3177 / peak 17183, against 4.72 s and RMS 3187 from the same text
+on Windows. Two platforms, effectively the same output.
+
+**`ElBruno.QwenTTS` does not fault through NAudio.** This was the open question
+that could have cost us the dependency. `NAudio.Wasapi.dll` and
+`NAudio.WinMM.dll` are copied to the Linux build output and the app runs
+regardless: nothing on the inference path calls into them. They are inert
+baggage, not a portability problem — which is the answer we needed, though it
+stays worth watching, since it is a property of the code paths we happen to
+call rather than a guarantee.
+
+Speed and memory are Windows-comparable: **RTF 5.54 against 5.00**, and 16.03 GB
+against 17.68 GB, on the long text. The ONNX Runtime package ships `linux-x64`
+(and `linux-arm64`) natives, so nothing extra is required.
+
+### A models folder on a slow volume slows *generation*, not just loading
+
+The first Linux run read the model from `/mnt/c` — the Windows filesystem over
+9p — and was **twice as slow at inference**, not merely slower to start:
+
+| Models on | Pipeline ready | RTF (short) |
+|---|---|---|
+| `/mnt/c` (9p) | 6.8 s | 11.16 |
+| native ext4 | 2.4 s | 8.30 |
+
+That is not a WSL curiosity, and it is the reason this is worth writing down.
+ONNX external-data weights are **memory-mapped**, so pages are faulted in
+throughout the run rather than read once at load. §3d lets the user point the
+models folder at "any folder (external drive, etc.)" — and on a USB disk, a
+network share, or a spinning drive, that choice will make every generation
+slower, with nothing on screen explaining why. Worth a warning next to the
+folder picker, and worth a thought in Doctor.
+
 ## Dependency versions, verified on nuget.org 2026-08-18
 
 | Package | Latest | Note |
@@ -297,10 +339,10 @@ bans NAudio as a *chosen* dependency; this one is inherited.
 
 ## Open questions
 
-1. **Linux.** Nothing here has been run on Linux. The two things to prove are
-   that `ElBruno.QwenTTS` does not fault through NAudio, and that SoundFlow
-   ships working `linux-x64` natives. If NAudio faults, the fallback is to
-   vendor the MIT pipeline source — which M8 and M10 partly require anyway.
+1. **Bare-metal Linux**, and **SoundFlow's `linux-x64` natives**. Inference is
+   proven on WSL2 and NAudio is not a problem; the playback library is still
+   untested on either, and WSL2 is not a substitute for a real distro on the
+   audio path.
 2. **1.7B `int4` memory and speed**, for both wavekat exports. If design mode
    cannot run in a reasonable footprint, that is a scope decision, not a bug.
 3. **Whether wavekat's graphs can be driven through `TtsPipeline`** rather than
