@@ -117,18 +117,31 @@ public sealed class EngineTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Inference_does_not_run_on_the_calling_thread()
+    public async Task The_caller_is_released_before_inference_finishes()
     {
         // §2: the UI thread never does inference work and never writes the
-        // output. Asserted rather than assumed, because the failure is a frozen
-        // window rather than an exception.
-        var callerThread = Environment.CurrentManagedThreadId;
-        var synth = new FakeSynthesizer();
+        // output, so the window stays responsive for the whole run. Asserted
+        // rather than assumed, because the failure is a frozen window rather
+        // than an exception.
+        //
+        // Phrased as "the caller got control back", not "a different thread ran
+        // it". Thread identity is the wrong test: xUnit runs on the thread pool,
+        // so Task.Run may legitimately reuse the very thread the test started
+        // on — which made an earlier version of this test fail about one run in
+        // three while the app was behaving perfectly.
+        var synth = new FakeSynthesizer { Gate = new SemaphoreSlim(0) };
         await using var engine = NewEngine(synth);
 
-        await engine.GenerateAsync(Request(), null, default);
+        var run = engine.GenerateAsync(Request(), null, default);
+        await synth.Entered.Task;
 
-        Assert.NotEqual(callerThread, synth.SynthesizedOnThread);
+        // Inference is underway and this thread is still free to work.
+        Assert.False(run.IsCompleted);
+        Assert.Equal(EngineState.Generating, engine.Status.State);
+
+        synth.Gate.Release();
+        var result = await run;
+        Assert.True(File.Exists(result.OutputPath));
     }
 
     [Fact]
@@ -218,6 +231,25 @@ public sealed class EngineTests : IAsyncLifetime
         synth.Throw = null;
         var result = await engine.GenerateAsync(Request(), null, default);
         Assert.True(File.Exists(result.OutputPath));
+    }
+
+    [Fact]
+    public async Task The_engine_is_never_left_busy_after_a_run_ends()
+    {
+        // Regression: the engine reported download progress through
+        // Progress<T>, which posts asynchronously, so a stale "Downloading"
+        // could land after the run's final status and leave the engine busy
+        // forever — refusing every future generation. It passed on one OS and
+        // failed on a faster CI runner, which is what a timing bug looks like.
+        var synth = new FakeSynthesizer();
+        await using var engine = NewEngine(synth);
+
+        for (var i = 0; i < 5; i++)
+        {
+            await engine.GenerateAsync(Request($"run {i}"), null, default);
+            Assert.False(engine.Status.IsBusy);
+            Assert.Equal(EngineState.Idle, engine.Status.State);
+        }
     }
 
     [Fact]

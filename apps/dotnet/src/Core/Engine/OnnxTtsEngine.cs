@@ -131,7 +131,13 @@ public sealed class OnnxTtsEngine : ITtsEngine
                     _sourceFor(mode),
                     _layoutFor(mode),
                     _modelsRoot(),
-                    new Progress<DownloadProgress>(p => Publish(
+                    // Deliberately NOT Progress<T>. That posts to the captured
+                    // synchronization context, so a report can be delivered
+                    // after the run has already published its final status —
+                    // putting the engine back into Downloading forever and
+                    // refusing every future run. Reporting inline keeps status
+                    // updates ordered with respect to the work producing them.
+                    new InlineProgress<DownloadProgress>(p => Publish(
                         new EngineStatus(EngineState.Downloading, p.Fraction, p.Human()), progress)),
                     token).ConfigureAwait(false);
 
@@ -361,6 +367,20 @@ public sealed class OnnxTtsEngine : ITtsEngine
         lock (_gate) _status = status;
         StatusChanged?.Invoke(this, status);
         progress?.Report(status);
+    }
+
+    /// <summary>
+    /// An <see cref="IProgress{T}"/> that calls straight through.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Progress{T}"/> exists to marshal onto a UI thread, which is
+    /// exactly wrong for state the engine owns: the hop makes delivery
+    /// unordered with respect to the run. Marshalling for display is the App
+    /// layer's job, and the caller's own progress object still does it.
+    /// </remarks>
+    private sealed class InlineProgress<T>(Action<T> report) : IProgress<T>
+    {
+        public void Report(T value) => report(value);
     }
 
     private void SignalIdleWaiters()
