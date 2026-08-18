@@ -144,6 +144,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         Mode == TtsMode.VoiceDesign ? "Voice" : "Style";
 
     /// <summary>
+    /// Whether the progress bar should animate rather than measure.
+    /// </summary>
+    /// <remarks>
+    /// Only a download knows how far along it is. Loading a model and
+    /// generating do not — and generating is the long one, so a determinate
+    /// bar pinned at zero is what a user sees for most of a run. Moving says
+    /// "still working"; a bar at zero says "stuck".
+    /// </remarks>
+    public bool IsIndeterminate => IsBusy && Progress <= 0;
+
+    /// <summary>
     /// Whether there is a result to play or reveal.
     /// </summary>
     /// <remarks>
@@ -242,6 +253,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // below is bound, so it has to land on the UI thread.
             IsBusy = status.IsBusy;
             Progress = status.Progress;
+            OnPropertyChanged(nameof(IsIndeterminate));
             ProgressDetail = status.Detail;
             Status = Describe(status);
 
@@ -290,6 +302,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(ShowExamples));
         OnPropertyChanged(nameof(HasResult));
         OnPropertyChanged(nameof(ShowGenerate));
+        OnPropertyChanged(nameof(IsIndeterminate));
     }
 
     partial void OnScriptChanged(string value) => Refresh();
