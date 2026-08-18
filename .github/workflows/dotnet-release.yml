@@ -279,11 +279,13 @@ jobs:
             if [ -f "$handwritten" ]; then
               cat "$handwritten"
             else
-              # Scoped to this app and the shared spec. A release listing the
-              # other app's commits would describe work this download does not
-              # contain.
+              # apps/dotnet only, and deliberately NOT spec. Behaviour changes
+              # start in /spec by this repository's own rule, so every macOS
+              # feature touches it too — passing --path spec put fifteen
+              # feat(macos) lines into this app's first release, describing work
+              # the download does not contain.
               python3 tools/release-notes.py "$tag" \
-                --tags 'dotnet-v*' --path apps/dotnet --path spec
+                --tags 'dotnet-v*' --path apps/dotnet
             fi
 
             printf '\n---\n\n'
@@ -298,7 +300,7 @@ jobs:
             printf '### What works\n\n'
             printf 'Preset voice and voice design. Voice clone is not implemented yet, and '
             printf 'the tab says so.\n\n'
-            printf 'The first generation in each mode downloads that mode s model '
+            printf 'The first generation in each mode downloads the model for that mode '
             printf '(about 5.9 GB) with a progress bar and a time estimate; after that it '
             printf 'runs offline. Doctor checks there is room before the download starts.\n\n'
             printf '### Requirements\n\n'
