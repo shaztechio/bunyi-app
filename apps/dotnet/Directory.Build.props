@@ -1,0 +1,46 @@
+<!--
+Copyright 2026 Shazron Abdullah and Bunyi contributors
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+<Project>
+
+  <!--
+    Settings shared by every project here, so a new one inherits them rather
+    than repeating them. Versions live in Directory.Packages.props.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+
+    <!-- A warning we let through is one nobody reads. -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+
+    <!-- Same input, same output: needed for any later signing or provenance. -->
+    <Deterministic>true</Deterministic>
+
+    <!--
+      The app version. macOS keeps its own in apps/macos/project.yml; the two
+      are released separately and are not expected to march in step.
+    -->
+    <VersionPrefix>0.1.0</VersionPrefix>
+    <Company>Bunyi contributors</Company>
+    <Product>Bunyi</Product>
+    <Authors>Shazron Abdullah and Bunyi contributors</Authors>
+    <Copyright>Copyright 2026 Shazron Abdullah and Bunyi contributors</Copyright>
+  </PropertyGroup>
+
+</Project>

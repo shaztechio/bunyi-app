@@ -14,9 +14,13 @@
 
 name: .NET build (Windows + Linux)
 
-# The Windows+Linux app (apps/dotnet) is a SCAFFOLD — this workflow will be
-# red until it is implemented. It documents the intended build and turns
-# green once the stubs are filled in against /spec/FEATURES.md.
+# Builds and tests the Windows+Linux app on both operating systems. The app
+# itself is still being filled in against /spec/FEATURES.md, but the build,
+# the tests and both publish paths are green and expected to stay that way.
+#
+# The publish step is not decoration: apps/dotnet ships as self-contained
+# builds, and a publish path that is never exercised is one that breaks
+# quietly and is discovered at release time.
 
 on:
   push:
@@ -48,8 +52,42 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: "9.0.x"
+          dotnet-version: "10.0.x"
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('apps/dotnet/Directory.Packages.props') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
       - name: Restore
         run: dotnet restore
+
       - name: Build
         run: dotnet build --no-restore -c Release
+
+      - name: Test
+        run: dotnet test --no-build -c Release --verbosity normal
+
+      # src/Core is UI-framework-free by rule (see apps/dotnet/AGENTS.md).
+      # Checked rather than trusted: the rule is easy to break by reflex, with
+      # an editor's using-completion, and hard to notice in review.
+      - name: Core stays UI-framework-free
+        shell: bash
+        run: |
+          if grep -rnE '^\s*(global\s+)?using\s+Avalonia' src/Core/ ; then
+            echo "::error::src/Core must not reference Avalonia — UI belongs in src/App."
+            exit 1
+          fi
+          if grep -rn 'Include="Avalonia' src/Core/*.csproj ; then
+            echo "::error::src/Core must not take an Avalonia package reference."
+            exit 1
+          fi
+          echo "src/Core is clean."
+
+      - name: Publish (self-contained)
+        shell: bash
+        run: |
+          rid=$([ "$RUNNER_OS" = "Windows" ] && echo win-x64 || echo linux-x64)
+          dotnet publish src/App -c Release -r "$rid" --self-contained -o "artifacts/$rid"

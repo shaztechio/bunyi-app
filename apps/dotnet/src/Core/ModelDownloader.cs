@@ -1,11 +1,28 @@
+// Copyright 2026 Shazron Abdullah and Bunyi contributors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 // Model download: Hub repo or self-hosted base URL, resumable, offline
 // reuse, progress/ETA, tokenizer auto-fetch. Mirrors macOS TTSEngine
 // download* / downloadFromBaseURL / ensureTokenizerJSON.
 // Spec: /spec/FEATURES.md §3, /spec/DATA-FORMATS.md.
-namespace Qwen3TtsStudio.Core;
+namespace Bunyi.Core;
 
 public sealed class ModelDownloader(HttpClient http, LogStore log)
 {
+    private readonly HttpClient _http = http ?? throw new ArgumentNullException(nameof(http));
+    private readonly LogStore _log = log ?? throw new ArgumentNullException(nameof(log));
+
     // Standard file set when a self-hosted server has no manifest.txt.
     // ONNX variant — differs from the macOS .safetensors list. TODO: confirm
     // against the chosen ONNX export's actual contents (spec §3c).

@@ -37,3 +37,6 @@ dist/
 # Python bytecode from the packaging scripts
 __pycache__/
 *.pyc
+
+# .NET publish output
+artifacts/
