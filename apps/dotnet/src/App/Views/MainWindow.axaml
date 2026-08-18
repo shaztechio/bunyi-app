@@ -193,7 +193,19 @@ limitations under the License.
       began, so leaving them editable invites changes that silently do not apply
       to the audio being produced.
     -->
-    <StackPanel Spacing="16">
+    <!--
+      A Grid rather than a StackPanel, and that is the whole of why History
+      scrolls. A StackPanel measures its children with INFINITE height in the
+      stacking direction, so the ScrollViewer inside the History card was never
+      given a height to fit into: it grew to whatever its rows needed and the
+      overflow was simply clipped by the window. Reported from using the app —
+      with enough clips, the ones at the bottom could not be reached at all.
+
+      Spacing is on the children rather than the Grid, because a row whose only
+      child is collapsed still gets its share of RowSpacing, which would leave a
+      gap where the hidden card used to be.
+    -->
+    <Grid RowDefinitions="Auto,*,Auto,Auto">
 
       <!--
         §1 opens "A segmented picker selects one of three modes"; §2a adds "A
@@ -205,7 +217,7 @@ limitations under the License.
         running job is using (§2). History is not, so it stays reachable — which
         is why the segments are individually disabled rather than the control.
       -->
-      <ListBox ItemsSource="{Binding AllSegments}" SelectedItem="{Binding SelectedSegment}"
+      <ListBox Grid.Row="0" ItemsSource="{Binding AllSegments}" SelectedItem="{Binding SelectedSegment}"
                SelectionMode="Single" Height="36">
         <ListBox.ItemsPanel>
           <ItemsPanelTemplate>
@@ -219,8 +231,8 @@ limitations under the License.
             <Setter Property="IsEnabled">
               <Setter.Value>
                 <MultiBinding Converter="{x:Static vm:SegmentEnabled.Instance}">
-                  <Binding Path="." />
                   <Binding Path="$parent[ListBox].((vm:MainViewModel)DataContext).IsBusy" />
+                  <Binding Path="$parent[ListBox].((vm:MainViewModel)DataContext).ShowingHistory" />
                 </MultiBinding>
               </Setter.Value>
             </Setter>
@@ -234,15 +246,16 @@ limitations under the License.
         </ListBox.ItemTemplate>
       </ListBox>
 
-      <Border Classes="card" IsVisible="{Binding ShowingHistory}" MinHeight="360">
+      <Border Grid.Row="1" Classes="card" IsVisible="{Binding ShowingHistory}"
+              Margin="0,16,0,0">
         <DockPanel>
           <TextBlock DockPanel.Dock="Top" Text="HISTORY" Classes="eyebrow" />
           <views:HistoryView DataContext="{Binding History}" />
         </DockPanel>
       </Border>
 
-      <Border Classes="card" IsVisible="{Binding !ShowingHistory}"
-              IsEnabled="{Binding !IsBusy}">
+      <Border Grid.Row="1" Classes="card" IsVisible="{Binding !ShowingHistory}"
+              IsEnabled="{Binding !IsBusy}" Margin="0,16,0,0">
         <DockPanel>
           <TextBlock DockPanel.Dock="Top" Text="SCRIPT" Classes="eyebrow" />
 
@@ -275,8 +288,8 @@ limitations under the License.
         </DockPanel>
       </Border>
 
-      <Border Classes="card" IsVisible="{Binding !ShowingHistory}"
-              IsEnabled="{Binding !IsBusy}">
+      <Border Grid.Row="2" Classes="card" IsVisible="{Binding !ShowingHistory}"
+              IsEnabled="{Binding !IsBusy}" Margin="0,16,0,0">
         <StackPanel Spacing="12">
           <TextBlock Text="OPTIONS" Classes="eyebrow" />
 
@@ -302,9 +315,9 @@ limitations under the License.
         </StackPanel>
       </Border>
 
-      <TextBlock Text="Voice clone is not implemented yet."
+      <TextBlock Grid.Row="3" Text="Voice clone is not implemented yet."
                  IsVisible="{Binding !ModeIsAvailable}"
-                 FontSize="12" Opacity="0.75" />
-    </StackPanel>
+                 FontSize="12" Opacity="0.75" Margin="0,16,0,0" />
+    </Grid>
   </DockPanel>
 </Window>

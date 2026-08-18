@@ -56,14 +56,27 @@ public sealed class ModeName : IValueConverter
 }
 
 /// <summary>
-/// Whether one segment of the picker can be clicked right now.
+/// Whether the picker can be used right now (spec §2).
 /// </summary>
 /// <remarks>
-/// The three modes are inputs and go dead while work runs — switching one would
-/// evict the model the running job is using (§2). History is not an input; it
-/// only reads a folder, and §2a keeps it reachable mid-run because hiding it
-/// would strand the user. One control, two rules, so the segments are disabled
-/// individually rather than the control as a whole.
+/// <para>
+/// While work runs the row is locked, <b>unless History is already showing</b>,
+/// in which case it unlocks so the run can be got back to. That is macOS's rule
+/// — <c>.disabled(engine.status.isBusy &amp;&amp; tab != .history)</c> — and it
+/// is the whole rule.
+/// </para>
+/// <para>
+/// This started out the other way round: the modes went dead and History stayed
+/// live, on the reasoning that History only reads a folder so there is no harm
+/// in reaching it. The harm is that it is a door with no handle on the far side.
+/// Going to History mid-run left every way back disabled, and the only exit was
+/// to stop the work or close the window. Reported from using the app.
+/// </para>
+/// <para>
+/// The modes are still inputs that must not change mid-run, so locking them is
+/// right; what was wrong was offering the one destination that could not be
+/// left.
+/// </para>
 /// </remarks>
 public sealed class SegmentEnabled : IMultiValueConverter
 {
@@ -73,9 +86,12 @@ public sealed class SegmentEnabled : IMultiValueConverter
     {
         if (values.Count < 2) return true;
 
-        var isHistory = values[0] is HistorySegment;
-        var isBusy = values[1] is true;
-        return isHistory || !isBusy;
+        var isBusy = values[0] is true;
+        var showingHistory = values.Count > 1 && values[1] is true;
+
+        // Everything or nothing, depending on where you already are. While work
+        // runs, a mode tab locks the row completely and History unlocks it.
+        return !isBusy || showingHistory;
     }
 }
 
