@@ -300,14 +300,29 @@ public sealed class ModelDownloaderTests : IAsyncLifetime
         using var cts = new CancellationTokenSource();
         var progress = new Progress<DownloadProgress>(p =>
         {
-            if (p.BytesReceived > 32_000) cts.Cancel();
+            if (p.BytesReceived > 0) cts.Cancel();
         });
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             NewDownloader().EnsureModelAsync(Source, Layout, _root, progress, cts.Token));
 
-        // Deliberately not cleaned up: that file is the resume point.
-        Assert.False(ModelDownloader.Inspect(ModelFolder, Layout).IsComplete);
+        // What matters is that stopping leaves the folder in a state the next
+        // run can finish from, with the right bytes at the end of it.
+        //
+        // Deliberately NOT asserting that the model is incomplete at this
+        // point: Progress<T> posts asynchronously, so on a fast machine the
+        // cancellation can land after the last required file has already
+        // arrived, and the model is legitimately complete. That is a race in
+        // the test, not a defect in the app — CI on a quicker runner found it.
+        await NewDownloader().EnsureModelAsync(Source, Layout, _root, null, default);
+
+        var path = Path.Combine(ModelFolder, "model.onnx.data");
+        Assert.Equal(512_000, new FileInfo(path).Length);
+        Assert.Equal(
+            _server.Sha256Of("model.onnx.data"),
+            await HttpFileDownloader.Sha256OfFileAsync(path, default));
+        Assert.True(ModelDownloader.Inspect(ModelFolder, Layout).IsComplete);
+        Assert.Empty(Directory.GetFiles(ModelFolder, "*.incomplete", SearchOption.AllDirectories));
     }
 
     [Fact]
