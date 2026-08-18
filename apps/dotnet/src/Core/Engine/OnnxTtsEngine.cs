@@ -165,12 +165,12 @@ public sealed class OnnxTtsEngine : ITtsEngine
                 if (instructWasIgnored())
                 {
                     // Recorded metadata must describe what produced the audio.
-                    // Keeping a style the model discarded would make the file
+                    // Keeping a style that was discarded would make the file
                     // claim a delivery it never had — and would send anyone
                     // reproducing it down the wrong path.
                     _log.Log(
-                        "This model does not act on a style instruction, so it was " +
-                        "ignored and is not recorded in the file.");
+                        "The style instruction was not applied, so it is not recorded " +
+                        "in the file. The current preset-voice pipeline ignores one.");
                     effective = request with { Instruct = null };
                 }
 

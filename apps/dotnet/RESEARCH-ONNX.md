@@ -349,42 +349,56 @@ which are Windows-only. It restores on any platform; whether any code path we
 reach calls into it on Linux is the open question below. `apps/dotnet/AGENTS.md`
 bans NAudio as a *chosen* dependency; this one is inherited.
 
-## The 0.6B preset-voice export ignores style instructions
+## The preset-voice pipeline refuses style instructions the model supports
 
-Found while wiring the engine (M4), not during the gate. The library says so
-plainly at generation time:
+Found while wiring the engine (M4). The library says so at generation time:
 
 ```
 Warning: Instruction text ignored - Qwen06B model does not support
 instruction control. Use 1.7B for style instructions.
 ```
 
-**This is a parity gap.** FEATURES §1 gives preset voice an "optional style
-instruction" and marks emotion/style as supported for that mode. The default
-ONNX export for it does not support one — it generates, and discards the
-instruction.
+**That message is wrong about the model, and it cost an hour of wrong
+conclusions.** It reads as a capability of the checkpoint, and was first written
+up here as a parity gap for `/spec` to settle. It is not one.
 
-It is the same shape of problem as the ICL clone trap: an input the UI presents
-as meaningful that changes nothing. The engine therefore refuses to record a
-style the model ignored, so an output file never claims a delivery it did not
-have, and logs the reason. `ISpeechSynthesizer.SupportsInstruct` carries the
-capability, and the library answers it per variant.
+Qwen's own model card for `Qwen3-TTS-12Hz-0.6B-CustomVoice` says the opposite:
 
-That keeps the app honest but does not close the gap. Three ways out, in
-rough order of preference:
+> allows for fine-grained style control over target voices via natural language
+> instructions
 
-1. **Default preset voice to `elbruno/Qwen3-TTS-12Hz-1.7B-CustomVoice-ONNX`**,
-   which supports instructions. It is roughly 10 GB against 5.88 GB, which is a
-   real cost for the audience §'s tone describes, and the 1.7B memory figures
-   are unmeasured.
-2. **Ship 0.6B and hide the style field** when the loaded model cannot use it,
-   with a spec note that the ONNX family's preset mode is style-less at the
-   default model.
-3. **Offer both**, since §3a already lets the user choose the source per mode —
-   the smaller model as the default and the larger as a documented option.
+with an `instruct=` argument in its usage example. The restriction is a
+hardcoded per-variant flag in `ElBruno.QwenTTS`:
 
-Whichever is chosen belongs in `/spec` first, because it changes what a mode
-offers.
+```
+Qwen06B    SupportsInstruct=False   repo=elbruno/...0.6B-CustomVoice-ONNX
+Qwen17B    SupportsInstruct=True    repo=elbruno/...1.7B-CustomVoice-ONNX
+```
+
+So **FEATURES §1 is correct** — preset voice does take a style instruction — and
+macOS, which defaults to the MLX build of the same 0.6B checkpoint, is
+unaffected. Nothing here needs a spec change.
+
+**What was done.** The engine refuses to record a style that was not applied,
+and says why. That is a safety net whatever the reason, and it stays: an input
+the UI presents as meaningful that changes nothing is the trap §1 refuses for
+clone mode, and a file that claims a delivery it never had misleads anyone
+trying to reproduce it. `ISpeechSynthesizer.SupportsInstruct` carries the
+capability, and is documented as a property of the implementation rather than of
+the model.
+
+**What is not being done.** Switching the default to the 1.7B export — roughly
+10 GB against 5.88 GB — to work around a boolean in a dependency would be a
+poor trade for the audience this app is aimed at, and it would not fix the
+smaller model.
+
+**How it closes.** M8 and M10 already require writing our own inference
+pipeline, since this library covers CustomVoice only. Prompt construction
+becomes ours at that point, and an instruction is text conditioning prepended to
+the sequence — the same machinery voice design needs. Preset-voice `instruct`
+therefore comes as a side effect of work already planned, rather than as a
+project of its own. Worth reporting upstream in the meantime; the library is MIT
+and actively maintained.
 
 ## Open questions
 

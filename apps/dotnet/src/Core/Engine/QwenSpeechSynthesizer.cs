@@ -59,8 +59,12 @@ public sealed class QwenSpeechSynthesizer(ILogSink log) : ISpeechSynthesizer
 
     /// <inheritdoc />
     /// <remarks>
-    /// The library answers this per variant, and for Qwen06B the answer is no:
-    /// it logs "Instruction text ignored" and generates without it.
+    /// False for the 0.6B variant, which is this library's rule rather than the
+    /// model's: Qwen documents style control on that checkpoint, and the
+    /// restriction here is a hardcoded per-variant flag
+    /// (<c>QwenModelVariantConfig.SupportsInstruct</c>) that reports false and
+    /// logs "Instruction text ignored". Owning prompt construction lifts it,
+    /// which M8 has to do anyway to reach voice design — see RESEARCH-ONNX.md.
     /// </remarks>
     public bool SupportsInstruct =>
         _pipeline is not null && QwenModelVariantConfig.SupportsInstruct(_pipeline.ModelVariant);

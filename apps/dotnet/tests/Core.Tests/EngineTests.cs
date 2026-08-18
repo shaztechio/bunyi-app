@@ -368,12 +368,13 @@ public sealed class EngineTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task A_style_the_model_ignores_is_not_recorded_as_though_it_applied()
+    public async Task A_style_that_was_not_applied_is_not_recorded_as_though_it_was()
     {
-        // The 0.6B preset-voice export silently discards an instruction. Keeping
-        // it in the metadata would make the file claim a delivery it never had,
-        // and send anyone reproducing it down the wrong path — the same reason
-        // §1 refuses a clone model that ignores its transcript.
+        // Whatever the reason a style was discarded — today it is the
+        // preset-voice pipeline refusing one the model actually supports —
+        // keeping it in the metadata would make the file claim a delivery it
+        // never had, and send anyone reproducing it down the wrong path. The
+        // same reason §1 refuses a clone model that ignores its transcript.
         var synth = new FakeSynthesizer { SupportsInstruct = false };
         await using var engine = NewEngine(synth);
 
@@ -381,11 +382,11 @@ public sealed class EngineTests : IAsyncLifetime
             Request() with { Instruct = "cheerful and quick" }, null, default);
 
         Assert.Null(WavMetadata.TryRead(result.OutputPath)!.Style);
-        Assert.Contains(_log.Lines, l => l.Contains("does not act on a style instruction"));
+        Assert.Contains(_log.Lines, l => l.Contains("style instruction was not applied"));
     }
 
     [Fact]
-    public async Task A_style_the_model_honours_is_recorded()
+    public async Task A_style_that_was_applied_is_recorded()
     {
         var synth = new FakeSynthesizer { SupportsInstruct = true };
         await using var engine = NewEngine(synth);

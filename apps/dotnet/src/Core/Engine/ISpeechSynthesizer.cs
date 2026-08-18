@@ -53,14 +53,20 @@ public interface ISpeechSynthesizer : IAsyncDisposable
     bool IsLoaded { get; }
 
     /// <summary>
-    /// Whether the loaded model acts on a style instruction (spec §1).
+    /// Whether this synthesizer will act on a style instruction (spec §1).
     /// </summary>
     /// <remarks>
-    /// Not every export does. The 0.6B CustomVoice model silently ignores one,
-    /// so an app that offered the field regardless would present an input that
-    /// changes nothing — and, worse, record it in the output's metadata as
-    /// though it had. §1 already refuses that bargain for clone mode; the same
-    /// reasoning applies here.
+    /// <para>
+    /// A property of the implementation, not of the model. §1 is right that
+    /// preset voice takes a style instruction, and the 0.6B CustomVoice model
+    /// does support one — Qwen's model card documents it. What does not is the
+    /// pipeline currently driving it, which refuses on that variant.
+    /// </para>
+    /// <para>
+    /// The engine asks so that it never records a style that had no effect. It
+    /// is a safety net whatever the reason: an input the UI presents as
+    /// meaningful that changes nothing is the trap §1 refuses for clone mode.
+    /// </para>
     /// </remarks>
     bool SupportsInstruct { get; }
 
