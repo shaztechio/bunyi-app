@@ -34,6 +34,7 @@ limitations under the License.
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />
+    <PackageReference Include="Xunit.SkippableFact" />
     <PackageReference Include="xunit.runner.visualstudio" />
   </ItemGroup>
 
