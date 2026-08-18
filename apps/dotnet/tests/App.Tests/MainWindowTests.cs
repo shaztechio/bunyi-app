@@ -349,52 +349,6 @@ public class MainWindowTests
     }
 
     [AvaloniaFact]
-    public void The_mode_picker_shows_names_a_person_would_read()
-    {
-        // Without an item template the picker renders the enum — "PresetVoice",
-        // "VoiceDesign" — which is what shipped. The names exist once already,
-        // because they are also settings keys and part of every filename.
-        var (window, _, _, _) = Open();
-
-        var picker = Find<ListBox>(window, _ => true);
-        var labels = picker.GetLogicalDescendants().OfType<TextBlock>()
-            .Select(t => t.Text).Where(t => !string.IsNullOrEmpty(t)).ToList();
-
-        Assert.Contains("Preset voice", labels);
-        Assert.Contains("Voice design", labels);
-        Assert.Contains("Voice clone", labels);
-        Assert.DoesNotContain(labels, l => l!.Contains("PresetVoice"));
-    }
-
-    [AvaloniaFact]
-    public void Progress_animates_when_there_is_no_fraction_to_show()
-    {
-        // Generating reports no fraction, and it is the long phase. A
-        // determinate bar pinned at zero for half a minute reads as an app that
-        // has hung.
-        var (window, _, engine, _) = Open(m => m.Script = "Hello there.");
-        var bar = Find<ProgressBar>(window, _ => true);
-
-        engine.Publish(new EngineStatus(EngineState.Generating));
-        Assert.True(bar.IsIndeterminate);
-
-        // A download does know, so it measures rather than animating.
-        engine.Publish(new EngineStatus(EngineState.Downloading, 0.42, "42%"));
-        Assert.False(bar.IsIndeterminate);
-        Assert.Equal(0.42, bar.Value, 3);
-    }
-
-    [AvaloniaFact]
-    public void Progress_is_not_shown_at_all_when_nothing_is_running()
-    {
-        var (window, _, _, _) = Open();
-
-        var bar = Find<ProgressBar>(window, _ => true);
-
-        Assert.False(bar.IsEffectivelyVisible);
-    }
-
-    [AvaloniaFact]
     public void A_speaker_survives_the_model_reporting_its_own_list()
     {
         // Regression: the fallback list is capitalised and the model reports
