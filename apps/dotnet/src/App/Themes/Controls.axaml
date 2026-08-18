@@ -1,0 +1,118 @@
+<!--
+Copyright 2026 Shazron Abdullah and Bunyi contributors
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+
+<!--
+  The shared control language, at APPLICATION level rather than per window.
+
+  It was per window, which meant the confirmation dialogs missed it entirely:
+  those are separate Window objects created in code, and a window's styles do
+  not reach them. So Trash asked its question through square buttons while
+  everything behind it was rounded. Anything defined here reaches every window
+  the app opens, including ones built at runtime.
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- Rounding, from the scale in Brand.axaml. -->
+  <Style Selector="Button">
+    <Setter Property="CornerRadius" Value="{DynamicResource BunyiControlRadius}" />
+  </Style>
+  <Style Selector="ToggleButton">
+    <Setter Property="CornerRadius" Value="{DynamicResource BunyiControlRadius}" />
+  </Style>
+  <Style Selector="TextBox">
+    <Setter Property="CornerRadius" Value="{DynamicResource BunyiControlRadius}" />
+  </Style>
+  <Style Selector="ComboBox">
+    <Setter Property="CornerRadius" Value="{DynamicResource BunyiControlRadius}" />
+  </Style>
+  <Style Selector="ListBox">
+    <Setter Property="CornerRadius" Value="{DynamicResource BunyiControlRadius}" />
+  </Style>
+  <Style Selector="ListBoxItem">
+    <Setter Property="CornerRadius" Value="{DynamicResource BunyiControlRadius}" />
+  </Style>
+  <Style Selector="ProgressBar">
+    <Setter Property="CornerRadius" Value="{DynamicResource BunyiPillRadius}" />
+  </Style>
+  <Style Selector="TabItem">
+    <Setter Property="CornerRadius" Value="{DynamicResource BunyiControlRadius}" />
+  </Style>
+
+  <!-- Icon buttons: circular, with the glyph comfortably inside. -->
+  <Style Selector="Button.icon">
+    <Setter Property="Width" Value="{DynamicResource BunyiIconButtonSize}" />
+    <Setter Property="Height" Value="{DynamicResource BunyiIconButtonSize}" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="CornerRadius" Value="{DynamicResource BunyiPillRadius}" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
+  <!--
+    A DESCENDANT selector, not a direct-child one. It was "Button.icon > Path",
+    which silently missed any icon wrapped in a Panel — so the Copy button,
+    which holds two Paths so it can swap to a tick, drew nothing at all. An
+    unstyled Path has no stroke, so the button looked empty rather than wrong.
+  -->
+  <Style Selector="Button.icon Path">
+    <Setter Property="Stroke" Value="{Binding $parent[Button].Foreground}" />
+    <Setter Property="StrokeThickness" Value="1.6" />
+    <Setter Property="StrokeLineCap" Value="Round" />
+    <Setter Property="StrokeJoin" Value="Round" />
+    <!--
+      15 inside 32 leaves a clear ring of space. At 18 the widest glyph — the
+      log lines, which span the full grid — touched the edge of the circle,
+      because Stretch=Uniform scales each icon's own bounding box to fill
+      whatever box it is given.
+    -->
+    <Setter Property="Width" Value="15" />
+    <Setter Property="Height" Value="15" />
+    <Setter Property="Stretch" Value="Uniform" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <!--
+    The spinner: a three-quarter arc that turns.
+
+    macOS shows one while generating, and an indeterminate bar is a poor
+    substitute — it fills the width of the window for something that is not a
+    measurement. A rotating arc says "working" without implying progress it
+    cannot report.
+  -->
+  <Style Selector="Path.spinner">
+    <Setter Property="Stroke" Value="{DynamicResource BunyiAccent}" />
+    <Setter Property="StrokeThickness" Value="2" />
+    <Setter Property="StrokeLineCap" Value="Round" />
+    <Setter Property="Width" Value="16" />
+    <Setter Property="Height" Value="16" />
+    <Setter Property="Stretch" Value="None" />
+    <Setter Property="RenderTransformOrigin" Value="50%,50%" />
+    <Setter Property="Data" Value="M8,1 A7,7 0 1 1 1,8" />
+    <Style.Animations>
+      <Animation Duration="0:0:0.9" IterationCount="Infinite">
+        <KeyFrame Cue="0%">
+          <Setter Property="RotateTransform.Angle" Value="0" />
+        </KeyFrame>
+        <KeyFrame Cue="100%">
+          <Setter Property="RotateTransform.Angle" Value="360" />
+        </KeyFrame>
+      </Animation>
+    </Style.Animations>
+  </Style>
+
+</Styles>

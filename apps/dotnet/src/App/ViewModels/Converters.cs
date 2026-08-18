@@ -21,6 +21,21 @@ using Bunyi.Core;
 namespace Bunyi.App.ViewModels;
 
 /// <summary>
+/// The History segment, which sits beside the three modes but is not one.
+/// </summary>
+/// <remarks>
+/// A type of its own rather than a fourth value in <c>TtsMode</c>, because that
+/// enum is a data format: it keys the settings, names every output file and is
+/// written into each clip's metadata. History is none of those things.
+/// </remarks>
+public sealed class HistorySegment
+{
+    public static HistorySegment Instance { get; } = new();
+    private HistorySegment() { }
+    public override string ToString() => "History";
+}
+
+/// <summary>
 /// A mode's name as the user should read it.
 /// </summary>
 /// <remarks>
@@ -38,6 +53,30 @@ public sealed class ModeName : IValueConverter
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
         throw new NotSupportedException();
+}
+
+/// <summary>
+/// Whether one segment of the picker can be clicked right now.
+/// </summary>
+/// <remarks>
+/// The three modes are inputs and go dead while work runs — switching one would
+/// evict the model the running job is using (§2). History is not an input; it
+/// only reads a folder, and §2a keeps it reachable mid-run because hiding it
+/// would strand the user. One control, two rules, so the segments are disabled
+/// individually rather than the control as a whole.
+/// </remarks>
+public sealed class SegmentEnabled : IMultiValueConverter
+{
+    public static SegmentEnabled Instance { get; } = new();
+
+    public object Convert(IList<object?> values, Type targetType, object? parameter, CultureInfo culture)
+    {
+        if (values.Count < 2) return true;
+
+        var isHistory = values[0] is HistorySegment;
+        var isBusy = values[1] is true;
+        return isHistory || !isBusy;
+    }
 }
 
 /// <summary>Play or stop, per row. There is deliberately no pause (spec §2a).</summary>

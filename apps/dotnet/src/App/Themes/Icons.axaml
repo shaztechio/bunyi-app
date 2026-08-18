@@ -42,8 +42,14 @@ limitations under the License.
   <!-- Help: a question mark in a circle. -->
   <StreamGeometry x:Key="IconHelp">M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z M9.5 9.2a2.6 2.6 0 0 1 5 .9c0 1.7-2.5 2.2-2.5 4 M12 17.2v.01</StreamGeometry>
 
-  <!-- Play: a triangle. -->
-  <StreamGeometry x:Key="IconPlay">M8 5.5v13l11-6.5z</StreamGeometry>
+  <!--
+    Play: a triangle, drawn centred on the 24 grid.
+
+    The optical nudge belongs in the geometry, not in a margin on the Path. A
+    margin shifts the box AFTER Stretch has already fitted the shape to it,
+    which moves the triangle off centre rather than correcting for its weight.
+  -->
+  <StreamGeometry x:Key="IconPlay">M9 5.5v13l10.5-6.5z</StreamGeometry>
 
   <!-- Stop: a square, matching Play's visual weight. -->
   <StreamGeometry x:Key="IconStop">M7.5 7.5h9v9h-9z</StreamGeometry>

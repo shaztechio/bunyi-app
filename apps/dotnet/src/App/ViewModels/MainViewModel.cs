@@ -100,6 +100,42 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         [TtsMode.PresetVoice, TtsMode.VoiceDesign, TtsMode.VoiceClone];
 
     /// <summary>
+    /// What the picker shows: the three modes, then History.
+    /// </summary>
+    /// <remarks>
+    /// §1 opens "A segmented picker selects one of three modes" and §2a adds "A
+    /// fourth segment beside the three generation modes" — so all four live in
+    /// one control. They were two controls, a list and a toggle, and choosing a
+    /// mode left History showing: the toggle was the only way out, which is not
+    /// what a segment is.
+    /// </remarks>
+    public IReadOnlyList<object> AllSegments { get; } =
+        [TtsMode.PresetVoice, TtsMode.VoiceDesign, TtsMode.VoiceClone, HistorySegment.Instance];
+
+    /// <summary>
+    /// Which segment is selected. History is not a mode, so it is its own
+    /// value rather than a fourth entry in the enum.
+    /// </summary>
+    public object SelectedSegment
+    {
+        get => ShowingHistory ? HistorySegment.Instance : Mode;
+        set
+        {
+            if (value is TtsMode mode)
+            {
+                ShowingHistory = false;
+                Mode = mode;
+            }
+            else if (value is HistorySegment)
+            {
+                ShowingHistory = true;
+            }
+
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>
     /// Whether Generate can be pressed (spec §1).
     /// </summary>
     public bool CanGenerate => !IsBusy && GenerationReadiness.CanGenerate(CurrentRequest());
@@ -153,6 +189,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// "still working"; a bar at zero says "stuck".
     /// </remarks>
     public bool IsIndeterminate => IsBusy && Progress <= 0;
+
+    /// <summary>A spinner, for the phases that cannot report a fraction.</summary>
+    public bool ShowSpinner => IsBusy && Progress <= 0;
+
+    /// <summary>A bar, only while something can actually be measured.</summary>
+    public bool ShowProgressBar => IsBusy && Progress > 0;
 
     /// <summary>
     /// Whether there is a result to play or reveal.
@@ -254,6 +296,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             IsBusy = status.IsBusy;
             Progress = status.Progress;
             OnPropertyChanged(nameof(IsIndeterminate));
+            OnPropertyChanged(nameof(ShowSpinner));
+            OnPropertyChanged(nameof(ShowProgressBar));
             ProgressDetail = status.Detail;
             Status = Describe(status);
 
@@ -303,6 +347,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(HasResult));
         OnPropertyChanged(nameof(ShowGenerate));
         OnPropertyChanged(nameof(IsIndeterminate));
+        OnPropertyChanged(nameof(ShowSpinner));
+        OnPropertyChanged(nameof(ShowProgressBar));
     }
 
     partial void OnScriptChanged(string value) => Refresh();
@@ -312,6 +358,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     partial void OnShowingHistoryChanged(bool value)
     {
+        OnPropertyChanged(nameof(SelectedSegment));
         // Read the folder every time it is shown, so it is never stale.
         if (value) History.Refresh();
 
@@ -322,6 +369,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     partial void OnModeChanged(TtsMode value)
     {
+        OnPropertyChanged(nameof(SelectedSegment));
         OnPropertyChanged(nameof(Examples));
         OnPropertyChanged(nameof(ExamplePrompt));
         OnPropertyChanged(nameof(ModeSubtitle));
