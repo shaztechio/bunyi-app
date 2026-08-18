@@ -54,7 +54,12 @@ SKIP = re.compile(r"^Release v?\d+\.\d+\.\d+$")
 
 def git(*args):
     result = subprocess.run(
-        ["git", *args], capture_output=True, text=True, check=False
+        # An explicit encoding rather than the locale default: the subjects here
+        # are full of em-dashes, and on a Windows console this died with a
+        # cp1252 decode error partway through the log — which produced a short
+        # and plausible changelog rather than an obvious failure.
+        ["git", *args], capture_output=True, text=True,
+        encoding="utf-8", errors="replace", check=False
     )
     if result.returncode != 0:
         sys.stderr.write(f"error: git {' '.join(args)}: {result.stderr.strip()}\n")
@@ -139,15 +144,19 @@ def render(current, previous, paths=()):
     breaking, buckets, other = classify(current, previous, paths)
     out = []
 
-    # First, and never in a list. A guest-side change means every existing user
-    # must Rebuild, and a new binary alone is not enough. That is the one thing
-    # in a release note that is expensive to miss.
+    # First, and never in a list: a breaking change is the one thing in a
+    # release note that is expensive to scroll past.
+    #
+    # This used to tell the reader to "stop your VMs and choose Rebuild", which
+    # is boilerplate from another project entirely and went out on a text-to-
+    # speech app's first release before anyone read it. Wording that names
+    # something this repository does not have is worse than no wording.
     if breaking:
-        out.append("## Breaking: you must Rebuild\n")
+        out.append("## Breaking\n")
         out.append(
-            "These change what is inside the guest. Installing this build is not "
-            "enough — stop your VMs and choose **Rebuild** for each affected "
-            "environment.\n"
+            "These change behaviour, or the format of something already on disk. "
+            "Read them before updating — an existing install may not carry "
+            "straight over.\n"
         )
         for subject, note in breaking:
             out.append(f"- {subject}")
