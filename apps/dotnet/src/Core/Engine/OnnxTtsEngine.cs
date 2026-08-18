@@ -39,7 +39,18 @@ namespace Bunyi.Core.Engine;
 /// </remarks>
 public sealed class OnnxTtsEngine : ITtsEngine
 {
-    private readonly ISpeechSynthesizer _synth;
+    private readonly Func<TtsMode, ISpeechSynthesizer> _synthFor;
+
+    /// <summary>
+    /// The synthesizer for the mode last asked for.
+    /// </summary>
+    /// <remarks>
+    /// One at a time, deliberately. The modes use different models of several
+    /// gigabytes each, and holding two resident is the difference between
+    /// fitting on a 16 GB machine and not — so switching mode unloads the one
+    /// being left behind.
+    /// </remarks>
+    private ISpeechSynthesizer _synth;
     private readonly ModelDownloader _downloader;
     private readonly ILogSink _log;
     private readonly Func<TtsMode, ModelSource> _sourceFor;
@@ -57,6 +68,11 @@ public sealed class OnnxTtsEngine : ITtsEngine
     private EngineStatus _status = EngineStatus.Idle;
     private string? _loadedFolder;
 
+    /// <summary>One synthesizer for every mode.</summary>
+    /// <remarks>
+    /// Kept because most callers, and every test that does not care about
+    /// modes, have exactly one.
+    /// </remarks>
     public OnnxTtsEngine(
         ISpeechSynthesizer synthesizer,
         ModelDownloader downloader,
@@ -68,8 +84,36 @@ public sealed class OnnxTtsEngine : ITtsEngine
         string appVersion = "0.1.0",
         TimeProvider? time = null,
         Func<TtsMode, bool, CancellationToken, Task<DoctorReport>>? doctor = null)
+        : this(
+            _ => synthesizer ?? throw new ArgumentNullException(nameof(synthesizer)),
+            downloader, log, sourceFor, layoutFor, modelsRoot, outputFolder,
+            appVersion, time, doctor)
     {
-        _synth = synthesizer ?? throw new ArgumentNullException(nameof(synthesizer));
+    }
+
+    /// <summary>A synthesizer per mode (spec §1).</summary>
+    /// <remarks>
+    /// Preset voice and voice design are different pipelines over different
+    /// exports, and the resolver is what lets one engine drive both while its
+    /// state machine, downloads, metadata and stop behaviour stay in one place.
+    /// </remarks>
+    public OnnxTtsEngine(
+        Func<TtsMode, ISpeechSynthesizer> synthesizerFor,
+        ModelDownloader downloader,
+        ILogSink log,
+        Func<TtsMode, ModelSource> sourceFor,
+        Func<TtsMode, ModelLayout>? layoutFor = null,
+        Func<string>? modelsRoot = null,
+        Func<string>? outputFolder = null,
+        string appVersion = "0.1.0",
+        TimeProvider? time = null,
+        Func<TtsMode, bool, CancellationToken, Task<DoctorReport>>? doctor = null)
+    {
+        _synthFor = synthesizerFor ?? throw new ArgumentNullException(nameof(synthesizerFor));
+
+        // Resolved now rather than on the first run, because Speakers is read
+        // to fill the picker before anything has been generated.
+        _synth = _synthFor(TtsMode.PresetVoice);
         _downloader = downloader ?? throw new ArgumentNullException(nameof(downloader));
         _log = log ?? throw new ArgumentNullException(nameof(log));
         _sourceFor = sourceFor ?? throw new ArgumentNullException(nameof(sourceFor));
@@ -79,6 +123,26 @@ public sealed class OnnxTtsEngine : ITtsEngine
         _appVersion = appVersion;
         _time = time ?? TimeProvider.System;
         _doctor = doctor;
+    }
+
+    /// <summary>
+    /// Points at the mode's synthesizer, releasing the one being left.
+    /// </summary>
+    /// <remarks>
+    /// Unloading matters more than tidiness: the previous mode's model is
+    /// several gigabytes and nothing else will ever ask for it back. §3d makes
+    /// the same point about deletion — on Windows a loaded session holds its
+    /// weights open.
+    /// </remarks>
+    private async Task UseSynthesizerFor(TtsMode mode)
+    {
+        var wanted = _synthFor(mode);
+        if (ReferenceEquals(wanted, _synth)) return;
+
+        await _synth.UnloadAsync().ConfigureAwait(false);
+
+        _synth = wanted;
+        _loadedFolder = null;
     }
 
     /// <inheritdoc />
@@ -176,6 +240,8 @@ public sealed class OnnxTtsEngine : ITtsEngine
                     token).ConfigureAwait(false);
 
                 token.ThrowIfCancellationRequested();
+
+                await UseSynthesizerFor(mode).ConfigureAwait(false);
 
                 if (!_synth.IsLoaded || _loadedFolder != folder)
                 {
