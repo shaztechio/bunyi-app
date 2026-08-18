@@ -63,8 +63,11 @@ public sealed class QwenSpeechSynthesizer(ILogSink log) : ISpeechSynthesizer
     /// model's: Qwen documents style control on that checkpoint, and the
     /// restriction here is a hardcoded per-variant flag
     /// (<c>QwenModelVariantConfig.SupportsInstruct</c>) that reports false and
-    /// logs "Instruction text ignored". Owning prompt construction lifts it,
-    /// which M8 has to do anyway to reach voice design — see RESEARCH-ONNX.md.
+    /// logs "Instruction text ignored". Reported upstream as
+    /// elbruno/ElBruno.QwenTTS#64; if the flag is corrected there this starts
+    /// returning true on its own. Owning prompt construction lifts it either
+    /// way, which M8 has to do anyway to reach voice design — see
+    /// RESEARCH-ONNX.md.
     /// </remarks>
     public bool SupportsInstruct =>
         _pipeline is not null && QwenModelVariantConfig.SupportsInstruct(_pipeline.ModelVariant);
