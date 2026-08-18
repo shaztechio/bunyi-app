@@ -112,6 +112,11 @@ public interface ITtsEngine : IAsyncDisposable
     /// </remarks>
     void ClearLastOutput();
 
+    /// <summary>
+    /// Releases the loaded model, so its files can be removed (spec §3d).
+    /// </summary>
+    Task UnloadAsync();
+
     /// <summary>Downloads and loads what is needed, then generates.</summary>
     /// <exception cref="EngineBusyException">A run is already in progress.</exception>
     Task<GenerateResult> GenerateAsync(

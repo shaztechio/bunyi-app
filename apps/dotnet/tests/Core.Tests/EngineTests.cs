@@ -435,6 +435,15 @@ public sealed class EngineTests : IAsyncLifetime
 
         public void ReleaseWorkingMemory() => Releases++;
 
+        public Task UnloadAsync()
+        {
+            IsLoaded = false;
+            Unloads++;
+            return Task.CompletedTask;
+        }
+
+        public int Unloads { get; private set; }
+
         public ValueTask DisposeAsync()
         {
             Gate?.Dispose();
