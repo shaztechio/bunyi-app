@@ -18,6 +18,29 @@ namespace Bunyi.Core;
 
 public enum TtsMode { PresetVoice, VoiceDesign, VoiceClone }
 
+/// <summary>Names for a mode that appear outside the code.</summary>
+public static class TtsModeExtensions
+{
+    /// <summary>
+    /// The mode's name as the user sees it, and as it is written down.
+    /// </summary>
+    /// <remarks>
+    /// These strings are a cross-app contract, not a label: they key the
+    /// per-mode settings (<c>modelRepo.Preset voice</c>, spec §3a), they are
+    /// recorded in each output WAV's embedded metadata, and with spaces
+    /// replaced they form the output filename
+    /// (<c>Voice-clone-20260725T2312.wav</c>, DATA-FORMATS). They match the
+    /// macOS enum's raw values exactly. Changing one is a data-format change.
+    /// </remarks>
+    public static string DisplayName(this TtsMode mode) => mode switch
+    {
+        TtsMode.PresetVoice => "Preset voice",
+        TtsMode.VoiceDesign => "Voice design",
+        TtsMode.VoiceClone => "Voice clone",
+        _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, null),
+    };
+}
+
 /// <summary>A Hugging Face repo id, or an http(s) base URL to self-host.</summary>
 public abstract record ModelSource
 {

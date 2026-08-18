@@ -15,11 +15,13 @@
 // Zip backup/restore of the models folder, stored (no compression),
 // with progress + stop and volume-aware save. Mirrors macOS BackupManager.
 // Spec: /spec/FEATURES.md §6, /spec/DATA-FORMATS.md (backup archive).
+using Bunyi.Core.Diagnostics;
+
 namespace Bunyi.Core;
 
-public sealed class BackupManager(LogStore log)
+public sealed class BackupManager(ILogSink log)
 {
-    private readonly LogStore _log = log ?? throw new ArgumentNullException(nameof(log));
+    private readonly ILogSink _log = log ?? throw new ArgumentNullException(nameof(log));
 
     /// <summary>
     /// Archive the models folder to a single .zip, STORED (no compression):

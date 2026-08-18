@@ -15,6 +15,8 @@
 // Saved voice-clone prompts (name + copied clip + transcript).
 // Mirrors macOS VoiceLibrary. Spec: /spec/FEATURES.md §5,
 // voices.json schema in /spec/DATA-FORMATS.md.
+using Bunyi.Core.Diagnostics;
+
 namespace Bunyi.Core;
 
 public sealed record SavedVoice(
@@ -24,9 +26,9 @@ public sealed record SavedVoice(
     string Transcript,
     DateTimeOffset CreatedAt);
 
-public sealed class VoiceLibrary(LogStore log)
+public sealed class VoiceLibrary(ILogSink log)
 {
-    private readonly LogStore _log = log ?? throw new ArgumentNullException(nameof(log));
+    private readonly ILogSink _log = log ?? throw new ArgumentNullException(nameof(log));
 
     public IReadOnlyList<SavedVoice> Voices { get; private set; } = Array.Empty<SavedVoice>();
 
