@@ -126,8 +126,18 @@ jobs:
 
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add "$props"
-          git commit -m "chore(dotnet): release $version"
+
+          # Asking for the version the file already carries is reasonable — it is
+          # what cutting the very first release looks like — and `git commit`
+          # fails on an empty change, which under set -e took the whole step
+          # with it. Nothing to commit simply means the tag goes on this commit.
+          if git diff --quiet -- "$props"; then
+            echo "VersionPrefix is already $version; tagging this commit."
+          else
+            git add "$props"
+            git commit -m "chore(dotnet): release $version"
+          fi
+
           git tag "$tag"
 
           # Pushing with GITHUB_TOKEN raises no workflow events, so this does
@@ -216,7 +226,12 @@ jobs:
         run: |
           set -euo pipefail
           ls -l dist/
-          archive="$(ls dist/*.zip dist/*.tar.gz 2>/dev/null | head -1)"
+          # find, not ls: each job produces one of the two archive kinds, so a
+          # glob for the other matches nothing and `ls` exits 2 for it. Under
+          # set -e that took down the step on a perfectly good build — with
+          # 2>/dev/null hiding the reason. find reports no matches as success,
+          # and the emptiness check below is what should decide.
+          archive="$(find dist -maxdepth 1 -type f \( -name '*.zip' -o -name '*.tar.gz' \) | head -1)"
           test -n "$archive"
           # wc -c rather than stat, whose flags differ between the runners.
           size="$(wc -c < "$archive")"
