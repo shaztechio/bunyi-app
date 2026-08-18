@@ -1,0 +1,39 @@
+<!--
+Copyright 2026 Shazron Abdullah and Bunyi contributors
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+
+<!--
+  The brand colours, in their own dictionary so the app and the headless tests
+  load exactly the same ones. §7 makes three appearance states a requirement,
+  so a colour that only works against one background is a bug in the other two —
+  which is why each is defined per theme rather than once.
+
+  The two indigos are the same sRGB values the macOS accent colorset and the
+  website use. Three copies of a brand colour is already one too many; this
+  comment is what stops it becoming four.
+-->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <ResourceDictionary.ThemeDictionaries>
+    <ResourceDictionary x:Key="Default">
+      <SolidColorBrush x:Key="BunyiAccent" Color="#5C54F5" />
+      <SolidColorBrush x:Key="BunyiCardBorder" Color="#22000000" />
+    </ResourceDictionary>
+    <ResourceDictionary x:Key="Dark">
+      <SolidColorBrush x:Key="BunyiAccent" Color="#7B72F0" />
+      <SolidColorBrush x:Key="BunyiCardBorder" Color="#33FFFFFF" />
+    </ResourceDictionary>
+  </ResourceDictionary.ThemeDictionaries>
+</ResourceDictionary>

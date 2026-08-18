@@ -32,6 +32,14 @@ limitations under the License.
       implements none of spec §3b.
     -->
     <PackageReference Include="ElBruno.QwenTTS" />
+
+    <!--
+      Playback, through miniaudio: identical on Windows and Linux, and the
+      package carries native libraries for both. System.Media and NAudio's
+      output backends are Windows-only, which apps/dotnet/AGENTS.md rules out.
+      Not a UI dependency — playing a file is not drawing one.
+    -->
+    <PackageReference Include="SoundFlow" />
   </ItemGroup>
 
 </Project>

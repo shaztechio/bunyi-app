@@ -88,6 +88,7 @@ apps/dotnet/
                transcription. Platform-agnostic; no UI refs.
   src/App/     Avalonia UI (views + viewmodels) referencing Core.
   tests/Core.Tests/   xUnit tests for src/Core.
+  tests/App.Tests/    headless Avalonia tests for the window.
 ```
 
 **Package versions are managed centrally.** A `PackageReference` here carries no
@@ -121,7 +122,10 @@ versions are already pinned centrally for when they do.
 | §2/§3d data locations | (Application Support) | `Infrastructure.AppPaths` |
 | §7 settings storage | (`UserDefaults`) | `Settings.SettingsStore`, `AppSettings` |
 | §2/§2a reveal in file manager | `NSWorkspace` | `Platform.FileReveal` |
-| §9 busy-close | `WindowCloseGuard` | `MainWindow.OnClosing` |
+| §9 busy-close | `WindowCloseGuard` | `Views.MainWindow.OnClosing` |
+| §1/§2 main window | `ContentView.swift` | `ViewModels.MainViewModel`, `Views.MainWindow` |
+| §1 readiness + examples | `ContentView.canGenerate` | `Engine.GenerationReadiness`, `ExamplePrompts` |
+| §2 playback | `AVAudioPlayer` | `Audio.IAudioPlayer` / `SoundFlowAudioPlayer` |
 
 ## Rules
 
@@ -130,6 +134,17 @@ versions are already pinned centrally for when they do.
   fails on a `using Avalonia` or an Avalonia package reference under
   `src/Core`, because the rule is easy to break with an editor's
   using-completion and hard to spot in review.
+- **The window's own guarantees are tested headlessly.** `tests/App.Tests`
+  opens the real `MainWindow` with no display and asserts the things §2 states
+  about it — Generate is *replaced* by Stop rather than disabled, the inputs go
+  dead while work runs, and Help and the log do not. That last one was claimed
+  to hold "by construction", which stays true only until someone moves a panel.
+  It runs with no `DISPLAY`, so CI exercises it too.
+- **Two xunit majors, on purpose.** `Core.Tests` is on xunit v2;
+  `App.Tests` is on **v3**, because `Avalonia.Headless.XUnit` requires it. They
+  are separate projects and `dotnet test` runs both. Worth unifying on v3 when
+  something else makes the migration cheap — v3 is the current line — but not
+  worth touching 200 passing tests for on its own.
 - **Warnings are errors.** If a stub's injected dependency is unread, hold it
   in a field with a null check rather than suppressing the warning: that is the
   code the implementation needs anyway.

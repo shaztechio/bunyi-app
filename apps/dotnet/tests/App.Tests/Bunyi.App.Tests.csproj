@@ -16,24 +16,22 @@ limitations under the License.
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>WinExe</OutputType>
-    <RootNamespace>Bunyi.App</RootNamespace>
-    <ApplicationManifest>app.manifest</ApplicationManifest>
-    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
-    <!-- Both are shipped as portable self-contained builds. -->
-    <RuntimeIdentifiers>win-x64;linux-x64</RuntimeIdentifiers>
+    <RootNamespace>Bunyi.App.Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <!-- xunit v3 test projects self-host, so they are executables. -->
+    <OutputType>Exe</OutputType>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Avalonia" />
-    <PackageReference Include="Avalonia.Desktop" />
-    <PackageReference Include="Avalonia.Themes.Fluent" />
-    <PackageReference Include="Avalonia.Fonts.Inter" />
-    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="Avalonia.Headless" />
+    <PackageReference Include="Avalonia.Headless.XUnit" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Core\Bunyi.Core.csproj" />
+    <ProjectReference Include="..\..\src\App\Bunyi.App.csproj" />
   </ItemGroup>
 
 </Project>
