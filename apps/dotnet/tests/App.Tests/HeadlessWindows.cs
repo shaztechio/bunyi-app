@@ -13,6 +13,7 @@
 // limitations under the License.
 
 using Avalonia.Controls;
+using Avalonia.Threading;
 
 namespace Bunyi.App.Tests;
 
@@ -61,6 +62,17 @@ public abstract class HeadlessWindows : IDisposable
 
     public void Dispose()
     {
+        // Closing a window is UI-thread work, and xunit does not promise to
+        // dispose the test class on the thread the test ran on — so this asks
+        // the dispatcher rather than assuming it is already there.
+        if (_opened.Count > 0) Dispatcher.UIThread.Invoke(CloseAll);
+
+        DisposeCore();
+        GC.SuppressFinalize(this);
+    }
+
+    private void CloseAll()
+    {
         // Newest first: a dialog shown over a window should go before the
         // window it belongs to.
         for (var i = _opened.Count - 1; i >= 0; i--)
@@ -77,8 +89,5 @@ public abstract class HeadlessWindows : IDisposable
         }
 
         _opened.Clear();
-
-        DisposeCore();
-        GC.SuppressFinalize(this);
     }
 }

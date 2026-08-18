@@ -40,8 +40,11 @@ public class PlaybackBarTests : HeadlessWindows
 
         public bool Running { get; private set; } = true;
 
+        public bool Created { get; private set; }
+
         public IBatchTimer Create(TimeSpan interval, Action tick)
         {
+            Created = true;
             _tick = tick;
             return this;
         }
@@ -64,13 +67,65 @@ public class PlaybackBarTests : HeadlessWindows
     }
 
     [Fact]
+    public void A_view_model_can_be_built_off_the_UI_thread()
+    {
+        // The bug this exists for. A DispatcherTimer belongs to the UI thread
+        // from the moment it is constructed, so building one in the view
+        // model's constructor made a view model that could only be created
+        // there. Plain unit tests build one on an ordinary thread and paid for
+        // it with "the calling thread cannot access this object" during
+        // cleanup — an intermittent CI failure that landed on whichever test
+        // happened to run next, which is what made it hard to attribute.
+        //
+        // Run on a thread of this test's own, because xunit's own threads have
+        // no dispatcher either and the failure was never reproducible locally.
+        Exception? thrown = null;
+
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                using var model = new MainViewModel(
+                    new FakeEngine(), new FakePlayer(), new RecordingLog());
+
+                Assert.False(model.IsPlaying);
+            }
+            catch (Exception ex)
+            {
+                thrown = ex;
+            }
+        });
+
+        thread.Start();
+        Assert.True(thread.Join(TimeSpan.FromSeconds(10)), "the constructor hung");
+        Assert.Null(thrown);
+    }
+
+    [Fact]
+    public void The_ticker_is_not_made_until_something_plays()
+    {
+        // Which is what keeps the constructor free of the UI thread.
+        var (model, player, timers) = NewModel();
+
+        Assert.False(timers.Created);
+
+        model.PlayCommand.Execute(null);
+
+        Assert.True(timers.Created);
+    }
+
+    [Fact]
     public void Nothing_is_playing_to_begin_with()
     {
         var (model, _, timers) = NewModel();
 
         Assert.False(model.IsPlaying);
         Assert.Equal(0, model.PlayProgress);
-        Assert.False(timers.Running);
+
+        // Not "the ticker is stopped": there is no ticker yet, which is the
+        // stronger statement and the one that keeps the constructor off the UI
+        // thread.
+        Assert.False(timers.Created);
     }
 
     [Fact]

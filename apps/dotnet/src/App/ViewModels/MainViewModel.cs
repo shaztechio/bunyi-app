@@ -30,7 +30,20 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 {
     private readonly ITtsEngine _engine;
     private readonly IAudioPlayer _player;
-    private readonly IBatchTimer? _ticker;
+    private readonly IBatchTimerFactory _timers;
+
+    /// <summary>
+    /// The playback ticker, made when something first plays.
+    /// </summary>
+    /// <remarks>
+    /// Lazily, and that matters beyond tidiness: a DispatcherTimer belongs to
+    /// the UI thread from the moment it is constructed, so building one in this
+    /// constructor made a view model that could only be created on that thread.
+    /// Plain unit tests construct one on an ordinary thread, and paid for it
+    /// with "the calling thread cannot access this object" during cleanup — an
+    /// intermittent CI failure that landed on whichever test came next.
+    /// </remarks>
+    private IBatchTimer? _ticker;
     private readonly ILogSink _log;
 
     [ObservableProperty] private TtsMode _mode = TtsMode.PresetVoice;
@@ -99,11 +112,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _player = player ?? throw new ArgumentNullException(nameof(player));
         _log = log ?? throw new ArgumentNullException(nameof(log));
 
-        // Ten times a second: fast enough that the bar moves smoothly, slow
-        // enough to cost nothing. Stopped whenever nothing is playing.
-        _ticker = (timers ?? new DispatcherTimerFactory())
-            .Create(TimeSpan.FromMilliseconds(100), TickPlayback);
-        _ticker.Stop();
+        _timers = timers ?? new DispatcherTimerFactory();
 
         History = new HistoryViewModel(
             player, log, outputFolder ?? (() => Core.Infrastructure.AppPaths.Outputs));
@@ -369,7 +378,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         IsPlaying = true;
         _player.Play(LastOutputPath);
-        _ticker?.Start();
+
+        // Made here rather than in the constructor: playing is the first moment
+        // this is certainly the UI thread.
+        _ticker ??= _timers.Create(TimeSpan.FromMilliseconds(100), TickPlayback);
+        _ticker.Start();
     }
 
     /// <summary>
