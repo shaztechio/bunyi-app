@@ -6,6 +6,31 @@ app of the *same runtime family*. Behavior (folder shape, manifest,
 voices.json, WAV) is identical everywhere; only the model **weight files**
 differ (MLX `.safetensors` on macOS vs ONNX on the .NET app).
 
+## Per-user app data
+
+Everything the app keeps for a user lives under one root, with fixed subfolder
+names so a folder is recognisable across platforms:
+
+| | macOS | Windows | Linux |
+|---|---|---|---|
+| Data root | `~/Library/Application Support/Bunyi` (inside the sandbox container) | `%LOCALAPPDATA%\Bunyi` | `$XDG_DATA_HOME/Bunyi`, defaulting to `~/.local/share/Bunyi` |
+| Settings | (`UserDefaults`) | `%APPDATA%\Bunyi\settings.json` | `$XDG_CONFIG_HOME/Bunyi/settings.json`, defaulting to `~/.config/Bunyi/settings.json` |
+
+Subfolders of the data root, identical everywhere: `Models` (the default
+models folder, §3d — relocatable), `Outputs` (§2), `Voices` (§5),
+`ModelConfigs` (§3a).
+
+**Settings and data are separated on the platforms that separate them.** On
+Windows `%APPDATA%` roams and `%LOCALAPPDATA%` does not, so a multi-gigabyte
+models folder under `%APPDATA%` would be handed to a domain roaming profile to
+synchronise at every logon. Settings are a few hundred bytes and are worth
+carrying between machines; models are not, and cannot be. The XDG split is the
+same distinction under different names.
+
+**macOS keeps settings in `UserDefaults`** rather than a file, which is the
+platform's own answer to the same question and stays as it is; the keys
+(`appearance`, `modelRepo.<Mode>`) are the contract, not the storage.
+
 ## Models folder
 
 Root is the models folder (default per-user app data; user-relocatable).
@@ -24,14 +49,56 @@ Root is the models folder (default per-user app data; user-relocatable).
   .cache/huggingface/…               ← Hub partials during download (macOS)
 ```
 
-- `<slug>` = the base URL's host+path sanitized to filesystem-safe chars.
+The ONNX family's file set is not the MLX one with the extensions swapped. An
+ONNX export is **several named graphs plus a folder of embedding arrays**, and
+any one of them missing is a model that loads and then fails:
+
+```
+    <org>/<repo>/
+      talker_prefill.onnx    talker_prefill.onnx.data
+      talker_decode.onnx     talker_decode.onnx.data
+      code_predictor.onnx    [code_predictor.onnx.data]
+      vocoder.onnx           vocoder.onnx.data
+      embeddings/…           ← *.npy arrays, and on some exports config.json
+      tokenizer/…            ← tokenizer.json, or vocab.json + merges.txt
+      [speaker_encoder.onnx  tokenizer_encoder.onnx  (+ .data)]   ← clone only
+      [int4/ | fp32/]        ← precision variants, when the export ships them
+```
+
+Two consequences the MLX layout never had:
+
+- **A precision subfolder is part of the path.** Some exports ship the same
+  graphs twice, at different quantizations. Only one variant is downloaded:
+  fetching a whole such repo means gigabytes that will never be loaded — one
+  published VoiceDesign export is 18.55 GB in total and 4.27 GB in its `int4`
+  subtree.
+- **`config.json` is not reliably at the top level.** Some exports keep it at
+  `embeddings/config.json`. It is still required; where it lives is a property
+  of the export.
+
+Because of both, the required-file set is declared **per export** rather than
+derived from a global pattern — see the completeness rule below and §3c's
+manifest.
+
+- `<slug>` = the base URL's host+path sanitized to filesystem-safe chars: take
+  `host` followed by `path`, replace every character outside
+  `[A-Za-z0-9._-]` with `-`, trim leading and trailing `-`, and use `server`
+  if nothing is left. Pinned rather than described because two apps must
+  produce the *same* folder name for the same URL, or a models folder stops
+  being interchangeable.
 - During Hub downloads, partial files live under `.cache/huggingface`.
 
-### `hasCompleteModel` rule (identical everywhere)
+### `hasCompleteModel` rule
+
+The question is the same everywhere — *may this folder be loaded without going
+to the network?* — but the test is per runtime family, because the two families
+do not agree on what a model's files look like.
+
+#### MLX family
+
 A model folder is "complete" and used offline when:
 1. `config.json` exists, **and**
-2. a weights file exists **at the top level** (`*.safetensors` for MLX,
-   `*.onnx` for the ONNX app), **and**
+2. a weights file exists **at the top level** (`*.safetensors`), **and**
 3. every shard named by a weights index (`model.safetensors.index.json`'s
    `weight_map`) is present, if such an index exists, **and**
 4. no partial/incomplete download markers exist anywhere in the tree.
@@ -43,6 +110,43 @@ folder that looked complete: the app skipped the download and failed at load,
 pointing at nothing.
 
 Rule 3 exists because one shard of three satisfies every other rule.
+
+#### ONNX family
+
+Every clause above except the last one fails on real ONNX exports, so the rule
+is restated rather than adapted. A model folder is complete when, **against the
+required-file list for that export** — the app's built-in list for a Hub repo,
+or the list the server published for a self-hosted one (§3c):
+
+1. every entry marked required exists at its declared relative path, at
+   non-zero length, **and**
+2. every `<name>.onnx` that declares external data has its `<name>.onnx.data`
+   sibling, also at non-zero length, **and**
+3. no partial/incomplete download markers exist anywhere in the tree.
+
+Why each MLX clause had to go:
+
+- **"`config.json` exists"** — true of most exports, but some ship it as
+  `embeddings/config.json`. A folder with everything it needs would be judged
+  incomplete forever, and re-downloaded on every launch.
+- **"a weights file at the top level"** — wrong in kind and in place. An export
+  is four or more named graphs, not "a weights file", and an export with a
+  precision subfolder has nothing weight-shaped at the top level at all. The
+  per-export list names whichever graphs that export actually ships, which is
+  what the clause was really trying to say.
+- **"every shard named by a weights index"** — ONNX has no weights index.
+  External data is not an enumerated set of shards; it is a single
+  fixed-name sibling declared inside the graph itself. Clause 2 is the
+  equivalent guarantee: it is exactly the "one shard of three" failure, in the
+  form this family can have it, and it is the common one — the `.onnx` file is
+  a few megabytes and its `.onnx.data` is gigabytes, so an interrupted download
+  very often leaves the small half.
+
+**Digests are deliberately not part of this test.** Where a server publishes
+them they decide whether a *downloaded* file is accepted and whether one
+already on disk may be reused (see `manifest.sha256`), and Doctor verifies them
+on demand — but hashing gigabytes on every launch is a worse problem than the
+one it detects, which is why FEATURES.md §11 keeps that check on demand.
 
 ## Self-host `manifest.txt`
 
@@ -139,10 +243,22 @@ does.
 ## `tokenizer.json` auto-fetch
 
 Some Qwen3-TTS conversions omit `tokenizer.json` (mlx-community ships
-`vocab.json` + `merges.txt` only), but tokenizer loaders require it. All
-Qwen3-TTS variants share one 151,643-token text tokenizer. When missing:
+`vocab.json` + `merges.txt` only), but some tokenizer loaders require it. All
+Qwen3-TTS variants share one 151,643-token text tokenizer, so any compatible
+copy will do. When the model folder carries **neither** a `tokenizer.json`
+**nor** a `vocab.json` + `merges.txt` pair that the app's tokenizer can be
+built from:
 1. try `<self-host base>/tokenizer.json` (if self-hosting), then
 2. a known-good fallback URL.
+
+The condition is "the app cannot build a tokenizer from what is here", not
+"`tokenizer.json` is absent" — the two came apart once there was a second
+runtime family. MLX's loader needs the file itself, so for that family the
+condition is unchanged in practice. ONNX exports ship a `tokenizer/`
+subfolder carrying `tokenizer.json`, or `vocab.json` + `merges.txt` from which
+the BPE is built directly, so the fetch does not normally trigger at all — and
+a client that insisted on a *top-level* `tokenizer.json` would re-download one
+on every launch, next to the perfectly good tokenizer it was ignoring.
 
 ## `configs.json` (saved model configurations)
 
