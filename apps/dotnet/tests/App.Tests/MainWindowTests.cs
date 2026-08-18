@@ -52,8 +52,21 @@ public class MainWindowTests
     private static T Find<T>(Window window, Func<T, bool> predicate) where T : Control =>
         window.GetLogicalDescendants().OfType<T>().First(predicate);
 
-    private static Button ButtonWith(Window window, string content) =>
-        Find<Button>(window, b => b.Content as string == content);
+    /// <summary>
+    /// Finds a button by name rather than by the words on it — several are
+    /// icons now, and a test that keys off user-visible copy breaks every time
+    /// the copy changes.
+    /// </summary>
+    private static Button ButtonWith(Window window, string name) =>
+        Find<Button>(window, b => b.Name == name);
+
+    /// <summary>
+    /// Finds a button by its text. Only for the example chips, whose label is
+    /// the content — they are generated from the examples themselves, so there
+    /// is no name to give them.
+    /// </summary>
+    private static Button ChipLabelled(Window window, string text) =>
+        Find<Button>(window, b => b.Content as string == text);
 
     [AvaloniaFact]
     public void The_window_opens_with_the_app_name()
@@ -83,7 +96,7 @@ public class MainWindowTests
     {
         var (window, model, _, _) = Open();
 
-        var generate = ButtonWith(window, "Generate");
+        var generate = ButtonWith(window, "GenerateButton");
         Assert.True(generate.IsVisible);
         Assert.False(generate.IsEffectivelyEnabled);
 
@@ -98,7 +111,7 @@ public class MainWindowTests
 
         model.Script = "Hello there.";
 
-        Assert.True(ButtonWith(window, "Generate").IsEffectivelyEnabled);
+        Assert.True(ButtonWith(window, "GenerateButton").IsEffectivelyEnabled);
         Assert.Null(model.BlockedReason);
     }
 
@@ -110,7 +123,7 @@ public class MainWindowTests
         var (window, model, _, _) = Open();
 
         var example = ExamplePrompts.For(TtsMode.PresetVoice)[0];
-        var chip = ButtonWith(window, example);
+        var chip = ChipLabelled(window, example);
         Assert.True(chip.IsVisible);
 
         chip.Command!.Execute(chip.CommandParameter);
@@ -126,7 +139,7 @@ public class MainWindowTests
 
         model.Script = "x";
 
-        Assert.False(ButtonWith(window, example).IsEffectivelyVisible);
+        Assert.False(ChipLabelled(window, example).IsEffectivelyVisible);
     }
 
     [AvaloniaFact]
@@ -139,8 +152,8 @@ public class MainWindowTests
 
         engine.Publish(new EngineStatus(EngineState.Downloading));
 
-        Assert.False(ButtonWith(window, "Generate").IsEffectivelyVisible);
-        var stop = ButtonWith(window, "Stop");
+        Assert.False(ButtonWith(window, "GenerateButton").IsEffectivelyVisible);
+        var stop = ButtonWith(window, "StopButton");
         Assert.True(stop.IsEffectivelyVisible);
         Assert.True(stop.IsEffectivelyEnabled);
     }
@@ -151,7 +164,7 @@ public class MainWindowTests
         var (window, _, engine, _) = Open(m => m.Script = "Hello there.");
         engine.Publish(new EngineStatus(EngineState.Generating));
 
-        var stop = ButtonWith(window, "Stop");
+        var stop = ButtonWith(window, "StopButton");
         stop.Command!.Execute(null);
 
         Assert.Equal(1, engine.StopRequests);
@@ -185,8 +198,8 @@ public class MainWindowTests
 
         engine.Publish(new EngineStatus(EngineState.Downloading, 0.4, "42% — about 3.1 MB/s"));
 
-        Assert.True(ButtonWith(window, "Help").IsEffectivelyEnabled);
-        Assert.True(ButtonWith(window, "Logs").IsEffectivelyEnabled);
+        Assert.True(ButtonWith(window, "HelpButton").IsEffectivelyEnabled);
+        Assert.True(ButtonWith(window, "LogsButton").IsEffectivelyEnabled);
     }
 
     [AvaloniaFact]
@@ -256,16 +269,83 @@ public class MainWindowTests
         // §2: only this run's result, and nothing offers to play old audio while
         // new audio is being made.
         var (window, model, engine, _) = Open(m => m.Script = "Hello there.");
-        Assert.False(ButtonWith(window, "Play").IsEffectivelyVisible);
+        Assert.False(ButtonWith(window, "PlayButton").IsEffectivelyVisible);
 
         engine.Publish(new EngineStatus(EngineState.Generating));
-        Assert.False(ButtonWith(window, "Play").IsEffectivelyVisible);
+        Assert.False(ButtonWith(window, "PlayButton").IsEffectivelyVisible);
 
         model.LastOutputPath = "/tmp/out.wav";
         engine.Publish(EngineStatus.Idle);
 
-        Assert.True(ButtonWith(window, "Play").IsEffectivelyVisible);
-        Assert.True(ButtonWith(window, "Show file").IsEffectivelyVisible);
+        Assert.True(ButtonWith(window, "PlayButton").IsEffectivelyVisible);
+        Assert.True(ButtonWith(window, "RevealButton").IsEffectivelyVisible);
+    }
+
+    [AvaloniaFact]
+    public void The_mode_picker_shows_names_a_person_would_read()
+    {
+        // Without an item template the picker renders the enum — "PresetVoice",
+        // "VoiceDesign" — which is what shipped. The names exist once already,
+        // because they are also settings keys and part of every filename.
+        var (window, _, _, _) = Open();
+
+        var picker = Find<ListBox>(window, _ => true);
+        var labels = picker.GetLogicalDescendants().OfType<TextBlock>()
+            .Select(t => t.Text).Where(t => !string.IsNullOrEmpty(t)).ToList();
+
+        Assert.Contains("Preset voice", labels);
+        Assert.Contains("Voice design", labels);
+        Assert.Contains("Voice clone", labels);
+        Assert.DoesNotContain(labels, l => l!.Contains("PresetVoice"));
+    }
+
+    [AvaloniaFact]
+    public void Progress_animates_when_there_is_no_fraction_to_show()
+    {
+        // Generating reports no fraction, and it is the long phase. A
+        // determinate bar pinned at zero for half a minute reads as an app that
+        // has hung.
+        var (window, _, engine, _) = Open(m => m.Script = "Hello there.");
+        var bar = Find<ProgressBar>(window, _ => true);
+
+        engine.Publish(new EngineStatus(EngineState.Generating));
+        Assert.True(bar.IsIndeterminate);
+
+        // A download does know, so it measures rather than animating.
+        engine.Publish(new EngineStatus(EngineState.Downloading, 0.42, "42%"));
+        Assert.False(bar.IsIndeterminate);
+        Assert.Equal(0.42, bar.Value, 3);
+    }
+
+    [AvaloniaFact]
+    public void Progress_is_not_shown_at_all_when_nothing_is_running()
+    {
+        var (window, _, _, _) = Open();
+
+        var bar = Find<ProgressBar>(window, _ => true);
+
+        Assert.False(bar.IsEffectivelyVisible);
+    }
+
+    [AvaloniaFact]
+    public void Every_icon_only_button_says_what_it_does_on_hover()
+    {
+        // The risk icons introduce. This audience is non-technical, and an
+        // unlabelled glyph is only obvious to whoever chose it — so a button
+        // with a picture and no words must carry a tooltip.
+        var (window, model, _, _) = Open(m => m.Script = "Hello there.");
+        model.LastOutputPath = "/tmp/out.wav";
+
+        var iconButtons = window.GetLogicalDescendants().OfType<Button>()
+            .Where(b => b.Classes.Contains("icon"))
+            .ToList();
+
+        Assert.NotEmpty(iconButtons);
+        Assert.All(iconButtons, b =>
+        {
+            var tip = ToolTip.GetTip(b) as string;
+            Assert.False(string.IsNullOrWhiteSpace(tip), $"{b.Name} has no tooltip");
+        });
     }
 
     [AvaloniaFact]

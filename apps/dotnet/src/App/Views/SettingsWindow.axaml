@@ -31,6 +31,15 @@ limitations under the License.
     </Style>
     <!-- Long explanatory prose sits beside the controls it explains, behind a
          left rule, rather than at the top like a README. -->
+    <Style Selector="Button">
+      <Setter Property="CornerRadius" Value="{DynamicResource BunyiControlRadius}" />
+    </Style>
+    <Style Selector="TextBox">
+      <Setter Property="CornerRadius" Value="{DynamicResource BunyiControlRadius}" />
+    </Style>
+    <Style Selector="ComboBox">
+      <Setter Property="CornerRadius" Value="{DynamicResource BunyiControlRadius}" />
+    </Style>
     <Style Selector="Border.callout">
       <Setter Property="BorderThickness" Value="2,0,0,0" />
       <Setter Property="BorderBrush" Value="{DynamicResource BunyiAccent}" />

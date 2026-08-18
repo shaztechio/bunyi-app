@@ -64,8 +64,13 @@ public sealed class HistoryTests : IDisposable
         return (window, model, engine, player);
     }
 
-    private static Button ButtonWith(Window window, string content) =>
-        window.GetLogicalDescendants().OfType<Button>().First(b => b.Content as string == content);
+    /// <summary>
+    /// Finds a button by name rather than by the words on it — several are
+    /// icons now, and a test that keys off user-visible copy breaks every time
+    /// the copy changes.
+    /// </summary>
+    private static Button ButtonWith(Window window, string name) =>
+        window.GetLogicalDescendants().OfType<Button>().First(b => b.Name == name);
 
     [AvaloniaFact]
     public void History_lists_what_is_in_the_folder_when_it_is_shown()
@@ -122,10 +127,10 @@ public sealed class HistoryTests : IDisposable
         model.Script = "Hello there.";
 
         model.ShowingHistory = true;
-        Assert.False(ButtonWith(window, "Generate").IsEffectivelyVisible);
+        Assert.False(ButtonWith(window, "GenerateButton").IsEffectivelyVisible);
 
         engine.Publish(new EngineStatus(EngineState.Generating));
-        Assert.True(ButtonWith(window, "Stop").IsEffectivelyVisible);
+        Assert.True(ButtonWith(window, "StopButton").IsEffectivelyVisible);
     }
 
     [AvaloniaFact]
@@ -136,11 +141,11 @@ public sealed class HistoryTests : IDisposable
         WriteClip("Preset-voice-20260101T000000.wav");
         var (window, model, _, _) = Open();
         model.LastOutputPath = "/tmp/out.wav";
-        Assert.True(ButtonWith(window, "Play").IsEffectivelyVisible);
+        Assert.True(ButtonWith(window, "PlayButton").IsEffectivelyVisible);
 
         model.ShowingHistory = true;
 
-        Assert.False(ButtonWith(window, "Play").IsEffectivelyVisible);
+        Assert.False(ButtonWith(window, "PlayButton").IsEffectivelyVisible);
     }
 
     [AvaloniaFact]

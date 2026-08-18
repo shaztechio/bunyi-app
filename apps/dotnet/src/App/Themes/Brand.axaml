@@ -25,7 +25,23 @@ limitations under the License.
   comment is what stops it becoming four.
 -->
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=System.Runtime">
+
+  <ResourceDictionary.MergedDictionaries>
+    <ResourceInclude Source="avares://Bunyi.App/Themes/Icons.axaml" />
+  </ResourceDictionary.MergedDictionaries>
+
+  <!--
+    The radius scale. UI-PLAN.md gives 12 for cards, 8 for the controls inside
+    them and a capsule for pills; these are those, named so a value is never
+    typed twice and the shapes stay related to each other.
+  -->
+  <CornerRadius x:Key="BunyiCardRadius">12</CornerRadius>
+  <CornerRadius x:Key="BunyiControlRadius">8</CornerRadius>
+  <CornerRadius x:Key="BunyiPillRadius">999</CornerRadius>
+  <sys:Double x:Key="BunyiIconButtonSize">32</sys:Double>
+
   <ResourceDictionary.ThemeDictionaries>
     <ResourceDictionary x:Key="Default">
       <SolidColorBrush x:Key="BunyiAccent" Color="#5C54F5" />
