@@ -28,6 +28,7 @@ namespace Bunyi.Core.Tests;
 /// that matters reads as a pass in CI, which is the failure mode worth
 /// avoiding when the whole point is cross-platform agreement.
 /// </remarks>
+[Collection("environment")]
 public class AppPathsTests
 {
     [Fact]

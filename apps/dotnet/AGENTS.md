@@ -123,6 +123,9 @@ versions are already pinned centrally for when they do.
 | §7 settings storage | (`UserDefaults`) | `Settings.SettingsStore`, `AppSettings` |
 | §2/§2a reveal in file manager | `NSWorkspace` | `Platform.FileReveal` |
 | §9 busy-close | `WindowCloseGuard` | `Views.MainWindow.OnClosing` |
+| §2a History | `HistoryView.swift` | `ViewModels.HistoryViewModel`, `Views.HistoryView` |
+| §2a folder-is-the-record | `generatedOutputs()` | `Audio.GeneratedOutputs` |
+| §2a/§3d move to Trash | `FileManager.trashItem` | `Platform.Trash` |
 | §1/§2 main window | `ContentView.swift` | `ViewModels.MainViewModel`, `Views.MainWindow` |
 | §1 readiness + examples | `ContentView.canGenerate` | `Engine.GenerationReadiness`, `ExamplePrompts` |
 | §2 playback | `AVAudioPlayer` | `Audio.IAudioPlayer` / `SoundFlowAudioPlayer` |

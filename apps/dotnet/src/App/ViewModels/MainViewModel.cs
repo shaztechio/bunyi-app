@@ -43,11 +43,24 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string? _lastOutputPath;
     [ObservableProperty] private bool _isPlaying;
 
-    public MainViewModel(ITtsEngine engine, IAudioPlayer player, ILogSink log)
+    /// <summary>
+    /// Whether History is showing instead of a generation mode (spec §2a).
+    /// </summary>
+    /// <remarks>
+    /// A fourth segment beside the three modes, not a mode itself: it has no
+    /// text to speak, so it offers no Generate button.
+    /// </remarks>
+    [ObservableProperty] private bool _showingHistory;
+
+    public MainViewModel(
+        ITtsEngine engine, IAudioPlayer player, ILogSink log, Func<string>? outputFolder = null)
     {
         _engine = engine ?? throw new ArgumentNullException(nameof(engine));
         _player = player ?? throw new ArgumentNullException(nameof(player));
         _log = log ?? throw new ArgumentNullException(nameof(log));
+
+        History = new HistoryViewModel(
+            player, log, outputFolder ?? (() => Core.Infrastructure.AppPaths.Outputs));
 
         Speakers = [.. FallbackSpeakers.All];
 
@@ -63,6 +76,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// class: it is the thing being closed, and it is what shows the dialog.
     /// </remarks>
     public ITtsEngine Engine => _engine;
+
+    /// <summary>History (spec §2a).</summary>
+    public HistoryViewModel History { get; }
 
     /// <summary>Languages offered in every mode (spec §1).</summary>
     public IReadOnlyList<string> AllLanguages { get; } = Languages.All;
@@ -98,7 +114,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     /// <summary>Whether they belong on screen at all.</summary>
     public bool ShowExamples =>
-        ExamplePrompts.ShouldShow(Mode, Script, LastOutputPath is not null);
+        !ShowingHistory && ExamplePrompts.ShouldShow(Mode, Script, LastOutputPath is not null);
 
     /// <summary>Only preset voice is implemented so far.</summary>
     public bool ModeIsAvailable => Mode == TtsMode.PresetVoice;
@@ -124,8 +140,25 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public string InstructLabel =>
         Mode == TtsMode.VoiceDesign ? "Voice" : "Style";
 
-    /// <summary>Whether there is a result to play or reveal.</summary>
-    public bool HasResult => LastOutputPath is not null && !IsBusy;
+    /// <summary>
+    /// Whether there is a result to play or reveal.
+    /// </summary>
+    /// <remarks>
+    /// Hidden in History, which has its own per-row player — two players on
+    /// screen can play over each other (spec §2a).
+    /// </remarks>
+    public bool HasResult => LastOutputPath is not null && !IsBusy && !ShowingHistory;
+
+    /// <summary>
+    /// Whether Generate belongs on screen.
+    /// </summary>
+    /// <remarks>
+    /// §2a: no Generate button in History — there is no text on screen to
+    /// speak, so it would either do nothing or silently act on a mode that is
+    /// not visible. <b>Stop stays</b>, because a run can still be in progress
+    /// while History is open and hiding it would strand the user.
+    /// </remarks>
+    public bool ShowGenerate => !ShowingHistory && !IsBusy;
 
     [RelayCommand]
     private void UseExample(string? example)
@@ -253,12 +286,23 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(BlockedReason));
         OnPropertyChanged(nameof(ShowExamples));
         OnPropertyChanged(nameof(HasResult));
+        OnPropertyChanged(nameof(ShowGenerate));
     }
 
     partial void OnScriptChanged(string value) => Refresh();
     partial void OnInstructChanged(string value) => Refresh();
     partial void OnIsBusyChanged(bool value) => Refresh();
     partial void OnLastOutputPathChanged(string? value) => Refresh();
+
+    partial void OnShowingHistoryChanged(bool value)
+    {
+        // Read the folder every time it is shown, so it is never stale.
+        if (value) History.Refresh();
+
+        OnPropertyChanged(nameof(HasResult));
+        OnPropertyChanged(nameof(ShowGenerate));
+        OnPropertyChanged(nameof(ShowExamples));
+    }
 
     partial void OnModeChanged(TtsMode value)
     {
@@ -274,6 +318,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public void Dispose()
     {
         _engine.StatusChanged -= OnEngineStatusChanged;
+        History.Dispose();
         _player.Dispose();
     }
 }

@@ -15,6 +15,7 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
+using Avalonia.Platform.Storage;
 using Bunyi.App.ViewModels;
 using Bunyi.Core.Engine;
 
@@ -25,7 +26,48 @@ public partial class MainWindow : Window
     private bool _closeConfirmed;
     private bool _waitingToClose;
 
-    public MainWindow() => AvaloniaXamlLoader.Load(this);
+    public MainWindow()
+    {
+        AvaloniaXamlLoader.Load(this);
+        DataContextChanged += (_, _) => WireHistory();
+    }
+
+    /// <summary>
+    /// Gives History the things only a window has: a clipboard, a save picker
+    /// and somewhere to ask a question.
+    /// </summary>
+    private void WireHistory()
+    {
+        if (DataContext is not MainViewModel model) return;
+
+        model.History.Clipboard = Clipboard;
+        model.History.ConfirmTrash = ConfirmTrashAsync;
+        model.History.ChooseSaveLocation = ChooseSaveLocationAsync;
+    }
+
+    /// <summary>§2a: Trash after confirming, because the audio may be the only copy.</summary>
+    private Task<bool> ConfirmTrashAsync(ViewModels.HistoryRow row) =>
+        AskAsync(
+            "Move this clip to the Trash?",
+            $"“{row.Summary}” goes to the Trash, where you can still get it back.",
+            confirm: "Move to Trash",
+            cancel: "Keep");
+
+    /// <summary>
+    /// §2a: Download opens a save panel so the user chooses the destination.
+    /// </summary>
+    private async Task<string?> ChooseSaveLocationAsync(ViewModels.HistoryRow row)
+    {
+        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Save a copy",
+            SuggestedFileName = System.IO.Path.GetFileName(row.Path),
+            DefaultExtension = "wav",
+            FileTypeChoices = [new FilePickerFileType("Audio") { Patterns = ["*.wav"] }],
+        });
+
+        return file?.TryGetLocalPath();
+    }
 
     private ITtsEngine? Engine => (DataContext as MainViewModel)?.Engine;
 
@@ -76,14 +118,32 @@ public partial class MainWindow : Window
     }
 
     /// <summary>Returns whether the user chose to keep working.</summary>
-    private async Task<bool> ConfirmAsync()
+    private Task<bool> ConfirmAsync() =>
+        AskAsync(
+            "Stop the current operation?",
+            "Bunyi is still working. Stopping will discard what it is doing. "
+            + "The window closes once it has stopped, or after 15 seconds.",
+            confirm: "Stop and Close",
+            cancel: "Keep Working",
+            invert: true);
+
+    /// <summary>
+    /// A two-button question.
+    /// </summary>
+    /// <param name="invert">
+    /// True when the returned value should mean "cancelled" rather than
+    /// "confirmed" — §9 wants Keep Working as the safe default and the
+    /// destructive choice as the other one.
+    /// </param>
+    private async Task<bool> AskAsync(
+        string title, string message, string confirm, string cancel, bool invert = false)
     {
-        var keepWorking = new Button { Content = "Keep Working", IsDefault = true, MinWidth = 120 };
-        var stopAndClose = new Button { Content = "Stop and Close", IsCancel = true, MinWidth = 120 };
+        var cancelButton = new Button { Content = cancel, IsDefault = true, MinWidth = 120 };
+        var confirmButton = new Button { Content = confirm, IsCancel = true, MinWidth = 120 };
 
         var dialog = new Window
         {
-            Title = "Stop the current operation?",
+            Title = title,
             Width = 420,
             SizeToContent = SizeToContent.Height,
             CanResize = false,
@@ -96,9 +156,7 @@ public partial class MainWindow : Window
                 {
                     new TextBlock
                     {
-                        Text = "Bunyi is still working. Stopping will discard what it is "
-                             + "doing. The window closes once it has stopped, or after "
-                             + "15 seconds.",
+                        Text = message,
                         TextWrapping = Avalonia.Media.TextWrapping.Wrap,
                     },
                     new StackPanel
@@ -106,18 +164,18 @@ public partial class MainWindow : Window
                         Orientation = Avalonia.Layout.Orientation.Horizontal,
                         HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
                         Spacing = 8,
-                        Children = { stopAndClose, keepWorking },
+                        Children = { confirmButton, cancelButton },
                     },
                 },
             },
         };
 
-        // Keep Working is the safe default; Stop and Close is the destructive
-        // one (spec §9).
+        // The safe choice is the default and the destructive one is not, and
+        // dismissing the dialog counts as the safe choice (spec §9).
         var result = new TaskCompletionSource<bool>();
-        keepWorking.Click += (_, _) => { result.TrySetResult(true); dialog.Close(); };
-        stopAndClose.Click += (_, _) => { result.TrySetResult(false); dialog.Close(); };
-        dialog.Closed += (_, _) => result.TrySetResult(true);
+        cancelButton.Click += (_, _) => { result.TrySetResult(invert); dialog.Close(); };
+        confirmButton.Click += (_, _) => { result.TrySetResult(!invert); dialog.Close(); };
+        dialog.Closed += (_, _) => result.TrySetResult(invert);
 
         await dialog.ShowDialog(this);
         return await result.Task;
