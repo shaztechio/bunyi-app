@@ -392,13 +392,24 @@ the model.
 poor trade for the audience this app is aimed at, and it would not fix the
 smaller model.
 
-**How it closes.** M8 and M10 already require writing our own inference
-pipeline, since this library covers CustomVoice only. Prompt construction
-becomes ours at that point, and an instruction is text conditioning prepended to
-the sequence — the same machinery voice design needs. Preset-voice `instruct`
-therefore comes as a side effect of work already planned, rather than as a
-project of its own. Worth reporting upstream in the meantime; the library is MIT
-and actively maintained.
+**Reported upstream:**
+[elbruno/ElBruno.QwenTTS#64](https://github.com/elbruno/ElBruno.QwenTTS/issues/64)
+— "Qwen3-TTS-12Hz-0.6B-CustomVoice does support instructions". If the flag is
+corrected there, `SupportsInstruct` starts returning true on its own and the
+engine stops suppressing the style, with no change needed here: the capability
+is asked of the synthesizer rather than assumed, precisely so that can happen.
+
+The issue leaves open the one thing we could not determine from outside — whether
+the ONNX export itself carries the conditioning path, or only the library's flag
+is wrong. If it is the export, the flag is accurate and only the warning's
+wording misleads.
+
+**How it closes regardless.** M8 and M10 already require writing our own
+inference pipeline, since this library covers CustomVoice only. Prompt
+construction becomes ours at that point, and an instruction is text conditioning
+prepended to the sequence — the same machinery voice design needs. Preset-voice
+`instruct` therefore arrives as a side effect of work already planned, rather
+than as a project of its own.
 
 ## Open questions
 
