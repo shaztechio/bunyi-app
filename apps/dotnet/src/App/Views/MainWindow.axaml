@@ -59,9 +59,23 @@ limitations under the License.
         <TextBlock Text="{Binding ModeSubtitle}" FontSize="12" Opacity="0.75" />
       </StackPanel>
       <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+        <!--
+          §11: Doctor, Logs and Help sit in one group, in that order — by how
+          far the answer is from the app: whether it can run at all, what it
+          did, what it is. All three are available while work is in progress; a
+          run behaving strangely is exactly when they are wanted.
+
+          Settings leads rather than splitting them. It is the odd one out —
+          it changes the app rather than explaining it — and putting it between
+          Doctor and Logs would be the one arrangement §11 rules out.
+        -->
         <Button Classes="icon" Click="OnSettingsClicked" Name="SettingsButton"
                 ToolTip.Tip="Settings — models, storage and appearance">
           <Path Data="{DynamicResource IconSettings}" />
+        </Button>
+        <Button Classes="icon" Click="OnDoctorClicked" Name="DoctorButton"
+                ToolTip.Tip="Doctor — can this machine generate right now?">
+          <Path Data="{DynamicResource IconDoctor}" />
         </Button>
         <Button Classes="icon" Name="LogsButton"
                 ToolTip.Tip="Logs — what Bunyi has been doing">

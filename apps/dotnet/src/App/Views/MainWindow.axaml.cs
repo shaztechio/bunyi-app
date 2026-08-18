@@ -17,6 +17,8 @@ using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform.Storage;
 using Bunyi.App.ViewModels;
+using Bunyi.Core;
+using Bunyi.Core.Diagnostics;
 using Bunyi.Core.Engine;
 
 namespace Bunyi.App.Views;
@@ -40,6 +42,7 @@ public partial class MainWindow : Window
     {
         if (DataContext is not MainViewModel model) return;
 
+        model.ShowReport = report => ShowReportAsync(report, "Cannot generate yet");
         model.History.Clipboard = Clipboard;
         model.History.ConfirmTrash = ConfirmTrashAsync;
         model.History.ChooseSaveLocation = ChooseSaveLocationAsync;
@@ -70,6 +73,127 @@ public partial class MainWindow : Window
     }
 
     private ITtsEngine? Engine => (DataContext as MainViewModel)?.Engine;
+
+    /// <summary>
+    /// Runs Doctor on demand and shows everything it found (spec §11).
+    /// </summary>
+    /// <remarks>
+    /// Every check, passes included — "everything is fine" is the most common
+    /// useful answer, and a dialog that appears only when something is wrong
+    /// cannot give it. The same findings go to the log so they can be copied
+    /// into a bug report.
+    /// </remarks>
+    private async void OnDoctorClicked(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainViewModel model) return;
+
+        var report = await model.RunDoctorAsync();
+        if (report is null) return;
+
+        await ShowReportAsync(report, "Doctor");
+    }
+
+    /// <summary>
+    /// The findings as rows, blockers first.
+    /// </summary>
+    /// <remarks>
+    /// Separated from the dialog so the ordering can be tested without showing
+    /// a modal window, which a headless test cannot dismiss.
+    /// </remarks>
+    internal static StackPanel BuildFindings(DoctorReport report)
+    {
+        var lines = new StackPanel { Spacing = 10 };
+
+        // Blockers first: what stops the run is what the reader needs.
+        foreach (var finding in report.Findings
+                     .OrderByDescending(f => f.Severity == DoctorSeverity.Blocker)
+                     .ThenByDescending(f => f.Severity == DoctorSeverity.Warning))
+        {
+            var mark = finding.Severity switch
+            {
+                DoctorSeverity.Blocker => "✕",
+                DoctorSeverity.Warning => "!",
+                _ => "✓",
+            };
+
+            lines.Children.Add(new StackPanel
+            {
+                Orientation = Avalonia.Layout.Orientation.Horizontal,
+                Spacing = 8,
+                Children =
+                {
+                    new TextBlock { Text = mark, Width = 14, FontWeight = Avalonia.Media.FontWeight.Bold },
+                    new StackPanel
+                    {
+                        Children =
+                        {
+                            new TextBlock
+                            {
+                                Text = finding.Title,
+                                FontWeight = Avalonia.Media.FontWeight.SemiBold,
+                            },
+                            new SelectableTextBlock
+                            {
+                                Text = finding.Detail,
+                                TextWrapping = Avalonia.Media.TextWrapping.Wrap,
+                                Opacity = 0.85,
+                                MaxWidth = 420,
+                            },
+                        },
+                    },
+                },
+            });
+        }
+
+
+        return lines;
+    }
+
+    /// <summary>Shows a report, blockers first.</summary>
+    internal async Task ShowReportAsync(DoctorReport report, string title)
+    {
+        var lines = BuildFindings(report);
+
+        var copy = new Button { Content = "Copy", MinWidth = 90 };
+        var close = new Button { Content = "Close", IsDefault = true, IsCancel = true, MinWidth = 90 };
+
+        var dialog = new Window
+        {
+            Title = $"{title} — {report.Mode.DisplayName()}",
+            Width = 520,
+            SizeToContent = SizeToContent.Height,
+            CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Content = new StackPanel
+            {
+                Margin = new Avalonia.Thickness(20),
+                Spacing = 16,
+                Children =
+                {
+                    lines,
+                    new StackPanel
+                    {
+                        Orientation = Avalonia.Layout.Orientation.Horizontal,
+                        HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
+                        Spacing = 8,
+                        Children = { copy, close },
+                    },
+                },
+            },
+        };
+
+        copy.Click += async (_, _) =>
+        {
+            if (Clipboard is null) return;
+            var transfer = new Avalonia.Input.DataTransfer();
+            transfer.Add(Avalonia.Input.DataTransferItem.CreateText(report.Describe()));
+            await Clipboard.SetDataAsync(transfer);
+            copy.Content = "Copied";
+        };
+        close.Click += (_, _) => dialog.Close();
+
+        await dialog.ShowDialog(this);
+    }
 
     /// <summary>Opens Settings, or brings the open one forward.</summary>
     private SettingsWindow? _settings;

@@ -53,14 +53,17 @@ public sealed class EngineTests : IAsyncLifetime
         if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true);
     }
 
-    private OnnxTtsEngine NewEngine(FakeSynthesizer synth) => new(
+    private OnnxTtsEngine NewEngine(
+        FakeSynthesizer synth,
+        Func<TtsMode, bool, CancellationToken, Task<DoctorReport>>? doctor = null) => new(
         synth,
         new ModelDownloader(_http, _log),
         _log,
         _ => new ModelSource.BaseUrl(_server.BaseUrl),
         _ => Layout,
         () => _root,
-        () => Path.Combine(_root, "Outputs"));
+        () => Path.Combine(_root, "Outputs"),
+        doctor: doctor);
 
     private static GenerateRequest Request(string text = "Hello there.") =>
         new(TtsMode.PresetVoice, text, "english", "ryan");
@@ -250,6 +253,76 @@ public sealed class EngineTests : IAsyncLifetime
             Assert.False(engine.Status.IsBusy);
             Assert.Equal(EngineState.Idle, engine.Status.State);
         }
+    }
+
+    [Fact]
+    public async Task A_blocker_stops_the_run_before_anything_is_downloaded()
+    {
+        // §11: Doctor runs before any download begins, because the point is not
+        // to discover after 3.4 GB that there was never room for it.
+        var synth = new FakeSynthesizer();
+        var report = new DoctorReport(TtsMode.PresetVoice,
+            [new DoctorFinding("Disk space", "No room.", DoctorSeverity.Blocker)]);
+
+        await using var engine = NewEngine(synth, doctor: (_, _, _) => Task.FromResult(report));
+
+        var failed = await Assert.ThrowsAsync<PreflightFailedException>(
+            () => engine.GenerateAsync(Request(), null, default));
+
+        Assert.Same(report, failed.Report);
+        Assert.Equal(0, _server.BodyRequestCount("model.onnx"));
+        Assert.Equal(0, synth.Loads);
+    }
+
+    [Fact]
+    public async Task Warnings_go_to_the_log_and_do_not_stop_the_run()
+    {
+        // §11: warnings do not stop it and are written to the Logs.
+        var synth = new FakeSynthesizer();
+        var report = new DoctorReport(TtsMode.PresetVoice,
+            [new DoctorFinding("Memory", "It may swap.", DoctorSeverity.Warning)]);
+
+        await using var engine = NewEngine(synth, doctor: (_, _, _) => Task.FromResult(report));
+
+        var result = await engine.GenerateAsync(Request(), null, default);
+
+        Assert.True(File.Exists(result.OutputPath));
+        Assert.Contains(_log.Lines, l => l.Contains("It may swap."));
+    }
+
+    [Fact]
+    public async Task A_healthy_preflight_says_nothing_at_all()
+    {
+        // §11: "a preflight the user notices on a healthy machine is a bug".
+        var synth = new FakeSynthesizer();
+        var report = new DoctorReport(TtsMode.PresetVoice,
+            [new DoctorFinding("Disk space", "Plenty.", DoctorSeverity.Ok)]);
+
+        await using var engine = NewEngine(synth, doctor: (_, _, _) => Task.FromResult(report));
+
+        await engine.GenerateAsync(Request(), null, default);
+
+        Assert.DoesNotContain(_log.Lines, l => l.Contains("Plenty."));
+        Assert.DoesNotContain(_log.Lines, l => l.Contains("Doctor"));
+    }
+
+    [Fact]
+    public async Task The_preflight_is_never_the_slow_check()
+    {
+        // Hashing gigabytes before every generation would be a worse problem
+        // than the one it detects (§11).
+        var synth = new FakeSynthesizer();
+        var deepAsked = false;
+
+        await using var engine = NewEngine(synth, doctor: (_, deep, _) =>
+        {
+            deepAsked |= deep;
+            return Task.FromResult(new DoctorReport(TtsMode.PresetVoice, []));
+        });
+
+        await engine.GenerateAsync(Request(), null, default);
+
+        Assert.False(deepAsked);
     }
 
     [Fact]

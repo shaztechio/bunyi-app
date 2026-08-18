@@ -349,4 +349,92 @@ public sealed class ModelDownloaderTests : IAsyncLifetime
         public IReadOnlyList<string> Lines { get { lock (_lines) return _lines.ToArray(); } }
         public void Log(string message) { lock (_lines) _lines.Add(message); }
     }
+
+    // ---- On-demand integrity verification (spec §11) ----
+
+    private async Task<string> InstallAsync()
+    {
+        var source = new ModelSource.BaseUrl(_server.BaseUrl);
+        await NewDownloader().EnsureModelAsync(source, Layout, _root, null, default);
+        return ModelDownloader.FolderFor(source, _root);
+    }
+
+    [Fact]
+    public async Task Verification_passes_on_the_files_it_just_downloaded()
+    {
+        _server.Add("manifest.sha256", _server.Sha256Manifest(
+            "embeddings/config.json", "model.onnx", "model.onnx.data"));
+        var folder = await InstallAsync();
+
+        var bad = await NewDownloader().VerifyAsync(
+            new ModelSource.BaseUrl(_server.BaseUrl), Layout, folder, default);
+
+        Assert.Empty(bad);
+    }
+
+    [Fact]
+    public async Task Verification_names_a_file_that_changed_underneath_the_app()
+    {
+        // The failure this check exists for: a model that loads and speaks
+        // nonsense, which nothing else in the app can tell from a working one.
+        _server.Add("manifest.sha256", _server.Sha256Manifest(
+            "embeddings/config.json", "model.onnx", "model.onnx.data"));
+        var folder = await InstallAsync();
+
+        await File.WriteAllBytesAsync(Path.Combine(folder, "model.onnx"), new byte[4_096]);
+
+        var bad = await NewDownloader().VerifyAsync(
+            new ModelSource.BaseUrl(_server.BaseUrl), Layout, folder, default);
+
+        Assert.Equal(["model.onnx"], bad);
+    }
+
+    [Fact]
+    public async Task A_file_with_no_published_digest_is_not_called_a_mismatch()
+    {
+        // manifest.txt publishes names and no digests. Reporting every file as
+        // failing would make the check useless against every source that serves
+        // one.
+        _server.Add("manifest.txt",
+            string.Join("\n", "embeddings/config.json", "model.onnx", "model.onnx.data"));
+        var folder = await InstallAsync();
+
+        await File.WriteAllBytesAsync(Path.Combine(folder, "model.onnx"), new byte[8]);
+
+        var bad = await NewDownloader().VerifyAsync(
+            new ModelSource.BaseUrl(_server.BaseUrl), Layout, folder, default);
+
+        Assert.Empty(bad);
+    }
+
+    [Fact]
+    public async Task A_required_file_that_is_simply_gone_is_reported()
+    {
+        _server.Add("manifest.sha256", _server.Sha256Manifest(
+            "embeddings/config.json", "model.onnx", "model.onnx.data"));
+        var folder = await InstallAsync();
+
+        File.Delete(Path.Combine(folder, "model.onnx.data"));
+
+        var bad = await NewDownloader().VerifyAsync(
+            new ModelSource.BaseUrl(_server.BaseUrl), Layout, folder, default);
+
+        Assert.Equal(["model.onnx.data"], bad);
+    }
+
+    [Fact]
+    public async Task Verification_reads_the_files_and_never_re_downloads_them()
+    {
+        // It is a check, not a repair. §3d puts deleting and re-downloading in
+        // Settings, where the user decides to spend the bandwidth.
+        _server.Add("manifest.sha256", _server.Sha256Manifest(
+            "embeddings/config.json", "model.onnx", "model.onnx.data"));
+        var folder = await InstallAsync();
+        var before = _server.BodyRequestCount("model.onnx");
+
+        await NewDownloader().VerifyAsync(
+            new ModelSource.BaseUrl(_server.BaseUrl), Layout, folder, default);
+
+        Assert.Equal(before, _server.BodyRequestCount("model.onnx"));
+    }
 }
