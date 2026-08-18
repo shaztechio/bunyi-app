@@ -26,6 +26,17 @@ limitations under the License.
 
   <ItemGroup>
     <!--
+      So the tests can reach internals worth asserting without widening the
+      public API for them. Doctor's source probe is the case in point: how the
+      URL is built is a real defect risk — a hardcoded config.json would report
+      the preset-voice export's server as dead — but it is not something a
+      caller should be able to reach into.
+    -->
+    <InternalsVisibleTo Include="Bunyi.Core.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
       Preset-voice inference. This brings ONNX Runtime with it, and NAudio,
       whose Windows-only assemblies are inert on Linux — verified, see
       ../../RESEARCH-ONNX.md. Its downloader is deliberately unused: it

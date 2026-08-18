@@ -47,15 +47,37 @@ public partial class App : Application
 
             ApplyAppearance(settings.Appearance);
 
+            var probe = new SystemProbe();
+            var downloader = new ModelDownloader(Http, log);
+
+            // Doctor needs the same view of sources and folders the engine has,
+            // so it is built from the same functions rather than a second copy.
+            Task<DoctorReport> RunDoctor(TtsMode mode, bool deep, CancellationToken ct) =>
+                Bunyi.Core.Diagnostics.Doctor.RunAsync(
+                    mode,
+                    ModelSource.Parse(settings.SourceFor(mode), DefaultSourceFor(mode)),
+                    ModelLayout.PresetVoice,
+                    settingsStore.ResolveModelsFolder(settings),
+                    Bunyi.Core.Infrastructure.AppPaths.Outputs,
+                    probe,
+                    Reachable,
+                    (folder, token) => downloader.VerifyAsync(
+                        ModelSource.Parse(settings.SourceFor(mode), DefaultSourceFor(mode)),
+                        ModelLayout.PresetVoice, folder, token),
+                    deep,
+                    ct);
+
             var engine = new OnnxTtsEngine(
                 new QwenSpeechSynthesizer(log),
-                new ModelDownloader(Http, log),
+                downloader,
                 log,
                 mode => ModelSource.Parse(settings.SourceFor(mode), DefaultSourceFor(mode)),
                 _ => ModelLayout.PresetVoice,
                 () => settingsStore.ResolveModelsFolder(settings),
                 () => Bunyi.Core.Infrastructure.AppPaths.Outputs,
-                typeof(App).Assembly.GetName().Version?.ToString(3) ?? "0.1.0");
+                typeof(App).Assembly.GetName().Version?.ToString(3) ?? "0.1.0",
+                time: null,
+                doctor: RunDoctor);
 
             var settingsViewModel = new SettingsViewModel(
                 settingsStore,
@@ -67,6 +89,7 @@ public partial class App : Application
             var viewModel = new MainViewModel(engine, new SoundFlowAudioPlayer(log), log)
             {
                 Settings = settingsViewModel,
+                Doctor = RunDoctor,
             };
 
             // §3d: a model being deleted is evicted from memory first,
@@ -87,6 +110,32 @@ public partial class App : Application
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    /// <summary>
+    /// Whether a source answers, for Doctor's reachability check.
+    /// </summary>
+    /// <remarks>
+    /// A HEAD, and a short timeout of its own: the question is whether the
+    /// server is there, and waiting the download client's thirty minutes to
+    /// find out it is not would defeat the point of asking before the download.
+    /// </remarks>
+    private static async Task<bool> Reachable(Uri uri, CancellationToken ct)
+    {
+        try
+        {
+            using var quick = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+            using var request = new HttpRequestMessage(HttpMethod.Head, uri);
+            using var response = await quick.SendAsync(request, ct);
+
+            // Any answer means the server is alive. A 404 on one file is a
+            // different problem, and the download reports it far better.
+            return response.StatusCode != System.Net.HttpStatusCode.RequestTimeout;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            return false;
+        }
     }
 
     /// <summary>

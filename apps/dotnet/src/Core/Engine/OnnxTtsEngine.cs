@@ -48,6 +48,7 @@ public sealed class OnnxTtsEngine : ITtsEngine
     private readonly Func<string> _outputFolder;
     private readonly string _appVersion;
     private readonly TimeProvider _time;
+    private readonly Func<TtsMode, bool, CancellationToken, Task<DoctorReport>>? _doctor;
 
     private readonly object _gate = new();
     private readonly List<TaskCompletionSource<bool>> _idleWaiters = [];
@@ -65,7 +66,8 @@ public sealed class OnnxTtsEngine : ITtsEngine
         Func<string>? modelsRoot = null,
         Func<string>? outputFolder = null,
         string appVersion = "0.1.0",
-        TimeProvider? time = null)
+        TimeProvider? time = null,
+        Func<TtsMode, bool, CancellationToken, Task<DoctorReport>>? doctor = null)
     {
         _synth = synthesizer ?? throw new ArgumentNullException(nameof(synthesizer));
         _downloader = downloader ?? throw new ArgumentNullException(nameof(downloader));
@@ -76,6 +78,7 @@ public sealed class OnnxTtsEngine : ITtsEngine
         _outputFolder = outputFolder ?? (() => AppPaths.Outputs);
         _appVersion = appVersion;
         _time = time ?? TimeProvider.System;
+        _doctor = doctor;
     }
 
     /// <inheritdoc />
@@ -136,6 +139,27 @@ public sealed class OnnxTtsEngine : ITtsEngine
             {
                 var token = run.Token;
                 var mode = request.Mode;
+
+                // §11: Doctor runs BEFORE any download begins, because the
+                // point is not to discover after 3.4 GB that there was never
+                // room for it. Blockers stop the run; warnings only go to the
+                // log. When nothing is wrong nothing is said at all — a
+                // preflight the user notices on a healthy machine is a bug.
+                if (_doctor is not null)
+                {
+                    var report = await _doctor(mode, false, token).ConfigureAwait(false);
+
+                    foreach (var warning in report.Warnings)
+                    {
+                        _log.Log($"Doctor ({mode.DisplayName()}) — {warning.Title}: {warning.Detail}");
+                    }
+
+                    if (report.HasBlockers)
+                    {
+                        _log.Log(report.Describe());
+                        throw new PreflightFailedException(report);
+                    }
+                }
 
                 var folder = await _downloader.EnsureModelAsync(
                     _sourceFor(mode),

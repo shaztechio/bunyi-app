@@ -83,6 +83,32 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>Settings (spec §7), or null when the app did not supply one.</summary>
     public SettingsViewModel? Settings { get; init; }
 
+    /// <summary>
+    /// Runs every check on demand, including the slow one (spec §11).
+    /// </summary>
+    /// <remarks>
+    /// Reports on the mode last generated with when History is showing, since
+    /// History is not a generation mode — which is only sensible behaviour
+    /// because the report says which mode it is about.
+    /// </remarks>
+    public Func<TtsMode, bool, CancellationToken, Task<DoctorReport>>? Doctor { get; init; }
+
+    /// <summary>Shows a report, supplied by the view.</summary>
+    public Func<DoctorReport, Task>? ShowReport { get; set; }
+
+    /// <summary>The on-demand run, or null when no Doctor was supplied.</summary>
+    public async Task<DoctorReport?> RunDoctorAsync()
+    {
+        if (Doctor is null) return null;
+
+        var report = await Doctor(Mode, true, CancellationToken.None);
+
+        // The same findings go to the log, so they can be copied into a bug
+        // report without keeping the dialog open (§11).
+        _log.Log(report.Describe());
+        return report;
+    }
+
     /// <summary>Languages offered in every mode (spec §1).</summary>
     public IReadOnlyList<string> AllLanguages { get; } = Languages.All;
 
@@ -245,6 +271,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         catch (OperationCanceledException)
         {
             Status = "Stopped";
+        }
+        catch (PreflightFailedException failed)
+        {
+            // §11: blockers stop the run and are reported in a dialog. The
+            // findings already went to the log inside the engine.
+            Status = "Cannot generate yet.";
+            if (ShowReport is not null) await ShowReport(failed.Report);
         }
         catch (Exception ex)
         {

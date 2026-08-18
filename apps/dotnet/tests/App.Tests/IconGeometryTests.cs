@@ -113,7 +113,7 @@ public class IconGeometryTests
         // the Copy button spent a release invisible.
         foreach (var key in new[]
                  {
-                     "IconSettings", "IconLogs", "IconHelp", "IconPlay", "IconStop",
+                     "IconDoctor", "IconSettings", "IconLogs", "IconHelp", "IconPlay", "IconStop",
                      "IconSave", "IconCopy", "IconTick", "IconFolder", "IconTrash",
                      "IconPlayRound28", "IconStopRound28", "IconPlayRound32",
                  })

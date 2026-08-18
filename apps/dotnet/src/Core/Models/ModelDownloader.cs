@@ -13,6 +13,7 @@
 // limitations under the License.
 
 using System.Diagnostics;
+using System.Security.Cryptography;
 using Bunyi.Core.Diagnostics;
 
 namespace Bunyi.Core.Models;
@@ -259,6 +260,72 @@ public sealed class ModelDownloader(HttpClient http, ILogSink log, TimeProvider?
     /// data is gigabytes, so an interrupted download usually leaves the small
     /// half, and every other check would pass.
     /// </remarks>
+    /// <summary>
+    /// Re-hashes what is on disk against the digests the source published, and
+    /// returns the files that do not match (spec §11).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Only ever on demand. It reads every byte of the model — several gigabytes
+    /// — which is why §11 keeps it out of the preflight that runs before every
+    /// generation.
+    /// </para>
+    /// <para>
+    /// A file the manifest gives no digest for is skipped rather than reported:
+    /// there is nothing to compare it against, and calling that a mismatch would
+    /// make the check useless against every source that publishes
+    /// <c>manifest.txt</c>. A required file that is missing entirely is a
+    /// mismatch — <see cref="Inspect" /> would say the same, but this is the
+    /// check the user asked for.
+    /// </para>
+    /// </remarks>
+    public async Task<IReadOnlyList<string>> VerifyAsync(
+        ModelSource source,
+        ModelLayout layout,
+        string folder,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(layout);
+
+        var files = await ResolveFileListAsync(source, layout, null, ct).ConfigureAwait(false);
+        var bad = new List<string>();
+
+        foreach (var file in files)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            var path = Path.Combine(folder, file.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+
+            if (!File.Exists(path))
+            {
+                if (file.Required) bad.Add(file.RelativePath);
+                continue;
+            }
+
+            if (file.Sha256 is null) continue;
+
+            var actual = await HashFileAsync(path, ct).ConfigureAwait(false);
+            if (!string.Equals(actual, file.Sha256, StringComparison.OrdinalIgnoreCase))
+            {
+                log.Log($"Integrity: {file.RelativePath} expected {file.Sha256}, found {actual}.");
+                bad.Add(file.RelativePath);
+            }
+        }
+
+        return bad;
+    }
+
+    private static async Task<string> HashFileAsync(string path, CancellationToken ct)
+    {
+        await using var stream = new FileStream(
+            path, FileMode.Open, FileAccess.Read, FileShare.Read,
+            bufferSize: 1 << 20, useAsync: true);
+
+        var hash = await SHA256.HashDataAsync(stream, ct).ConfigureAwait(false);
+        return Convert.ToHexStringLower(hash);
+    }
+
     public static ModelCompleteness Inspect(string folder, ModelLayout layout)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(folder);

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using Bunyi.Core.Diagnostics;
 using Bunyi.Core.Models;
 
 namespace Bunyi.Core.Engine;
@@ -145,6 +146,21 @@ public interface ITtsEngine : IAsyncDisposable
     /// lie in exactly the case the timeout exists for.
     /// </remarks>
     Task<bool> WaitForIdleAsync(TimeSpan timeout, CancellationToken ct = default);
+}
+
+/// <summary>
+/// Doctor found something that would stop the run (spec §11).
+/// </summary>
+/// <remarks>
+/// Carries the whole report rather than a message, because §11 wants blockers
+/// reported in a dialog and the same findings written to the log — and a
+/// caller cannot rebuild a report from a sentence.
+/// </remarks>
+public sealed class PreflightFailedException(DoctorReport report)
+    : InvalidOperationException(
+        string.Join(" ", report.Blockers.Select(b => $"{b.Title}: {b.Detail}")))
+{
+    public DoctorReport Report { get; } = report;
 }
 
 /// <summary>A run was asked for while one was already going.</summary>

@@ -33,7 +33,10 @@ namespace Bunyi.Core.Models;
 /// 14 GB that is never loaded.
 /// </para>
 /// </remarks>
-public sealed record ModelLayout(string Id, IReadOnlyList<ModelFile> Files)
+public sealed record ModelLayout(
+    string Id,
+    IReadOnlyList<ModelFile> Files,
+    long ApproxDownloadBytes = 0)
 {
     /// <summary>The files a 404 must fail the whole download for (spec §3c).</summary>
     public IEnumerable<ModelFile> RequiredFiles => Files.Where(f => f.Required);
@@ -58,6 +61,11 @@ public sealed record ModelLayout(string Id, IReadOnlyList<ModelFile> Files)
     /// <c>embeddings/config.json</c>, which is precisely why the MLX
     /// completeness rule could not be reused.
     /// </remarks>
+    /// <remarks>
+    /// The size is the published total, measured from the repository listing
+    /// rather than estimated. Doctor uses it to answer "is there room for this"
+    /// before the download starts, which is the whole point of asking early.
+    /// </remarks>
     public static ModelLayout PresetVoice { get; } = new(
         "elbruno-customvoice-0.6b",
         [
@@ -72,7 +80,8 @@ public sealed record ModelLayout(string Id, IReadOnlyList<ModelFile> Files)
             new ModelFile("vocoder.onnx.data", Required: true),
             new ModelFile("tokenizer/vocab.json", Required: true),
             new ModelFile("tokenizer/merges.txt", Required: true),
-        ]);
+        ],
+        ApproxDownloadBytes: 5_880_000_000);
 }
 
 /// <summary>Why a model folder is not usable yet.</summary>

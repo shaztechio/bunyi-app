@@ -33,6 +33,13 @@ limitations under the License.
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
+  <!--
+    Doctor: a stethoscope. §11 puts it first of three — Doctor, Logs, Help —
+    ordered by how far the answer is from the app: whether it can run at all,
+    what it did, what it is.
+  -->
+  <StreamGeometry x:Key="IconDoctor">M6 3v5a4 4 0 0 0 8 0V3 M6 3H4.5 M6 3h1.5 M14 3h-1.5 M14 3h1.5 M10 12v3a4 4 0 0 0 8 0v-1 M18 9.5a2 2 0 1 0 0 4 2 2 0 0 0 0-4z</StreamGeometry>
+
   <!-- Settings: a gear. -->
   <StreamGeometry x:Key="IconSettings">M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z M19.4 13a7.6 7.6 0 0 0 0-2l2-1.6a.5.5 0 0 0 .1-.6l-1.9-3.3a.5.5 0 0 0-.6-.2l-2.4 1a7.4 7.4 0 0 0-1.7-1l-.4-2.5a.5.5 0 0 0-.5-.4h-3.8a.5.5 0 0 0-.5.4l-.4 2.5a7.4 7.4 0 0 0-1.7 1l-2.4-1a.5.5 0 0 0-.6.2L2.5 8.8a.5.5 0 0 0 .1.6L4.6 11a7.6 7.6 0 0 0 0 2l-2 1.6a.5.5 0 0 0-.1.6l1.9 3.3a.5.5 0 0 0 .6.2l2.4-1a7.4 7.4 0 0 0 1.7 1l.4 2.5a.5.5 0 0 0 .5.4h3.8a.5.5 0 0 0 .5-.4l.4-2.5a7.4 7.4 0 0 0 1.7-1l2.4 1a.5.5 0 0 0 .6-.2l1.9-3.3a.5.5 0 0 0-.1-.6z</StreamGeometry>
 

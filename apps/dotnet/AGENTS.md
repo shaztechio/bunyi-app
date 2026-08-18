@@ -1,15 +1,18 @@
 # AGENTS.md — Windows + Linux app (.NET + Avalonia + ONNX)
 
-> **Status: the app is not implemented; the build and the groundwork are.**
+> **Status: preset voice works end to end; two of the three modes do not
+> exist yet.**
+> Spec sections §1 (preset voice only), §2, §2a, §3, §7, §8, §9 and §11 are
+> implemented, with the main window, History, Settings and Doctor. Voice design
+> (§1, §8 of the plan's M8), transcription (§4), voice clone, the saved voices
+> library (§5), backup and restore (§6), the logs and help windows (§8, §10)
+> and packaging are still to come.
+>
 > `dotnet build`, `dotnet test` and a self-contained `dotnet publish` are green
 > on Windows and Linux, and CI runs all three on both. The research gate is
-> also behind us: ONNX inference is proven for preset voice and the stack is
+> behind us: ONNX inference is proven for preset voice and the stack is
 > chosen — see [`RESEARCH-ONNX.md`](RESEARCH-ONNX.md), which is the first thing
 > to read before touching the engine or its dependencies.
->
-> What is missing is the product. Most of `src/Core` is still a stub that
-> throws, and `src/App` is a placeholder window. Fill them in against
-> `/spec/FEATURES.md`.
 
 One C#/.NET application that targets **both Windows and Linux** from a single
 codebase. It must implement the exact behavior in `/spec/FEATURES.md` and

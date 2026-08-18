@@ -36,4 +36,9 @@ limitations under the License.
     <ProjectReference Include="..\Core\Bunyi.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The view is the unit under test for the dialogs it builds in code. -->
+    <InternalsVisibleTo Include="Bunyi.App.Tests" />
+  </ItemGroup>
+
 </Project>
