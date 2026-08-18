@@ -15,6 +15,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Xunit;
 using Avalonia.Markup.Xaml.Styling;
 using Avalonia.Themes.Fluent;
 using Bunyi.App.Tests;
@@ -24,6 +25,22 @@ using Bunyi.Core.Diagnostics;
 using Bunyi.Core.Engine;
 
 [assembly: AvaloniaTestApplication(typeof(TestAppBuilder))]
+
+// Avalonia's headless session is process-global — one Application, one
+// dispatcher, one visual world — and xunit runs test CLASSES in parallel by
+// default. Two classes touching that single Application from two threads is
+// exactly "the calling thread cannot access this object because a different
+// thread owns it", which is how this suite failed in CI perhaps one run in
+// three: on a different test each time, on both operating systems, including
+// tests that open no window and one that only reads a resource.
+//
+// It never reproduced locally, which is the tell. A machine with more cores
+// schedules the collections differently, and the race needs two classes to
+// overlap at the wrong moment.
+//
+// These tests are milliseconds each, so serialising them costs nothing worth
+// having. Core's tests are unaffected and still run in parallel.
+[assembly: CollectionBehavior(DisableTestParallelization = true)]
 
 namespace Bunyi.App.Tests;
 
