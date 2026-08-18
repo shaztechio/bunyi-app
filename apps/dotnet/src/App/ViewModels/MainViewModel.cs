@@ -18,6 +18,7 @@ using Bunyi.Core;
 using Bunyi.Core.Audio;
 using Bunyi.Core.Diagnostics;
 using Bunyi.Core.Engine;
+using Bunyi.Core.Models;
 using Bunyi.Core.Platform;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -29,7 +30,20 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 {
     private readonly ITtsEngine _engine;
     private readonly IAudioPlayer _player;
-    private readonly IBatchTimer? _ticker;
+    private readonly IBatchTimerFactory _timers;
+
+    /// <summary>
+    /// The playback ticker, made when something first plays.
+    /// </summary>
+    /// <remarks>
+    /// Lazily, and that matters beyond tidiness: a DispatcherTimer belongs to
+    /// the UI thread from the moment it is constructed, so building one in this
+    /// constructor made a view model that could only be created on that thread.
+    /// Plain unit tests construct one on an ordinary thread, and paid for it
+    /// with "the calling thread cannot access this object" during cleanup — an
+    /// intermittent CI failure that landed on whichever test came next.
+    /// </remarks>
+    private IBatchTimer? _ticker;
     private readonly ILogSink _log;
 
     [ObservableProperty] private TtsMode _mode = TtsMode.PresetVoice;
@@ -98,11 +112,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _player = player ?? throw new ArgumentNullException(nameof(player));
         _log = log ?? throw new ArgumentNullException(nameof(log));
 
-        // Ten times a second: fast enough that the bar moves smoothly, slow
-        // enough to cost nothing. Stopped whenever nothing is playing.
-        _ticker = (timers ?? new DispatcherTimerFactory())
-            .Create(TimeSpan.FromMilliseconds(100), TickPlayback);
-        _ticker.Stop();
+        _timers = timers ?? new DispatcherTimerFactory();
 
         History = new HistoryViewModel(
             player, log, outputFolder ?? (() => Core.Infrastructure.AppPaths.Outputs));
@@ -230,13 +240,28 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         !ShowingHistory && ExamplePrompts.ShouldShow(Mode, Script, LastOutputPath is not null);
 
     /// <summary>Only preset voice is implemented so far.</summary>
-    public bool ModeIsAvailable => Mode == TtsMode.PresetVoice;
+    public bool ModeIsAvailable => ModelLayout.Exists(Mode);
+
+    /// <summary>
+    /// Whether to offer a speaker list.
+    /// </summary>
+    /// <remarks>
+    /// Design mode has none — the voice comes from the description instead —
+    /// and a picker that changes nothing is the trap §1 refuses for clone
+    /// mode's emotion field.
+    /// </remarks>
+    public bool ShowSpeakers => ModeIsAvailable && Mode != TtsMode.VoiceDesign;
+
+    /// <summary>What the style or voice field suggests, which differs by mode.</summary>
+    public string InstructPlaceholder => Mode == TtsMode.VoiceDesign
+        ? "Describe the voice, e.g. a warm older man with a slight rasp"
+        : "Optional — how it should be said";
 
     /// <summary>What the mode picker's subtitle says.</summary>
     public string ModeSubtitle => Mode switch
     {
         TtsMode.PresetVoice => "Choose a voice the model already knows.",
-        TtsMode.VoiceDesign => "Describe a voice and the model builds it. Not implemented yet.",
+        TtsMode.VoiceDesign => "Describe a voice and the model builds it.",
         TtsMode.VoiceClone => "Clone a voice from a recording. Not implemented yet.",
         _ => string.Empty,
     };
@@ -353,7 +378,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         IsPlaying = true;
         _player.Play(LastOutputPath);
-        _ticker?.Start();
+
+        // Made here rather than in the constructor: playing is the first moment
+        // this is certainly the UI thread.
+        _ticker ??= _timers.Create(TimeSpan.FromMilliseconds(100), TickPlayback);
+        _ticker.Start();
     }
 
     /// <summary>
@@ -494,8 +523,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(ExamplePrompt));
         OnPropertyChanged(nameof(ModeSubtitle));
         OnPropertyChanged(nameof(ModeIsAvailable));
+        OnPropertyChanged(nameof(ShowSpeakers));
         OnPropertyChanged(nameof(ShowInstruct));
         OnPropertyChanged(nameof(InstructLabel));
+        OnPropertyChanged(nameof(InstructPlaceholder));
         Refresh();
     }
 

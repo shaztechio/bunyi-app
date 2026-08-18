@@ -279,7 +279,7 @@ limitations under the License.
           </StackPanel>
 
           <StackPanel Orientation="Horizontal" Spacing="10"
-                      IsVisible="{Binding ModeIsAvailable}">
+                      IsVisible="{Binding ShowSpeakers}">
             <TextBlock Text="Speaker" Classes="rowLabel" />
             <ComboBox ItemsSource="{Binding Speakers}" SelectedItem="{Binding Speaker}"
                       MinWidth="180" />
@@ -289,12 +289,12 @@ limitations under the License.
                       IsVisible="{Binding ShowInstruct}">
             <TextBlock Text="{Binding InstructLabel}" Classes="rowLabel" />
             <TextBox Text="{Binding Instruct}" MinWidth="320"
-                     PlaceholderText="Optional — how it should be said" />
+                     PlaceholderText="{Binding InstructPlaceholder}" />
           </StackPanel>
         </StackPanel>
       </Border>
 
-      <TextBlock Text="Voice design and voice clone are not implemented yet."
+      <TextBlock Text="Voice clone is not implemented yet."
                  IsVisible="{Binding !ModeIsAvailable}"
                  FontSize="12" Opacity="0.75" />
     </StackPanel>
