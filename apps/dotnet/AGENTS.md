@@ -50,6 +50,16 @@ the on-disk formats in `/spec/DATA-FORMATS.md`. The macOS app
   > memory match Windows. One trap it records: ONNX weights are memory-mapped,
   > so a models folder on a slow volume makes **generation** slower, not just
   > loading.
+- **Tokenizer:** **our own**, `src/Core/Design/QwenTokenizer.cs`. Not
+  `Microsoft.ML.Tokenizers`, which was measured against HuggingFace's tokenizer
+  on the export's own files and cannot do Qwen2: **special tokens are not
+  recognised at all** — `<|im_start|>` comes back as seven tokens of literal
+  punctuation, and its `CodeGenTokenizer` has no public constructor that
+  accepts them — and runs of spaces and newlines split differently. The chat
+  template is nothing but special tokens, so that alone settles it. Ours is
+  pinned against ids taken from HuggingFace on every case, kept in
+  `tests/Core.Tests/Fixtures/qwen-tokenizer-truth.json`; those ids are what the
+  model was trained on and are the only definition of correct.
 - **Transcription:** Whisper (Whisper.net or whisper-ONNX), bundled — works
   offline and identically on both OSes (do **not** use OS speech APIs; they
   differ per platform).

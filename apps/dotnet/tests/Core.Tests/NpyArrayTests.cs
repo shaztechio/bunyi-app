@@ -212,12 +212,17 @@ public sealed class NpyArrayTests : IDisposable
         for (var i = 0; i < values.Length; i++) values[i] = i;
 
         var path = Write(values, [rows, columns]);
-        var before = GC.GetTotalAllocatedBytes(precise: true);
+
+        // Per-thread, not process-wide: xunit runs test classes in parallel, so
+        // a process-wide counter measures whatever else happened to be running.
+        // Mapped pages are not managed allocations at all, which is exactly the
+        // distinction being asserted.
+        var before = GC.GetAllocatedBytesForCurrentThread();
 
         using var array = NpyArray.Open(path);
         array.Row(19_999);
 
-        var allocated = GC.GetTotalAllocatedBytes(precise: true) - before;
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
         var fileSize = new FileInfo(path).Length;
 
         Assert.True(allocated < fileSize / 4,
