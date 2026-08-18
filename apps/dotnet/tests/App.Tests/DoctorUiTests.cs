@@ -28,12 +28,12 @@ namespace Bunyi.App.Tests;
 /// <summary>
 /// Doctor as the user meets it (spec §11).
 /// </summary>
-public class DoctorUiTests
+public class DoctorUiTests : HeadlessWindows
 {
     private static DoctorReport Report(params DoctorFinding[] findings) =>
         new(TtsMode.PresetVoice, findings);
 
-    private static (MainWindow Window, MainViewModel Model) Open(
+    private (MainWindow Window, MainViewModel Model) Open(
         Func<TtsMode, bool, CancellationToken, Task<DoctorReport>>? doctor = null,
         RecordingLog? log = null)
     {
@@ -42,8 +42,7 @@ public class DoctorUiTests
             Doctor = doctor,
         };
 
-        var window = new MainWindow { DataContext = model };
-        window.Show();
+        var window = Open(new MainWindow { DataContext = model });
         return (window, model);
     }
 

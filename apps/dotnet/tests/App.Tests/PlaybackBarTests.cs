@@ -31,7 +31,7 @@ namespace Bunyi.App.Tests;
 /// glyph that stayed on Play while the clip ran. History had both from the
 /// start, which is what made the gap easy to miss.
 /// </remarks>
-public class PlaybackBarTests
+public class PlaybackBarTests : HeadlessWindows
 {
     /// <summary>A timer a test drives by hand.</summary>
     private sealed class ManualTimers : IBatchTimerFactory, IBatchTimer
@@ -52,7 +52,7 @@ public class PlaybackBarTests
         public void Dispose() { }
     }
 
-    private static (MainViewModel Model, FakePlayer Player, ManualTimers Timers) NewModel()
+    private (MainViewModel Model, FakePlayer Player, ManualTimers Timers) NewModel()
     {
         var player = new FakePlayer();
         var timers = new ManualTimers();
@@ -230,12 +230,11 @@ public class PlaybackBarTests
     private static Control Find(Window window, string name) =>
         window.GetLogicalDescendants().OfType<Control>().First(c => c.Name == name);
 
-    private static (MainWindow Window, MainViewModel Model, FakePlayer Player, ManualTimers Timers)
+    private (MainWindow Window, MainViewModel Model, FakePlayer Player, ManualTimers Timers)
         Open()
     {
         var (model, player, timers) = NewModel();
-        var window = new MainWindow { DataContext = model };
-        window.Show();
+        var window = Open(new MainWindow { DataContext = model });
         window.UpdateLayout();
         return (window, model, player, timers);
     }

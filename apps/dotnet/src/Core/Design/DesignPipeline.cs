@@ -55,7 +55,30 @@ public sealed record DesignResult(float[] Samples, IReadOnlyList<int[]> Codes)
 /// codebooks and one decode step, then the vocoder over everything at the end.
 /// </para>
 /// </remarks>
-public sealed class DesignPipeline : IDisposable
+/// <summary>
+/// What the engine needs of a voice-design pipeline.
+/// </summary>
+/// <remarks>
+/// An interface so the adapter above the pipeline can be tested without the
+/// 5.85 GB export: everything it does - converting samples, refusing when no
+/// model is loaded, releasing one pipeline before opening another - is worth
+/// pinning, and none of it needs a model to be wrong.
+/// </remarks>
+public interface IDesignPipeline : IDisposable
+{
+    /// <summary>The export's own sampling defaults.</summary>
+    SamplingOptions DefaultSampling { get; }
+
+    /// <summary>Speaks the request.</summary>
+    DesignResult Generate(
+        DesignRequest request,
+        SamplingOptions? options = null,
+        IProgress<int>? progress = null,
+        int? maxFrames = null,
+        CancellationToken ct = default);
+}
+
+public sealed class DesignPipeline : IDesignPipeline
 {
     private readonly DesignConfig _config;
     private readonly PrefillBuilder _prefill;
