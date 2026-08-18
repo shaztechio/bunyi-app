@@ -71,7 +71,13 @@ limitations under the License.
       disabled group so Stop stays pressable.
     -->
     <StackPanel DockPanel.Dock="Bottom" Spacing="8" Margin="0,16,0,0">
+      <!--
+        Indeterminate whenever there is no real fraction to show. A download
+        reports one; loading a model and generating do not, and a determinate
+        bar sitting at zero for half a minute reads as an app that has hung.
+      -->
       <ProgressBar Minimum="0" Maximum="1" Value="{Binding Progress}"
+                   IsIndeterminate="{Binding IsIndeterminate}"
                    IsVisible="{Binding IsBusy}" Height="4" />
       <Grid ColumnDefinitions="*,Auto">
         <TextBlock Text="{Binding Status}" FontSize="12" Opacity="0.75"
@@ -123,6 +129,12 @@ limitations under the License.
               <UniformGrid Rows="1" />
             </ItemsPanelTemplate>
           </ListBox.ItemsPanel>
+          <ListBox.ItemTemplate>
+            <DataTemplate>
+              <TextBlock Text="{Binding Converter={x:Static vm:ModeName.Instance}}"
+                         HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </DataTemplate>
+          </ListBox.ItemTemplate>
         </ListBox>
         <ToggleButton Grid.Column="1" Content="History" Height="36" MinWidth="90"
                       IsChecked="{Binding ShowingHistory}"

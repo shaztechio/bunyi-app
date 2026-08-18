@@ -16,8 +16,29 @@ using System.Globalization;
 using Avalonia;
 using Avalonia.Data.Converters;
 using Avalonia.Media;
+using Bunyi.Core;
 
 namespace Bunyi.App.ViewModels;
+
+/// <summary>
+/// A mode's name as the user should read it.
+/// </summary>
+/// <remarks>
+/// Without this the picker renders the enum — "PresetVoice", "VoiceDesign" —
+/// because that is what ToString gives. The names are already defined once, in
+/// <see cref="TtsModeExtensions.DisplayName"/>, because they are also settings
+/// keys and part of every output filename.
+/// </remarks>
+public sealed class ModeName : IValueConverter
+{
+    public static ModeName Instance { get; } = new();
+
+    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        value is TtsMode mode ? mode.DisplayName() : value?.ToString();
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
+}
 
 /// <summary>Play or stop, per row. There is deliberately no pause (spec §2a).</summary>
 public sealed class PlayGlyph : IValueConverter
