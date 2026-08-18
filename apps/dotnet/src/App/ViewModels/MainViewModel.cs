@@ -211,17 +211,23 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
             if (_engine.Speakers.Count > 0 && !_engine.Speakers.SequenceEqual(Speakers))
             {
+                // Read the choice BEFORE emptying the list. Clearing a bound
+                // collection sets the picker's selection to null, and the
+                // two-way binding writes that straight back here — so by the
+                // time the list is refilled, Speaker is already gone.
+                var wanted = Speaker;
+
                 Speakers.Clear();
                 foreach (var speaker in _engine.Speakers) Speakers.Add(speaker);
 
                 // Keep the user's choice across the swap. The fallback list is
                 // capitalised ("Ryan") and the model reports lowercase
-                // ("ryan"), so an exact match would silently reset the picker
-                // to whatever happens to be first the moment a model loads —
+                // ("ryan"), so an exact match would reset the picker to
+                // whatever happens to be first the moment a model loads —
                 // which is the "Preset voice forgot your speaker" defect the
                 // macOS app already had once.
                 var kept = Speakers.FirstOrDefault(
-                    s => string.Equals(s, Speaker, StringComparison.OrdinalIgnoreCase));
+                    s => string.Equals(s, wanted, StringComparison.OrdinalIgnoreCase));
                 Speaker = kept ?? Speakers[0];
             }
 

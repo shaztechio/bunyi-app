@@ -54,12 +54,18 @@ limitations under the License.
   </ItemGroup>
 
   <ItemGroup Label="Tests">
+    <!-- Runs the real window without a display, so §2's UI guarantees are
+         asserted rather than described. -->
+    <PackageVersion Include="Avalonia.Headless" Version="12.1.1" />
+    <PackageVersion Include="Avalonia.Headless.XUnit" Version="12.1.1" />
     <!-- FakeTimeProvider: lets the 10 s / 30 s stall rules be asserted in
          milliseconds instead of by a test that sleeps for half a minute. -->
     <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="9.10.0" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.1" />
+    <!-- Avalonia.Headless.XUnit requires xunit v3, so the UI tests use it. -->
+    <PackageVersion Include="xunit.v3" Version="3.2.2" />
   </ItemGroup>
 
 </Project>
