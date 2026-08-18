@@ -374,10 +374,110 @@ frames and 8.21 GB at 267 — the right shape, and the right order of magnitude,
 though it leaves a residual of a couple of GB that varies by run, so it is a
 hypothesis rather than a finding.
 
-If it is right, it is worth money: ORT's CPU arena can be configured or
-disabled per session, and doing so would cut the long-text peak substantially
-for **both** modes. M8 should try it before accepting 17 GB as the cost of 22
-seconds of audio.
+**This was tested, and it is wrong** — see "The arena is real, and far too
+small to be the answer" below. The mechanism exists and the magnitude does not:
+disabling the arena removes the decode loop's growth entirely, but that growth
+is 0.51 GB at 267 frames, not the ~9 GB that separates the short and long
+generations.
+
+## Two experiments before M8
+
+### The design graphs are the same graphs
+
+Every input and output of `wavekat/…1.7B-VoiceDesign-ONNX` `int4/` matches
+`elbruno/…0.6B-CustomVoice-ONNX`, name for name, in the same order, with the
+same element types and the same symbolic dimensions. **The only difference is
+`hidden_size`, 1024 against 2048.**
+
+| Graph | Both exports |
+|---|---|
+| `talker_prefill` | in `inputs_embeds[b,seq,H]`, `attention_mask[b,seq]`, `position_ids[3,b,seq]` → `logits`, `hidden_states`, and 56 per-layer `present_key_N` / `present_value_N` |
+| `talker_decode` | in `inputs_embeds[b,1,H]`, `attention_mask[b,total]`, `position_ids[3,b,1]`, `past_keys[28,b,8,past,128]`, `past_values` → `logits[1,1,3072]`, `hidden_states[1,1,H]`, `present_keys`, `present_values` |
+| `code_predictor` | in `inputs_embeds[b,seq,H]`, `generation_steps`, `past_keys[5,b,8,past,128]`, `past_values` → `logits[b,seq,2048]`, `present_keys`, `present_values` |
+| `vocoder` | in `codes[b,16,frames]` → `waveform[1,1,…]` |
+
+Two consequences for M8:
+
+- **The inference driver is shared.** Prefill, the decode loop, the 16-way code
+  predictor and the vocoder are mechanically identical between the modes; only
+  the width of the hidden state changes, and it is already a symbolic dimension
+  in every graph. Whatever drives one drives the other, if it reads the width
+  from config instead of assuming it.
+- **What differs is input preparation, not inference.** Preset voice picks a
+  speaker from `speaker_ids.json`; design has no speaker list at all, and
+  instead ships `text_embedding.npy` (1.24 GB) with `text_projection_fc1/fc2`
+  weights. The description is embedded and projected into the same
+  `inputs_embeds` the graph already takes. That is the part M8 has to write.
+
+One structural wrinkle both exports share: **prefill returns the cache as 56
+separate per-layer tensors, and decode wants it as two stacked ones**
+(`[28,…]`). A pipeline has to concatenate 28 pairs between the two calls. It is
+the same shape of work in both modes, and easy to get subtly wrong — the layer
+order is the obvious trap.
+
+### The arena is real, and far too small to be the answer
+
+The hypothesis recorded earlier: ONNX has no in-place KV cache, so every decode
+step allocates a size no previous step used, and an arena that grows rather
+than reuses would hold the sum of all of them.
+
+Tested directly by driving the real `talker_decode` graph with zeroed inputs of
+the correct shapes, carrying the cache forward as a real loop does, with the
+CPU arena on and off:
+
+| Frames | Arena | Peak | Growth over the loop | Wall |
+|---|---|---|---|---|
+| 64 | on | 1.97 GB | 0.12 GB | 5.6 s |
+| 64 | off | 1.97 GB | −0.01 GB | 5.7 s |
+| 267 | on | 2.36 GB | **0.51 GB** | 30.9 s |
+| 267 | off | 2.36 GB | **0.01 GB** | 33.8 s |
+
+**The mechanism is confirmed and the magnitude refutes the hypothesis.**
+Turning the arena off removes essentially all of the loop's growth, at about
+9% more wall-clock — but it is 0.51 GB at 267 frames, not the ~9 GB that
+separates the measured short and long generations. The decode loop is, by
+itself, well behaved.
+
+### The vocoder grows with the clip, and is also too small
+
+The next suspect: the vocoder is one `Run` over the **whole** sequence, and it
+upsamples to 24 kHz, so its activations scale with output length rather than
+with the model.
+
+| Frames | Audio | Delta | Wall |
+|---|---|---|---|
+| 32 | 2.6 s | 0.23 GB | 0.5 s |
+| 64 | 5.1 s | 0.11 GB | 0.9 s |
+| 128 | 10.2 s | 0.37 GB | 2.1 s |
+| 267 | 21.4 s | 0.64 GB | 4.5 s |
+
+Peak 1.76 GB at 267 frames, against 0.9 GB of vocoder weights — so roughly
+0.8 GB of activations for 21 s of audio, growing with length as expected. Real,
+worth chunking, and still not the answer.
+
+### So the 17.68 GB is not yet explained
+
+Decode contributes ~2.4 GB including its session, the vocoder ~1.8 GB including
+its own, and the four sessions together were measured at 4.56 GB static. The
+production peak for the same 267 frames was **17.68 GB**. The two components
+suspected here account for about a gigabyte of growth between them; the rest is
+somewhere in how the shipping pipeline holds what it produces, and attributing
+it means profiling that pipeline rather than reasoning about it.
+
+That is a better position than it sounds, because **M8 writes our own
+pipeline.** Three levers are now known to exist and to be ours to set:
+
+1. `EnableCpuMemArena = false` on the decode session — 0.5 GB at 267 frames for
+   ~9% wall-clock. Worth taking on a machine that is short of memory, which is
+   the only machine it matters on.
+2. **Chunk the vocoder.** It takes `codes[1,16,frames]`; nothing forces one
+   call for the whole clip, and its activations are the part that scales.
+3. **Release prefill before decoding.** Prefill and decode are separate sessions
+   over the same weights and prefill is finished with after one call, which is
+   ~1.8 GB held for the entire generation.
+
+None of these should be built blind. The first thing M8's pipeline needs is the
+same measurement against itself, where every allocation is attributable.
 
 ## Linux
 
