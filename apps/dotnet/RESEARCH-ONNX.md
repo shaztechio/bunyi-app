@@ -230,6 +230,18 @@ With the vocoder on CPU either way, the two GPU providers separate sharply:
   configuration in which it wins.
 - **CUDA is 3.7x faster than CPU** and uses 5.8 GB less memory.
 
+**The CUDA audio was checked by ear against the CPU audio and sounds as good.**
+That mattered enough to be worth a person listening: every other figure here
+says the two are equivalent, but nothing in an RTF or a sample count would
+catch a provider that quietly degraded quality, and quality is the whole point
+of the product. Do not read the per-clip RMS as a quality signal — the short
+CPU and CUDA clips measured RMS 3187 and 1380, which is sampling variation
+between two renditions of the same sentence, not one of them being wrong.
+Decoding is stochastic, so no two runs match even on one provider.
+
+So the speedup is free, and CUDA is worth offering rather than merely
+possible.
+
 The likely reason DirectML loses is shape: decode is one small `Run` per 12 Hz
 frame against a KV cache that grows every step, which is close to the worst
 case for a provider with per-dispatch overhead and a preference for static
