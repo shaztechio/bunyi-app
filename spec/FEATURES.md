@@ -65,14 +65,27 @@ A segmented picker selects one of three modes. macOS source:
   add an emotion field to clone mode. Emotion for a cloned voice must come
   from the reference clip's own delivery. (Tracked upstream: 25 Hz models.)
 
+- **The clone model must be an in-context-learning (ICL) export.** §4 makes the
+  reference transcript effectively mandatory because cloning works by aligning
+  the recording to its words — which requires a model that takes the reference
+  *audio codes and text* as context. Some published exports instead reduce the
+  clip to a fixed-size speaker embedding and take no transcript at all. Such a
+  model must not be used to implement this mode: it loads, it runs, it returns
+  audio in a plausibly similar voice, and it silently ignores the transcript —
+  so the field the UI presents as required does nothing, and the failure is
+  invisible to everyone except someone comparing it against a real clone. A
+  runtime family that has no ICL export available ships without clone mode and
+  records the gap, rather than shipping a different feature under its name.
+
 ## 2. Generation output
 
 - Sample rate **24 kHz**, mono, WAV.
-- Saved to the app's per-user data folder: macOS
-  `~/Library/Application Support/Bunyi/Outputs` (inside the
-  sandbox container — no extra file-access entitlement needed). Other
-  platforms: an equivalent per-user app-data subfolder named `Outputs`.
-  One click away via the in-app reveal-in-file-manager button.
+- Saved to an `Outputs` subfolder of the app's per-user data folder — macOS
+  `~/Library/Application Support/Bunyi/Outputs` (inside the sandbox container
+  — no extra file-access entitlement needed), Windows
+  `%LOCALAPPDATA%\Bunyi\Outputs`, Linux `$XDG_DATA_HOME/Bunyi/Outputs`. The
+  roots are pinned in `DATA-FORMATS.md`; the subfolder name is `Outputs`
+  everywhere. One click away via the in-app reveal-in-file-manager button.
   Filename: `<Mode>-<ISO8601 timestamp>.wav`.
 - **The file carries what produced it** — text, mode, language, speaker,
   style, reference transcript, model repo, app version, timestamp — embedded
@@ -110,11 +123,17 @@ A segmented picker selects one of three modes. macOS source:
   froze the app at the end of every generation. Any runtime with deferred
   evaluation has the same trap in a different place — the rule is that the
   window stays responsive for the whole run, not that one named call is moved.
-- **The runtime's buffer cache is released once the output is written.** ML
+- **The runtime's working memory is released once the output is written.** ML
   runtimes keep freed buffers rather than returning them, which is right during
-  a run and wrong after one: on unified memory that cache is real RAM held
-  against work that has finished. The model stays resident — only the cache
-  goes. This matters most on the machines the app is aimed at: a multi-gigabyte
+  a run and wrong after one: that cache is real RAM held against work that has
+  finished. The model stays resident — only the cache goes. Every runtime has
+  this behaviour under a different name and needs its own call (MLX: the GPU
+  buffer cache; ONNX Runtime: per-run values and the allocator arena), so the
+  requirement is the outcome, not a named function: after the WAV is written,
+  the memory a finished run was using is back. It is released on **every** exit
+  path — success, stop, and error — and never while abandoned work is still
+  allocating, which would hand back buffers that work is about to ask for
+  again. This matters most on the machines the app is aimed at: a multi-gigabyte
   model plus a long generation's leftovers is enough to push a 16 GB machine
   into swap, and a swapping machine stalls audio playback and freezes the
   window for seconds at a time.
@@ -172,7 +191,10 @@ reveal-in-file-manager.
   copy, because one that appears to do nothing gets pressed again.
 - **Trash** moves a file to the system Trash after confirming, not an
   unrecoverable delete: the row label is truncated, so the wrong icon is easy
-  to hit, and the audio may be the only copy.
+  to hit, and the audio may be the only copy. Every platform has a recoverable
+  delete and the app uses it — the macOS Trash, the Windows Recycle Bin, the
+  freedesktop trash directory on Linux. Unlinking the file is not an
+  implementation of this on any of them.
 - **No Generate button in History**: there is no text on screen to speak, so
   the button would either do nothing or silently act on a mode that is not
   visible. **Stop stays**, because a run can still be in progress while
@@ -225,6 +247,20 @@ than documenting one a user picked, and unverified bytes do not clear it.
 > same Qwen3-TTS models. The *defaults differ per platform* but the
 > source-selection UX, folder layout, and self-host behavior are identical.
 > See `DATA-FORMATS.md`.
+>
+> | Mode | MLX default (macOS) | ONNX default (.NET) |
+> |---|---|---|
+> | Preset voice | `mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-bf16` | `elbruno/Qwen3-TTS-12Hz-0.6B-CustomVoice-ONNX` |
+> | Voice design | `mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16` | `wavekat/Qwen3-TTS-1.7B-VoiceDesign-ONNX` (`int4`) |
+> | Voice clone | `mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16` | `wavekat/Qwen3-TTS-0.6B-Base-ONNX` (`int4`) |
+>
+> The clone defaults are **different sizes** across families, deliberately:
+> macOS uses a 1.7B Base model, and no 1.7B ONNX export meeting the ICL
+> requirement in §1 is available, so the ONNX family uses the 0.6B one. A
+> smaller model of the right kind beats a larger one that cannot do the job.
+> Both wavekat exports are used at their `int4` variant, because the `fp32`
+> variant beside it is large enough that loading one is not a realistic ask of
+> the machines this app targets — for voice design, 12.7 GB against 4.3 GB.
 
 ### 3b. Download behavior (identical across platforms)
 - **Resumable & incremental**: already-present files are skipped — on every
@@ -232,7 +268,11 @@ than documenting one a user picked, and unverified bytes do not clear it.
   re-fetch what is already on disk; for a self-hosted model that is gigabytes
   of pointless transfer. A file counts as present when its size matches the
   server's, not merely when it exists: an interrupted write leaves a file that
-  exists and is wrong.
+  exists and is wrong. **Where the server supports ranged requests, a partly
+  transferred file resumes from where it stopped** rather than starting over.
+  The unit that must not be re-fetched is the byte, not the file: one file is
+  usually most of the model, so restarting it is close to restarting
+  everything.
 - **Manifest paths are untrusted input.** A self-hosted manifest names its own
   files, and those names become write destinations. Entries that could escape
   the model's folder are skipped and logged, per the path rules in
@@ -271,13 +311,24 @@ than documenting one a user picked, and unverified bytes do not clear it.
   default file list for that runtime.
 - Required files fail the download on 404; all others are best-effort.
 - Files land in `models/self-hosted/<slug>` and are reused offline.
-- **https recommended**; plain http requires a platform-specific security
-  opt-in (macOS: ATS exception).
+- **https recommended.** Plain http is blocked outright on platforms that
+  block it (macOS: App Transport Security, liftable only by an Info.plist
+  exception and a rebuild). Where the platform does not block it, the app
+  allows it and **warns**: a line in the log naming the URL, and the same
+  warning beside the Settings field. The user typed the address and may be on
+  a LAN with no certificate, so this is not an error — but model weights
+  fetched over http are unauthenticated bytes, and a client that says nothing
+  implies otherwise.
 
 ### 3d. Custom models folder
-- Default: per-user app-data dir (macOS: App Support container). User can
-  point it at any folder (external drive, etc.), persisted across launches
-  (macOS: security-scoped bookmark). "Show in Finder/Explorer" + reset.
+- Default: a `Models` subfolder of the per-user app-data dir
+  (`DATA-FORMATS.md`). User can point it at any folder (external drive, etc.),
+  **persisted across launches** — by whatever means the platform requires a
+  chosen folder to stay reachable (macOS: a security-scoped bookmark, because
+  the sandbox does not otherwise re-grant access; elsewhere: the absolute
+  path). A location that no longer resolves falls back to the default and says
+  so in the log, rather than failing every download against a folder that is
+  not there. "Show in the file manager" + reset.
 - **Downloaded models are listed and deletable** in Settings → Storage: each
   model, its source (Hub or self-hosted), its size, and a Delete button that
   moves the folder to the Trash after confirming. Reclaiming several gigabytes
@@ -360,7 +411,12 @@ rule/badge treatments, which survive both — not in a window background.
 macOS source: `LogStore.swift`, `LogsView.swift`.
 - A separate Logs window (macOS: Window → Logs, ⌘L) with timestamped,
   selectable, monospaced lines, autoscroll, Copy + Clear.
-- Mirror to the platform's system log where available (macOS: OSLog).
+- Mirror to the platform's system log **where the app can write to one
+  unprivileged**. macOS uses OSLog. Windows' Event Log needs an
+  administrator-created source, so a per-user app does not qualify: mirror to
+  standard error and a rolling file under the data root instead, which is what
+  Linux does too. The in-app Logs window is the guarantee; the mirror is so a
+  crashed run still left a record.
 - Everything notable is logged: model prepare/download progress, per-file
   self-host downloads, tokenizer step, transcription result, generation
   token milestones, saved output path + timing, backup/restore steps, and
@@ -412,7 +468,8 @@ Each check reports *ok*, *warning*, or *blocker*.
    below that plus 5 GB. When the model is already present, only the space a
    generation's own output needs.
 3. **Memory.** Available RAM against the size of the model that must be
-   resident. **Warning only, never a blocker** — it is a prediction about a
+   resident — whatever "available" means on the platform, and counting memory
+   the runtime is holding but could return. **Warning only, never a blocker** — it is a prediction about a
    run that has not started, the figure moves the moment another app quits,
    and a machine under pressure still finishes, only slowly. Blocking on it
    would refuse runs that would have worked.
