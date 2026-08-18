@@ -34,9 +34,9 @@ namespace Bunyi.App.Tests;
 /// previously claimed to hold "by construction", which is the kind of claim that
 /// stays true only until someone moves a panel.
 /// </remarks>
-public class MainWindowTests
+public class MainWindowTests : HeadlessWindows
 {
-    private static (MainWindow Window, MainViewModel Model, FakeEngine Engine, FakePlayer Player)
+    private (MainWindow Window, MainViewModel Model, FakeEngine Engine, FakePlayer Player)
         Open(Action<MainViewModel>? arrange = null)
     {
         var engine = new FakeEngine();
@@ -44,8 +44,7 @@ public class MainWindowTests
         var model = new MainViewModel(engine, player, new RecordingLog());
         arrange?.Invoke(model);
 
-        var window = new MainWindow { DataContext = model };
-        window.Show();
+        var window = Open(new MainWindow { DataContext = model });
         return (window, model, engine, player);
     }
 

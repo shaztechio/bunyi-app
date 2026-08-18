@@ -25,7 +25,7 @@ using Xunit;
 namespace Bunyi.App.Tests;
 
 /// <summary>Settings (spec §7, §3a, §3d).</summary>
-public sealed class SettingsTests : IDisposable
+public sealed class SettingsTests : HeadlessWindows
 {
     private readonly string _folder =
         Path.Combine(Path.GetTempPath(), "bunyi-tests", Guid.NewGuid().ToString("N"));
@@ -35,7 +35,7 @@ public sealed class SettingsTests : IDisposable
 
     public SettingsTests() => Directory.CreateDirectory(_folder);
 
-    public void Dispose()
+    protected override void DisposeCore()
     {
         if (Directory.Exists(_folder)) Directory.Delete(_folder, recursive: true);
     }
@@ -58,8 +58,7 @@ public sealed class SettingsTests : IDisposable
     public void The_window_opens_with_four_tabs()
     {
         // §7: General, Models, Storage, Backup.
-        var window = new SettingsWindow { DataContext = NewModel() };
-        window.Show();
+        var window = Open(new SettingsWindow { DataContext = NewModel() });
 
         var tabs = window.GetLogicalDescendants().OfType<TabItem>().ToList();
         Assert.Equal(4, tabs.Count);
@@ -72,8 +71,7 @@ public sealed class SettingsTests : IDisposable
     public void The_window_title_follows_the_selected_tab()
     {
         // §7: "the window title reflects the selected tab (platform convention)".
-        var window = new SettingsWindow { DataContext = NewModel() };
-        window.Show();
+        var window = Open(new SettingsWindow { DataContext = NewModel() });
 
         var tabControl = window.GetLogicalDescendants().OfType<TabControl>().First();
         tabControl.SelectedIndex = 2;

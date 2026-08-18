@@ -26,12 +26,11 @@ namespace Bunyi.App.Tests;
 /// <summary>
 /// In-app help (spec §10).
 /// </summary>
-public class HelpTests
+public class HelpTests : HeadlessWindows
 {
-    private static HelpWindow Open()
+    private HelpWindow Open()
     {
-        var window = new HelpWindow();
-        window.Show();
+        var window = Open(new HelpWindow());
         window.UpdateLayout();
         return window;
     }

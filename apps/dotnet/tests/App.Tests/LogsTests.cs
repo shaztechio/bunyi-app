@@ -25,7 +25,7 @@ namespace Bunyi.App.Tests;
 /// <summary>
 /// The Logs window (spec §8).
 /// </summary>
-public class LogsTests
+public class LogsTests : HeadlessWindows
 {
     /// <summary>A timer that only ticks when a test says so.</summary>
     private sealed class ManualTimers : IBatchTimerFactory, IBatchTimer
@@ -50,7 +50,7 @@ public class LogsTests
         public void Dispose() => Stopped = true;
     }
 
-    private static (LogsViewModel Model, LogStore Store, ManualTimers Timers) NewModel()
+    private (LogsViewModel Model, LogStore Store, ManualTimers Timers) NewModel()
     {
         var store = new LogStore();
         var timers = new ManualTimers();
@@ -213,12 +213,11 @@ public class LogsTests
 
     // ---- The window itself ----
 
-    private static (LogsWindow Window, LogsViewModel Model, LogStore Store, ManualTimers Timers)
+    private (LogsWindow Window, LogsViewModel Model, LogStore Store, ManualTimers Timers)
         Open()
     {
         var (model, store, timers) = NewModel();
-        var window = new LogsWindow { DataContext = model };
-        window.Show();
+        var window = Open(new LogsWindow { DataContext = model });
         return (window, model, store, timers);
     }
 

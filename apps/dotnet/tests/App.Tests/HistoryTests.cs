@@ -25,14 +25,14 @@ using Xunit;
 namespace Bunyi.App.Tests;
 
 /// <summary>History, in the window (spec §2a).</summary>
-public sealed class HistoryTests : IDisposable
+public sealed class HistoryTests : HeadlessWindows
 {
     private readonly string _outputs =
         Path.Combine(Path.GetTempPath(), "bunyi-tests", Guid.NewGuid().ToString("N"));
 
     public HistoryTests() => Directory.CreateDirectory(_outputs);
 
-    public void Dispose()
+    protected override void DisposeCore()
     {
         if (Directory.Exists(_outputs)) Directory.Delete(_outputs, recursive: true);
     }
@@ -59,8 +59,7 @@ public sealed class HistoryTests : IDisposable
         var engine = new FakeEngine();
         var player = new FakePlayer();
         var model = new MainViewModel(engine, player, new RecordingLog(), () => _outputs);
-        var window = new MainWindow { DataContext = model };
-        window.Show();
+        var window = Open(new MainWindow { DataContext = model });
         return (window, model, engine, player);
     }
 
