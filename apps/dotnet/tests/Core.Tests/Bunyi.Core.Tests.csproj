@@ -39,6 +39,7 @@ limitations under the License.
     <Content Include="Fixtures\qwen-tokenizer-truth.json" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Fixtures\prefill-truth.json" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Fixtures\design-greedy-truth.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Fixtures\mel-truth.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
