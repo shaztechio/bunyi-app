@@ -91,3 +91,33 @@ jobs:
         run: |
           rid=$([ "$RUNNER_OS" = "Windows" ] && echo win-x64 || echo linux-x64)
           dotnet publish src/App -c Release -r "$rid" --self-contained -o "artifacts/$rid"
+
+      # Whisper.net.Runtime offers its natives for every platform at once, and
+      # a publish will happily copy all of them — about 15 MB nobody can load.
+      # Directory.Build.targets drops the ones that do not match the RID; this
+      # checks it still does, in both directions. Getting it wrong the other way
+      # is worse than the waste: a build that cannot transcribe at all.
+      - name: The build carries only its own Whisper natives
+        shell: bash
+        run: |
+          rid=$([ "$RUNNER_OS" = "Windows" ] && echo win-x64 || echo linux-x64)
+          cd "artifacts/$rid"
+
+          foreign=$(find runtimes -iname "*whisper*" -not -path "runtimes/$rid/*" 2>/dev/null || true)
+          if [ -n "$foreign" ]; then
+            echo "::error::natives for other platforms are being shipped:"
+            echo "$foreign"
+            exit 1
+          fi
+
+          if [ -z "$(find runtimes/$rid -iname '*whisper*' 2>/dev/null)" ]; then
+            echo "::error::no Whisper natives for $rid — transcription cannot work."
+            exit 1
+          fi
+
+          if [ -e ggml-metal.metal ]; then
+            echo "::error::an Apple Metal shader is being shipped to $rid."
+            exit 1
+          fi
+
+          echo "Only $rid Whisper natives present."

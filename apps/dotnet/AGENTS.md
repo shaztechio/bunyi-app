@@ -60,9 +60,12 @@ the on-disk formats in `/spec/DATA-FORMATS.md`. The macOS app
   pinned against ids taken from HuggingFace on every case, kept in
   `tests/Core.Tests/Fixtures/qwen-tokenizer-truth.json`; those ids are what the
   model was trained on and are the only definition of correct.
-- **Transcription:** Whisper (Whisper.net or whisper-ONNX), bundled — works
-  offline and identically on both OSes (do **not** use OS speech APIs; they
-  differ per platform).
+- **Transcription:** Whisper, via `Whisper.net` — the same words on both OSes,
+  and nothing leaves the machine (do **not** use OS speech APIs; they differ per
+  platform). The **model** is downloaded on first use rather than shipped, so it
+  costs nothing to the people who never open clone mode; the natives are what
+  ship, and `Directory.Build.targets` keeps only the ones the target platform
+  can load — the package offers every platform's at once.
 - **Audio:** a cross-platform lib for playback + resample-to-24 kHz-mono
   (miniaudio via a binding, SDL, or PortAudio). No `System.Media` /
   `NAudio` (Windows-only).
