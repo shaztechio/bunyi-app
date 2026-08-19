@@ -33,6 +33,8 @@ public partial class SettingsWindow : Window
         if (DataContext is not SettingsViewModel model) return;
 
         model.ChooseModelsFolder = ChooseModelsFolderAsync;
+        model.ChooseBackupDestination = ChooseBackupDestinationAsync;
+        model.ChooseBackupSource = ChooseBackupSourceAsync;
         model.ConfirmDelete = ConfirmDeleteAsync;
     }
 
@@ -46,6 +48,33 @@ public partial class SettingsWindow : Window
         {
             Title = header;
         }
+    }
+
+    /// <summary>§6: where to write the backup.</summary>
+    private async Task<string?> ChooseBackupDestinationAsync()
+    {
+        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Save a backup of your models",
+            SuggestedFileName = $"Bunyi models {DateTime.Now:yyyy-MM-dd}",
+            DefaultExtension = "zip",
+            FileTypeChoices = [new FilePickerFileType("Backup") { Patterns = ["*.zip"] }],
+        });
+
+        return file?.TryGetLocalPath();
+    }
+
+    /// <summary>§6: which backup to restore from.</summary>
+    private async Task<string?> ChooseBackupSourceAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Choose a backup to restore",
+            AllowMultiple = false,
+            FileTypeFilter = [new FilePickerFileType("Backup") { Patterns = ["*.zip"] }],
+        });
+
+        return files.Count > 0 ? files[0].TryGetLocalPath() : null;
     }
 
     private async Task<string?> ChooseModelsFolderAsync()

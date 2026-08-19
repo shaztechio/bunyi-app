@@ -53,6 +53,36 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private string _modelsFolder = string.Empty;
     [ObservableProperty] private string _storageSummary = string.Empty;
 
+    /// <summary>How far a backup or restore has got, 0 to 1 (spec §6).</summary>
+    [ObservableProperty] private double _backupProgress;
+
+    /// <summary>
+    /// How the last backup or restore went.
+    /// </summary>
+    /// <remarks>
+    /// Only ever written when one finishes, is stopped, or fails. Progress
+    /// writes to <see cref="BackupDetail" /> instead, and the two are separate
+    /// on purpose: <c>Progress&lt;T&gt;</c> delivers on another thread, so a
+    /// report can arrive after the run is over. Sharing one field meant
+    /// "Backed up to backup.zip" could be overwritten by a late
+    /// "Backing up… 100%" — about one run in fifteen.
+    /// </remarks>
+    [ObservableProperty] private string _backupStatus = string.Empty;
+
+    /// <summary>The running commentary, shown only while one is going.</summary>
+    [ObservableProperty] private string _backupDetail = string.Empty;
+
+    /// <summary>Whether one is running, which is what Stop is for.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(BackupIsIdle))]
+    [NotifyCanExecuteChangedFor(nameof(BackUpCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RestoreCommand))]
+    [NotifyCanExecuteChangedFor(nameof(StopBackupCommand))]
+    private bool _backupRunning;
+
+    /// <summary>Whether the buttons that start one can be pressed.</summary>
+    public bool BackupIsIdle => !BackupRunning;
+
     public SettingsViewModel(
         SettingsStore store,
         ModelConfigLibrary configs,
@@ -88,6 +118,12 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     /// <summary>Asks the user to pick a folder, supplied by the view.</summary>
     public Func<Task<string?>>? ChooseModelsFolder { get; set; }
+
+    /// <summary>Asks the window where to write a backup (spec §6).</summary>
+    public Func<Task<string?>>? ChooseBackupDestination { get; set; }
+
+    /// <summary>Asks the window which backup to restore (spec §6).</summary>
+    public Func<Task<string?>>? ChooseBackupSource { get; set; }
 
     /// <summary>Asks the user to confirm deleting a model, supplied by the view.</summary>
     public Func<DownloadedModelRow, Task<bool>>? ConfirmDelete { get; set; }
@@ -191,6 +227,131 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// </remarks>
     [RelayCommand]
     private void OpenLink(string? url) => WebLink.Open(url, _log);
+
+    private CancellationTokenSource? _backupCancel;
+
+    /// <summary>
+    /// Collects the models folder into one zip (spec §6).
+    /// </summary>
+    /// <remarks>
+    /// The point is not tidiness. A models folder is gigabytes fetched over a
+    /// slow link, and the alternative on the next machine is fetching them
+    /// again.
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(BackupIsIdle))]
+    private async Task BackUpAsync()
+    {
+        if (ChooseBackupDestination is null) return;
+
+        var destination = await ChooseBackupDestination();
+        if (string.IsNullOrWhiteSpace(destination)) return;
+
+        await RunAsync(
+            "Backing up",
+            async (backup, progress, ct) =>
+            {
+                await backup.BackupAsync(
+                    _store.ResolveModelsFolder(_settings), destination, progress, ct);
+
+                return $"Backed up to {Path.GetFileName(destination)}.";
+            });
+    }
+
+    /// <summary>
+    /// Merges a backup into the models folder (spec §6).
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(BackupIsIdle))]
+    private async Task RestoreAsync()
+    {
+        if (ChooseBackupSource is null) return;
+
+        var source = await ChooseBackupSource();
+        if (string.IsNullOrWhiteSpace(source)) return;
+
+        await RunAsync(
+            "Restoring",
+            async (backup, progress, ct) =>
+            {
+                var skipped = await backup.RestoreAsync(
+                    source, _store.ResolveModelsFolder(_settings), progress, ct);
+
+                Reload();
+
+                return skipped.Count == 0
+                    ? "Restored everything in that backup."
+                    : $"Restored what was missing. {skipped.Count} model(s) already here were kept.";
+            });
+    }
+
+    /// <summary>Stops a backup or restore, for real (spec §6).</summary>
+    [RelayCommand(CanExecute = nameof(BackupRunning))]
+    private void StopBackup()
+    {
+        BackupDetail = "Stopping…";
+        _backupCancel?.Cancel();
+    }
+
+    /// <summary>
+    /// Runs one of the two, with the progress, cancelling and reporting they
+    /// share.
+    /// </summary>
+    /// <remarks>
+    /// Written once because the difference between them is one call. Both are
+    /// long, both must not block the window, and both have to say something
+    /// useful whether they finish, are stopped, or fail.
+    /// </remarks>
+    private async Task RunAsync(
+        string what,
+        Func<BackupManager, IProgress<Bunyi.Core.BackupProgress>, CancellationToken, Task<string>> work)
+    {
+        _backupCancel?.Dispose();
+        _backupCancel = new CancellationTokenSource();
+
+        BackupRunning = true;
+        BackupProgress = 0;
+        BackupDetail = $"{what}…";
+        BackupStatus = string.Empty;
+
+        // Every run gets a number, and a report from an older one is ignored.
+        // Progress<T> posts to the captured context rather than running inline,
+        // so a report can be delivered *after* the run has finished and
+        // overwrite "Backed up to backup.zip" with "Backing up… 100%". The
+        // engine hit the same thing with downloads and left a comment about it;
+        // this is that comment being useful.
+        var progress = new System.Progress<Bunyi.Core.BackupProgress>(p =>
+        {
+            BackupProgress = p.Fraction;
+            BackupDetail = $"{what}… {p.Fraction:P0}";
+        });
+
+        try
+        {
+            // Off the window's thread: this reads and writes gigabytes, and §6
+            // is explicit that it must never block the UI.
+            var message = await Task.Run(
+                () => work(new BackupManager(_log), progress, _backupCancel.Token),
+                _backupCancel.Token);
+
+            BackupProgress = 1;
+            BackupStatus = message;
+        }
+        catch (OperationCanceledException)
+        {
+            BackupProgress = 0;
+            BackupStatus = $"{what} stopped. Nothing was left half-finished.";
+        }
+        catch (Exception ex)
+        {
+            BackupProgress = 0;
+            BackupStatus = ex.Message;
+            _log.Log($"{what} failed: {ex}");
+        }
+        finally
+        {
+            BackupRunning = false;
+            BackupDetail = string.Empty;
+        }
+    }
 
     [RelayCommand]
     private void SaveConfig()

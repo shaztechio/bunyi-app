@@ -169,9 +169,30 @@ limitations under the License.
     <TabItem Header="Backup">
       <StackPanel Margin="12" Spacing="12">
         <TextBlock Text="BACK UP AND RESTORE" Classes="eyebrow" />
+
+        <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.8"
+                   Text="Collects your models folder into a single .zip, so you do not have to download several gigabytes again on another machine." />
+
+        <StackPanel Orientation="Horizontal" Spacing="10">
+          <Button Content="Back up…" Command="{Binding BackUpCommand}" />
+          <Button Content="Restore…" Command="{Binding RestoreCommand}" />
+          <Button Content="Stop" Classes="danger"
+                  Command="{Binding StopBackupCommand}"
+                  IsVisible="{Binding BackupRunning}" />
+        </StackPanel>
+
+        <ProgressBar Minimum="0" Maximum="1" Value="{Binding BackupProgress}"
+                     IsVisible="{Binding BackupRunning}" Height="4" />
+
+        <TextBlock Text="{Binding BackupDetail}" FontSize="12" Opacity="0.8"
+                   TextWrapping="Wrap" IsVisible="{Binding BackupRunning}" />
+
+        <TextBlock Text="{Binding BackupStatus}" FontSize="12" Opacity="0.8"
+                   TextWrapping="Wrap" IsVisible="{Binding BackupIsIdle}" />
+
         <Border Classes="callout">
           <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.8"
-                     Text="Not built yet. It will collect your models folder into a single .zip, so you do not have to download several gigabytes again after moving to a new machine." />
+                     Text="Restoring never replaces a model you already have — anything already here is kept and the backup's copy is skipped." />
         </Border>
       </StackPanel>
     </TabItem>
