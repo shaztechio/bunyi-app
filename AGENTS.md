@@ -41,6 +41,38 @@ Two codebases, three operating systems, one spec.
 Because the inference engine and UI cannot be shared, parity is a
 *discipline*, enforced by the spec below.
 
+### It is the runtime that cannot be shared, not the UI toolkit
+
+"Avalonia is Windows and Linux only" would be a tidier reason, and it is not
+the reason — Avalonia runs on macOS perfectly well. Every native dependency
+this app has already ships an Apple Silicon build: `Avalonia.Native`, ONNX
+Runtime, SoundFlow, and Whisper.net, the last of those with a Metal backend.
+The OS-conditional surface in `apps/dotnet/src` is about a dozen sites in four
+files, several of which already carry a macOS branch. A port would not be hard.
+
+**macOS stays Swift because MLX has no cross-platform equivalent.** On Apple
+Silicon, MLX puts the model on the GPU with unified memory. An Avalonia build
+would land on the CPU for two independent reasons already recorded in
+`apps/dotnet/RESEARCH-ONNX.md`: the vocoder graph runs on the CPU execution
+provider under every runtime, because `node_pad_1` computes a negative
+dimension that only the CPU kernel tolerates; and the talker's int4 weights use
+`MatMulNBits`, a contrib op a CoreML execution provider is not expected to
+accept. The second half is inference from the op set rather than a measurement.
+
+The measured CPU cost is **RTF 5.0 and a 17.7 GB peak working set** on long
+text — on a 16 GB Mac that may not fit at all. So the trade is retiring a
+native app that uses the hardware for a portable one that ignores it. The
+comparison is not yet exact: nothing here records an MLX figure on the same
+text and machine, and getting one is the cheap experiment that would settle the
+question properly. ONNX Runtime's WebGPU provider, reaching Metal through Dawn,
+is the only plausible GPU path and is likewise unmeasured.
+
+Two smaller facts worth having: ONNX Runtime 1.29 ships no `osx-x64` build, so
+a port would not extend reach to Intel Macs; and the macOS app is sandboxed,
+while .NET has no security-scoped bookmark API, so a relocatable models folder
+there would need P/Invoke into AppKit or dropping the sandbox — which would
+strand every existing user's models in an orphaned container a second time.
+
 ## The parity rule (read before changing any feature)
 
 1. **`spec/FEATURES.md` is the source of truth** for observable behavior;
