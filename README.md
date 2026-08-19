@@ -61,8 +61,19 @@ Any feature change updates the spec **and** every app.
 
 ## Code signing policy
 
-Free code signing provided by [SignPath.io](https://signpath.io), certificate by
-[SignPath Foundation](https://signpath.org).
+Signing differs by platform, because the three do not offer the same thing.
+
+**macOS** — signed with an Apple Developer ID certificate, notarized by Apple,
+and stapled. The release workflow verifies both the app and the disk image
+before publishing, so Gatekeeper accepts them offline.
+
+**Windows** — free code signing provided by [SignPath.io](https://signpath.io),
+certificate by [SignPath Foundation](https://signpath.org). *The 1.0.0 build is
+not yet signed; signing applies from the next release.*
+
+**Linux** — nothing signs a portable tarball in a way the system checks, so
+there is no equivalent to claim. Every release publishes a SHA-256 checksum for
+the archive, which is what there is to verify against.
 
 **Team roles** — committers, reviewers and approvers:
 Shazron Abdullah ([@shazron](https://github.com/shazron)).
