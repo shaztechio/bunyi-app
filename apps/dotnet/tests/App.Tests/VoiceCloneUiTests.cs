@@ -484,6 +484,69 @@ public sealed class VoiceCloneUiTests : HeadlessWindows
     }
 
     [Fact]
+    public void Deleting_the_voice_in_use_empties_the_fields()
+    {
+        // Reported from using the app: after deleting, the Recording row showed
+        // the library's copy by its id — a GUID, for a file that no longer
+        // existed. Generate would have failed on it.
+        using var folder = new TempFolder();
+        var library = new VoiceLibrary(new RecordingLog(), folder.Path);
+        library.Save("Test01", folder.Clip(), "He shoots, he scores.");
+
+        var model = WithLibrary(library);
+        model.SelectedVoice = model.SavedVoices[0];
+        Assert.True(model.HasReference);
+
+        model.DeleteVoiceCommand.Execute(null);
+
+        Assert.False(model.HasReference);
+        Assert.Null(model.ReferenceAudioPath);
+        Assert.Equal(string.Empty, model.ReferenceTranscript);
+        Assert.Equal("No recording chosen", model.ReferenceName);
+    }
+
+    [Fact]
+    public async Task Deleting_a_different_voice_leaves_the_chosen_recording_alone()
+    {
+        // Only the recording that went. A file the user picked themselves has
+        // nothing to do with the library.
+        using var folder = new TempFolder();
+        var library = new VoiceLibrary(new RecordingLog(), folder.Path);
+        library.Save("Test01", folder.Clip(), "He shoots, he scores.");
+
+        var model = WithLibrary(library);
+        model.ChooseReference = () => Task.FromResult<string?>("my own.wav");
+        model.Transcribe = (_, _) => Task.FromResult("something else");
+        await model.PickReferenceCommand.ExecuteAsync(null);
+
+        model.SelectedVoice = model.SavedVoices[0];
+        model.ReferenceAudioPath = "my own.wav";
+        model.DeleteVoiceCommand.Execute(null);
+
+        Assert.Equal("my own.wav", model.ReferenceAudioPath);
+    }
+
+    [Fact]
+    public async Task Choosing_a_recording_by_hand_stops_claiming_a_saved_voice()
+    {
+        // Otherwise the picker still reads "Test01" beside a file that has
+        // nothing to do with it.
+        using var folder = new TempFolder();
+        var library = new VoiceLibrary(new RecordingLog(), folder.Path);
+        library.Save("Test01", folder.Clip(), "He shoots, he scores.");
+
+        var model = WithLibrary(library);
+        model.SelectedVoice = model.SavedVoices[0];
+
+        model.ChooseReference = () => Task.FromResult<string?>("my own.wav");
+        model.Transcribe = (_, _) => Task.FromResult("something else");
+        await model.PickReferenceCommand.ExecuteAsync(null);
+
+        Assert.Null(model.SelectedVoice);
+        Assert.Equal("my own.wav", model.ReferenceName);
+    }
+
+    [Fact]
     public void Deleting_needs_something_selected()
     {
         using var folder = new TempFolder();

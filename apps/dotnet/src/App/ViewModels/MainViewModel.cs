@@ -548,6 +548,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         var chosen = await ChooseReference();
         if (string.IsNullOrWhiteSpace(chosen)) return;
 
+        // No longer the saved voice — the picker must not keep claiming a name
+        // that has nothing to do with the file now in the field.
+        SelectedVoice = null;
         ReferenceAudioPath = chosen;
 
         // A transcript already typed is the user's, and §4 says it always wins.
@@ -624,12 +627,23 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         if (SelectedVoice is not { } voice || _voices is null) return;
 
+        var clip = _voices.ClipPath(voice);
+        var wasInUse = string.Equals(ReferenceAudioPath, clip, StringComparison.OrdinalIgnoreCase);
+
         _voices.Delete(voice);
         SelectedVoice = null;
         ReloadVoices();
 
-        // The fields keep whatever they had: the recording is gone from the
-        // library, but the user may still be part-way through using it.
+        // If the fields were pointing at the recording that just went, they
+        // stop. Leaving them showing a file that no longer exists is worse than
+        // showing nothing — the name means nothing to anyone, and Generate
+        // would have failed on it.
+        if (wasInUse)
+        {
+            ReferenceAudioPath = null;
+            ReferenceTranscript = string.Empty;
+        }
+
         Status = $"Deleted the voice “{voice.Name}”.";
     }
 
