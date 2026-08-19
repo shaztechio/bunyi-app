@@ -184,10 +184,6 @@ public sealed record ModelLayout(
     /// of the same weights. 3.86 GB fetched out of 8.77 GB published.
     /// </para>
     /// </remarks>
-    /// <remarks>
-    /// Not yet reachable through <see cref="For" />. Until the pipeline exists,
-    /// offering the download would be offering a mode that cannot speak.
-    /// </remarks>
     public static ModelLayout VoiceClone { get; } = new(
         "wavekat-base-0.6b-int4",
         [
@@ -278,21 +274,20 @@ public sealed record ModelLayout(
     /// unimplemented mode — Doctor, which is asked about whatever tab is on
     /// screen — does not have to catch an exception to find out.
     /// </remarks>
-    public static bool Exists(TtsMode mode) =>
-        mode is TtsMode.PresetVoice or TtsMode.VoiceDesign;
+    public static bool Exists(TtsMode mode) => mode is
+        TtsMode.PresetVoice or TtsMode.VoiceDesign or TtsMode.VoiceClone;
 
     /// <summary>The export a mode uses.</summary>
     /// <remarks>
-    /// Clone is deliberately absent even though <see cref="VoiceClone" /> is
-    /// written: the layout is only a file list, and answering with it before
-    /// there is a pipeline behind it would have the app offer a 3.86 GB
-    /// download for a mode that cannot speak. It joins this switch in the same
-    /// change that makes clone work.
+    /// Every mode has one. The throw stays for a mode added to the enum with no
+    /// export behind it: answering with some other mode's layout would have the
+    /// app download gigabytes for something that cannot run.
     /// </remarks>
     public static ModelLayout For(TtsMode mode) => mode switch
     {
         TtsMode.PresetVoice => PresetVoice,
         TtsMode.VoiceDesign => VoiceDesign,
+        TtsMode.VoiceClone => VoiceClone,
         _ => throw new NotSupportedException(
             $"{mode.DisplayName()} is not implemented yet, so it has no model to download."),
     };

@@ -47,18 +47,15 @@ public class VoiceDesignUiTests : HeadlessWindows
         window.GetLogicalDescendants().OfType<T>().First(c => c.Name == name);
 
     [Fact]
-    public void Voice_design_is_available_now_and_clone_is_not()
+    public void Every_mode_is_available_now()
     {
         var model = new MainViewModel(new FakeEngine(), new FakePlayer(), new RecordingLog());
 
-        model.Mode = TtsMode.PresetVoice;
-        Assert.True(model.ModeIsAvailable);
-
-        model.Mode = TtsMode.VoiceDesign;
-        Assert.True(model.ModeIsAvailable);
-
-        model.Mode = TtsMode.VoiceClone;
-        Assert.False(model.ModeIsAvailable);
+        foreach (var mode in Enum.GetValues<TtsMode>())
+        {
+            model.Mode = mode;
+            Assert.True(model.ModeIsAvailable, $"{mode} should be available");
+        }
     }
 
     [Fact]
@@ -198,37 +195,41 @@ public class VoiceDesignUiTests : HeadlessWindows
     }
 
     [AvaloniaFact]
-    public void Clone_still_says_it_is_not_implemented()
+    public void Nothing_apologises_for_clone_mode_any_more()
     {
-        // Honest about what does not work, now that one of the two does.
+        // The notice stays in the window for a mode added without an
+        // implementation behind it, but no mode is in that state today — so it
+        // must not be showing.
         var (window, _) = Show(TtsMode.VoiceClone);
         window.UpdateLayout();
 
         var notice = window.GetLogicalDescendants().OfType<TextBlock>()
-            .First(t => t.Text?.Contains("not implemented") == true);
+            .FirstOrDefault(t => t.Text?.Contains("not implemented") == true);
 
-        Assert.True(notice.IsVisible);
-        Assert.DoesNotContain("Voice design", notice.Text!, StringComparison.Ordinal);
+        Assert.True(notice is null || !notice.IsVisible,
+            "the window still says a mode is unimplemented");
     }
 
     // ---- The export the mode downloads ----
 
     [Fact]
-    public void Design_mode_has_a_layout_and_clone_does_not()
+    public void Every_mode_has_an_export_to_download()
     {
-        Assert.True(ModelLayout.Exists(TtsMode.PresetVoice));
-        Assert.True(ModelLayout.Exists(TtsMode.VoiceDesign));
-        Assert.False(ModelLayout.Exists(TtsMode.VoiceClone));
+        foreach (var mode in Enum.GetValues<TtsMode>())
+        {
+            Assert.True(ModelLayout.Exists(mode), $"{mode} has no layout");
+            Assert.NotEmpty(ModelLayout.For(mode).Files);
+        }
     }
 
     [Fact]
-    public void Asking_for_an_unimplemented_modes_layout_says_so()
+    public void No_two_modes_share_a_download_folder()
     {
-        // Rather than answering with the preset-voice model, which would have
-        // the app download 5.88 GB for a mode that cannot run.
-        var error = Assert.Throws<NotSupportedException>(() => ModelLayout.For(TtsMode.VoiceClone));
+        // They are different exports, and a shared folder would have one mode's
+        // completeness check pass on another mode's files.
+        var names = Enum.GetValues<TtsMode>().Select(m => ModelLayout.For(m).Id).ToList();
 
-        Assert.Contains("Voice clone", error.Message, StringComparison.Ordinal);
+        Assert.Equal(names.Count, names.Distinct(StringComparer.Ordinal).Count());
     }
 
     [Fact]

@@ -22,6 +22,7 @@ using Bunyi.Core;
 using Bunyi.Core.Audio;
 using Bunyi.Core.Diagnostics;
 using Bunyi.Core.Qwen;
+using Bunyi.Core.Transcription;
 using Bunyi.Core.Engine;
 using Bunyi.Core.Models;
 using Bunyi.Core.Settings;
@@ -92,9 +93,15 @@ public partial class App : Application
             // behind when the mode changes.
             var preset = new QwenSpeechSynthesizer(log);
             var design = new DesignSpeechSynthesizer(log);
+            var clone = new CloneSpeechSynthesizer(log);
 
             var engine = new OnnxTtsEngine(
-                mode => mode == TtsMode.VoiceDesign ? design : preset,
+                mode => mode switch
+                {
+                    TtsMode.VoiceDesign => design,
+                    TtsMode.VoiceClone => clone,
+                    _ => (ISpeechSynthesizer)preset,
+                },
                 downloader,
                 log,
                 SourceFor,
@@ -117,6 +124,43 @@ public partial class App : Application
                 Settings = settingsViewModel,
                 Doctor = RunDoctor,
                 Logs = new LogsViewModel(log),
+            };
+
+            // §4: the transcript is filled in by listening, on-device. The model
+            // comes down through the same downloader as everything else, so
+            // §3b's progress, resume and checksums apply to it — and nothing
+            // fetches it until someone actually clones a voice.
+            var transcriber = new WhisperTranscriber(
+                async ct =>
+                {
+                    var folder = await downloader.EnsureModelAsync(
+                        new ModelSource.Repo(ModelLayout.WhisperSource),
+                        ModelLayout.Whisper,
+                        Path.Combine(settingsStore.ResolveModelsFolder(settings), "whisper"),
+                        null,
+                        ct);
+
+                    return Path.Combine(folder, "ggml-base.bin");
+                },
+                log);
+
+            viewModel.Transcribe = async (path, ct) =>
+            {
+                // Only the first ten seconds are ever cloned from, so the
+                // transcript is taken from exactly that much. A transcript
+                // running past the audio makes the clone finish the recording
+                // instead of speaking the text.
+                var trimmed = ReferenceAudio.WriteTrimmedCopy(
+                    path, TimeSpan.FromSeconds(10), log);
+
+                try
+                {
+                    return await transcriber.TranscribeAsync(trimmed ?? path, "english", ct);
+                }
+                finally
+                {
+                    if (trimmed is not null && File.Exists(trimmed)) File.Delete(trimmed);
+                }
             };
 
             // §3d: a model being deleted is evicted from memory first,
