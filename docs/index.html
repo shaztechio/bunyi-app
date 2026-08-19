@@ -131,10 +131,26 @@
      that already carries its own shadow, and a border would be a frame drawn
      around a frame. */
   .shot figure { margin: 0; }
-  .shot img { display: block; width: 100%; height: auto; }
+
+  /* A caption belongs to the image above it, and that has to be legible at a
+     glance: close to its own image, far from the next one. With 1rem here and
+     2.5rem between figures the two gaps were near enough alike that each
+     caption looked like it floated between the two screenshots. */
+  .shot figure + figure { margin-top: 4rem; }
+
+  /* margin-inline, not text-align. These are block elements, so centring the
+     text inside the figure does nothing for the image itself — which is why
+     the Windows screenshot, capped below the column width, sat against the
+     left edge. */
+  .shot img { display: block; width: 100%; height: auto; margin-inline: auto; }
   .shot figcaption {
-    color: var(--muted); font-size: .9rem; text-align: center; margin-top: 1rem;
+    color: var(--muted); font-size: .9rem; text-align: center; margin-top: .9rem;
   }
+
+  /* The Windows shot is a 1x capture narrower than the column. width:auto so it
+     is drawn at its own size rather than stretched — upscaling a screenshot
+     only blurs the interface text it exists to show. */
+  .shot-second img { width: auto; max-width: min(100%, 762px); }
 
   .cta { display: flex; flex-wrap: wrap; gap: .7rem; margin-top: 1.6rem; }
   .btn {
@@ -293,13 +309,6 @@
     </figure>
   </div>
 </section>
-
-<style>
-  /* The second screenshot is a 1x capture and narrower than the column, so it
-     is centred at its own size rather than stretched. */
-  .shot-second { margin-top: 2.5rem; text-align: center; }
-  .shot-second img { max-width: min(100%, 762px); height: auto; }
-</style>
 
 <section id="modes">
   <div class="wrap">
