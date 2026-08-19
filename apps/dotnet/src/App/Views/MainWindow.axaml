@@ -315,25 +315,40 @@ limitations under the License.
 
           <!-- Clone mode: the recording, and what it says (spec §4). -->
           <StackPanel Spacing="8" IsVisible="{Binding ShowReference}">
-            <StackPanel Orientation="Horizontal" Spacing="10">
-              <TextBlock Text="Recording" Classes="rowLabel" />
-              <Button Content="Choose…" Command="{Binding PickReferenceCommand}" />
-              <TextBlock Text="{Binding ReferenceName}" VerticalAlignment="Center"
-                         Opacity="0.75" TextTrimming="CharacterEllipsis" MaxWidth="260" />
-            </StackPanel>
+            <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="10">
+              <TextBlock Grid.Column="0" Text="Recording" Classes="rowLabel"
+                         VerticalAlignment="Center" />
+              <Button Grid.Column="1" Content="Choose…"
+                      Command="{Binding PickReferenceCommand}"
+                      IsEnabled="{Binding CanEditTranscript}" />
+              <TextBlock Grid.Column="2" Text="{Binding ReferenceName}"
+                         VerticalAlignment="Center" Opacity="0.75"
+                         TextTrimming="CharacterEllipsis" />
+            </Grid>
 
             <TextBlock Text="{x:Static vm:MainViewModel.ReferenceHint}"
-                       FontSize="12" Opacity="0.65" TextWrapping="Wrap" MaxWidth="520" />
+                       FontSize="12" Opacity="0.65" TextWrapping="Wrap" />
 
-            <StackPanel Orientation="Horizontal" Spacing="10"
-                        IsVisible="{Binding HasReference}">
-              <TextBlock Text="It says" Classes="rowLabel" />
-              <TextBox Text="{Binding ReferenceTranscript}" MinWidth="320"
+            <!--
+              A Grid rather than a horizontal StackPanel. A StackPanel measures
+              its children against infinite width, so a wrapping TextBox never
+              wraps — it grows to the length of one line of transcript and runs
+              off the side of the window. The star column gives it whatever is
+              left over, which is what it needs to wrap inside.
+            -->
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10"
+                  IsVisible="{Binding HasReference}">
+              <TextBlock Grid.Column="0" Text="It says" Classes="rowLabel"
+                         VerticalAlignment="Center" />
+              <TextBox Grid.Column="1" Text="{Binding ReferenceTranscript}"
                        AcceptsReturn="False" TextWrapping="Wrap"
+                       IsEnabled="{Binding CanEditTranscript}"
                        PlaceholderText="What the recording says, word for word" />
-              <Button Content="Listen again" Command="{Binding ListenAgainCommand}"
-                      IsEnabled="{Binding !IsTranscribing}" />
-            </StackPanel>
+              <Button Grid.Column="2" Content="Listen again"
+                      Command="{Binding ListenAgainCommand}"
+                      VerticalAlignment="Top"
+                      IsEnabled="{Binding CanEditTranscript}" />
+            </Grid>
           </StackPanel>
         </StackPanel>
       </Border>

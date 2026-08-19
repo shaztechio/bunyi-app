@@ -33,7 +33,7 @@ limitations under the License.
             <Border BorderThickness="0,0,0,1" Padding="4,10"
                     BorderBrush="{DynamicResource BunyiCardBorder}"
                     ToolTip.Tip="{Binding Details}">
-              <Grid ColumnDefinitions="Auto,*,Auto">
+              <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
 
                 <!--
                   §2a: progress is drawn as a ring around the play button
@@ -79,16 +79,26 @@ limitations under the License.
                   </Button>
                 </Panel>
 
+                <!--
+                  Grids rather than horizontal StackPanels. A StackPanel offers
+                  its children infinite width, so TextTrimming never fires and a
+                  long line runs under the buttons on the right instead of
+                  ending in an ellipsis. Clone rows made this obvious: their
+                  subtitle carries the whole reference transcript.
+                -->
                 <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
-                  <StackPanel Orientation="Horizontal" Spacing="6">
-                    <Border Background="{DynamicResource BunyiAccent}" CornerRadius="{DynamicResource BunyiPillRadius}"
+                  <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                    <Border Grid.Column="0" Background="{DynamicResource BunyiAccent}"
+                            CornerRadius="{DynamicResource BunyiPillRadius}"
                             Padding="6,1" VerticalAlignment="Center">
                       <TextBlock Text="{Binding Mode}" FontSize="10" Foreground="White" />
                     </Border>
-                    <TextBlock Text="{Binding Summary}" TextTrimming="CharacterEllipsis"
+                    <TextBlock Grid.Column="1" Text="{Binding Summary}"
+                               TextTrimming="CharacterEllipsis"
                                VerticalAlignment="Center" />
-                  </StackPanel>
-                  <TextBlock Text="{Binding Subtitle}" FontSize="11" Opacity="0.7" />
+                  </Grid>
+                  <TextBlock Text="{Binding Subtitle}" FontSize="11" Opacity="0.7"
+                             TextTrimming="CharacterEllipsis" />
                 </StackPanel>
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4"

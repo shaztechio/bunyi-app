@@ -63,7 +63,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string _referenceTranscript = string.Empty;
 
     /// <summary>Whether a transcript is being worked out right now.</summary>
-    [ObservableProperty] private bool _isTranscribing;
+    /// <remarks>
+    /// Drives the spinner and disables the transcript field. Listening takes
+    /// seconds, and a field that stays editable while something is about to
+    /// overwrite it invites typing that is then thrown away.
+    /// </remarks>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowSpinner))]
+    [NotifyPropertyChangedFor(nameof(CanEditTranscript))]
+    private bool _isTranscribing;
     [ObservableProperty] private string _status = "Ready";
     [ObservableProperty] private double _progress;
     [ObservableProperty] private string? _progressDetail;
@@ -338,7 +346,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public bool IsIndeterminate => IsBusy && Progress <= 0;
 
     /// <summary>A spinner, for the phases that cannot report a fraction.</summary>
-    public bool ShowSpinner => IsBusy && Progress <= 0;
+    /// <remarks>
+    /// Listening counts. It is not a generation — the engine is idle and the
+    /// window stays usable — but it is work the status line is reporting, and a
+    /// status that changes with nothing moving beside it reads as stuck.
+    /// </remarks>
+    public bool ShowSpinner => IsTranscribing || (IsBusy && Progress <= 0);
+
+    /// <summary>Whether the transcript can be typed into right now.</summary>
+    public bool CanEditTranscript => !IsTranscribing;
 
     /// <summary>A bar, only while something can actually be measured.</summary>
     public bool ShowProgressBar => IsBusy && Progress > 0;

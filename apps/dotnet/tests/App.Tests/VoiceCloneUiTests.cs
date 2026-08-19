@@ -12,7 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Headless.XUnit;
+using Avalonia.LogicalTree;
 using Bunyi.App.ViewModels;
+using Bunyi.App.Views;
 using Bunyi.Core;
 using Bunyi.Core.Engine;
 using Xunit;
@@ -22,7 +27,7 @@ namespace Bunyi.App.Tests;
 /// <summary>
 /// Clone mode in the window (spec §1, §4).
 /// </summary>
-public sealed class VoiceCloneUiTests
+public sealed class VoiceCloneUiTests : HeadlessWindows
 {
     // ---- Which rows belong to which mode ----
 
@@ -247,6 +252,91 @@ public sealed class VoiceCloneUiTests
 
         Assert.Null(engine.LastRequest?.ReferenceAudioPath);
         Assert.Null(engine.LastRequest?.ReferenceTranscript);
+    }
+
+    // ---- Layout ----
+
+    [AvaloniaFact]
+    public void The_transcript_stays_inside_the_window()
+    {
+        // It did not. A horizontal StackPanel measures its children against
+        // infinite width, so a wrapping TextBox never wraps — it grew to the
+        // length of one line of transcript, ran off the right edge, and pushed
+        // the Listen again button out of the window entirely.
+        var model = New();
+        model.Mode = TtsMode.VoiceClone;
+        model.ReferenceAudioPath = "clip.wav";
+        model.ReferenceTranscript =
+            "The sun rose slowly over the mountains, casting long golden shadows "
+            + "across the valley below. Birds began to sing in the tall pine trees, "
+            + "and a gentle breeze carried the scent of wildflowers.";
+
+        var window = Open(new MainWindow { DataContext = model });
+        window.UpdateLayout();
+
+        var field = window.GetLogicalDescendants().OfType<TextBox>()
+            .First(t => t.Text == model.ReferenceTranscript);
+
+        var right = field.TranslatePoint(new Point(field.Bounds.Width, 0), window);
+
+        Assert.NotNull(right);
+        Assert.True(right!.Value.X <= window.Bounds.Width,
+            $"the transcript reaches {right.Value.X} in a window {window.Bounds.Width} wide");
+    }
+
+    [AvaloniaFact]
+    public void The_listen_again_button_stays_on_screen()
+    {
+        // The half of the same bug that was easiest to miss: the button was not
+        // clipped, it was pushed out of the window.
+        var model = New();
+        model.Mode = TtsMode.VoiceClone;
+        model.ReferenceAudioPath = "clip.wav";
+        model.ReferenceTranscript = new string('a', 400);
+
+        var window = Open(new MainWindow { DataContext = model });
+        window.UpdateLayout();
+
+        var button = window.GetLogicalDescendants().OfType<Button>()
+            .First(b => (b.Content as string) == "Listen again");
+
+        var right = button.TranslatePoint(new Point(button.Bounds.Width, 0), window);
+
+        Assert.NotNull(right);
+        Assert.True(right!.Value.X <= window.Bounds.Width,
+            $"Listen again reaches {right.Value.X} in a window {window.Bounds.Width} wide");
+    }
+
+    // ---- While it is listening ----
+
+    [Fact]
+    public void The_transcript_cannot_be_typed_into_while_it_listens()
+    {
+        // Seconds of work about to overwrite the field. Leaving it editable
+        // invites typing that is then thrown away.
+        var model = New();
+
+        Assert.True(model.CanEditTranscript);
+
+        model.IsTranscribing = true;
+        Assert.False(model.CanEditTranscript);
+    }
+
+    [Fact]
+    public void The_spinner_turns_while_it_listens()
+    {
+        // The status line says "Listening to the recording…" for several
+        // seconds. A status that changes with nothing moving beside it reads as
+        // stuck.
+        var model = New();
+
+        Assert.False(model.ShowSpinner);
+
+        model.IsTranscribing = true;
+        Assert.True(model.ShowSpinner);
+
+        model.IsTranscribing = false;
+        Assert.False(model.ShowSpinner);
     }
 
     private static MainViewModel New(FakeEngine? engine = null) =>
