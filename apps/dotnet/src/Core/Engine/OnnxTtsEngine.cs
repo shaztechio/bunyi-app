@@ -253,7 +253,21 @@ public sealed class OnnxTtsEngine : ITtsEngine
                 token.ThrowIfCancellationRequested();
                 Publish(new EngineStatus(EngineState.Generating), progress);
 
-                var audio = await _synth.SynthesizeAsync(request, token).ConfigureAwait(false);
+                // Generation cannot report a fraction — nothing knows how much
+                // speech the text will become — so it reports what it has made
+                // instead. Without this a long run is indistinguishable from a
+                // hung one, which is exactly how it was reported: "stuck",
+                // while eighteen cores were busy.
+                //
+                // Inline for the same reason downloads are: a captured
+                // synchronization context can deliver a frame count after the
+                // run has published its final status, leaving the engine
+                // Generating forever.
+                var frames = new InlineProgress<int>(n => Publish(
+                    new EngineStatus(EngineState.Generating, Detail: FramesSoFar(n), Frames: n),
+                    progress));
+
+                var audio = await _synth.SynthesizeAsync(request, token, frames).ConfigureAwait(false);
                 token.ThrowIfCancellationRequested();
 
                 if (audio.Samples.Length == 0)
@@ -479,6 +493,19 @@ public sealed class OnnxTtsEngine : ITtsEngine
     /// unordered with respect to the run. Marshalling for display is the App
     /// layer's job, and the caller's own progress object still does it.
     /// </remarks>
+    /// <summary>
+    /// What has been made so far, in words rather than a number.
+    /// </summary>
+    /// <remarks>
+    /// Frames mean nothing to anyone; the seconds of speech they amount to mean
+    /// something immediately, and tell a user whether a long run is producing
+    /// what they asked for or rambling. Codec frames are 12.5 a second.
+    /// </remarks>
+    internal static string FramesSoFar(int frames) =>
+        string.Create(
+            System.Globalization.CultureInfo.InvariantCulture,
+            $"{frames} frames · {frames / 12.5:0.0}s of speech so far");
+
     private sealed class InlineProgress<T>(Action<T> report) : IProgress<T>
     {
         public void Report(T value) => report(value);

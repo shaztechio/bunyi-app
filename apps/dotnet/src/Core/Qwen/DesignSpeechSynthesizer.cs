@@ -90,7 +90,8 @@ public sealed class DesignSpeechSynthesizer(
     }
 
     /// <inheritdoc />
-    public Task<SynthesisResult> SynthesizeAsync(GenerateRequest request, CancellationToken ct)
+    public Task<SynthesisResult> SynthesizeAsync(
+        GenerateRequest request, CancellationToken ct, IProgress<int>? frames = null)
     {
         ArgumentNullException.ThrowIfNull(request);
 
@@ -104,6 +105,7 @@ public sealed class DesignSpeechSynthesizer(
         // behaviour as leaving a style instruction empty elsewhere.
         var result = _pipeline.Generate(
             new DesignRequest(request.Text, request.Instruct, request.Language),
+            progress: frames,
             ct: ct);
 
         return Task.FromResult(new SynthesisResult(

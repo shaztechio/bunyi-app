@@ -138,7 +138,7 @@ public sealed class DesignPipeline : IDesignPipeline
             _prefill.Build(request, _tokenizer),
             _prefill.TrailingHidden,
             options ?? _config.Sampling,
-            maxFrames ?? _config.MaxNewTokens,
+            maxFrames ?? TalkerLoop.FrameBudget(request.Text, _config.MaxNewTokens),
             "Voice design",
             progress,
             vocoderContext: null,

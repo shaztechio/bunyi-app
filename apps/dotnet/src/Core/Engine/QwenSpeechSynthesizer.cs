@@ -128,7 +128,8 @@ public sealed class QwenSpeechSynthesizer(ILogSink log) : ISpeechSynthesizer
     }
 
     /// <inheritdoc />
-    public async Task<SynthesisResult> SynthesizeAsync(GenerateRequest request, CancellationToken ct)
+    public async Task<SynthesisResult> SynthesizeAsync(
+        GenerateRequest request, CancellationToken ct, IProgress<int>? frames = null)
     {
         ArgumentNullException.ThrowIfNull(request);
 

@@ -68,6 +68,58 @@ public sealed class EngineTests : IAsyncLifetime
     private static GenerateRequest Request(string text = "Hello there.") =>
         new(TtsMode.PresetVoice, text, "english", "ryan");
 
+    // ---- Saying what a long run is doing ----
+
+    [Fact]
+    public async Task Generation_reports_the_frames_it_has_made()
+    {
+        // Reported as stuck when it was working: eighteen cores busy, and the
+        // window saying only "Generating…" for three minutes. Nothing can
+        // report a fraction here — no one knows how much speech the text will
+        // become — so it reports what it has produced instead.
+        var synth = new FakeSynthesizer { ReportFrames = [12, 48, 120] };
+        await using var engine = NewEngine(synth);
+
+        var seen = new List<EngineStatus>();
+        engine.StatusChanged += (_, status) => seen.Add(status);
+
+        await engine.GenerateAsync(Request(), null, default);
+
+        var reports = seen.Where(s => s.Frames > 0).ToList();
+
+        Assert.Equal([12, 48, 120], reports.Select(r => r.Frames));
+        Assert.All(reports, r => Assert.Equal(EngineState.Generating, r.State));
+    }
+
+    [Fact]
+    public async Task The_frame_count_is_told_as_seconds_of_speech()
+    {
+        // Frames mean nothing to anyone; seconds say whether a long run is
+        // producing what was asked for or rambling.
+        var synth = new FakeSynthesizer { ReportFrames = [125] };
+        await using var engine = NewEngine(synth);
+
+        string? detail = null;
+        engine.StatusChanged += (_, status) =>
+        {
+            if (status.Frames > 0) detail = status.Detail;
+        };
+
+        await engine.GenerateAsync(Request(), null, default);
+
+        Assert.NotNull(detail);
+        Assert.Contains("125 frames", detail!, StringComparison.Ordinal);
+        Assert.Contains("10.0s", detail!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Frames_become_seconds_at_the_codec_rate()
+    {
+        // 12.5 a second, which is what the vocoder emits.
+        Assert.Contains("1.0s", OnnxTtsEngine.FramesSoFar(12), StringComparison.Ordinal);
+        Assert.Contains("8.0s", OnnxTtsEngine.FramesSoFar(100), StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task A_run_writes_a_24_kHz_wav_and_reports_where()
     {
@@ -494,10 +546,13 @@ public sealed class EngineTests : IAsyncLifetime
             return Task.CompletedTask;
         }
 
-        public async Task<SynthesisResult> SynthesizeAsync(GenerateRequest request, CancellationToken ct)
+        public async Task<SynthesisResult> SynthesizeAsync(
+            GenerateRequest request, CancellationToken ct, IProgress<int>? frames = null)
         {
             SynthesizedOnThread = Environment.CurrentManagedThreadId;
             Entered.TrySetResult();
+
+            foreach (var n in ReportFrames) frames?.Report(n);
 
             if (Gate is not null) await Gate.WaitAsync(ct).ConfigureAwait(false);
             ct.ThrowIfCancellationRequested();
@@ -505,6 +560,9 @@ public sealed class EngineTests : IAsyncLifetime
 
             return new SynthesisResult(Samples, WavWriter.SampleRate, Samples.Length / 2_000);
         }
+
+        /// <summary>Frame counts to report before finishing, for tests.</summary>
+        public int[] ReportFrames { get; set; } = [];
 
         public void ReleaseWorkingMemory() => Releases++;
 
