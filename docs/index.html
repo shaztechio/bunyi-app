@@ -18,6 +18,19 @@
     var ua = navigator.userAgent || '';
     var os = '';
 
+    // ?os=win|mac|linux forces a system, and ?os=none forces the plain
+    // written order. For checking all four states from one machine — the
+    // alternative is editing the page to test it, and a page you edited to
+    // test it is not the page you shipped.
+    var forced = (/[?&]os=([a-z]+)/i.exec(location.search) || [])[1];
+    forced = forced && forced.toLowerCase();
+
+    if (forced === 'win' || forced === 'mac' || forced === 'linux') {
+      d.className += (d.className ? ' ' : '') + 'is-' + forced;
+      return;
+    }
+    if (forced === 'none') return;
+
     if (/mac/i.test(p) || /Macintosh/i.test(ua)) os = 'mac';
     else if (/win/i.test(p) || /Windows/i.test(ua)) os = 'win';
     else if (/linux|x11|cros/i.test(p) || /Linux|CrOS/i.test(ua)) os = 'linux';
