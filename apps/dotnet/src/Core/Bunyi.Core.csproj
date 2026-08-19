@@ -52,6 +52,8 @@ limitations under the License.
       Not a UI dependency — playing a file is not drawing one.
     -->
     <PackageReference Include="SoundFlow" />
+    <PackageReference Include="Whisper.net" />
+    <PackageReference Include="Whisper.net.Runtime" />
   </ItemGroup>
 
 </Project>

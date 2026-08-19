@@ -157,6 +157,40 @@ public sealed record ModelLayout(
         ],
         ApproxDownloadBytes: 5_850_000_000);
 
+    /// <summary>
+    /// The Whisper model that transcribes a reference clip (spec §4).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <c>base</c>, not <c>base.en</c>: §1 offers ten languages and the
+    /// English-only build would transcribe the other nine into nonsense that
+    /// looks like English. 141 MB against tiny's 74 or small's 465 — tiny
+    /// mishears enough to be worse than useless for a clone, where the
+    /// transcript has to match the recording word for word.
+    /// </para>
+    /// <para>
+    /// Fetched through the same downloader as everything else, so §3b's
+    /// progress, resume and checksums apply to it too. It is a second download
+    /// on top of a mode's own model, which is why nothing fetches it until a
+    /// transcript is actually wanted.
+    /// </para>
+    /// </remarks>
+    public static ModelLayout Whisper { get; } = new(
+        "whisper-base",
+        [new ModelFile("ggml-base.bin", Required: true)],
+        ApproxDownloadBytes: 148_000_000);
+
+    /// <summary>
+    /// Where <see cref="Whisper"/> comes from.
+    /// </summary>
+    /// <remarks>
+    /// Not a §3a per-mode source: that setting exists so a user can point a
+    /// <em>mode</em> at their own export or a mirror, and transcription is not a
+    /// mode. whisper.cpp's own repository is the origin every other distribution
+    /// of these files copies from.
+    /// </remarks>
+    public const string WhisperSource = "ggerganov/whisper.cpp";
+
     /// <summary>Whether a mode has an export to download at all.</summary>
     /// <remarks>
     /// Asked before <see cref="For" />, so a caller that can cope with an

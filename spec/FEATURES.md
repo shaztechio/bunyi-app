@@ -355,8 +355,20 @@ macOS source: `TTSEngine.loadReferenceAudio`, `ReferenceTranscriber.swift`.
   clip on-device and use the result (also shown to the user, editable).
   - macOS: Speech framework (`SFSpeechRecognizer`), fed PCM buffers (not a
     file URL — the recognition daemon can't read a sandboxed file).
-  - .NET (Win+Linux): Whisper (whisper.cpp or Whisper-ONNX), bundled so it
-    works offline and identically on both OSes.
+  - .NET (Win+Linux): Whisper (whisper.cpp), so the same words come out on
+    both OSes and nothing leaves the machine.
+    - The model is **fetched on first use** through the same downloader as
+      everything else (§3b: progress, resume, checksums), not shipped in the
+      app. It is a multilingual model, because §1 offers ten languages and an
+      English-only one would turn the other nine into confident nonsense.
+    - So the first clone on a new machine downloads it, with the usual
+      progress; every clone after that is offline. Shipping it instead would
+      add its weight to every download, including for the people who never
+      open clone mode.
+  - The transcriber is told **which language §1 has selected**, rather than
+    detecting it — the user has already answered that question, and a model
+    guessing differently transcribes the right sounds into the wrong words.
+    "Auto" is the one case where it detects.
   - A typed transcript always overrides auto-detection.
 
 ## 5. Saved voices library
