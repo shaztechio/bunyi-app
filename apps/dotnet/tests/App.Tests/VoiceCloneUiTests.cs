@@ -339,6 +339,186 @@ public sealed class VoiceCloneUiTests : HeadlessWindows
         Assert.False(model.ShowSpinner);
     }
 
+    // ---- Saved voices (spec §5) ----
+
+    [Fact]
+    public void A_window_without_a_library_offers_no_saved_voices()
+    {
+        // And touches nobody's library on the way. The app supplies the real
+        // one; anything else gets none rather than reading the user's folder.
+        var model = New();
+
+        Assert.False(model.HasSavedVoices);
+        Assert.Empty(model.SavedVoices);
+        Assert.False(model.CanSaveVoice);
+    }
+
+    [Fact]
+    public void Saved_voices_appear_once_there_are_some()
+    {
+        using var folder = new TempFolder();
+        var library = new VoiceLibrary(new RecordingLog(), folder.Path);
+        library.Save("Eric", folder.Clip(), "He shoots, he scores.");
+
+        var model = WithLibrary(library);
+
+        Assert.True(model.HasSavedVoices);
+        Assert.Equal("Eric", Assert.Single(model.SavedVoices).Name);
+    }
+
+    [Fact]
+    public void Choosing_a_saved_voice_fills_the_recording_and_the_transcript()
+    {
+        // §5: selecting it fills reference + transcript. They were saved as a
+        // pair and only mean anything as a pair — half of one is the state that
+        // makes a clone finish the recording instead of speaking.
+        using var folder = new TempFolder();
+        var library = new VoiceLibrary(new RecordingLog(), folder.Path);
+        var saved = library.Save("Eric", folder.Clip(), "He shoots, he scores.");
+
+        var model = WithLibrary(library);
+        model.SelectedVoice = model.SavedVoices[0];
+
+        Assert.Equal(library.ClipPath(saved), model.ReferenceAudioPath);
+        Assert.Equal("He shoots, he scores.", model.ReferenceTranscript);
+    }
+
+    [Fact]
+    public void A_saved_voice_is_enough_to_generate_from()
+    {
+        using var folder = new TempFolder();
+        var library = new VoiceLibrary(new RecordingLog(), folder.Path);
+        library.Save("Eric", folder.Clip(), "He shoots, he scores.");
+
+        var model = WithLibrary(library);
+        model.Mode = TtsMode.VoiceClone;
+        model.Script = "Something to say.";
+        model.SelectedVoice = model.SavedVoices[0];
+
+        Assert.True(model.CanGenerate);
+    }
+
+    [Fact]
+    public void Saving_needs_a_name_a_recording_and_a_transcript()
+    {
+        using var folder = new TempFolder();
+        var model = WithLibrary(new VoiceLibrary(new RecordingLog(), folder.Path));
+
+        Assert.False(model.CanSaveVoice);
+
+        model.ReferenceAudioPath = folder.Clip();
+        Assert.False(model.CanSaveVoice);
+
+        model.ReferenceTranscript = "He shoots, he scores.";
+        Assert.False(model.CanSaveVoice);
+
+        model.NewVoiceName = "Eric";
+        Assert.True(model.CanSaveVoice);
+    }
+
+    [Fact]
+    public void Saving_while_it_is_still_listening_is_refused()
+    {
+        // The transcript is about to be replaced, so what would be saved is not
+        // what the user is looking at.
+        using var folder = new TempFolder();
+        var model = WithLibrary(new VoiceLibrary(new RecordingLog(), folder.Path));
+
+        model.ReferenceAudioPath = folder.Clip();
+        model.ReferenceTranscript = "He shoots, he scores.";
+        model.NewVoiceName = "Eric";
+        model.IsTranscribing = true;
+
+        Assert.False(model.CanSaveVoice);
+    }
+
+    [Fact]
+    public void Saving_adds_it_and_clears_the_name_box()
+    {
+        using var folder = new TempFolder();
+        var model = WithLibrary(new VoiceLibrary(new RecordingLog(), folder.Path));
+
+        model.ReferenceAudioPath = folder.Clip();
+        model.ReferenceTranscript = "He shoots, he scores.";
+        model.NewVoiceName = "Eric";
+        model.SaveVoiceCommand.Execute(null);
+
+        Assert.Equal("Eric", Assert.Single(model.SavedVoices).Name);
+        Assert.Equal(string.Empty, model.NewVoiceName);
+        Assert.True(model.HasSavedVoices);
+    }
+
+    [Fact]
+    public void Saving_points_the_fields_at_the_copy()
+    {
+        // Not at the file the user picked. From here on the library's copy is
+        // the recording, and it is the one that survives them tidying up.
+        using var folder = new TempFolder();
+        var library = new VoiceLibrary(new RecordingLog(), folder.Path);
+        var model = WithLibrary(library);
+        var original = folder.Clip();
+
+        model.ReferenceAudioPath = original;
+        model.ReferenceTranscript = "He shoots, he scores.";
+        model.NewVoiceName = "Eric";
+        model.SaveVoiceCommand.Execute(null);
+
+        Assert.NotEqual(original, model.ReferenceAudioPath);
+        Assert.Equal(library.ClipPath(model.SavedVoices[0]), model.ReferenceAudioPath);
+    }
+
+    [Fact]
+    public void Deleting_removes_it_from_the_list()
+    {
+        using var folder = new TempFolder();
+        var library = new VoiceLibrary(new RecordingLog(), folder.Path);
+        library.Save("Eric", folder.Clip(), "He shoots, he scores.");
+
+        var model = WithLibrary(library);
+        model.SelectedVoice = model.SavedVoices[0];
+        model.DeleteVoiceCommand.Execute(null);
+
+        Assert.Empty(model.SavedVoices);
+        Assert.False(model.HasSavedVoices);
+        Assert.Null(model.SelectedVoice);
+    }
+
+    [Fact]
+    public void Deleting_needs_something_selected()
+    {
+        using var folder = new TempFolder();
+        var model = WithLibrary(new VoiceLibrary(new RecordingLog(), folder.Path));
+
+        Assert.False(model.CanDeleteVoice);
+    }
+
+    private static MainViewModel WithLibrary(VoiceLibrary library) =>
+        new(new FakeEngine(), new FakePlayer(), new RecordingLog(), voices: library);
+
     private static MainViewModel New(FakeEngine? engine = null) =>
         new(engine ?? new FakeEngine(), new FakePlayer(), new RecordingLog());
+
+    /// <summary>A scratch Voices folder that cleans up after itself.</summary>
+    private sealed class TempFolder : IDisposable
+    {
+        public string Path { get; } = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), "bunyi-tests", Guid.NewGuid().ToString("N"));
+
+        public TempFolder() => Directory.CreateDirectory(Path);
+
+        public string Clip()
+        {
+            var file = System.IO.Path.Combine(Path, $"source-{Guid.NewGuid():N}.wav");
+            var pcm = new short[24_000];
+            for (var i = 0; i < pcm.Length; i++) pcm[i] = (short)(Math.Sin(i * 0.05) * 8000);
+
+            Bunyi.Core.Audio.WavWriter.Write(file, pcm, 24_000);
+            return file;
+        }
+
+        public void Dispose()
+        {
+            if (Directory.Exists(Path)) Directory.Delete(Path, recursive: true);
+        }
+    }
 }

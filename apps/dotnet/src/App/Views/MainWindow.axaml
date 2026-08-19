@@ -16,6 +16,7 @@ limitations under the License.
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:Bunyi.App.ViewModels"
+        xmlns:core="clr-namespace:Bunyi.Core;assembly=Bunyi.Core"
         xmlns:views="clr-namespace:Bunyi.App.Views"
         x:Class="Bunyi.App.Views.MainWindow"
         x:DataType="vm:MainViewModel"
@@ -313,8 +314,30 @@ limitations under the License.
                      PlaceholderText="{Binding InstructPlaceholder}" />
           </StackPanel>
 
-          <!-- Clone mode: the recording, and what it says (spec §4). -->
+          <!-- Clone mode: the recording, and what it says (spec §4, §5). -->
           <StackPanel Spacing="8" IsVisible="{Binding ShowReference}">
+            <!--
+              Saved voices first: picking one fills everything below, so it is
+              the shortest way to a clone and belongs before the long way.
+            -->
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10"
+                  IsVisible="{Binding HasSavedVoices}">
+              <TextBlock Grid.Column="0" Text="Saved voice" Classes="rowLabel"
+                         VerticalAlignment="Center" />
+              <ComboBox Grid.Column="1" ItemsSource="{Binding SavedVoices}"
+                        SelectedItem="{Binding SelectedVoice}"
+                        HorizontalAlignment="Stretch"
+                        PlaceholderText="Choose a voice you saved earlier">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="core:SavedVoice">
+                    <TextBlock Text="{Binding Name}" />
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+              <Button Grid.Column="2" Content="Delete"
+                      Command="{Binding DeleteVoiceCommand}"
+                      ToolTip.Tip="Remove this voice and the recording it kept" />
+            </Grid>
             <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="10">
               <TextBlock Grid.Column="0" Text="Recording" Classes="rowLabel"
                          VerticalAlignment="Center" />
@@ -348,6 +371,21 @@ limitations under the License.
                       Command="{Binding ListenAgainCommand}"
                       VerticalAlignment="Top"
                       IsEnabled="{Binding CanEditTranscript}" />
+            </Grid>
+
+            <!--
+              Saving needs both halves, so it lives under them. §5: a name, the
+              recording and the transcript, kept together.
+            -->
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10"
+                  IsVisible="{Binding HasReference}">
+              <TextBlock Grid.Column="0" Text="Save as" Classes="rowLabel"
+                         VerticalAlignment="Center" />
+              <TextBox Grid.Column="1" Text="{Binding NewVoiceName}"
+                       PlaceholderText="Name this voice to use it again later" />
+              <Button Grid.Column="2" Content="Save voice"
+                      Command="{Binding SaveVoiceCommand}"
+                      VerticalAlignment="Top" />
             </Grid>
           </StackPanel>
         </StackPanel>

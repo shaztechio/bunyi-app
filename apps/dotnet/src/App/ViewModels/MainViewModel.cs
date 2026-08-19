@@ -56,11 +56,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ReferenceName))]
     [NotifyPropertyChangedFor(nameof(HasReference))]
+    [NotifyPropertyChangedFor(nameof(CanSaveVoice))]
     [NotifyCanExecuteChangedFor(nameof(GenerateCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SaveVoiceCommand))]
     private string? _referenceAudioPath;
 
     /// <summary>What that recording says, typed or listened for (spec §4).</summary>
-    [ObservableProperty] private string _referenceTranscript = string.Empty;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanSaveVoice))]
+    [NotifyCanExecuteChangedFor(nameof(SaveVoiceCommand))]
+    private string _referenceTranscript = string.Empty;
 
     /// <summary>Whether a transcript is being worked out right now.</summary>
     /// <remarks>
@@ -71,6 +76,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowSpinner))]
     [NotifyPropertyChangedFor(nameof(CanEditTranscript))]
+    [NotifyPropertyChangedFor(nameof(CanSaveVoice))]
+    [NotifyCanExecuteChangedFor(nameof(SaveVoiceCommand))]
     private bool _isTranscribing;
     [ObservableProperty] private string _status = "Ready";
     [ObservableProperty] private double _progress;
@@ -127,7 +134,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         IAudioPlayer player,
         ILogSink log,
         Func<string>? outputFolder = null,
-        IBatchTimerFactory? timers = null)
+        IBatchTimerFactory? timers = null,
+        VoiceLibrary? voices = null)
     {
         _engine = engine ?? throw new ArgumentNullException(nameof(engine));
         _player = player ?? throw new ArgumentNullException(nameof(player));
@@ -142,6 +150,40 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         _engine.StatusChanged += OnEngineStatusChanged;
         _player.Finished += (_, _) => UiThread.Post(StopPlayback);
+
+        _voices = voices;
+        ReloadVoices();
+    }
+
+    /// <summary>
+    /// The saved voices, or null when this window has no library.
+    /// </summary>
+    /// <remarks>
+    /// Null rather than one pointing at the user's own folder. The app supplies
+    /// the real library; anything that does not — a test, a preview — gets a
+    /// window with no saved voices rather than one quietly reading, pruning and
+    /// rewriting somebody's actual library on construction.
+    /// </remarks>
+    private readonly VoiceLibrary? _voices;
+
+    /// <summary>The saved voices, newest first (spec §5).</summary>
+    public ObservableCollection<SavedVoice> SavedVoices { get; } = [];
+
+    /// <summary>Whether there is anything in the library to offer.</summary>
+    public bool HasSavedVoices => SavedVoices.Count > 0;
+
+    /// <summary>Re-reads the library, pruning entries whose audio has gone.</summary>
+    private void ReloadVoices()
+    {
+        SavedVoices.Clear();
+
+        if (_voices is not null)
+        {
+            _voices.Load();
+            foreach (var voice in _voices.Voices) SavedVoices.Add(voice);
+        }
+
+        OnPropertyChanged(nameof(HasSavedVoices));
     }
 
     /// <summary>
@@ -415,6 +457,80 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             await ListenAsync();
         }
+    }
+
+    /// <summary>The saved voice in use, or null (spec §5).</summary>
+    /// <remarks>
+    /// Choosing one fills the recording and the transcript together. They were
+    /// saved as a pair and only mean anything as a pair — half of a saved voice
+    /// is the state that makes a clone finish the recording instead of speaking.
+    /// </remarks>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(DeleteVoiceCommand))]
+    private SavedVoice? _selectedVoice;
+
+    partial void OnSelectedVoiceChanged(SavedVoice? value)
+    {
+        if (value is null) return;
+
+        if (_voices is null) return;
+
+        ReferenceAudioPath = _voices.ClipPath(value);
+        ReferenceTranscript = value.Transcript;
+    }
+
+    /// <summary>What a voice about to be saved will be called.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SaveVoiceCommand))]
+    private string _newVoiceName = string.Empty;
+
+    /// <summary>Whether there is a complete voice to save (spec §5).</summary>
+    public bool CanSaveVoice =>
+        _voices is not null
+        && HasReference
+        && !string.IsNullOrWhiteSpace(ReferenceTranscript)
+        && !string.IsNullOrWhiteSpace(NewVoiceName)
+        && !IsTranscribing;
+
+    /// <summary>Saves the current recording and transcript under a name.</summary>
+    [RelayCommand(CanExecute = nameof(CanSaveVoice))]
+    private void SaveVoice()
+    {
+        try
+        {
+            var saved = _voices!.Save(NewVoiceName, ReferenceAudioPath!, ReferenceTranscript);
+
+            ReloadVoices();
+            NewVoiceName = string.Empty;
+
+            // Point at the copy rather than the original, so the fields now
+            // describe what the library holds.
+            SelectedVoice = SavedVoices.FirstOrDefault(v => v.Id == saved.Id);
+            Status = $"Saved the voice “{saved.Name}”.";
+        }
+        catch (Exception ex) when (ex is ArgumentException or FileNotFoundException or IOException)
+        {
+            _log.Log($"Could not save that voice: {ex.Message}");
+            Status = ex.Message;
+        }
+    }
+
+    /// <summary>Whether there is a saved voice selected to remove.</summary>
+    public bool CanDeleteVoice => SelectedVoice is not null;
+
+    /// <summary>Removes a saved voice and its copied recording (spec §5).</summary>
+    [RelayCommand(CanExecute = nameof(CanDeleteVoice))]
+    private void DeleteVoice()
+    {
+        if (SelectedVoice is not { } voice || _voices is null) return;
+
+        _voices.Delete(voice);
+        SelectedVoice = null;
+        ReloadVoices();
+
+        // The fields keep whatever they had: the recording is gone from the
+        // library, but the user may still be part-way through using it.
+        Status = $"Deleted the voice “{voice.Name}”.";
     }
 
     /// <summary>Listens again, for when the transcript came out wrong.</summary>
