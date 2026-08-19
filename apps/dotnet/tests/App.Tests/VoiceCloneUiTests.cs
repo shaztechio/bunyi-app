@@ -492,6 +492,69 @@ public sealed class VoiceCloneUiTests : HeadlessWindows
         Assert.False(model.CanDeleteVoice);
     }
 
+    [Fact]
+    public void A_saved_voice_shows_its_name_rather_than_a_guid()
+    {
+        // The library names its copies after the entry's id, so the file name
+        // is a GUID and says nothing about what was picked.
+        using var folder = new TempFolder();
+        var library = new VoiceLibrary(new RecordingLog(), folder.Path);
+        library.Save("Test01", folder.Clip(), "He shoots, he scores.");
+
+        var model = WithLibrary(library);
+        model.SelectedVoice = model.SavedVoices[0];
+
+        Assert.Contains("Test01", model.ReferenceName, StringComparison.Ordinal);
+        Assert.DoesNotContain(".wav", model.ReferenceName, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_recording_chosen_by_hand_still_shows_its_file_name()
+    {
+        var model = New();
+        model.ReferenceAudioPath = Path.Combine("C:", "somewhere", "my voice.wav");
+
+        Assert.Equal("my voice.wav", model.ReferenceName);
+    }
+
+    [AvaloniaFact]
+    public void No_option_label_is_clipped()
+    {
+        // "Saved voice" did not fit a fixed 76px column. The labels share a
+        // size group now, so the column is as wide as its widest — a test
+        // rather than a bigger number, because the next long label would clip
+        // just as silently.
+        using var folder = new TempFolder();
+        var library = new VoiceLibrary(new RecordingLog(), folder.Path);
+        library.Save("Test01", folder.Clip(), "He shoots, he scores.");
+
+        var model = WithLibrary(library);
+        model.Mode = TtsMode.VoiceClone;
+        model.SelectedVoice = model.SavedVoices[0];
+
+        var window = Open(new MainWindow { DataContext = model });
+        window.UpdateLayout();
+
+        var labels = window.GetLogicalDescendants().OfType<TextBlock>()
+            .Where(t => t.Classes.Contains("rowLabel") && t.IsEffectivelyVisible)
+            .ToList();
+
+        Assert.NotEmpty(labels);
+
+        foreach (var label in labels)
+        {
+            // The control's own text layout, so this is the real font at the
+            // real size. Measuring a stand-in TextBlock gets a fallback font
+            // and overstates every width; reading DesiredSize is worse still,
+            // because an explicit Width makes it report that width and the
+            // clipping happens inside, where layout cannot see it.
+            var needed = label.TextLayout.Width;
+
+            Assert.True(label.Bounds.Width >= needed - 0.5,
+                $"“{label.Text}” is {label.Bounds.Width:0.#} wide but its text needs {needed:0.#}");
+        }
+    }
+
     private static MainViewModel WithLibrary(VoiceLibrary library) =>
         new(new FakeEngine(), new FakePlayer(), new RecordingLog(), voices: library);
 

@@ -350,9 +350,26 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// The file name rather than the path: the path is long, usually
     /// uninteresting, and on a narrow window pushes everything else off screen.
     /// </remarks>
-    public string ReferenceName => HasReference
-        ? Path.GetFileName(ReferenceAudioPath!)
-        : "No recording chosen";
+    public string ReferenceName
+    {
+        get
+        {
+            if (!HasReference) return "No recording chosen";
+
+            // A saved voice's copy is named after its id, so the file name is a
+            // GUID and tells the user nothing about what they picked. Show what
+            // they called it instead.
+            if (SelectedVoice is { } voice
+                && _voices is not null
+                && string.Equals(ReferenceAudioPath, _voices.ClipPath(voice),
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return $"{voice.Name} — the saved recording";
+            }
+
+            return Path.GetFileName(ReferenceAudioPath!);
+        }
+    }
 
     /// <summary>What to tell someone about the recording they should pick.</summary>
     /// <remarks>
@@ -466,6 +483,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// is the state that makes a clone finish the recording instead of speaking.
     /// </remarks>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ReferenceName))]
+    [NotifyPropertyChangedFor(nameof(CanDeleteVoice))]
     [NotifyCanExecuteChangedFor(nameof(DeleteVoiceCommand))]
     private SavedVoice? _selectedVoice;
 

@@ -36,10 +36,16 @@ limitations under the License.
       <Setter Property="BorderBrush" Value="{DynamicResource BunyiCardBorder}" />
       <Setter Property="Padding" Value="12" />
     </Style>
+    <!--
+      No fixed width. It was 76, and "Saved voice" did not fit — a number that
+      works until the next label is longer, then clips it silently. The option
+      rows share a size group instead, so the column is as wide as its widest
+      label and every row still lines up.
+    -->
     <Style Selector="TextBlock.rowLabel">
-      <Setter Property="Width" Value="76" />
       <Setter Property="VerticalAlignment" Value="Center" />
       <Setter Property="Opacity" Value="0.75" />
+      <Setter Property="Margin" Value="0,0,10,0" />
     </Style>
   </Window.Styles>
 
@@ -291,28 +297,40 @@ limitations under the License.
 
       <Border Grid.Row="2" Classes="card" IsVisible="{Binding !ShowingHistory}"
               IsEnabled="{Binding !IsBusy}" Margin="0,16,0,0">
-        <StackPanel Spacing="12">
+        <StackPanel Spacing="12" Grid.IsSharedSizeScope="True">
           <TextBlock Text="OPTIONS" Classes="eyebrow" />
 
-          <StackPanel Orientation="Horizontal" Spacing="10">
-            <TextBlock Text="Language" Classes="rowLabel" />
-            <ComboBox ItemsSource="{Binding AllLanguages}" SelectedItem="{Binding Language}"
-                      MinWidth="180" />
-          </StackPanel>
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto" SharedSizeGroup="OptionLabel" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="Language" Classes="rowLabel" />
+            <ComboBox Grid.Column="1" ItemsSource="{Binding AllLanguages}"
+                      SelectedItem="{Binding Language}"
+                      MinWidth="180" HorizontalAlignment="Left" />
+          </Grid>
 
-          <StackPanel Orientation="Horizontal" Spacing="10"
-                      IsVisible="{Binding ShowSpeakers}">
-            <TextBlock Text="Speaker" Classes="rowLabel" />
-            <ComboBox ItemsSource="{Binding Speakers}" SelectedItem="{Binding Speaker}"
-                      MinWidth="180" />
-          </StackPanel>
+          <Grid IsVisible="{Binding ShowSpeakers}">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto" SharedSizeGroup="OptionLabel" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="Speaker" Classes="rowLabel" />
+            <ComboBox Grid.Column="1" ItemsSource="{Binding Speakers}"
+                      SelectedItem="{Binding Speaker}"
+                      MinWidth="180" HorizontalAlignment="Left" />
+          </Grid>
 
-          <StackPanel Orientation="Horizontal" Spacing="10"
-                      IsVisible="{Binding ShowInstruct}">
-            <TextBlock Text="{Binding InstructLabel}" Classes="rowLabel" />
-            <TextBox Text="{Binding Instruct}" MinWidth="320"
+          <Grid IsVisible="{Binding ShowInstruct}">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto" SharedSizeGroup="OptionLabel" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="{Binding InstructLabel}" Classes="rowLabel" />
+            <TextBox Grid.Column="1" Text="{Binding Instruct}"
                      PlaceholderText="{Binding InstructPlaceholder}" />
-          </StackPanel>
+          </Grid>
 
           <!-- Clone mode: the recording, and what it says (spec §4, §5). -->
           <StackPanel Spacing="8" IsVisible="{Binding ShowReference}">
@@ -320,10 +338,13 @@ limitations under the License.
               Saved voices first: picking one fills everything below, so it is
               the shortest way to a clone and belongs before the long way.
             -->
-            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10"
-                  IsVisible="{Binding HasSavedVoices}">
-              <TextBlock Grid.Column="0" Text="Saved voice" Classes="rowLabel"
-                         VerticalAlignment="Center" />
+            <Grid IsVisible="{Binding HasSavedVoices}" ColumnSpacing="10">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" SharedSizeGroup="OptionLabel" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <TextBlock Grid.Column="0" Text="Saved voice" Classes="rowLabel" />
               <ComboBox Grid.Column="1" ItemsSource="{Binding SavedVoices}"
                         SelectedItem="{Binding SelectedVoice}"
                         HorizontalAlignment="Stretch"
@@ -338,9 +359,13 @@ limitations under the License.
                       Command="{Binding DeleteVoiceCommand}"
                       ToolTip.Tip="Remove this voice and the recording it kept" />
             </Grid>
-            <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="10">
-              <TextBlock Grid.Column="0" Text="Recording" Classes="rowLabel"
-                         VerticalAlignment="Center" />
+            <Grid ColumnSpacing="10">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" SharedSizeGroup="OptionLabel" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+              </Grid.ColumnDefinitions>
+              <TextBlock Grid.Column="0" Text="Recording" Classes="rowLabel" />
               <Button Grid.Column="1" Content="Choose…"
                       Command="{Binding PickReferenceCommand}"
                       IsEnabled="{Binding CanEditTranscript}" />
@@ -349,8 +374,14 @@ limitations under the License.
                          TextTrimming="CharacterEllipsis" />
             </Grid>
 
-            <TextBlock Text="{x:Static vm:MainViewModel.ReferenceHint}"
-                       FontSize="12" Opacity="0.65" TextWrapping="Wrap" />
+            <Grid ColumnSpacing="10">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" SharedSizeGroup="OptionLabel" />
+                <ColumnDefinition Width="*" />
+              </Grid.ColumnDefinitions>
+              <TextBlock Grid.Column="1" Text="{x:Static vm:MainViewModel.ReferenceHint}"
+                         FontSize="12" Opacity="0.65" TextWrapping="Wrap" />
+            </Grid>
 
             <!--
               A Grid rather than a horizontal StackPanel. A StackPanel measures
@@ -359,10 +390,13 @@ limitations under the License.
               off the side of the window. The star column gives it whatever is
               left over, which is what it needs to wrap inside.
             -->
-            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10"
-                  IsVisible="{Binding HasReference}">
-              <TextBlock Grid.Column="0" Text="It says" Classes="rowLabel"
-                         VerticalAlignment="Center" />
+            <Grid IsVisible="{Binding HasReference}" ColumnSpacing="10">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" SharedSizeGroup="OptionLabel" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <TextBlock Grid.Column="0" Text="It says" Classes="rowLabel" />
               <TextBox Grid.Column="1" Text="{Binding ReferenceTranscript}"
                        AcceptsReturn="False" TextWrapping="Wrap"
                        IsEnabled="{Binding CanEditTranscript}"
@@ -377,10 +411,13 @@ limitations under the License.
               Saving needs both halves, so it lives under them. §5: a name, the
               recording and the transcript, kept together.
             -->
-            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10"
-                  IsVisible="{Binding HasReference}">
-              <TextBlock Grid.Column="0" Text="Save as" Classes="rowLabel"
-                         VerticalAlignment="Center" />
+            <Grid IsVisible="{Binding HasReference}" ColumnSpacing="10">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" SharedSizeGroup="OptionLabel" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <TextBlock Grid.Column="0" Text="Save as" Classes="rowLabel" />
               <TextBox Grid.Column="1" Text="{Binding NewVoiceName}"
                        PlaceholderText="Name this voice to use it again later" />
               <Button Grid.Column="2" Content="Save voice"
