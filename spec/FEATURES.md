@@ -465,6 +465,11 @@ macOS source: `WindowCloseGuard.swift`.
 - The platform is named, not just the version. Windows and Linux are one
   codebase and look identical, so a version alone does not say which build a
   bug report is about.
+- **Credits** for the software the app is built on, and separately for the
+  models it downloads — each with its licence and where to find it. Every
+  licence stated must have been read from that project's own licence file or
+  model card; a credits list that guesses is a licence claim the project
+  cannot support.
 
 ## 10. Error handling & copy tone
 

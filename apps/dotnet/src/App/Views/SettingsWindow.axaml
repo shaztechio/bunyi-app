@@ -182,25 +182,63 @@ limitations under the License.
       Windows or Linux user looks for it. Spec §9a.
     -->
     <TabItem Header="About">
-      <StackPanel Margin="12" Spacing="12">
-        <TextBlock Text="{x:Static inf:AboutInfo.Name}" FontSize="22" FontWeight="SemiBold" />
-        <TextBlock Text="{x:Static inf:AboutInfo.Tagline}" Opacity="0.8" TextWrapping="Wrap" />
+      <!-- Scrolls: the credits make this the one tab taller than the window. -->
+      <ScrollViewer>
+        <StackPanel Margin="12" Spacing="12">
+          <TextBlock Text="{x:Static inf:AboutInfo.Name}" FontSize="22" FontWeight="SemiBold" />
+          <TextBlock Text="{x:Static inf:AboutInfo.Tagline}" Opacity="0.8" TextWrapping="Wrap" />
 
-        <StackPanel Spacing="4">
-          <TextBlock Text="{x:Static inf:AboutInfo.VersionLine}" />
-          <TextBlock Text="{x:Static inf:AboutInfo.Licence}" Opacity="0.75" FontSize="12" />
-          <TextBlock Text="{x:Static inf:AboutInfo.Copyright}" Opacity="0.75" FontSize="12"
-                     TextWrapping="Wrap" />
-        </StackPanel>
+          <StackPanel Spacing="4">
+            <TextBlock Text="{x:Static inf:AboutInfo.VersionLine}" />
+            <TextBlock Text="{x:Static inf:AboutInfo.Licence}" Opacity="0.75" FontSize="12" />
+            <TextBlock Text="{x:Static inf:AboutInfo.Copyright}" Opacity="0.75" FontSize="12"
+                       TextWrapping="Wrap" />
+            <TextBlock Text="{x:Static inf:AboutInfo.Home}" Opacity="0.75" FontSize="12"
+                       TextWrapping="Wrap" />
+          </StackPanel>
 
-        <Border Classes="callout">
-          <StackPanel Spacing="6">
-            <TextBlock Text="{x:Static inf:AboutInfo.Home}" FontSize="12" TextWrapping="Wrap" />
+          <Border Classes="callout">
             <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.8"
                        Text="Quote the version and platform above when reporting a problem — the Windows and Linux apps are the same program and look alike." />
-          </StackPanel>
-        </Border>
-      </StackPanel>
+          </Border>
+
+          <TextBlock Text="BUILT WITH" Classes="eyebrow" Margin="0,8,0,0" />
+          <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.8"
+                     Text="Bunyi is free software standing on other people's free software." />
+
+          <ItemsControl ItemsSource="{x:Static inf:AboutInfo.Credits}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="inf:Credit">
+                <StackPanel Margin="0,0,0,10" Spacing="1">
+                  <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13" />
+                  <TextBlock Text="{Binding Does}" FontSize="12" Opacity="0.8"
+                             TextWrapping="Wrap" />
+                  <TextBlock Text="{Binding Detail}" FontSize="11" Opacity="0.6"
+                             TextWrapping="Wrap" />
+                </StackPanel>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <TextBlock Text="THE VOICES" Classes="eyebrow" Margin="0,8,0,0" />
+          <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.8"
+                     Text="The models are downloaded rather than shipped, and they are the part that actually speaks." />
+
+          <ItemsControl ItemsSource="{x:Static inf:AboutInfo.ModelCredits}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="inf:Credit">
+                <StackPanel Margin="0,0,0,10" Spacing="1">
+                  <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13" />
+                  <TextBlock Text="{Binding Does}" FontSize="12" Opacity="0.8"
+                             TextWrapping="Wrap" />
+                  <TextBlock Text="{Binding Detail}" FontSize="11" Opacity="0.6"
+                             TextWrapping="Wrap" />
+                </StackPanel>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </ScrollViewer>
     </TabItem>
   </TabControl>
 </Window>

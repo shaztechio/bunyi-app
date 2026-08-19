@@ -121,6 +121,67 @@ public sealed class SettingsTests : HeadlessWindows
             AboutInfo.Version);
     }
 
+    [AvaloniaFact]
+    public void The_about_tab_credits_the_software_it_is_built_on()
+    {
+        var window = Open(new SettingsWindow { DataContext = NewModel() });
+
+        var tabs = window.GetLogicalDescendants().OfType<TabControl>().First();
+        tabs.SelectedIndex = 4;
+        window.UpdateLayout();
+
+        var shown = window.GetLogicalDescendants().OfType<TextBlock>()
+            .Select(t => t.Text ?? string.Empty)
+            .ToList();
+
+        foreach (var credit in AboutInfo.Credits.Concat(AboutInfo.ModelCredits))
+        {
+            Assert.Contains(credit.Name, shown);
+        }
+    }
+
+    [Fact]
+    public void Everything_the_app_ships_or_downloads_is_credited()
+    {
+        // The things a user actually runs, each named once.
+        var names = AboutInfo.Credits.Select(c => c.Name).ToList();
+
+        Assert.Contains("Avalonia", names);
+        Assert.Contains("ONNX Runtime", names);
+        Assert.Contains("SoundFlow", names);
+        Assert.Contains(names, n => n.Contains("whisper.cpp", StringComparison.Ordinal));
+        Assert.Contains(names, n => n.Contains("QwenTTS", StringComparison.Ordinal));
+
+        // And the models, which arrive after the app does.
+        Assert.Contains(AboutInfo.ModelCredits, c => c.Name.Contains("Qwen3-TTS", StringComparison.Ordinal));
+        Assert.Contains(AboutInfo.ModelCredits, c => c.Name.Contains("Whisper", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Every_credit_names_a_licence_and_somewhere_to_look()
+    {
+        // A credits list that says "MIT" for something that is not is a licence
+        // claim this project cannot support, so each entry has to carry both —
+        // the licence, and the place someone can check it.
+        Assert.NotEmpty(AboutInfo.Credits);
+
+        foreach (var credit in AboutInfo.Credits.Concat(AboutInfo.ModelCredits))
+        {
+            Assert.False(string.IsNullOrWhiteSpace(credit.Name));
+            Assert.False(string.IsNullOrWhiteSpace(credit.Does));
+            Assert.False(string.IsNullOrWhiteSpace(credit.Licence));
+            Assert.StartsWith("https://", credit.Home, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void No_credit_is_listed_twice()
+    {
+        var all = AboutInfo.Credits.Concat(AboutInfo.ModelCredits).Select(c => c.Name).ToList();
+
+        Assert.Equal(all.Count, all.Distinct(StringComparer.Ordinal).Count());
+    }
+
     [Fact]
     public void The_platform_matches_the_stamp_written_into_every_clip()
     {
