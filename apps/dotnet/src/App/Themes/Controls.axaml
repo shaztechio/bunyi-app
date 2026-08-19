@@ -93,6 +93,33 @@ limitations under the License.
   </Style>
 
   <!--
+    A link: text that happens to be clickable, not a button wearing a URL.
+    Avalonia has no HyperlinkButton in this version, so it is a Button stripped
+    back to its content, underlined on hover the way a link is anywhere else.
+  -->
+  <Style Selector="Button.link">
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Foreground" Value="{DynamicResource BunyiAccent}" />
+  </Style>
+  <Style Selector="Button.link /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+  <Style Selector="Button.link:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="TextBlock.TextDecorations" Value="Underline" />
+  </Style>
+  <Style Selector="Button.link:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Opacity" Value="0.7" />
+  </Style>
+
+  <!--
     Stop is red, as on macOS, and never a disabled grey — it only exists while
     there is something to stop, so it is always live and always the way out.
   -->

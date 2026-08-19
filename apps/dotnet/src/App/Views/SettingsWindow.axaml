@@ -193,8 +193,11 @@ limitations under the License.
             <TextBlock Text="{x:Static inf:AboutInfo.Licence}" Opacity="0.75" FontSize="12" />
             <TextBlock Text="{x:Static inf:AboutInfo.Copyright}" Opacity="0.75" FontSize="12"
                        TextWrapping="Wrap" />
-            <TextBlock Text="{x:Static inf:AboutInfo.Home}" Opacity="0.75" FontSize="12"
-                       TextWrapping="Wrap" />
+            <Button Classes="link" Content="{x:Static inf:AboutInfo.Home}"
+                    FontSize="12" HorizontalAlignment="Left"
+                    ToolTip.Tip="Open in your browser"
+                    Command="{Binding OpenLinkCommand}"
+                    CommandParameter="{x:Static inf:AboutInfo.Home}" />
           </StackPanel>
 
           <Border Classes="callout">
@@ -213,8 +216,19 @@ limitations under the License.
                   <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13" />
                   <TextBlock Text="{Binding Does}" FontSize="12" Opacity="0.8"
                              TextWrapping="Wrap" />
-                  <TextBlock Text="{Binding Detail}" FontSize="11" Opacity="0.6"
-                             TextWrapping="Wrap" />
+                  <!--
+                    A WrapPanel, so a long URL moves to the next line rather
+                    than running off the side.
+                  -->
+                  <WrapPanel>
+                    <TextBlock Text="{Binding Licence}" FontSize="11" Opacity="0.6"
+                               VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <Button Classes="link" Content="{Binding Home}"
+                            VerticalAlignment="Center"
+                            ToolTip.Tip="Open in your browser"
+                            Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).OpenLinkCommand}"
+                            CommandParameter="{Binding Home}" />
+                  </WrapPanel>
                 </StackPanel>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
@@ -231,8 +245,19 @@ limitations under the License.
                   <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13" />
                   <TextBlock Text="{Binding Does}" FontSize="12" Opacity="0.8"
                              TextWrapping="Wrap" />
-                  <TextBlock Text="{Binding Detail}" FontSize="11" Opacity="0.6"
-                             TextWrapping="Wrap" />
+                  <!--
+                    A WrapPanel, so a long URL moves to the next line rather
+                    than running off the side.
+                  -->
+                  <WrapPanel>
+                    <TextBlock Text="{Binding Licence}" FontSize="11" Opacity="0.6"
+                               VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <Button Classes="link" Content="{Binding Home}"
+                            VerticalAlignment="Center"
+                            ToolTip.Tip="Open in your browser"
+                            Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).OpenLinkCommand}"
+                            CommandParameter="{Binding Home}" />
+                  </WrapPanel>
                 </StackPanel>
               </DataTemplate>
             </ItemsControl.ItemTemplate>

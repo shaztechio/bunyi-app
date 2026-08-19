@@ -180,6 +180,18 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 
     /// <summary>Saves the three sources under a name (spec §3a).</summary>
+    /// <summary>
+    /// Opens one of the credits links in the user's own browser (spec §9a).
+    /// </summary>
+    /// <remarks>
+    /// The URLs come from a compiled-in list, and <see cref="WebLink" /> still
+    /// checks each one is https before handing it to a shell handler. Nothing
+    /// else in the app opens a link, so the whole surface is this method and
+    /// that list.
+    /// </remarks>
+    [RelayCommand]
+    private void OpenLink(string? url) => WebLink.Open(url, _log);
+
     [RelayCommand]
     private void SaveConfig()
     {

@@ -17,6 +17,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.LogicalTree;
 using Avalonia.Styling;
 using Bunyi.App.Infrastructure;
+using Bunyi.Core.Platform;
 using Bunyi.App.ViewModels;
 using Bunyi.App.Views;
 using Bunyi.Core;
@@ -172,6 +173,43 @@ public sealed class SettingsTests : HeadlessWindows
             Assert.False(string.IsNullOrWhiteSpace(credit.Licence));
             Assert.StartsWith("https://", credit.Home, StringComparison.Ordinal);
         }
+    }
+
+    [AvaloniaFact]
+    public void Every_credit_link_is_clickable()
+    {
+        // A URL you have to select and paste is a URL nobody follows.
+        var window = Open(new SettingsWindow { DataContext = NewModel() });
+
+        var tabs = window.GetLogicalDescendants().OfType<TabControl>().First();
+        tabs.SelectedIndex = 4;
+        window.UpdateLayout();
+
+        var links = window.GetLogicalDescendants().OfType<Button>()
+            .Where(b => b.Classes.Contains("link"))
+            .Select(b => b.Content as string)
+            .ToList();
+
+        foreach (var credit in AboutInfo.Credits.Concat(AboutInfo.ModelCredits))
+        {
+            Assert.Contains(credit.Home, links);
+        }
+
+        // The project's own link too.
+        Assert.Contains(AboutInfo.Home, links);
+    }
+
+    [Fact]
+    public void Every_link_the_about_tab_offers_is_one_that_will_open()
+    {
+        // WebLink refuses anything that is not https. A credit carrying such a
+        // link would render a button that quietly does nothing.
+        foreach (var credit in AboutInfo.Credits.Concat(AboutInfo.ModelCredits))
+        {
+            Assert.True(WebLink.IsSafe(credit.Home), $"{credit.Name} has an unopenable link");
+        }
+
+        Assert.True(WebLink.IsSafe(AboutInfo.Home));
     }
 
     [Fact]
