@@ -274,6 +274,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         get => ShowingHistory ? HistorySegment.Instance : Mode;
         set
         {
+            var was = SelectedSegment;
+
             if (value is TtsMode mode)
             {
                 ShowingHistory = false;
@@ -284,8 +286,41 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 ShowingHistory = true;
             }
 
+            // Only when the tab actually changed. Avalonia re-sets the same
+            // segment during layout, and clearing the last result on that would
+            // make a finished clip vanish while nobody touched anything.
+            if (!Equals(was, SelectedSegment)) LeaveTab();
+
             OnPropertyChanged();
         }
+    }
+
+    /// <summary>
+    /// Puts the previous tab down: stop playing, and clear its result.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The player belongs to the clip that was just made, and the clip belongs
+    /// to the tab that made it. Carrying it across meant preset voice's result
+    /// sat under clone mode's controls, playable, with nothing on screen saying
+    /// which tab it came from.
+    /// </para>
+    /// <para>
+    /// Refreshing here matters as much. Returning to the tab you left calls
+    /// this setter without changing Mode, so OnModeChanged never fires — which
+    /// is how Generate could end up disabled with nothing to press.
+    /// </para>
+    /// </remarks>
+    private void LeaveTab()
+    {
+        StopPlayback();
+
+        // Not deleted, just no longer this tab's business. It is in History,
+        // which is where a finished clip lives.
+        LastOutputPath = null;
+        Duration = TimeSpan.Zero;
+
+        Refresh();
     }
 
     /// <summary>
@@ -756,10 +791,18 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(ShowProgressBar));
     }
 
+    // Everything CurrentRequest reads has to refresh the button, or Generate
+    // stays disabled after the very change that made it usable. Choosing a
+    // recording in clone mode did exactly that: readiness was satisfied and
+    // nothing said so.
     partial void OnScriptChanged(string value) => Refresh();
     partial void OnInstructChanged(string value) => Refresh();
     partial void OnIsBusyChanged(bool value) => Refresh();
     partial void OnLastOutputPathChanged(string? value) => Refresh();
+    partial void OnLanguageChanged(string value) => Refresh();
+    partial void OnSpeakerChanged(string value) => Refresh();
+    partial void OnReferenceAudioPathChanged(string? value) => Refresh();
+    partial void OnReferenceTranscriptChanged(string value) => Refresh();
 
     partial void OnShowingHistoryChanged(bool value)
     {

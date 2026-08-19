@@ -555,6 +555,105 @@ public sealed class VoiceCloneUiTests : HeadlessWindows
         }
     }
 
+    // ---- Switching tabs ----
+
+    [Fact]
+    public void Generate_wakes_up_when_a_recording_is_chosen()
+    {
+        // It did not. Readiness was satisfied and nothing told the button, so
+        // it stayed disabled until some unrelated change refreshed it — which
+        // is why it seemed to depend on switching tabs.
+        var model = New();
+        model.Mode = TtsMode.VoiceClone;
+        model.Script = "Something to say.";
+
+        Assert.False(model.CanGenerate);
+
+        var seen = false;
+        model.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(model.CanGenerate)) seen = true;
+        };
+
+        model.ReferenceAudioPath = "clip.wav";
+
+        Assert.True(model.CanGenerate);
+        Assert.True(seen, "nothing announced that Generate had become usable");
+    }
+
+    [Fact]
+    public void Returning_to_the_tab_you_left_still_refreshes_it()
+    {
+        // Preset → History → Preset sets the segment without changing Mode, so
+        // OnModeChanged never fires. That path has to refresh anyway or the
+        // button keeps whatever it last computed.
+        var model = New();
+        model.Script = "Something to say.";
+
+        model.SelectedSegment = HistorySegment.Instance;
+
+        var seen = false;
+        model.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(model.CanGenerate)) seen = true;
+        };
+
+        model.SelectedSegment = TtsMode.PresetVoice;
+
+        Assert.True(seen, "coming back from History never refreshed Generate");
+        Assert.True(model.CanGenerate);
+    }
+
+    [Fact]
+    public void Switching_tabs_puts_the_player_away()
+    {
+        // The clip belongs to the tab that made it. Carried across, preset
+        // voice's result sat under clone mode's controls with nothing saying
+        // where it came from.
+        var model = New();
+        model.LastOutputPath = "out.wav";
+
+        Assert.True(model.HasResult);
+
+        model.SelectedSegment = TtsMode.VoiceDesign;
+
+        Assert.False(model.HasResult);
+        Assert.Null(model.LastOutputPath);
+    }
+
+    [Fact]
+    public void Switching_tabs_stops_the_audio()
+    {
+        // Otherwise it keeps playing with no visible way to stop it.
+        var player = new FakePlayer();
+        var model = new MainViewModel(new FakeEngine(), player, new RecordingLog())
+        {
+            LastOutputPath = "out.wav",
+        };
+
+        model.PlayCommand.Execute(null);
+        Assert.True(model.IsPlaying);
+
+        model.SelectedSegment = TtsMode.VoiceDesign;
+
+        Assert.False(model.IsPlaying);
+    }
+
+    [Fact]
+    public void Re_selecting_the_same_tab_leaves_a_finished_clip_alone()
+    {
+        // Avalonia re-sets the same segment during layout. Treating that as a
+        // tab change would make a clip vanish while nobody touched anything.
+        var model = New();
+        model.Mode = TtsMode.PresetVoice;
+        model.LastOutputPath = "out.wav";
+
+        model.SelectedSegment = TtsMode.PresetVoice;
+
+        Assert.Equal("out.wav", model.LastOutputPath);
+        Assert.True(model.HasResult);
+    }
+
     private static MainViewModel WithLibrary(VoiceLibrary library) =>
         new(new FakeEngine(), new FakePlayer(), new RecordingLog(), voices: library);
 
