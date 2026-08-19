@@ -126,7 +126,11 @@ public sealed record OutputMetadata
     /// </remarks>
     public string? VoiceSummary()
     {
-        if (!string.IsNullOrEmpty(Speaker)) return Speaker;
+        // The stored value is the model's identifier; this is the only place it
+        // is read for a person, so it is presented the same way the picker
+        // presents it. A clip made with "ryan" and one made with "Ryan" are the
+        // same voice and should not read as two.
+        if (!string.IsNullOrEmpty(Speaker)) return DisplayName.For(Speaker);
         if (!string.IsNullOrEmpty(VoiceDescription)) return VoiceDescription;
         if (!string.IsNullOrEmpty(ReferenceTranscript)) return $"Clone of “{ReferenceTranscript}”";
         return null;

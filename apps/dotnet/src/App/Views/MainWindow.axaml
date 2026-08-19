@@ -308,7 +308,13 @@ limitations under the License.
             <TextBlock Grid.Column="0" Text="Language" Classes="rowLabel" />
             <ComboBox Grid.Column="1" ItemsSource="{Binding AllLanguages}"
                       SelectedItem="{Binding Language}"
-                      MinWidth="180" HorizontalAlignment="Left" />
+                      MinWidth="180" HorizontalAlignment="Left">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="x:String">
+                  <TextBlock Text="{Binding Converter={x:Static vm:IdentifierName.Instance}}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
           </Grid>
 
           <Grid IsVisible="{Binding ShowSpeakers}">
@@ -319,7 +325,13 @@ limitations under the License.
             <TextBlock Grid.Column="0" Text="Speaker" Classes="rowLabel" />
             <ComboBox Grid.Column="1" ItemsSource="{Binding Speakers}"
                       SelectedItem="{Binding Speaker}"
-                      MinWidth="180" HorizontalAlignment="Left" />
+                      MinWidth="180" HorizontalAlignment="Left">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="x:String">
+                  <TextBlock Text="{Binding Converter={x:Static vm:IdentifierName.Instance}}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
           </Grid>
 
           <Grid IsVisible="{Binding ShowInstruct}">
