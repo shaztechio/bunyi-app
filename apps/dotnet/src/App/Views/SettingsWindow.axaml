@@ -16,6 +16,7 @@ limitations under the License.
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:Bunyi.App.ViewModels"
+        xmlns:inf="clr-namespace:Bunyi.App.Infrastructure"
         xmlns:core="clr-namespace:Bunyi.Core.Settings;assembly=Bunyi.Core"
         x:Class="Bunyi.App.Views.SettingsWindow"
         x:DataType="vm:SettingsViewModel"
@@ -173,6 +174,96 @@ limitations under the License.
                      Text="Not built yet. It will collect your models folder into a single .zip, so you do not have to download several gigabytes again after moving to a new machine." />
         </Border>
       </StackPanel>
+    </TabItem>
+
+    <!--
+      What an About panel would say. macOS gets one free from AppKit; there is
+      no equivalent here and no menu bar to hang one on, so it lives where a
+      Windows or Linux user looks for it. Spec §9a.
+    -->
+    <TabItem Header="About">
+      <!-- Scrolls: the credits make this the one tab taller than the window. -->
+      <ScrollViewer>
+        <StackPanel Margin="12" Spacing="12">
+          <TextBlock Text="{x:Static inf:AboutInfo.Name}" FontSize="22" FontWeight="SemiBold" />
+          <TextBlock Text="{x:Static inf:AboutInfo.Tagline}" Opacity="0.8" TextWrapping="Wrap" />
+
+          <StackPanel Spacing="4">
+            <TextBlock Text="{x:Static inf:AboutInfo.VersionLine}" />
+            <TextBlock Text="{x:Static inf:AboutInfo.Licence}" Opacity="0.75" FontSize="12" />
+            <TextBlock Text="{x:Static inf:AboutInfo.Copyright}" Opacity="0.75" FontSize="12"
+                       TextWrapping="Wrap" />
+            <Button Classes="link" Content="{x:Static inf:AboutInfo.Home}"
+                    FontSize="12" HorizontalAlignment="Left"
+                    ToolTip.Tip="Open in your browser"
+                    Command="{Binding OpenLinkCommand}"
+                    CommandParameter="{x:Static inf:AboutInfo.Home}" />
+          </StackPanel>
+
+          <Border Classes="callout">
+            <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.8"
+                       Text="Quote the version and platform above when reporting a problem — the Windows and Linux apps are the same program and look alike." />
+          </Border>
+
+          <TextBlock Text="BUILT WITH" Classes="eyebrow" Margin="0,8,0,0" />
+          <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.8"
+                     Text="Bunyi is free software standing on other people's free software." />
+
+          <ItemsControl ItemsSource="{x:Static inf:AboutInfo.Credits}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="inf:Credit">
+                <StackPanel Margin="0,0,0,10" Spacing="1">
+                  <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13" />
+                  <TextBlock Text="{Binding Does}" FontSize="12" Opacity="0.8"
+                             TextWrapping="Wrap" />
+                  <!--
+                    A WrapPanel, so a long URL moves to the next line rather
+                    than running off the side.
+                  -->
+                  <WrapPanel>
+                    <TextBlock Text="{Binding Licence}" FontSize="11" Opacity="0.6"
+                               VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <Button Classes="link" Content="{Binding Home}"
+                            VerticalAlignment="Center"
+                            ToolTip.Tip="Open in your browser"
+                            Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).OpenLinkCommand}"
+                            CommandParameter="{Binding Home}" />
+                  </WrapPanel>
+                </StackPanel>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <TextBlock Text="THE VOICES" Classes="eyebrow" Margin="0,8,0,0" />
+          <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.8"
+                     Text="The models are downloaded rather than shipped, and they are the part that actually speaks." />
+
+          <ItemsControl ItemsSource="{x:Static inf:AboutInfo.ModelCredits}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="inf:Credit">
+                <StackPanel Margin="0,0,0,10" Spacing="1">
+                  <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13" />
+                  <TextBlock Text="{Binding Does}" FontSize="12" Opacity="0.8"
+                             TextWrapping="Wrap" />
+                  <!--
+                    A WrapPanel, so a long URL moves to the next line rather
+                    than running off the side.
+                  -->
+                  <WrapPanel>
+                    <TextBlock Text="{Binding Licence}" FontSize="11" Opacity="0.6"
+                               VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <Button Classes="link" Content="{Binding Home}"
+                            VerticalAlignment="Center"
+                            ToolTip.Tip="Open in your browser"
+                            Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).OpenLinkCommand}"
+                            CommandParameter="{Binding Home}" />
+                  </WrapPanel>
+                </StackPanel>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </ScrollViewer>
     </TabItem>
   </TabControl>
 </Window>

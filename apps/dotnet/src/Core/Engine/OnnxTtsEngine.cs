@@ -451,6 +451,7 @@ public sealed class OnnxTtsEngine : ITtsEngine
 
             ModelRepo = SourceName(request.Mode, modelFolder),
             AppVersion = _appVersion,
+            Platform = OutputMetadata.CurrentPlatform,
             Created = now,
         };
     }

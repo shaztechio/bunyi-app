@@ -412,6 +412,8 @@ tab (platform convention). macOS source: `SettingsView.swift`.
 - **Models**: the three per-mode source fields (repo ID or base URL) + help.
 - **Storage**: models-folder location controls + pre-download commands.
 - **Backup**: back up / restore / stop + status.
+- **About** (.NET only): name, version, platform, licence and copyright —
+  see §9a. macOS has no such tab; AppKit's About panel covers it there.
 
 The appearance setting is why the app's visual design cannot be built on a
 single fixed palette: any colour that only works against one background is a
@@ -451,6 +453,31 @@ macOS source: `WindowCloseGuard.swift`.
   close "once it has stopped" would be a lie in exactly the case the timeout
   exists for. Pressing close again during the wait does nothing: it must not
   ask twice or start a second stop. Not busy ⇒ close immediately.
+
+### 9a. Naming the build
+
+- The app says **what it is, which version, and which platform** somewhere a
+  user can reach without generating anything.
+  - macOS gets this free: AppKit's About panel, filled from the bundle.
+  - **.NET (Win+Linux)**: there is no equivalent and no menu bar to hang one
+    on, so it is an **About tab in Settings** (§7) — where a Windows or Linux
+    user looks for it.
+- The platform is named, not just the version. Windows and Linux are one
+  codebase and look identical, so a version alone does not say which build a
+  bug report is about.
+- **Credits** for the software the app is built on, and separately for the
+  models it downloads — each with its licence and a link that opens in the
+  user's browser.
+  - The list lives in **`/spec/CREDITS.json`**, read by both apps, so the two
+    cannot end up crediting different things. Entries are tagged with the app
+    they belong to: the two share the models and almost nothing else.
+  - Every licence stated must have been **read from that project's own licence
+    file, package metadata, model card, or README** — never from memory. A
+    credits list that guesses is a licence claim the project cannot support.
+    Note that a project can state its licence only in its README, where the
+    GitHub API and file listings both miss it; absence of a `LICENSE` file is
+    not absence of a licence. Where a project genuinely states none, the file
+    says so rather than leaving it out.
 
 ## 10. Error handling & copy tone
 

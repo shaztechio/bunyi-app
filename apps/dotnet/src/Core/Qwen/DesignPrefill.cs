@@ -14,7 +14,7 @@
 
 using System.Numerics.Tensors;
 
-namespace Bunyi.Core.Design;
+namespace Bunyi.Core.Qwen;
 
 /// <summary>What a generation is being asked for.</summary>
 /// <param name="Text">The words to speak.</param>
@@ -42,12 +42,12 @@ public sealed record DesignRequest(string Text, string? Instruction, string Lang
 /// by tests rather than by reading.
 /// </para>
 /// </remarks>
-public sealed class PrefillBuilder(
-    DesignConfig config,
+public sealed class DesignPrefill(
+    QwenConfig config,
     TextProjection text,
     NpyArray codecEmbedding)
 {
-    private readonly DesignConfig _config = config ?? throw new ArgumentNullException(nameof(config));
+    private readonly QwenConfig _config = config ?? throw new ArgumentNullException(nameof(config));
     private readonly TextProjection _text = text ?? throw new ArgumentNullException(nameof(text));
 
     private readonly NpyArray _codec =

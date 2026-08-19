@@ -47,6 +47,9 @@ Because the inference engine and UI cannot be shared, parity is a
    **`spec/DATA-FORMATS.md`** pins on-disk formats so a models folder /
    backup / voices library is interchangeable between apps of the same
    runtime family.
+   **`spec/CREDITS.json`** is shared *data* rather than shared code: one list
+   of the software and models both apps are built on, tagged by which app
+   uses each entry, so the two cannot end up crediting different things.
 2. **Any feature change updates the spec first, then every app.** A change
    landed in one app but not the spec (and the other app, or a tracked
    follow-up) is incomplete.

@@ -51,6 +51,27 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string _language = Languages.Default;
     [ObservableProperty] private string _speaker = FallbackSpeakers.Default;
     [ObservableProperty] private string _instruct = string.Empty;
+
+    /// <summary>The recording a clone is taken from (spec §4).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ReferenceName))]
+    [NotifyPropertyChangedFor(nameof(HasReference))]
+    [NotifyCanExecuteChangedFor(nameof(GenerateCommand))]
+    private string? _referenceAudioPath;
+
+    /// <summary>What that recording says, typed or listened for (spec §4).</summary>
+    [ObservableProperty] private string _referenceTranscript = string.Empty;
+
+    /// <summary>Whether a transcript is being worked out right now.</summary>
+    /// <remarks>
+    /// Drives the spinner and disables the transcript field. Listening takes
+    /// seconds, and a field that stays editable while something is about to
+    /// overwrite it invites typing that is then thrown away.
+    /// </remarks>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowSpinner))]
+    [NotifyPropertyChangedFor(nameof(CanEditTranscript))]
+    private bool _isTranscribing;
     [ObservableProperty] private string _status = "Ready";
     [ObservableProperty] private double _progress;
     [ObservableProperty] private string? _progressDetail;
@@ -154,6 +175,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>Shows a report, supplied by the view.</summary>
     public Func<DoctorReport, Task>? ShowReport { get; set; }
 
+    /// <summary>Asks the window for a recording to clone from (spec §4).</summary>
+    public Func<Task<string?>>? ChooseReference { get; set; }
+
+    /// <summary>Listens to a recording and returns what it says (spec §4).</summary>
+    public Func<string, CancellationToken, Task<string>>? Transcribe { get; set; }
+
     /// <summary>The on-demand run, or null when no Doctor was supplied.</summary>
     public async Task<DoctorReport?> RunDoctorAsync()
     {
@@ -246,11 +273,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// Whether to offer a speaker list.
     /// </summary>
     /// <remarks>
-    /// Design mode has none — the voice comes from the description instead —
-    /// and a picker that changes nothing is the trap §1 refuses for clone
-    /// mode's emotion field.
+    /// Preset voice alone. Design mode takes a description instead and clone
+    /// takes a recording, and neither export has speakers to offer — a picker
+    /// there would be the trap §1 refuses for clone mode's emotion field.
+    /// Written as the one mode that has them rather than as the modes that do
+    /// not: the second form silently became wrong the moment clone worked.
     /// </remarks>
-    public bool ShowSpeakers => ModeIsAvailable && Mode != TtsMode.VoiceDesign;
+    public bool ShowSpeakers => ModeIsAvailable && Mode == TtsMode.PresetVoice;
 
     /// <summary>What the style or voice field suggests, which differs by mode.</summary>
     public string InstructPlaceholder => Mode == TtsMode.VoiceDesign
@@ -262,9 +291,36 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         TtsMode.PresetVoice => "Choose a voice the model already knows.",
         TtsMode.VoiceDesign => "Describe a voice and the model builds it.",
-        TtsMode.VoiceClone => "Clone a voice from a recording. Not implemented yet.",
+        TtsMode.VoiceClone => "Clone a voice from a recording of it.",
         _ => string.Empty,
     };
+
+    /// <summary>Whether the reference-recording row belongs on screen.</summary>
+    public bool ShowReference => Mode == TtsMode.VoiceClone;
+
+    /// <summary>Whether a recording has been chosen.</summary>
+    public bool HasReference => !string.IsNullOrWhiteSpace(ReferenceAudioPath);
+
+    /// <summary>
+    /// The chosen recording, named the way a person would recognise it.
+    /// </summary>
+    /// <remarks>
+    /// The file name rather than the path: the path is long, usually
+    /// uninteresting, and on a narrow window pushes everything else off screen.
+    /// </remarks>
+    public string ReferenceName => HasReference
+        ? Path.GetFileName(ReferenceAudioPath!)
+        : "No recording chosen";
+
+    /// <summary>What to tell someone about the recording they should pick.</summary>
+    /// <remarks>
+    /// The ten-second limit is the model's, and worth saying before the fact
+    /// rather than after: hand it a longer clip with a transcript covering all
+    /// of it and the clone finishes the recording instead of speaking the text.
+    /// </remarks>
+    public const string ReferenceHint =
+        "A few seconds of clear speech. Only the first ten are used, "
+        + "and it works best ending on a finished sentence.";
 
     /// <summary>Whether the style field applies to this mode (spec §1).</summary>
     /// <remarks>
@@ -290,7 +346,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public bool IsIndeterminate => IsBusy && Progress <= 0;
 
     /// <summary>A spinner, for the phases that cannot report a fraction.</summary>
-    public bool ShowSpinner => IsBusy && Progress <= 0;
+    /// <remarks>
+    /// Listening counts. It is not a generation — the engine is idle and the
+    /// window stays usable — but it is work the status line is reporting, and a
+    /// status that changes with nothing moving beside it reads as stuck.
+    /// </remarks>
+    public bool ShowSpinner => IsTranscribing || (IsBusy && Progress <= 0);
+
+    /// <summary>Whether the transcript can be typed into right now.</summary>
+    public bool CanEditTranscript => !IsTranscribing;
 
     /// <summary>A bar, only while something can actually be measured.</summary>
     public bool ShowProgressBar => IsBusy && Progress > 0;
@@ -325,6 +389,61 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // guesses (spec §1).
         if (ExamplePrompts.FillsScript(Mode)) Script = example;
         else Instruct = example;
+    }
+
+    /// <summary>
+    /// Chooses the recording to clone, and listens to it (spec §4).
+    /// </summary>
+    /// <remarks>
+    /// The transcript is filled in as soon as the recording is chosen rather
+    /// than when Generate is pressed. §4 wants it shown and editable, and it can
+    /// only be either if it arrives while there is still something to edit it
+    /// with.
+    /// </remarks>
+    [RelayCommand]
+    private async Task PickReferenceAsync()
+    {
+        if (ChooseReference is null) return;
+
+        var chosen = await ChooseReference();
+        if (string.IsNullOrWhiteSpace(chosen)) return;
+
+        ReferenceAudioPath = chosen;
+
+        // A transcript already typed is the user's, and §4 says it always wins.
+        if (string.IsNullOrWhiteSpace(ReferenceTranscript))
+        {
+            await ListenAsync();
+        }
+    }
+
+    /// <summary>Listens again, for when the transcript came out wrong.</summary>
+    [RelayCommand]
+    private Task ListenAgainAsync() => ListenAsync();
+
+    private async Task ListenAsync()
+    {
+        if (Transcribe is null || !HasReference || IsTranscribing) return;
+
+        IsTranscribing = true;
+        Status = "Listening to the recording…";
+
+        try
+        {
+            ReferenceTranscript = await Transcribe(ReferenceAudioPath!, CancellationToken.None);
+            Status = "Ready";
+        }
+        catch (Exception ex)
+        {
+            // Not fatal: §4 makes this a convenience, and the field can be
+            // typed into. Saying so beats a dialog that stops the work.
+            _log.Log($"Could not transcribe the recording: {ex.Message}");
+            Status = "Could not make out the recording — type what it says.";
+        }
+        finally
+        {
+            IsTranscribing = false;
+        }
     }
 
     [RelayCommand]
@@ -435,7 +554,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         Script,
         Language,
         Mode == TtsMode.PresetVoice ? Speaker : null,
-        Mode == TtsMode.VoiceClone ? null : Instruct);
+        Mode == TtsMode.VoiceClone ? null : Instruct,
+        Mode == TtsMode.VoiceClone ? ReferenceAudioPath : null,
+        Mode == TtsMode.VoiceClone ? ReferenceTranscript : null);
 
     private void OnEngineStatusChanged(object? sender, EngineStatus status) =>
         UiThread.Post(() =>
@@ -525,6 +646,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(ModeIsAvailable));
         OnPropertyChanged(nameof(ShowSpeakers));
         OnPropertyChanged(nameof(ShowInstruct));
+        OnPropertyChanged(nameof(ShowReference));
         OnPropertyChanged(nameof(InstructLabel));
         OnPropertyChanged(nameof(InstructPlaceholder));
         Refresh();

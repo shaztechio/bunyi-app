@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-namespace Bunyi.Core.Design;
+namespace Bunyi.Core.Qwen;
 
 /// <summary>How the next token is chosen.</summary>
 /// <param name="Temperature">Above 1 flattens the distribution, below sharpens it.</param>

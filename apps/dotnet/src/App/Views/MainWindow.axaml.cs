@@ -46,6 +46,7 @@ public partial class MainWindow : Window
         model.History.Clipboard = Clipboard;
         model.History.ConfirmTrash = ConfirmTrashAsync;
         model.History.ChooseSaveLocation = ChooseSaveLocationAsync;
+        model.ChooseReference = ChooseReferenceAsync;
     }
 
     /// <summary>§2a: Trash after confirming, because the audio may be the only copy.</summary>
@@ -55,6 +56,31 @@ public partial class MainWindow : Window
             $"“{row.Summary}” goes to the Trash, where you can still get it back.",
             confirm: "Move to Trash",
             cancel: "Keep");
+
+    /// <summary>
+    /// §4: picks the recording a clone is taken from.
+    /// </summary>
+    /// <remarks>
+    /// The three formats the decoder actually handles are offered, plus an "any
+    /// file" escape for the person whose recording has an unusual extension. A
+    /// file it cannot read fails with a message naming the formats, which is
+    /// better than a filter that hides the file and explains nothing.
+    /// </remarks>
+    private async Task<string?> ChooseReferenceAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Choose a recording of the voice",
+            AllowMultiple = false,
+            FileTypeFilter =
+            [
+                new FilePickerFileType("Audio") { Patterns = ["*.wav", "*.mp3", "*.flac"] },
+                new FilePickerFileType("Any file") { Patterns = ["*"] },
+            ],
+        });
+
+        return files.Count > 0 ? files[0].TryGetLocalPath() : null;
+    }
 
     /// <summary>
     /// §2a: Download opens a save panel so the user chooses the destination.

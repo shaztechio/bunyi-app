@@ -80,6 +80,47 @@ public static class ReferenceAudio
     }
 
     /// <summary>Decodes a clip without changing its rate or channels.</summary>
+    /// <summary>
+    /// A copy of a recording holding only the part a clone will use.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Returns null when the recording is already short enough, so the caller
+    /// keeps using the original and nothing is copied for nothing.
+    /// </para>
+    /// <para>
+    /// This exists so a transcript describes exactly the audio the model is
+    /// shown. Transcribe the whole of a longer recording and the words run past
+    /// the sound: the model then finishes the recording instead of speaking the
+    /// text it was given. That is observed behaviour, in both this
+    /// implementation and the reference one.
+    /// </para>
+    /// </remarks>
+    /// <returns>A path in the temporary folder, which the caller deletes.</returns>
+    public static string? WriteTrimmedCopy(
+        string path, TimeSpan limit, ILogSink? log = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+
+        const int Rate = 16_000;
+        var samples = Load(path, Rate, log);
+        var allowed = (int)(limit.TotalSeconds * Rate);
+
+        if (samples.Length <= allowed) return null;
+
+        var pcm = new short[allowed];
+        for (var i = 0; i < allowed; i++)
+        {
+            pcm[i] = (short)Math.Round(Math.Clamp(samples[i], -1f, 1f) * short.MaxValue);
+        }
+
+        var temporary = Path.Combine(
+            Path.GetTempPath(), $"bunyi-reference-{Guid.NewGuid():N}.wav");
+
+        WavWriter.Write(temporary, pcm, Rate);
+        return temporary;
+    }
+
     public static DecodedAudio Decode(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);

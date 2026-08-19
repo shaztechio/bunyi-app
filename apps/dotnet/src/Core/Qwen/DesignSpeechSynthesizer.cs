@@ -15,7 +15,7 @@
 using Bunyi.Core.Diagnostics;
 using Bunyi.Core.Engine;
 
-namespace Bunyi.Core.Design;
+namespace Bunyi.Core.Qwen;
 
 /// <summary>
 /// Voice design, behind the engine's synthesizer seam (spec §1).

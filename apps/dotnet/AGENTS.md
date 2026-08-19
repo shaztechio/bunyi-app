@@ -50,7 +50,7 @@ the on-disk formats in `/spec/DATA-FORMATS.md`. The macOS app
   > memory match Windows. One trap it records: ONNX weights are memory-mapped,
   > so a models folder on a slow volume makes **generation** slower, not just
   > loading.
-- **Tokenizer:** **our own**, `src/Core/Design/QwenTokenizer.cs`. Not
+- **Tokenizer:** **our own**, `src/Core/Qwen/QwenTokenizer.cs`. Not
   `Microsoft.ML.Tokenizers`, which was measured against HuggingFace's tokenizer
   on the export's own files and cannot do Qwen2: **special tokens are not
   recognised at all** — `<|im_start|>` comes back as seven tokens of literal

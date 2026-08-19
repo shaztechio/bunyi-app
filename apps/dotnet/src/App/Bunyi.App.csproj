@@ -43,6 +43,14 @@ limitations under the License.
       Named Bunyi.App.HELP.md by the default resource naming.
     -->
     <EmbeddedResource Include="..\..\HELP.md" Link="HELP.md" />
+
+    <!--
+      The credits are shared with the macOS app: one list, so the two cannot
+      disagree about what the project is built on. It lives in /spec because
+      that is where this repository keeps what both apps must agree on — they
+      share no code, and this is data.
+    -->
+    <EmbeddedResource Include="..\..\..\..\spec\CREDITS.json" Link="CREDITS.json" />
   </ItemGroup>
 
   <ItemGroup>

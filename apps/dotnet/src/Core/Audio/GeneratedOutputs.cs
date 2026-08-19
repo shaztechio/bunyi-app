@@ -92,7 +92,12 @@ public sealed record GeneratedOutput(
         Add("Created", Local(Metadata.Created));
         Add("Size", SizeText());
         Add("File", Path);
-        Add("Made with", $"Bunyi {Metadata.AppVersion}");
+        // The platform is the file's own, not this machine's. A clip made on a
+        // Mac and opened here still says macOS, which is the only answer that
+        // stays true when the file travels.
+        Add("Made with", Metadata.Platform is { Length: > 0 } platform
+            ? $"Bunyi {Metadata.AppVersion} ({platform})"
+            : $"Bunyi {Metadata.AppVersion}");
 
         return text.ToString().TrimEnd();
 

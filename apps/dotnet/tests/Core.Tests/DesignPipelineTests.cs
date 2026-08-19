@@ -13,7 +13,7 @@
 // limitations under the License.
 
 using System.Text.Json;
-using Bunyi.Core.Design;
+using Bunyi.Core.Qwen;
 using Bunyi.Core.Diagnostics;
 using Xunit;
 
@@ -81,7 +81,7 @@ public class DesignPipelineTests
     /// Loading four sessions and generating takes seconds; doing it per test
     /// would take minutes. The run is deterministic, so one is enough.
     /// </remarks>
-    private static readonly Lazy<(DesignResult Result, TimeSpan Elapsed)> Run = new(() =>
+    private static readonly Lazy<(SpeechResult Result, TimeSpan Elapsed)> Run = new(() =>
     {
         using var pipeline = new DesignPipeline(Root!, "int4", new NullLog());
 
@@ -94,7 +94,7 @@ public class DesignPipelineTests
         return (result, clock.Elapsed);
     }, isThreadSafe: true);
 
-    private static DesignResult Ours()
+    private static SpeechResult Ours()
     {
         Skip.If(Root is null,
             "The 5.85 GB voice-design export is not on this machine. "

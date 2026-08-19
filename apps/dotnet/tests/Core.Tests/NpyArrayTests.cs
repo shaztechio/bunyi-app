@@ -13,7 +13,7 @@
 // limitations under the License.
 
 using System.Text;
-using Bunyi.Core.Design;
+using Bunyi.Core.Qwen;
 using Xunit;
 
 namespace Bunyi.Core.Tests;
@@ -42,43 +42,7 @@ public sealed class NpyArrayTests : IDisposable
     private string Write(
         float[] values, int[] shape, string dtype = "<f4",
         bool fortran = false, byte major = 1)
-    {
-        var path = Path.Combine(_root, $"{Guid.NewGuid():N}.npy");
-
-        var shapeText = shape.Length == 1
-            ? $"({shape[0]},)"
-            : "(" + string.Join(", ", shape) + ")";
-
-        var dict = $"{{'descr': '{dtype}', 'fortran_order': {(fortran ? "True" : "False")}, "
-                   + $"'shape': {shapeText}, }}";
-
-        // NumPy pads the header so the values start on a 64-byte boundary.
-        var prefix = major == 1 ? 10 : 12;
-        var unpadded = prefix + dict.Length + 1;
-        var padding = (64 - unpadded % 64) % 64;
-        var header = dict + new string(' ', padding) + "\n";
-
-        using var stream = new FileStream(path, FileMode.Create, FileAccess.Write);
-        // Raw 0x93, not a UTF-8 literal: that would be seven bytes, because
-        // UTF-8 encodes U+0093 as two.
-        stream.Write([0x93, (byte)'N', (byte)'U', (byte)'M', (byte)'P', (byte)'Y']);
-        stream.WriteByte(major);
-        stream.WriteByte(0);
-
-        if (major == 1)
-        {
-            stream.Write(BitConverter.GetBytes((ushort)header.Length));
-        }
-        else
-        {
-            stream.Write(BitConverter.GetBytes((uint)header.Length));
-        }
-
-        stream.Write(Encoding.ASCII.GetBytes(header));
-
-        foreach (var value in values) stream.Write(BitConverter.GetBytes(value));
-        return path;
-    }
+        => NpyFile.Write(_root, values, shape, dtype, fortran, major);
 
     [Fact]
     public void A_two_dimensional_array_knows_its_shape()

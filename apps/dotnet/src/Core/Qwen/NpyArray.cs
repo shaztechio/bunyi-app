@@ -18,7 +18,7 @@ using System.IO.MemoryMappedFiles;
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace Bunyi.Core.Design;
+namespace Bunyi.Core.Qwen;
 
 /// <summary>
 /// The header of a NumPy <c>.npy</c> file.

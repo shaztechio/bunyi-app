@@ -16,73 +16,41 @@ using Bunyi.Core.Diagnostics;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 
-namespace Bunyi.Core.Design;
+namespace Bunyi.Core.Qwen;
 
-/// <summary>What one generation produced.</summary>
-/// <param name="Samples">24 kHz mono, in the range −1 to 1.</param>
-/// <param name="Codes">
-/// The codec frames, sixteen codes each, at 12 Hz.
-/// </param>
-/// <remarks>
-/// The codes are kept rather than discarded once the vocoder has run. They are
-/// what the reference implementation can be compared against exactly — audio can
-/// only be compared approximately — and they are cheap: sixteen integers a
-/// frame, against a thousand samples.
-/// </remarks>
-public sealed record DesignResult(float[] Samples, IReadOnlyList<int[]> Codes)
+/// <summary>Audio and the codes it was made from.</summary>
+/// <param name="Samples">24 kHz mono, as the vocoder returned it.</param>
+/// <param name="Codes">One array of codebook entries per frame.</param>
+public sealed record SpeechResult(float[] Samples, IReadOnlyList<int[]> Codes)
 {
-    /// <summary>How many frames were produced.</summary>
+    /// <summary>Frames produced, at 12 Hz.</summary>
     public int Frames => Codes.Count;
 
     /// <summary>How long the audio runs.</summary>
     public TimeSpan Duration(int sampleRate) =>
-        TimeSpan.FromSeconds((double)Samples.Length / sampleRate);
+        TimeSpan.FromSeconds(Samples.Length / (double)sampleRate);
 }
 
 /// <summary>
-/// Drives the voice-design graphs (spec §1, design mode).
+/// Turns a primed sequence into speech: prefill, decode, vocode.
 /// </summary>
 /// <remarks>
 /// <para>
-/// Ported from the export's own <c>generate_onnx.py</c>. The graphs are
-/// identical to the preset-voice export's apart from hidden width (see
-/// RESEARCH-ONNX.md), so this drives both in principle; only design mode uses it
-/// today.
+/// Everything after the sequence is built is the same whichever mode asked for
+/// it. Design mode and clone mode differ only in what they put in front of the
+/// model — one describes a voice in words, the other shows it a recording — and
+/// from the first generated frame onwards the two are indistinguishable. So this
+/// is written once and takes the sequence as an argument.
 /// </para>
 /// <para>
-/// Four sessions, all alive at once because each is needed every frame: prefill
-/// once, then per frame a code predictor run for each of fifteen remaining
-/// codebooks and one decode step, then the vocoder over everything at the end.
+/// Four graphs: prefill reads the whole sequence at once, decode advances one
+/// frame at a time, the code predictor fills in the fifteen codebooks the talker
+/// does not emit, and the vocoder turns the lot into samples.
 /// </para>
 /// </remarks>
-/// <summary>
-/// What the engine needs of a voice-design pipeline.
-/// </summary>
-/// <remarks>
-/// An interface so the adapter above the pipeline can be tested without the
-/// 5.85 GB export: everything it does - converting samples, refusing when no
-/// model is loaded, releasing one pipeline before opening another - is worth
-/// pinning, and none of it needs a model to be wrong.
-/// </remarks>
-public interface IDesignPipeline : IDisposable
+public sealed class TalkerLoop : IDisposable
 {
-    /// <summary>The export's own sampling defaults.</summary>
-    SamplingOptions DefaultSampling { get; }
-
-    /// <summary>Speaks the request.</summary>
-    DesignResult Generate(
-        DesignRequest request,
-        SamplingOptions? options = null,
-        IProgress<int>? progress = null,
-        int? maxFrames = null,
-        CancellationToken ct = default);
-}
-
-public sealed class DesignPipeline : IDesignPipeline
-{
-    private readonly DesignConfig _config;
-    private readonly PrefillBuilder _prefill;
-    private readonly QwenTokenizer _tokenizer;
+    private readonly QwenConfig _config;
     private readonly NpyArray _talkerCodec;
     private readonly NpyArray[] _groupCodec;
     private readonly TokenSampler _sampler;
@@ -95,45 +63,24 @@ public sealed class DesignPipeline : IDesignPipeline
 
     private bool _disposed;
 
-    /// <summary>Opens the sessions and maps the tables.</summary>
-    /// <param name="folder">The export's root, holding <c>config.json</c>.</param>
-    /// <param name="variant">The precision subfolder, normally <c>int4</c>.</param>
-    public DesignPipeline(
-        string folder,
-        string variant,
-        ILogSink log,
-        TokenSampler? sampler = null)
+    /// <param name="graphs">The folder holding the four <c>.onnx</c> files.</param>
+    /// <param name="talkerCodec">The first codebook's table. Not disposed here.</param>
+    /// <param name="groupCodec">The other fifteen. Not disposed here.</param>
+    public TalkerLoop(
+        QwenConfig config,
+        string graphs,
+        NpyArray talkerCodec,
+        NpyArray[] groupCodec,
+        TokenSampler sampler,
+        ILogSink log)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(folder);
+        _config = config ?? throw new ArgumentNullException(nameof(config));
+        _talkerCodec = talkerCodec ?? throw new ArgumentNullException(nameof(talkerCodec));
+        _groupCodec = groupCodec ?? throw new ArgumentNullException(nameof(groupCodec));
+        _sampler = sampler ?? throw new ArgumentNullException(nameof(sampler));
         _log = log ?? throw new ArgumentNullException(nameof(log));
-        _sampler = sampler ?? new TokenSampler();
 
-        _config = DesignConfig.Load(Path.Combine(folder, "config.json"));
-        _tokenizer = QwenTokenizer.Load(Path.Combine(folder, "tokenizer"));
-
-        var embeddings = Path.Combine(folder, "embeddings");
-        NpyArray Open(string name) => NpyArray.Open(Path.Combine(embeddings, $"{name}.npy"));
-
-        _talkerCodec = Open("talker_codec_embedding");
-
-        // One table per codebook after the first: the code predictor emits
-        // fifteen more, each from its own vocabulary.
-        _groupCodec = new NpyArray[_config.CodeGroups - 1];
-        for (var g = 0; g < _groupCodec.Length; g++) _groupCodec[g] = Open($"cp_codec_embedding_{g}");
-
-        using (var fc1W = Open("text_projection_fc1_weight"))
-        using (var fc1B = Open("text_projection_fc1_bias"))
-        using (var fc2W = Open("text_projection_fc2_weight"))
-        using (var fc2B = Open("text_projection_fc2_bias"))
-        {
-            var projection = new TextProjection(
-                Open("text_embedding"),
-                fc1W.ToArray(), fc1B.ToArray(), fc2W.ToArray(), fc2B.ToArray());
-
-            _prefill = new PrefillBuilder(_config, projection, _talkerCodec);
-        }
-
-        var graphs = Path.Combine(folder, variant);
+        ArgumentException.ThrowIfNullOrWhiteSpace(graphs);
 
         // The arena is left off on the decode session. It was measured at 0.5 GB
         // over 267 frames for about 9% wall-clock, and every step allocates a
@@ -150,30 +97,35 @@ public sealed class DesignPipeline : IDesignPipeline
         _vocoderSession = new InferenceSession(Path.Combine(graphs, "vocoder.onnx"));
     }
 
-    /// <summary>The export's own sampling defaults.</summary>
-    public SamplingOptions DefaultSampling => _config.Sampling;
-
-    /// <summary>Speaks the request.</summary>
-    /// <param name="request">Text, description and language.</param>
-    /// <param name="options">Sampling, or the export's defaults when null.</param>
-    /// <param name="progress">Frames produced so far.</param>
-    /// <param name="maxFrames">A cap, or the export's own when null.</param>
-    /// <param name="ct">Cancellation, checked once a frame.</param>
-    public DesignResult Generate(
-        DesignRequest request,
-        SamplingOptions? options = null,
+    /// <summary>Speaks a primed sequence.</summary>
+    /// <param name="rows">The prefill sequence, one row per position.</param>
+    /// <param name="trailingHidden">
+    /// The text stream's padding, added to every generated frame. The text is
+    /// finished by the time generation starts, so it pads from here on.
+    /// </param>
+    /// <param name="what">How this run is named in the log.</param>
+    /// <param name="vocoderContext">
+    /// Frames to vocode ahead of the generated ones and then cut away. Clone
+    /// mode passes the reference recording's own codes: the vocoder carries
+    /// state across frames, so starting it cold on the first generated frame
+    /// makes the opening of a clone worse than the rest of it. Design mode has
+    /// nothing to pass and starts cold, which is what its reference does too.
+    /// </param>
+    public SpeechResult Generate(
+        float[][] rows,
+        float[] trailingHidden,
+        SamplingOptions sampling,
+        int cap,
+        string what,
         IProgress<int>? progress = null,
-        int? maxFrames = null,
+        IReadOnlyList<int[]>? vocoderContext = null,
         CancellationToken ct = default)
     {
-        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(rows);
+        ArgumentNullException.ThrowIfNull(trailingHidden);
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        var sampling = options ?? _config.Sampling;
-        var cap = maxFrames ?? _config.MaxNewTokens;
-
-        var rows = _prefill.Build(request, _tokenizer);
-        _log.Log($"Voice design: {rows.Length} tokens of context.");
+        _log.Log($"{what}: {rows.Length} tokens of context.");
 
         var (logits, hidden, pastKeys, pastValues) = RunPrefill(rows);
 
@@ -213,7 +165,7 @@ public sealed class DesignPipeline : IDesignPipeline
             frames.Add(frame);
             progress?.Report(frames.Count);
 
-            var next = NextInput(frame);
+            var next = NextInput(frame, trailingHidden);
             (logits, hidden, pastKeys, pastValues) =
                 RunDecode(next, position, pastKeys, pastValues);
 
@@ -226,8 +178,8 @@ public sealed class DesignPipeline : IDesignPipeline
                 "The model produced no audio for that text. Try different words.");
         }
 
-        _log.Log($"Voice design: {frames.Count} frames.");
-        return new DesignResult(RunVocoder(frames), frames);
+        _log.Log($"{what}: {frames.Count} frames.");
+        return new SpeechResult(RunVocoder(frames, vocoderContext), frames);
     }
 
     private (float[] Logits, float[] Hidden, float[] Keys, float[] Values) RunPrefill(float[][] rows)
@@ -249,7 +201,7 @@ public sealed class DesignPipeline : IDesignPipeline
         {
             for (var i = 0; i < rows.Length; i++)
             {
-                positions.Buffer.Span[axis * rows.Length + i] = i;
+                positions.Buffer.Span[(axis * rows.Length) + i] = i;
             }
         }
 
@@ -374,9 +326,9 @@ public sealed class DesignPipeline : IDesignPipeline
     /// </summary>
     /// <remarks>
     /// Every codebook's embedding for this frame, summed, plus the text stream's
-    /// padding — the text is finished, so it pads from here on.
+    /// padding.
     /// </remarks>
-    private float[] NextInput(int[] frame)
+    private float[] NextInput(int[] frame, float[] trailingHidden)
     {
         var next = _talkerCodec.Row(frame[0]);
 
@@ -386,31 +338,45 @@ public sealed class DesignPipeline : IDesignPipeline
             for (var i = 0; i < next.Length; i++) next[i] += embed[i];
         }
 
-        var pad = _prefill.TrailingHidden;
-        for (var i = 0; i < next.Length; i++) next[i] += pad[i];
+        for (var i = 0; i < next.Length; i++) next[i] += trailingHidden[i];
 
         return next;
     }
 
-    private float[] RunVocoder(List<int[]> frames)
+    private float[] RunVocoder(List<int[]> frames, IReadOnlyList<int[]>? context)
     {
         var groups = _config.CodeGroups;
-        var codes = new DenseTensor<long>([1, groups, frames.Count]);
+        var lead = context?.Count ?? 0;
+        var total = lead + frames.Count;
+
+        var codes = new DenseTensor<long>([1, groups, total]);
 
         // Transposed on the way in: the frames are gathered per frame, and the
         // vocoder wants them per codebook.
-        for (var frame = 0; frame < frames.Count; frame++)
+        void Put(int at, int[] frame)
         {
             for (var group = 0; group < groups; group++)
             {
-                codes.Buffer.Span[group * frames.Count + frame] = frames[frame][group];
+                codes.Buffer.Span[(group * total) + at] = frame[group];
             }
         }
+
+        for (var i = 0; i < lead; i++) Put(i, context![i]);
+        for (var i = 0; i < frames.Count; i++) Put(lead + i, frames[i]);
 
         using var results = _vocoderSession.Run(
             [NamedOnnxValue.CreateFromTensor("codes", codes)]);
 
-        return results.First().AsTensor<float>().ToArray();
+        var samples = results.First().AsTensor<float>().ToArray();
+        if (lead == 0) return samples;
+
+        // Cut by the same proportion of frames rather than by a fixed samples
+        // per frame. The two agree whenever the vocoder's ratio is exact, and
+        // when it is not this cuts at the right place anyway — which matters,
+        // because a few samples out here is the reference's last syllable left
+        // at the front of the answer.
+        var cut = (int)((double)lead / total * samples.Length);
+        return samples[cut..];
     }
 
     public void Dispose()
@@ -422,8 +388,5 @@ public sealed class DesignPipeline : IDesignPipeline
         _decodeSession.Dispose();
         _codePredictorSession.Dispose();
         _vocoderSession.Dispose();
-
-        _talkerCodec.Dispose();
-        foreach (var table in _groupCodec) table.Dispose();
     }
 }
