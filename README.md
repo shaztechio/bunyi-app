@@ -59,6 +59,19 @@ Any feature change updates the spec **and** every app.
   (`dotnet build`, .NET 10 SDK). All three modes work. Releases are portable
   self-contained builds — unzip and run, with no runtime to install.
 
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://signpath.io), certificate by
+[SignPath Foundation](https://signpath.org).
+
+**Team roles** — committers, reviewers and approvers:
+Shazron Abdullah ([@shazron](https://github.com/shazron)).
+
+**Privacy.** This program does not transfer any information to other networked
+systems unless you ask it to. Models are downloaded from the source you choose
+the first time you use a mode; generation happens on your own machine, and the
+audio never leaves it.
+
 Hosting the models yourself (when the Hub is slow, or you are serving a team):
 [`SELF-HOSTING.md`](SELF-HOSTING.md), and [`CACHING.md`](CACHING.md) for
 putting that bucket behind a CDN once it is serving — plus what to set up so
