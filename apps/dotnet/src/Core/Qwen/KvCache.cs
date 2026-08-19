@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-namespace Bunyi.Core.Design;
+namespace Bunyi.Core.Qwen;
 
 /// <summary>
 /// Joins prefill's per-layer cache into the stacked one decode expects.

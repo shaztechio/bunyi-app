@@ -17,7 +17,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
-namespace Bunyi.Core.Design;
+namespace Bunyi.Core.Qwen;
 
 /// <summary>
 /// Qwen2 byte-level BPE, as the exports ship it.

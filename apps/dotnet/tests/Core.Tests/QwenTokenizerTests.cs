@@ -13,7 +13,7 @@
 // limitations under the License.
 
 using System.Text.Json;
-using Bunyi.Core.Design;
+using Bunyi.Core.Qwen;
 using Xunit;
 
 namespace Bunyi.Core.Tests;

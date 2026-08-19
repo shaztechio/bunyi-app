@@ -158,6 +158,87 @@ public sealed record ModelLayout(
         ApproxDownloadBytes: 5_850_000_000);
 
     /// <summary>
+    /// The voice-clone export: <c>wavekat/Qwen3-TTS-0.6B-Base-ONNX</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Verified against the published repository listing, not assumed. This is
+    /// the <b>ICL</b> export, and that is the whole reason it is this one: it
+    /// ships <c>tokenizer_encoder</c> alongside <c>speaker_encoder</c>, so the
+    /// reference clip becomes codes the model reads in context against its
+    /// transcript. The other published 0.6B Base export has only a speaker
+    /// encoder — it would load, run, return a plausible voice, and ignore the
+    /// transcript entirely, leaving §4 presenting a required field that does
+    /// nothing. RESEARCH-ONNX.md records that trap; §1 now states the
+    /// requirement.
+    /// </para>
+    /// <para>
+    /// Both encoders are required, and both carry external data far larger than
+    /// their graph — 35 MB and 192 MB against a fraction of a megabyte each.
+    /// That is exactly the shape the completeness rule was written for: an
+    /// interrupted download leaves the small half behind and the folder looks
+    /// finished.
+    /// </para>
+    /// <para>
+    /// <c>int4</c> only, as with voice design: <c>fp32/</c> is another 4.91 GB
+    /// of the same weights. 3.86 GB fetched out of 8.77 GB published.
+    /// </para>
+    /// </remarks>
+    /// <remarks>
+    /// Not yet reachable through <see cref="For" />. Until the pipeline exists,
+    /// offering the download would be offering a mode that cannot speak.
+    /// </remarks>
+    public static ModelLayout VoiceClone { get; } = new(
+        "wavekat-base-0.6b-int4",
+        [
+            new ModelFile("config.json", Required: true),
+
+            // The ICL half. Without these it is not a clone, only an impression.
+            new ModelFile("speaker_encoder.onnx", Required: true),
+            new ModelFile("speaker_encoder.onnx.data", Required: true),
+            new ModelFile("tokenizer_encoder.onnx", Required: true),
+            new ModelFile("tokenizer_encoder.onnx.data", Required: true),
+
+            new ModelFile("int4/talker_prefill.onnx", Required: true),
+            new ModelFile("int4/talker_prefill.onnx.data", Required: true),
+            new ModelFile("int4/talker_decode.onnx", Required: true),
+            new ModelFile("int4/talker_decode.onnx.data", Required: true),
+            new ModelFile("int4/code_predictor.onnx", Required: true),
+            new ModelFile("int4/code_predictor.onnx.data", Required: true),
+            new ModelFile("int4/vocoder.onnx", Required: true),
+            new ModelFile("int4/vocoder.onnx.data", Required: true),
+
+            new ModelFile("embeddings/text_embedding.npy", Required: true),
+            new ModelFile("embeddings/talker_codec_embedding.npy", Required: true),
+            new ModelFile("embeddings/text_projection_fc1_weight.npy", Required: true),
+            new ModelFile("embeddings/text_projection_fc1_bias.npy", Required: true),
+            new ModelFile("embeddings/text_projection_fc2_weight.npy", Required: true),
+            new ModelFile("embeddings/text_projection_fc2_bias.npy", Required: true),
+
+            new ModelFile("embeddings/cp_codec_embedding_0.npy", Required: true),
+            new ModelFile("embeddings/cp_codec_embedding_1.npy", Required: true),
+            new ModelFile("embeddings/cp_codec_embedding_2.npy", Required: true),
+            new ModelFile("embeddings/cp_codec_embedding_3.npy", Required: true),
+            new ModelFile("embeddings/cp_codec_embedding_4.npy", Required: true),
+            new ModelFile("embeddings/cp_codec_embedding_5.npy", Required: true),
+            new ModelFile("embeddings/cp_codec_embedding_6.npy", Required: true),
+            new ModelFile("embeddings/cp_codec_embedding_7.npy", Required: true),
+            new ModelFile("embeddings/cp_codec_embedding_8.npy", Required: true),
+            new ModelFile("embeddings/cp_codec_embedding_9.npy", Required: true),
+            new ModelFile("embeddings/cp_codec_embedding_10.npy", Required: true),
+            new ModelFile("embeddings/cp_codec_embedding_11.npy", Required: true),
+            new ModelFile("embeddings/cp_codec_embedding_12.npy", Required: true),
+            new ModelFile("embeddings/cp_codec_embedding_13.npy", Required: true),
+            new ModelFile("embeddings/cp_codec_embedding_14.npy", Required: true),
+
+            new ModelFile("tokenizer/tokenizer.json", Required: true),
+            new ModelFile("tokenizer/vocab.json", Required: true),
+            new ModelFile("tokenizer/merges.txt", Required: true),
+            new ModelFile("tokenizer/added_tokens.json"),
+        ],
+        ApproxDownloadBytes: 3_860_000_000);
+
+    /// <summary>
     /// The Whisper model that transcribes a reference clip (spec §4).
     /// </summary>
     /// <remarks>
@@ -202,9 +283,11 @@ public sealed record ModelLayout(
 
     /// <summary>The export a mode uses.</summary>
     /// <remarks>
-    /// Clone has none yet, and answering with the preset-voice layout would
-    /// have the app download 5.88 GB for a mode that cannot run — so it says so
-    /// instead.
+    /// Clone is deliberately absent even though <see cref="VoiceClone" /> is
+    /// written: the layout is only a file list, and answering with it before
+    /// there is a pipeline behind it would have the app offer a 3.86 GB
+    /// download for a mode that cannot speak. It joins this switch in the same
+    /// change that makes clone work.
     /// </remarks>
     public static ModelLayout For(TtsMode mode) => mode switch
     {

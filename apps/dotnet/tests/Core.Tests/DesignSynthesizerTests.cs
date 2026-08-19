@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using Bunyi.Core.Design;
+using Bunyi.Core.Qwen;
 using Bunyi.Core.Engine;
 using Xunit;
 

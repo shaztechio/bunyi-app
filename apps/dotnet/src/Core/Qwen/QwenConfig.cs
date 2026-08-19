@@ -14,7 +14,7 @@
 
 using System.Text.Json;
 
-namespace Bunyi.Core.Design;
+namespace Bunyi.Core.Qwen;
 
 /// <summary>
 /// The numbers an export publishes about itself.
@@ -35,7 +35,7 @@ namespace Bunyi.Core.Design;
 /// the graphs are otherwise identical and one pipeline should drive both.
 /// </para>
 /// </remarks>
-public sealed record DesignConfig
+public sealed record QwenConfig
 {
     /// <summary>The talker's hidden width — 1024 at 0.6B, 2048 at 1.7B.</summary>
     public required int HiddenSize { get; init; }
@@ -122,7 +122,7 @@ public sealed record DesignConfig
     public bool IsVoiceDesign => SpeakerIds.Count == 0;
 
     /// <summary>Reads an export's <c>config.json</c>.</summary>
-    public static DesignConfig Load(string path)
+    public static QwenConfig Load(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
@@ -131,11 +131,11 @@ public sealed record DesignConfig
     }
 
     /// <summary>Reads a config from parsed JSON.</summary>
-    internal static DesignConfig Parse(JsonElement root, string source)
+    internal static QwenConfig Parse(JsonElement root, string source)
     {
         var generate = root.TryGetProperty("generate_config", out var g) ? g : default;
 
-        return new DesignConfig
+        return new QwenConfig
         {
             HiddenSize = Int(root, source, "talker_hidden_size", "talker", "hidden_size"),
             Layers = Int(root, source, "talker_num_layers", "talker", "num_hidden_layers"),

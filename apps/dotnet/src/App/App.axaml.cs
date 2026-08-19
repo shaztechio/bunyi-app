@@ -21,7 +21,7 @@ using Bunyi.App.Views;
 using Bunyi.Core;
 using Bunyi.Core.Audio;
 using Bunyi.Core.Diagnostics;
-using Bunyi.Core.Design;
+using Bunyi.Core.Qwen;
 using Bunyi.Core.Engine;
 using Bunyi.Core.Models;
 using Bunyi.Core.Settings;

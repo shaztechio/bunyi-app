@@ -13,7 +13,7 @@
 // limitations under the License.
 
 using System.Text.Json;
-using Bunyi.Core.Design;
+using Bunyi.Core.Qwen;
 using Bunyi.Core.Engine;
 using Xunit;
 
@@ -57,8 +57,8 @@ public class PrefillTests
     /// <summary>Everything a build needs, loaded once.</summary>
     private sealed class Model
     {
-        public required DesignConfig Config { get; init; }
-        public required PrefillBuilder Builder { get; init; }
+        public required QwenConfig Config { get; init; }
+        public required DesignPrefill Builder { get; init; }
         public required QwenTokenizer Tokenizer { get; init; }
     }
 
@@ -69,7 +69,7 @@ public class PrefillTests
 
         NpyArray Open(string name) => NpyArray.Open(Path.Combine(embeddings, $"{name}.npy"));
 
-        var config = DesignConfig.Load(Path.Combine(root, "config.json"));
+        var config = QwenConfig.Load(Path.Combine(root, "config.json"));
 
         using var fc1W = Open("text_projection_fc1_weight");
         using var fc1B = Open("text_projection_fc1_bias");
@@ -83,7 +83,7 @@ public class PrefillTests
         return new Model
         {
             Config = config,
-            Builder = new PrefillBuilder(config, projection, Open("talker_codec_embedding")),
+            Builder = new DesignPrefill(config, projection, Open("talker_codec_embedding")),
             Tokenizer = QwenTokenizer.Load(Path.Combine(root, "tokenizer")),
         };
     }, isThreadSafe: true);
@@ -251,8 +251,8 @@ public class PrefillTests
         using var a = JsonDocument.Parse(flat);
         using var b = JsonDocument.Parse(nested);
 
-        var one = DesignConfig.Parse(a.RootElement, "flat");
-        var two = DesignConfig.Parse(b.RootElement, "nested");
+        var one = QwenConfig.Parse(a.RootElement, "flat");
+        var two = QwenConfig.Parse(b.RootElement, "nested");
 
         Assert.Equal(2048, one.HiddenSize);
         Assert.Equal(one.HiddenSize, two.HiddenSize);
@@ -269,7 +269,7 @@ public class PrefillTests
         using var document = JsonDocument.Parse("""{"talker_hidden_size":2048}""");
 
         var error = Assert.Throws<InvalidDataException>(
-            () => DesignConfig.Parse(document.RootElement, "partial.json"));
+            () => QwenConfig.Parse(document.RootElement, "partial.json"));
 
         Assert.Contains("partial.json", error.Message, StringComparison.Ordinal);
     }
@@ -279,7 +279,7 @@ public class PrefillTests
     {
         Skip.If(Root is null, "The voice-design export is not on this machine.");
 
-        var config = DesignConfig.Load(Path.Combine(Root!, "config.json"));
+        var config = QwenConfig.Load(Path.Combine(Root!, "config.json"));
 
         Assert.True(config.IsVoiceDesign);
         Assert.Empty(config.SpeakerIds);
@@ -295,7 +295,7 @@ public class PrefillTests
         // does not offer; this one must not quietly differ either way.
         Skip.If(Root is null, "The voice-design export is not on this machine.");
 
-        var config = DesignConfig.Load(Path.Combine(Root!, "config.json"));
+        var config = QwenConfig.Load(Path.Combine(Root!, "config.json"));
 
         Assert.Equal(
             Languages.All.Where(l => l != "auto").Order(),
@@ -307,7 +307,7 @@ public class PrefillTests
     {
         Skip.If(Root is null, "The voice-design export is not on this machine.");
 
-        var config = DesignConfig.Load(Path.Combine(Root!, "config.json"));
+        var config = QwenConfig.Load(Path.Combine(Root!, "config.json"));
 
         Assert.Equal(0.9f, config.Sampling.Temperature);
         Assert.Equal(50, config.Sampling.TopK);

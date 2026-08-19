@@ -16,7 +16,7 @@ using Bunyi.Core.Diagnostics;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 
-namespace Bunyi.Core.Design;
+namespace Bunyi.Core.Qwen;
 
 /// <summary>What one generation produced.</summary>
 /// <param name="Samples">24 kHz mono, in the range −1 to 1.</param>
@@ -80,8 +80,8 @@ public interface IDesignPipeline : IDisposable
 
 public sealed class DesignPipeline : IDesignPipeline
 {
-    private readonly DesignConfig _config;
-    private readonly PrefillBuilder _prefill;
+    private readonly QwenConfig _config;
+    private readonly DesignPrefill _prefill;
     private readonly QwenTokenizer _tokenizer;
     private readonly NpyArray _talkerCodec;
     private readonly NpyArray[] _groupCodec;
@@ -108,7 +108,7 @@ public sealed class DesignPipeline : IDesignPipeline
         _log = log ?? throw new ArgumentNullException(nameof(log));
         _sampler = sampler ?? new TokenSampler();
 
-        _config = DesignConfig.Load(Path.Combine(folder, "config.json"));
+        _config = QwenConfig.Load(Path.Combine(folder, "config.json"));
         _tokenizer = QwenTokenizer.Load(Path.Combine(folder, "tokenizer"));
 
         var embeddings = Path.Combine(folder, "embeddings");
@@ -130,7 +130,7 @@ public sealed class DesignPipeline : IDesignPipeline
                 Open("text_embedding"),
                 fc1W.ToArray(), fc1B.ToArray(), fc2W.ToArray(), fc2B.ToArray());
 
-            _prefill = new PrefillBuilder(_config, projection, _talkerCodec);
+            _prefill = new DesignPrefill(_config, projection, _talkerCodec);
         }
 
         var graphs = Path.Combine(folder, variant);

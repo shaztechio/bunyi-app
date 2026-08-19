@@ -14,7 +14,7 @@
 
 using System.Numerics.Tensors;
 
-namespace Bunyi.Core.Design;
+namespace Bunyi.Core.Qwen;
 
 /// <summary>
 /// The gated MLP that turns a text token into something the talker takes.
