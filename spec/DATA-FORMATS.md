@@ -320,7 +320,11 @@ Stored in a `Voices` subfolder of app data, alongside copied audio clips.
   useful — `INAM` (the text, truncated), `IART` (speaker or voice
   description), `ISFT` (`Bunyi <version>`), `ICRD` (ISO 8601), `IGNR`
   (`Speech`) — plus the whole record as JSON in `ICMT`:
-  `mode`, `text`, `language`, `modelRepo`, `appVersion`, `created`, plus
+  `mode`, `text`, `language`, `modelRepo`, `appVersion`, `created`,
+  optional `platform` (`Windows`, `macOS` or `Linux` — what produced the
+  file, **stored** rather than worked out when it is read, because a clip is
+  routinely opened on a machine other than the one that made it; absent in
+  files written before it existed, which are not broken), plus
   exactly one voice field for the mode that produced it: `speaker` and
   optional `style` (preset voice), `voiceDescription` (voice design), or
   `referenceTranscript` (voice clone). They are separate keys on purpose —

@@ -68,6 +68,35 @@ public sealed record OutputMetadata
     [JsonPropertyName("appVersion")]
     public required string AppVersion { get; init; }
 
+    /// <summary>Which operating system produced the file.</summary>
+    /// <remarks>
+    /// <para>
+    /// Stored rather than worked out when the file is read, and that is the
+    /// whole point of it: a clip made on one machine is routinely opened on
+    /// another. Deriving it at display time would have every file claim
+    /// whichever system happened to be looking at it, which is worse than not
+    /// saying at all.
+    /// </para>
+    /// <para>
+    /// Optional, because files written before this existed do not have it and
+    /// are not broken — they simply say nothing about where they came from.
+    /// </para>
+    /// </remarks>
+    [JsonPropertyName("platform")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Platform { get; init; }
+
+    /// <summary>The name for the system this build is running on.</summary>
+    /// <remarks>
+    /// The names people use, not the runtime's identifiers: someone reading
+    /// "Made with Bunyi 0.1.0 (Windows)" should recognise it immediately.
+    /// </remarks>
+    public static string CurrentPlatform =>
+        OperatingSystem.IsWindows() ? "Windows"
+        : OperatingSystem.IsMacOS() ? "macOS"
+        : OperatingSystem.IsLinux() ? "Linux"
+        : "Unknown";
+
     [JsonPropertyName("created")]
     public required DateTimeOffset Created { get; init; }
 

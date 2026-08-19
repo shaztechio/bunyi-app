@@ -452,6 +452,18 @@ macOS source: `WindowCloseGuard.swift`.
   exists for. Pressing close again during the wait does nothing: it must not
   ask twice or start a second stop. Not busy ⇒ close immediately.
 
+### 9a. Naming the build
+
+- The app says **what it is, which version, and which platform** somewhere a
+  user can reach without generating anything.
+  - macOS gets this free: AppKit's About panel, filled from the bundle.
+  - **.NET (Win+Linux)**: there is no equivalent and no menu bar to hang one
+    on, so it goes at the foot of the Help window, which §8 already keeps
+    always available.
+- The platform is named, not just the version. Windows and Linux are one
+  codebase and look identical, so a version alone does not say which build a
+  bug report is about.
+
 ## 10. Error handling & copy tone
 
 - Plain verbs, sentence case, no jargon ("Generate", not "Synthesize").
