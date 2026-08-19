@@ -56,8 +56,7 @@ Any feature change updates the spec **and** every app.
 - **macOS** → [`apps/macos/README.md`](apps/macos/README.md) /
   [`apps/macos/AGENTS.md`](apps/macos/AGENTS.md) (XcodeGen + xcodebuild).
 - **Windows / Linux** → [`apps/dotnet/AGENTS.md`](apps/dotnet/AGENTS.md)
-  (`dotnet build`, .NET 10 SDK). Preset voice and voice design work; voice
-  clone is not implemented yet and says so in the app. Releases are portable
+  (`dotnet build`, .NET 10 SDK). All three modes work. Releases are portable
   self-contained builds — unzip and run, with no runtime to install.
 
 Hosting the models yourself (when the Hub is slow, or you are serving a team):
@@ -66,7 +65,7 @@ putting that bucket behind a CDN once it is serving — plus what to set up so
 the bill cannot surprise you.
 
 CI: [`.github/workflows/`](.github/workflows/) builds macOS (green) and the
-.NET matrix for Windows + Linux (red until the app is implemented).
+.NET matrix for Windows + Linux, both green.
 [`release.yml`](.github/workflows/release.yml) builds, Developer ID signs,
 notarizes, staples, and publishes the macOS app — tags and manual runs only.
 See [`apps/macos/AGENTS.md`](apps/macos/AGENTS.md) for the release and help-book
