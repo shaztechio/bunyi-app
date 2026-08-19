@@ -679,8 +679,23 @@ chmod +x Bunyi.App
     <p class="eyebrow">Provenance</p>
     <h2>Code signing policy</h2>
     <p>
-      Free code signing provided by <a href="https://signpath.io">SignPath.io</a>, certificate by
+      Signing differs by platform, because the three do not offer the same thing.
+    </p>
+    <p>
+      <strong>macOS</strong> — signed with an Apple Developer ID certificate, notarized by Apple, and
+      stapled. The release workflow verifies both the app and the disk image before publishing, so
+      Gatekeeper accepts them offline.
+    </p>
+    <p>
+      <strong>Windows</strong> — free code signing provided by
+      <a href="https://signpath.io">SignPath.io</a>, certificate by
       <a href="https://signpath.org">SignPath Foundation</a>.
+      <em>The 1.0.0 build is not yet signed; signing applies from the next release.</em>
+    </p>
+    <p>
+      <strong>Linux</strong> — nothing signs a portable tarball in a way the system checks, so there is
+      no equivalent to claim. Every release publishes a SHA-256 checksum for the archive, which is what
+      there is to verify against.
     </p>
     <p>
       <strong>Team roles</strong> — committers, reviewers and approvers:
