@@ -8,10 +8,15 @@
     "is data, and each app reads it in its own way.",
     "",
     "Every licence here was read from that project's own licence file, its",
-    "package metadata, or its model card. Never from memory: a credits list",
-    "that guesses is a licence claim the project cannot support. Where a",
-    "project states no licence, this says so — that is information, not an",
-    "omission to be tidied away.",
+    "package metadata, its model card, or its README. Never from memory: a",
+    "credits list that guesses is a licence claim the project cannot support.",
+    "",
+    "Check the README before concluding a project has no licence. One entry",
+    "here states MIT only there, with no LICENSE file — so the GitHub API",
+    "reports none and file listings show none. Absence of a LICENSE file is",
+    "not absence of a licence. Where a project genuinely states none, this",
+    "says so, because that is information rather than an omission to tidy",
+    "away.",
     "",
     "'apps' says which app ships or downloads the entry. 'kind' separates the",
     "libraries an app is built from ('library') from the models it fetches",
@@ -136,11 +141,11 @@
     {
       "name": "swift-qwen3-tts",
       "does": "The reference Qwen3-TTS pipeline for MLX",
-      "licence": "No licence stated",
+      "licence": "MIT",
       "url": "https://github.com/AtomGradient/swift-qwen3-tts",
       "kind": "library",
       "apps": ["macos"],
-      "$note": "Checked 2026-08-19: the repository carries no LICENSE file and GitHub reports no licence. Recorded as stated rather than assumed."
+      "$note": "Checked 2026-08-19: stated as MIT in the README's License section. There is no LICENSE file, so GitHub's API reports no licence and automated scanners will miss it — check the README, not the file listing."
     },
     {
       "name": "swift-transformers",

@@ -472,9 +472,12 @@ macOS source: `WindowCloseGuard.swift`.
     cannot end up crediting different things. Entries are tagged with the app
     they belong to: the two share the models and almost nothing else.
   - Every licence stated must have been **read from that project's own licence
-    file, package metadata, or model card** — never from memory. A credits list
-    that guesses is a licence claim the project cannot support. Where a project
-    states no licence, the file says so rather than leaving it out.
+    file, package metadata, model card, or README** — never from memory. A
+    credits list that guesses is a licence claim the project cannot support.
+    Note that a project can state its licence only in its README, where the
+    GitHub API and file listings both miss it; absence of a `LICENSE` file is
+    not absence of a licence. Where a project genuinely states none, the file
+    says so rather than leaving it out.
 
 ## 10. Error handling & copy tone
 
