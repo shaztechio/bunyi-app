@@ -56,6 +56,26 @@ public sealed class ModeName : IValueConverter
 }
 
 /// <summary>
+/// Shows a model's identifier the way a person would write it.
+/// </summary>
+/// <remarks>
+/// Display only. The picker still holds — and still sends — whatever the model
+/// published, so "Uncle Fu" on screen is <c>uncle_fu</c> on the wire. Converting
+/// the value instead would mean guessing our way back to the identifier, and
+/// getting it wrong for any name we had not thought of.
+/// </remarks>
+public sealed class IdentifierName : IValueConverter
+{
+    public static IdentifierName Instance { get; } = new();
+
+    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        value is string identifier ? DisplayName.For(identifier) : value?.ToString();
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
+}
+
+/// <summary>
 /// Whether the picker can be used right now (spec §2).
 /// </summary>
 /// <remarks>

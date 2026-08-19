@@ -82,12 +82,41 @@ public class GenerationReadinessTests
     }
 
     [Fact]
-    public void Voice_clone_is_ready_once_it_has_one()
+    public void Voice_clone_needs_the_transcript_as_well_as_the_recording()
     {
-        var request = new GenerateRequest(
+        // §4 calls the transcript effectively mandatory, and the synthesizer
+        // already refuses without one — but only after the model has loaded,
+        // which on a first run is a multi-gigabyte download before being told a
+        // field is empty. Caught here instead.
+        var withoutTranscript = new GenerateRequest(
             TtsMode.VoiceClone, "Hello", "english", ReferenceAudioPath: "/tmp/clip.wav");
 
-        Assert.True(GenerationReadiness.CanGenerate(request));
+        Assert.False(GenerationReadiness.CanGenerate(withoutTranscript));
+        Assert.Equal(
+            RequiredInput.Transcript,
+            GenerationReadiness.Missing(withoutTranscript)!.Input);
+
+        var ready = withoutTranscript with { ReferenceTranscript = "What the clip says." };
+
+        Assert.True(GenerationReadiness.CanGenerate(ready));
+    }
+
+    [Fact]
+    public void What_is_missing_names_the_field_as_well_as_the_reason()
+    {
+        // A sentence alone cannot point at anything, and pointing is the whole
+        // improvement: Generate stays pressable and marks what it is waiting on.
+        Assert.Equal(
+            RequiredInput.Text,
+            GenerationReadiness.Missing(new GenerateRequest(TtsMode.PresetVoice, "  "))!.Input);
+
+        Assert.Equal(
+            RequiredInput.Instruction,
+            GenerationReadiness.Missing(new GenerateRequest(TtsMode.VoiceDesign, "Hello"))!.Input);
+
+        Assert.Equal(
+            RequiredInput.Reference,
+            GenerationReadiness.Missing(new GenerateRequest(TtsMode.VoiceClone, "Hello"))!.Input);
     }
 
     [Fact]

@@ -30,13 +30,21 @@ A segmented picker selects one of three modes. macOS source:
   (`supportedSpeakers`); a fallback list is shown until a model loads.
 - Language selector: auto + english, chinese, japanese, korean, german,
   french, russian, portuguese, spanish, italian.
-- **Generate is unavailable until the mode has what it needs**, and says why
-  on hover: text in every mode, plus a voice description for voice design and
-  a reference clip for voice clone. Not a validation message after the fact —
-  the engine rejects a clone with no clip only *after* preparing the model,
-  which on a first run means waiting out a multi-gigabyte download to be told
-  a file is missing. Voice design had no check at all and would generate an
-  arbitrary voice from an empty description.
+- **The run needs**: text in every mode, plus a voice description for voice
+  design, and a reference clip *and its transcript* for voice clone. Checked
+  before the button is pressed, not by the engine — the engine rejects a clone
+  with no clip only *after* preparing the model, which on a first run means
+  waiting out a multi-gigabyte download to be told a field is empty. Voice
+  design had no check at all and would generate an arbitrary voice from an
+  empty description.
+- **Generate stays pressable when something is missing**, and says what when
+  pressed: the field is marked, focus moves into it, and the reason appears
+  beside it and in the status line. The mark clears as soon as the field is
+  filled, and nothing is marked before Generate is pressed.
+  - **Not disabled.** A disabled button cannot be hovered for the tooltip that
+    would explain it, is skipped by screen readers, and — as shipped — did not
+    even look disabled, so it read as an action that silently did nothing. An
+    action that cannot be taken must still be able to say why.
 - **An unused window suggests something to click.** The first frame is
   otherwise an empty box, a "ready" line and a button that does not work —
   which for a non-technical audience is a dead end rather than a starting

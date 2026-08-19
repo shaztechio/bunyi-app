@@ -318,6 +318,8 @@ public sealed class HistoryTests : HeadlessWindows
         Assert.Equal("Preset voice", row.Mode);
         Assert.Contains("Text: Speak this.", row.Details);
         Assert.Contains("Model: elbruno/", row.Details);
-        Assert.Contains("ryan", row.Subtitle);
+        // "Ryan", not "ryan": the stored identifier is the model's, and the
+        // row is for a person.
+        Assert.Contains("Ryan", row.Subtitle, StringComparison.Ordinal);
     }
 }

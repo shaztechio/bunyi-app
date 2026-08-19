@@ -56,11 +56,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ReferenceName))]
     [NotifyPropertyChangedFor(nameof(HasReference))]
+    [NotifyPropertyChangedFor(nameof(CanSaveVoice))]
     [NotifyCanExecuteChangedFor(nameof(GenerateCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SaveVoiceCommand))]
     private string? _referenceAudioPath;
 
     /// <summary>What that recording says, typed or listened for (spec §4).</summary>
-    [ObservableProperty] private string _referenceTranscript = string.Empty;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanSaveVoice))]
+    [NotifyCanExecuteChangedFor(nameof(SaveVoiceCommand))]
+    private string _referenceTranscript = string.Empty;
 
     /// <summary>Whether a transcript is being worked out right now.</summary>
     /// <remarks>
@@ -71,6 +76,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowSpinner))]
     [NotifyPropertyChangedFor(nameof(CanEditTranscript))]
+    [NotifyPropertyChangedFor(nameof(CanSaveVoice))]
+    [NotifyCanExecuteChangedFor(nameof(SaveVoiceCommand))]
     private bool _isTranscribing;
     [ObservableProperty] private string _status = "Ready";
     [ObservableProperty] private double _progress;
@@ -127,7 +134,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         IAudioPlayer player,
         ILogSink log,
         Func<string>? outputFolder = null,
-        IBatchTimerFactory? timers = null)
+        IBatchTimerFactory? timers = null,
+        VoiceLibrary? voices = null)
     {
         _engine = engine ?? throw new ArgumentNullException(nameof(engine));
         _player = player ?? throw new ArgumentNullException(nameof(player));
@@ -142,6 +150,40 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         _engine.StatusChanged += OnEngineStatusChanged;
         _player.Finished += (_, _) => UiThread.Post(StopPlayback);
+
+        _voices = voices;
+        ReloadVoices();
+    }
+
+    /// <summary>
+    /// The saved voices, or null when this window has no library.
+    /// </summary>
+    /// <remarks>
+    /// Null rather than one pointing at the user's own folder. The app supplies
+    /// the real library; anything that does not — a test, a preview — gets a
+    /// window with no saved voices rather than one quietly reading, pruning and
+    /// rewriting somebody's actual library on construction.
+    /// </remarks>
+    private readonly VoiceLibrary? _voices;
+
+    /// <summary>The saved voices, newest first (spec §5).</summary>
+    public ObservableCollection<SavedVoice> SavedVoices { get; } = [];
+
+    /// <summary>Whether there is anything in the library to offer.</summary>
+    public bool HasSavedVoices => SavedVoices.Count > 0;
+
+    /// <summary>Re-reads the library, pruning entries whose audio has gone.</summary>
+    private void ReloadVoices()
+    {
+        SavedVoices.Clear();
+
+        if (_voices is not null)
+        {
+            _voices.Load();
+            foreach (var voice in _voices.Voices) SavedVoices.Add(voice);
+        }
+
+        OnPropertyChanged(nameof(HasSavedVoices));
     }
 
     /// <summary>
@@ -232,6 +274,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         get => ShowingHistory ? HistorySegment.Instance : Mode;
         set
         {
+            var was = SelectedSegment;
+
             if (value is TtsMode mode)
             {
                 ShowingHistory = false;
@@ -242,13 +286,92 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 ShowingHistory = true;
             }
 
+            // Only when the tab actually changed. Avalonia re-sets the same
+            // segment during layout, and clearing the last result on that would
+            // make a finished clip vanish while nobody touched anything.
+            if (!Equals(was, SelectedSegment)) LeaveTab();
+
             OnPropertyChanged();
         }
     }
 
     /// <summary>
+    /// Puts the previous tab down: stop playing, and clear its result.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The player belongs to the clip that was just made, and the clip belongs
+    /// to the tab that made it. Carrying it across meant preset voice's result
+    /// sat under clone mode's controls, playable, with nothing on screen saying
+    /// which tab it came from.
+    /// </para>
+    /// <para>
+    /// Refreshing here matters as much. Returning to the tab you left calls
+    /// this setter without changing Mode, so OnModeChanged never fires — which
+    /// is how Generate could end up disabled with nothing to press.
+    /// </para>
+    /// </remarks>
+    private void LeaveTab()
+    {
+        StopPlayback();
+
+        // Not deleted, just no longer this tab's business. It is in History,
+        // which is where a finished clip lives.
+        LastOutputPath = null;
+        Duration = TimeSpan.Zero;
+
+        Refresh();
+    }
+
+    /// <summary>
+    /// The field being pointed at after Generate was pressed too early.
+    /// </summary>
+    /// <remarks>
+    /// Null until someone presses Generate with something missing, and cleared
+    /// the moment that thing is supplied. Nothing is marked before it is asked
+    /// for: a form that shows errors for fields nobody has reached yet is
+    /// telling the user off for not having finished.
+    /// </remarks>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(NeedsText))]
+    [NotifyPropertyChangedFor(nameof(NeedsInstruction))]
+    [NotifyPropertyChangedFor(nameof(NeedsReference))]
+    [NotifyPropertyChangedFor(nameof(NeedsTranscript))]
+    [NotifyPropertyChangedFor(nameof(MissingReason))]
+    [NotifyPropertyChangedFor(nameof(HasMissing))]
+    private MissingInput? _missing;
+
+    public bool NeedsText => Missing?.Input == RequiredInput.Text;
+
+    public bool NeedsInstruction => Missing?.Input == RequiredInput.Instruction;
+
+    public bool NeedsReference => Missing?.Input == RequiredInput.Reference;
+
+    public bool NeedsTranscript => Missing?.Input == RequiredInput.Transcript;
+
+    /// <summary>Whether anything is being pointed at.</summary>
+    public bool HasMissing => Missing is not null;
+
+    /// <summary>What to say beside the field being pointed at.</summary>
+    public string MissingReason => Missing?.Reason ?? string.Empty;
+
+    /// <summary>Asks the window to put the cursor where the problem is.</summary>
+    /// <remarks>
+    /// The view model knows which field; only the window knows which control.
+    /// Focus matters more than the outline — it is the half a keyboard or
+    /// screen-reader user actually gets.
+    /// </remarks>
+    public event EventHandler<RequiredInput>? FocusRequested;
+
+    /// <summary>
     /// Whether Generate can be pressed (spec §1).
     /// </summary>
+    /// <remarks>
+    /// The button no longer uses this to disable itself. It stays pressable so
+    /// that pressing it can explain what is wrong — a disabled button cannot be
+    /// hovered for its own tooltip, and a screen reader skips it entirely. This
+    /// still says whether a run would start.
+    /// </remarks>
     public bool CanGenerate => !IsBusy && GenerationReadiness.CanGenerate(CurrentRequest());
 
     /// <summary>
@@ -308,9 +431,26 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// The file name rather than the path: the path is long, usually
     /// uninteresting, and on a narrow window pushes everything else off screen.
     /// </remarks>
-    public string ReferenceName => HasReference
-        ? Path.GetFileName(ReferenceAudioPath!)
-        : "No recording chosen";
+    public string ReferenceName
+    {
+        get
+        {
+            if (!HasReference) return "No recording chosen";
+
+            // A saved voice's copy is named after its id, so the file name is a
+            // GUID and tells the user nothing about what they picked. Show what
+            // they called it instead.
+            if (SelectedVoice is { } voice
+                && _voices is not null
+                && string.Equals(ReferenceAudioPath, _voices.ClipPath(voice),
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return $"{voice.Name} — the saved recording";
+            }
+
+            return Path.GetFileName(ReferenceAudioPath!);
+        }
+    }
 
     /// <summary>What to tell someone about the recording they should pick.</summary>
     /// <remarks>
@@ -408,6 +548,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         var chosen = await ChooseReference();
         if (string.IsNullOrWhiteSpace(chosen)) return;
 
+        // No longer the saved voice — the picker must not keep claiming a name
+        // that has nothing to do with the file now in the field.
+        SelectedVoice = null;
         ReferenceAudioPath = chosen;
 
         // A transcript already typed is the user's, and §4 says it always wins.
@@ -415,6 +558,93 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             await ListenAsync();
         }
+    }
+
+    /// <summary>The saved voice in use, or null (spec §5).</summary>
+    /// <remarks>
+    /// Choosing one fills the recording and the transcript together. They were
+    /// saved as a pair and only mean anything as a pair — half of a saved voice
+    /// is the state that makes a clone finish the recording instead of speaking.
+    /// </remarks>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ReferenceName))]
+    [NotifyPropertyChangedFor(nameof(CanDeleteVoice))]
+    [NotifyCanExecuteChangedFor(nameof(DeleteVoiceCommand))]
+    private SavedVoice? _selectedVoice;
+
+    partial void OnSelectedVoiceChanged(SavedVoice? value)
+    {
+        if (value is null) return;
+
+        if (_voices is null) return;
+
+        ReferenceAudioPath = _voices.ClipPath(value);
+        ReferenceTranscript = value.Transcript;
+    }
+
+    /// <summary>What a voice about to be saved will be called.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SaveVoiceCommand))]
+    private string _newVoiceName = string.Empty;
+
+    /// <summary>Whether there is a complete voice to save (spec §5).</summary>
+    public bool CanSaveVoice =>
+        _voices is not null
+        && HasReference
+        && !string.IsNullOrWhiteSpace(ReferenceTranscript)
+        && !string.IsNullOrWhiteSpace(NewVoiceName)
+        && !IsTranscribing;
+
+    /// <summary>Saves the current recording and transcript under a name.</summary>
+    [RelayCommand(CanExecute = nameof(CanSaveVoice))]
+    private void SaveVoice()
+    {
+        try
+        {
+            var saved = _voices!.Save(NewVoiceName, ReferenceAudioPath!, ReferenceTranscript);
+
+            ReloadVoices();
+            NewVoiceName = string.Empty;
+
+            // Point at the copy rather than the original, so the fields now
+            // describe what the library holds.
+            SelectedVoice = SavedVoices.FirstOrDefault(v => v.Id == saved.Id);
+            Status = $"Saved the voice “{saved.Name}”.";
+        }
+        catch (Exception ex) when (ex is ArgumentException or FileNotFoundException or IOException)
+        {
+            _log.Log($"Could not save that voice: {ex.Message}");
+            Status = ex.Message;
+        }
+    }
+
+    /// <summary>Whether there is a saved voice selected to remove.</summary>
+    public bool CanDeleteVoice => SelectedVoice is not null;
+
+    /// <summary>Removes a saved voice and its copied recording (spec §5).</summary>
+    [RelayCommand(CanExecute = nameof(CanDeleteVoice))]
+    private void DeleteVoice()
+    {
+        if (SelectedVoice is not { } voice || _voices is null) return;
+
+        var clip = _voices.ClipPath(voice);
+        var wasInUse = string.Equals(ReferenceAudioPath, clip, StringComparison.OrdinalIgnoreCase);
+
+        _voices.Delete(voice);
+        SelectedVoice = null;
+        ReloadVoices();
+
+        // If the fields were pointing at the recording that just went, they
+        // stop. Leaving them showing a file that no longer exists is worse than
+        // showing nothing — the name means nothing to anyone, and Generate
+        // would have failed on it.
+        if (wasInUse)
+        {
+            ReferenceAudioPath = null;
+            ReferenceTranscript = string.Empty;
+        }
+
+        Status = $"Deleted the voice “{voice.Name}”.";
     }
 
     /// <summary>Listens again, for when the transcript came out wrong.</summary>
@@ -449,7 +679,20 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private async Task GenerateAsync()
     {
-        if (!CanGenerate) return;
+        if (IsBusy) return;
+
+        // Pressed before it is ready: say what is missing, put the cursor in it,
+        // and mark it. Doing nothing was the old behaviour and it is what made
+        // the button look broken.
+        if (GenerationReadiness.Missing(CurrentRequest()) is { } missing)
+        {
+            Missing = missing;
+            Status = missing.Reason;
+            FocusRequested?.Invoke(this, missing.Input);
+            return;
+        }
+
+        Missing = null;
 
         try
         {
@@ -611,6 +854,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>Re-evaluates everything computed from the fields above.</summary>
     private void Refresh()
     {
+        // Cleared as soon as the run would start, so a mark never outlives the
+        // problem it described.
+        if (Missing is not null && GenerationReadiness.CanGenerate(CurrentRequest()))
+        {
+            Missing = null;
+        }
+
         OnPropertyChanged(nameof(CanGenerate));
         OnPropertyChanged(nameof(BlockedReason));
         OnPropertyChanged(nameof(ShowExamples));
@@ -621,10 +871,18 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(ShowProgressBar));
     }
 
+    // Everything CurrentRequest reads has to refresh the button, or Generate
+    // stays disabled after the very change that made it usable. Choosing a
+    // recording in clone mode did exactly that: readiness was satisfied and
+    // nothing said so.
     partial void OnScriptChanged(string value) => Refresh();
     partial void OnInstructChanged(string value) => Refresh();
     partial void OnIsBusyChanged(bool value) => Refresh();
     partial void OnLastOutputPathChanged(string? value) => Refresh();
+    partial void OnLanguageChanged(string value) => Refresh();
+    partial void OnSpeakerChanged(string value) => Refresh();
+    partial void OnReferenceAudioPathChanged(string? value) => Refresh();
+    partial void OnReferenceTranscriptChanged(string value) => Refresh();
 
     partial void OnShowingHistoryChanged(bool value)
     {

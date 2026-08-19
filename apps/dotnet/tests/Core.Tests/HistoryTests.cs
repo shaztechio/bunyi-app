@@ -120,7 +120,12 @@ public sealed class GeneratedOutputsTests : IDisposable
 
         Assert.Equal("The quick brown fox.", output.Summary());
         Assert.Equal("Preset voice", output.Mode);
-        Assert.Equal("ryan", output.Voice);
+
+        // Shown the way the picker shows it. The file stores the model's
+        // identifier, "ryan", and this is the only place it is read for a
+        // person — a clip made with "ryan" and one made with "Ryan" are the
+        // same voice and should not read as two.
+        Assert.Equal("Ryan", output.Voice);
     }
 
     [Fact]

@@ -47,6 +47,7 @@ public partial class MainWindow : Window
         model.History.ConfirmTrash = ConfirmTrashAsync;
         model.History.ChooseSaveLocation = ChooseSaveLocationAsync;
         model.ChooseReference = ChooseReferenceAsync;
+        model.FocusRequested += (_, input) => FocusTheProblem(input);
     }
 
     /// <summary>§2a: Trash after confirming, because the audio may be the only copy.</summary>
@@ -56,6 +57,30 @@ public partial class MainWindow : Window
             $"“{row.Summary}” goes to the Trash, where you can still get it back.",
             confirm: "Move to Trash",
             cancel: "Keep");
+
+    /// <summary>
+    /// Puts the cursor in the field the run is waiting on (spec §1).
+    /// </summary>
+    /// <remarks>
+    /// The view model knows which input is missing; only the window knows which
+    /// control holds it. Focus is the half of this that works without sight of
+    /// the red outline, so it is not decoration.
+    /// </remarks>
+    private void FocusTheProblem(RequiredInput input)
+    {
+        var name = input switch
+        {
+            RequiredInput.Text => "ScriptBox",
+            RequiredInput.Instruction => "InstructBox",
+            RequiredInput.Reference => "ChooseRecordingButton",
+            RequiredInput.Transcript => "TranscriptBox",
+            _ => null,
+        };
+
+        if (name is null) return;
+
+        this.FindControl<Control>(name)?.Focus();
+    }
 
     /// <summary>
     /// §4: picks the recording a clone is taken from.

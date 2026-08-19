@@ -81,7 +81,8 @@ public sealed class EngineRoutingTests : IAsyncLifetime
             return Task.CompletedTask;
         }
 
-        public Task<SynthesisResult> SynthesizeAsync(GenerateRequest request, CancellationToken ct)
+        public Task<SynthesisResult> SynthesizeAsync(
+            GenerateRequest request, CancellationToken ct, IProgress<int>? frames = null)
         {
             Syntheses++;
             return Task.FromResult(new SynthesisResult(new short[2400], 24_000, 2));

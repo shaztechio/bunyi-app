@@ -119,7 +119,9 @@ public partial class App : Application
                 ApplyAppearance,
                 DefaultSourceFor);
 
-            var viewModel = new MainViewModel(engine, new SoundFlowAudioPlayer(log), log)
+            var viewModel = new MainViewModel(
+                engine, new SoundFlowAudioPlayer(log), log,
+                voices: new VoiceLibrary(log))
             {
                 Settings = settingsViewModel,
                 Doctor = RunDoctor,

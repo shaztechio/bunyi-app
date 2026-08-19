@@ -93,7 +93,8 @@ public sealed class CloneSpeechSynthesizer(
     }
 
     /// <inheritdoc />
-    public Task<SynthesisResult> SynthesizeAsync(GenerateRequest request, CancellationToken ct)
+    public Task<SynthesisResult> SynthesizeAsync(
+        GenerateRequest request, CancellationToken ct, IProgress<int>? frames = null)
     {
         ArgumentNullException.ThrowIfNull(request);
 
@@ -134,6 +135,7 @@ public sealed class CloneSpeechSynthesizer(
         var result = _pipeline.Generate(
             new CloneRequest(request.Text, request.ReferenceTranscript, request.Language),
             reference,
+            progress: frames,
             ct: ct);
 
         return Task.FromResult(new SynthesisResult(

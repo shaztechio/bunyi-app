@@ -86,7 +86,15 @@ public interface ISpeechSynthesizer : IAsyncDisposable
     Task UnloadAsync();
 
     /// <summary>Generates audio. Long-running and CPU-bound.</summary>
-    Task<SynthesisResult> SynthesizeAsync(GenerateRequest request, CancellationToken ct);
+    /// <param name="frames">
+    /// Frames produced so far, reported as they are. Generation is the long
+    /// phase and it cannot report a fraction — nothing knows how much speech
+    /// the text will become — so this is the only thing that distinguishes a
+    /// run that is working from one that has hung. A clone can legitimately run
+    /// for minutes, and without this it looks identical to a deadlock.
+    /// </param>
+    Task<SynthesisResult> SynthesizeAsync(
+        GenerateRequest request, CancellationToken ct, IProgress<int>? frames = null);
 
     /// <summary>
     /// Hands back the working memory a finished run was using (spec §2).

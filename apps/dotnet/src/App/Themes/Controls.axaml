@@ -93,6 +93,38 @@ limitations under the License.
   </Style>
 
   <!--
+    A field the run is waiting on. Only ever set after Generate was pressed and
+    could not run — never before, because marking fields nobody has reached yet
+    is telling someone off for not having finished.
+
+    Colour is not the only signal: the field is focused and a sentence appears
+    beside it, so this works for anyone who cannot see the red.
+  -->
+  <Style Selector="TextBox.needed">
+    <Setter Property="BorderBrush" Value="{DynamicResource BunyiDanger}" />
+    <Setter Property="BorderThickness" Value="2" />
+  </Style>
+  <Style Selector="Button.needed">
+    <Setter Property="BorderBrush" Value="{DynamicResource BunyiDanger}" />
+    <Setter Property="BorderThickness" Value="2" />
+  </Style>
+  <Style Selector="TextBlock.needed">
+    <Setter Property="Foreground" Value="{DynamicResource BunyiDanger}" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+
+  <!--
+    A primary button that cannot be used should not look like one. The style set
+    the accent background in every state, so a disabled Generate stayed purple
+    and looked pressable — which is half of why "Generate does nothing" was the
+    reported symptom.
+  -->
+  <Style Selector="Button.primary:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Opacity" Value="0.45" />
+  </Style>
+
+  <!--
     A link: text that happens to be clickable, not a button wearing a URL.
     Avalonia has no HyperlinkButton in this version, so it is a Button stripped
     back to its content, underlined on hover the way a link is anywhere else.

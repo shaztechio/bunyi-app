@@ -97,6 +97,38 @@ public sealed class TalkerLoop : IDisposable
         _vocoderSession = new InferenceSession(Path.Combine(graphs, "vocoder.onnx"));
     }
 
+    /// <summary>Codec frames per second of speech.</summary>
+    public const double FramesPerSecond = 12.5;
+
+    /// <summary>
+    /// How many frames a piece of text could plausibly need.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Sampling is random — the export's own defaults are temperature 0.9 and
+    /// top-k 50 — and a draw occasionally never produces the token that ends a
+    /// run. The export's cap is 8192 frames, which is eleven minutes of audio
+    /// and, on a CPU, about half an hour of grinding. As a safety net for
+    /// someone waiting on one sentence, that is no net at all.
+    /// </para>
+    /// <para>
+    /// So the bound comes from the text instead. Speech runs about ten
+    /// characters a second at a slow pace; three times that, with a floor for
+    /// very short text, is far past anything a faithful reading needs while
+    /// still failing in seconds rather than in half an hour. A run that reaches
+    /// it has stopped speaking the text and started rambling.
+    /// </para>
+    /// </remarks>
+    public static int FrameBudget(string? text, int hardCap)
+    {
+        var characters = text?.Trim().Length ?? 0;
+        var plausible = Math.Max(10.0, characters / 10.0);
+        var generous = plausible * 3.0;
+
+        var frames = (int)Math.Ceiling(generous * FramesPerSecond);
+        return Math.Clamp(frames, 1, Math.Max(1, hardCap));
+    }
+
     /// <summary>Speaks a primed sequence.</summary>
     /// <param name="rows">The prefill sequence, one row per position.</param>
     /// <param name="trailingHidden">
@@ -176,6 +208,17 @@ public sealed class TalkerLoop : IDisposable
         {
             throw new InvalidOperationException(
                 "The model produced no audio for that text. Try different words.");
+        }
+
+        if (frames.Count >= cap)
+        {
+            // It ran out of budget rather than finishing. Said plainly, because
+            // the audio is probably wrong and the user is about to wonder why —
+            // and because trying again really is the fix: the next draw of a
+            // random sample usually ends normally.
+            _log.Log(
+                $"{what}: stopped after {frames.Count / FramesPerSecond:0}s of speech because the "
+                + "model did not finish on its own. Generating again usually works.");
         }
 
         _log.Log($"{what}: {frames.Count} frames.");
