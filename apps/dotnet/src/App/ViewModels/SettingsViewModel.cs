@@ -69,7 +69,16 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// </remarks>
     [ObservableProperty] private string _backupStatus = string.Empty;
 
-    /// <summary>The running commentary, shown only while one is going.</summary>
+    /// <summary>
+    /// The running commentary, shown only while one is going.
+    /// </summary>
+    /// <remarks>
+    /// Transient by design. A report can still arrive here after the run is
+    /// over — <c>Progress&lt;T&gt;</c> delivers on another thread — and that is
+    /// harmless precisely because the tab shows this only while
+    /// <see cref="BackupRunning" />. The outcome lives in
+    /// <see cref="BackupStatus" />, which progress never writes to.
+    /// </remarks>
     [ObservableProperty] private string _backupDetail = string.Empty;
 
     /// <summary>Whether one is running, which is what Stop is for.</summary>
