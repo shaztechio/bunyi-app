@@ -22,7 +22,8 @@ limitations under the License.
         x:DataType="vm:SettingsViewModel"
         Width="640" Height="560" MinWidth="560" MinHeight="440"
         WindowStartupLocation="CenterOwner"
-        Title="Settings">
+        Title="Settings"
+        Icon="/Assets/bunyi.png">
 
   <Window.Styles>
     <Style Selector="TextBlock.eyebrow">

@@ -21,7 +21,8 @@ limitations under the License.
         x:Class="Bunyi.App.Views.MainWindow"
         x:DataType="vm:MainViewModel"
         Width="760" Height="680" MinWidth="620" MinHeight="580"
-        Title="Bunyi">
+        Title="Bunyi"
+        Icon="/Assets/bunyi.png">
 
   <Window.Styles>
     <Style Selector="TextBlock.eyebrow">

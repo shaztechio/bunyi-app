@@ -21,7 +21,8 @@ limitations under the License.
         x:DataType="vm:LogsViewModel"
         Width="760" Height="520" MinWidth="480" MinHeight="320"
         WindowStartupLocation="CenterOwner"
-        Title="Logs">
+        Title="Logs"
+        Icon="/Assets/bunyi.png">
 
   <DockPanel Margin="16">
 
