@@ -269,6 +269,14 @@
   html.is-win .btn-win .dl,
   html.is-linux .btn-linux .dl { display: inline; }
 
+  /* The note follows the promotion. It used to lead with macOS whoever was
+     reading, so a Windows visitor got a Windows button above a paragraph about
+     disk images. */
+  .note-os { display: none; }
+  html:not(.is-win):not(.is-linux) .note-mac,
+  html.is-win .note-win,
+  html.is-linux .note-linux { display: inline; }
+
   /* Promoted to the front, rather than shuffling the rest around it. */
   .cta-os { align-items: center; }
   html.is-win .btn-win, html.is-linux .btn-linux { order: -1; }
@@ -373,10 +381,15 @@
         <a class="btn btn-ghost" href="https://github.com/shaztechio/bunyi-app">Source</a>
       </div>
       <p class="note">
-        <strong>macOS 1.1.0</strong> — a signed, notarized disk image for Apple Silicon, macOS&nbsp;15 or later.
-        Open it and drag Bunyi to Applications.
-        <strong>Windows and Linux 1.0.0</strong> — portable and self-contained: unzip and run, with no
-        runtime to install.
+        <span class="note-os note-mac"><strong>macOS 1.1.0</strong> — a signed, notarized disk image for Apple Silicon,
+        macOS&nbsp;15 or later. Open it and drag Bunyi to Applications. Windows and Linux 1.0.0 are portable:
+        unzip and run.</span>
+        <span class="note-os note-win"><strong>Windows 1.0.0</strong> — portable and self-contained: unzip anywhere and run
+        <code>Bunyi.App.exe</code>, with no runtime to install. It is unsigned, so SmartScreen warns once.
+        macOS and Linux builds are here too.</span>
+        <span class="note-os note-linux"><strong>Linux 1.0.0</strong> — portable and self-contained: untar, <code>chmod +x</code>,
+        and run, with no runtime to install. A desktop system needs nothing else. macOS and Windows builds are
+        here too.</span>
       </p>
     </div>
     <div class="hero-art">
@@ -661,6 +674,26 @@ chmod +x Bunyi.App
 
 </main>
 
+<section id="signing">
+  <div class="wrap">
+    <p class="eyebrow">Provenance</p>
+    <h2>Code signing policy</h2>
+    <p>
+      Free code signing provided by <a href="https://signpath.io">SignPath.io</a>, certificate by
+      <a href="https://signpath.org">SignPath Foundation</a>.
+    </p>
+    <p>
+      <strong>Team roles</strong> — committers, reviewers and approvers:
+      Shazron Abdullah (<a href="https://github.com/shazron">@shazron</a>).
+    </p>
+    <p>
+      <strong>Privacy.</strong> This program does not transfer any information to other networked systems
+      unless you ask it to. Models are downloaded from the source you choose the first time you use a mode;
+      generation happens on your own machine, and the audio never leaves it.
+    </p>
+  </div>
+</section>
+
 <footer>
   <div class="wrap foot-grid">
     <div>
@@ -668,6 +701,7 @@ chmod +x Bunyi.App
       <p style="margin:.6rem 0 0">Local text-to-speech, no terminal required.</p>
     </div>
     <div class="foot-links">
+      <a href="#signing">Code signing policy</a>
       <a href="https://github.com/shaztechio/bunyi-app">Repository</a>
       <a href="https://github.com/shaztechio/bunyi-app/blob/main/spec/FEATURES.md">Feature spec</a>
       <a href="https://github.com/QwenLM/Qwen3-TTS">Qwen3-TTS</a>
