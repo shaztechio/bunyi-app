@@ -201,6 +201,31 @@
   .pill-ok { color: #0d2a1f; background: var(--ok); }
   .pill-wip { color: #2c2003; background: var(--warn); }
 
+  /* CSS-only OS tabs. The radios are hidden and drive the panels through a
+     sibling selector, so this works with scripting off. */
+  .os-tabs > input[type="radio"] { position: absolute; opacity: 0; pointer-events: none; }
+  .os-picker { display: flex; gap: .4rem; margin: 1.2rem 0 1.4rem; flex-wrap: wrap; }
+  .os-picker label {
+    padding: .5rem 1rem; border-radius: 999px; cursor: pointer;
+    border: 1px solid rgba(255,255,255,.14); color: var(--muted); font-size: .95rem;
+  }
+  .os-picker label:hover { color: #fff; }
+  .os-panel { display: none; }
+
+  #os-mac:checked ~ .os-picker label[for="os-mac"],
+  #os-win:checked ~ .os-picker label[for="os-win"],
+  #os-linux:checked ~ .os-picker label[for="os-linux"] {
+    background: linear-gradient(100deg, var(--indigo), var(--violet));
+    border-color: transparent; color: #fff; font-weight: 600;
+  }
+
+  #os-mac:checked ~ .os-mac,
+  #os-win:checked ~ .os-win,
+  #os-linux:checked ~ .os-linux { display: block; }
+
+  /* Keyboard users get the same ring the rest of the page uses. */
+  .os-tabs > input[type="radio"]:focus-visible ~ .os-picker label[for] { outline: 2px solid var(--violet); outline-offset: 2px; }
+
   .steps { counter-reset: step; list-style: none; padding: 0; margin: 1.5rem 0 0; }
   .steps li { counter-increment: step; position: relative; padding-left: 2.4rem; margin-bottom: 1.4rem; }
   .steps li::before {
@@ -269,12 +294,16 @@
         themselves with a progress bar; after that it generates offline, and the audio never leaves your computer.
       </p>
       <div class="cta">
-        <a class="btn btn-primary" href="https://github.com/shaztechio/bunyi-app/releases/latest">Download for macOS</a>
-        <a class="btn btn-ghost" href="https://github.com/shaztechio/bunyi-app">View source</a>
+        <a class="btn btn-primary" href="https://github.com/shaztechio/bunyi-app/releases/tag/v1.1.0">Download for macOS</a>
+        <a class="btn btn-ghost" href="https://github.com/shaztechio/bunyi-app/releases/download/dotnet-v1.0.0/Bunyi-1.0.0-win-x64.zip">Windows</a>
+        <a class="btn btn-ghost" href="https://github.com/shaztechio/bunyi-app/releases/download/dotnet-v1.0.0/Bunyi-1.0.0-linux-x64.tar.gz">Linux</a>
+        <a class="btn btn-ghost" href="https://github.com/shaztechio/bunyi-app">Source</a>
       </div>
       <p class="note">
-        Version 1.1.0 — a signed, notarized disk image for Apple Silicon, macOS 15 or later.
-        Open it and drag Bunyi to Applications. Windows and Linux builds are on the         <a href="https://github.com/shaztechio/bunyi-app/releases">releases page</a> —         unzip and run, with no runtime to install.
+        <strong>macOS 1.1.0</strong> — a signed, notarized disk image for Apple Silicon, macOS&nbsp;15 or later.
+        Open it and drag Bunyi to Applications.
+        <strong>Windows and Linux 1.0.0</strong> — portable and self-contained: unzip and run, with no
+        runtime to install.
       </p>
     </div>
     <div class="hero-art">
@@ -440,12 +469,12 @@
           <tr>
             <td><strong>macOS</strong><br><span style="color:var(--muted)">Apple Silicon, macOS 15+</span></td>
             <td>Swift + MLX + SwiftUI</td>
-            <td><span class="pill pill-ok">Working</span><br><span style="color:var(--muted)">Reference implementation; <a href="https://github.com/shaztechio/bunyi-app/releases/latest">notarized download</a></span></td>
+            <td><span class="pill pill-ok">Working</span><br><span style="color:var(--muted)">Reference implementation; <a href="https://github.com/shaztechio/bunyi-app/releases/tag/v1.1.0">notarized download</a></span></td>
           </tr>
           <tr>
             <td><strong>Windows and Linux</strong><br><span style="color:var(--muted)">One app, both systems</span></td>
             <td>C# .NET + Avalonia + ONNX Runtime</td>
-            <td><span class="pill pill-ok">Working</span><br><span style="color:var(--muted)">All three modes; <a href="https://github.com/shaztechio/bunyi-app/releases">portable download</a></span></td>
+            <td><span class="pill pill-ok">Working</span><br><span style="color:var(--muted)">All three modes; <a href="https://github.com/shaztechio/bunyi-app/releases/tag/dotnet-v1.0.0">portable download</a></span></td>
           </tr>
         </tbody>
       </table>
@@ -467,52 +496,80 @@
   <div class="wrap">
     <p class="eyebrow">Get it running</p>
     <h2>Download it</h2>
-    <p>
-      <a href="https://github.com/shaztechio/bunyi-app/releases/latest"><strong>Bunyi 1.1.0</strong></a> is a signed and notarized disk image for Apple
-      Silicon Macs running macOS 15 or later. Open the <code>.dmg</code>, drag Bunyi to Applications, and
-      launch it — no Gatekeeper warnings, no terminal. A <code>.zip</code> of the same app is there for
-      scripted installs, alongside SHA-256 checksums for both.
-    </p>
-    <p>
-      The first generation in each mode downloads that mode’s model (about 1.5–4.5&nbsp;GB) with a progress
-      bar. After that it runs offline.
-    </p>
 
-    <h2 style="margin-top:2rem">Or build it yourself</h2>
+    <!--
+      CSS-only tabs: radio inputs, and a sibling selector to show the panel of
+      whichever is checked. No script, because the page needs none for this and
+      a download that depends on JavaScript is a download that can fail.
+    -->
+    <div class="os-tabs">
+      <input type="radio" name="os" id="os-mac" checked>
+      <input type="radio" name="os" id="os-win">
+      <input type="radio" name="os" id="os-linux">
+
+      <div class="os-picker">
+        <label for="os-mac">macOS</label>
+        <label for="os-win">Windows</label>
+        <label for="os-linux">Linux</label>
+      </div>
+
+      <div class="os-panel os-mac">
+        <p>
+          <a href="https://github.com/shaztechio/bunyi-app/releases/tag/v1.1.0"><strong>Bunyi 1.1.0</strong></a> is a signed and notarized disk image for Apple
+          Silicon Macs running macOS 15 or later. Open the <code>.dmg</code>, drag Bunyi to Applications, and
+          launch it — no Gatekeeper warnings, no terminal. A <code>.zip</code> of the same app is there for
+          scripted installs, alongside SHA-256 checksums for both.
+        </p>
+        <p>
+          Building it yourself needs an Apple Silicon Mac with Xcode 26 — the app uses Swift 6.2 and
+          mlx-swift’s Metal toolchain. The steps are in
+          <a href="https://github.com/shaztechio/bunyi-app/blob/main/apps/macos/AGENTS.md">apps/macos/AGENTS.md</a>.
+        </p>
+      </div>
+
+      <div class="os-panel os-win">
+        <p>
+          <a href="https://github.com/shaztechio/bunyi-app/releases/download/dotnet-v1.0.0/Bunyi-1.0.0-win-x64.zip"><strong>Bunyi 1.0.0 for Windows</strong></a> is a portable zip for 64-bit
+          Windows 10 or 11. Unzip it anywhere and run <code>Bunyi.App.exe</code> — there is no installer and
+          no .NET runtime to install.
+        </p>
+        <p>
+          It is not code-signed, so SmartScreen warns the first time: choose <em>More info</em>, then
+          <em>Run anyway</em>. The SHA-256 beside the download is there if you would rather check it first.
+        </p>
+        <p>
+          Building it yourself needs the .NET 10 SDK and <code>dotnet build</code> — see
+          <a href="https://github.com/shaztechio/bunyi-app/blob/main/apps/dotnet/AGENTS.md">apps/dotnet/AGENTS.md</a>.
+        </p>
+      </div>
+
+      <div class="os-panel os-linux">
+        <p>
+          <a href="https://github.com/shaztechio/bunyi-app/releases/download/dotnet-v1.0.0/Bunyi-1.0.0-linux-x64.tar.gz"><strong>Bunyi 1.0.0 for Linux</strong></a> is a portable tarball for x86-64.
+          Untar it, make it executable, and run it — the same self-contained build, with no runtime to
+          install.
+        </p>
+<pre><code>tar xzf Bunyi-1.0.0-linux-x64.tar.gz
+chmod +x Bunyi.App
+./Bunyi.App</code></pre>
+        <p>
+          On a desktop system — Ubuntu, Fedora, anything with a working desktop — that is all it needs. A
+          <strong>minimal or server install</strong> lacks the libraries a GUI app expects; on Debian or
+          Ubuntu:
+        </p>
+<pre><code>sudo apt install libx11-6 libice6 libsm6 libxi6 libxcursor1 libxrandr2 \
+  libxext6 libxrender1 libgl1 libfontconfig1 libicu74 libssl3 libasound2t64</code></pre>
+        <p>
+          Building it yourself needs the .NET 10 SDK and <code>dotnet build</code> — see
+          <a href="https://github.com/shaztechio/bunyi-app/blob/main/apps/dotnet/AGENTS.md">apps/dotnet/AGENTS.md</a>.
+        </p>
+      </div>
+    </div>
+
     <p>
-      Building from source needs an Apple Silicon Mac running macOS 15 or later, with Xcode 26 (the app
-      uses Swift 6.2 and mlx-swift’s Metal toolchain).
-    </p>
-
-    <ol class="steps">
-      <li>
-        <h3>Clone and generate the Xcode project</h3>
-        <p>The <code>.xcodeproj</code> is generated from <code>project.yml</code> and isn’t checked in — edit the YAML, never the project.</p>
-<pre><code>git clone https://github.com/shaztechio/bunyi-app.git
-cd bunyi-app/apps/macos
-brew install xcodegen
-xcodegen generate</code></pre>
-      </li>
-      <li>
-        <h3>Install the Metal toolchain</h3>
-        <p>Xcode 26 ships the Metal compiler separately, and mlx-swift compiles shaders. Skip this and the first build fails with <em>“cannot execute tool ‘metal’”</em>.</p>
-<pre><code>xcodebuild -downloadComponent MetalToolchain</code></pre>
-      </li>
-      <li>
-        <h3>Build and run</h3>
-        <p>Open <code>Bunyi.xcodeproj</code> and press ⌘R, or build from the command line. Xcode resolves swift-qwen3-tts and its dependencies on the first build.</p>
-<pre><code>xcodebuild -scheme "Bunyi" -destination 'platform=macOS' build</code></pre>
-      </li>
-      <li>
-        <h3>Generate something</h3>
-        <p>Type text, pick a mode, hit Generate. The first run in each mode downloads that mode’s model with a progress bar; every run after that is offline.</p>
-      </li>
-    </ol>
-
-    <p class="note">
-      Working on Windows or Linux? Start from
-      <a href="https://github.com/shaztechio/bunyi-app/blob/main/apps/dotnet/AGENTS.md">apps/dotnet/AGENTS.md</a>
-      and the spec. It can’t be built on a Mac.
+      Whichever you take: the first generation in each mode downloads that mode’s model (about
+      1.5–4.5&nbsp;GB) with a progress bar. After that it runs offline. Voice clone also fetches a 141&nbsp;MB
+      speech-recognition model the first time it listens to a recording.
     </p>
   </div>
 </section>
