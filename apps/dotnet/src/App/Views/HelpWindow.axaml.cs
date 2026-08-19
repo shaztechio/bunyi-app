@@ -15,7 +15,6 @@
 using System.Reflection;
 using Avalonia;
 using Avalonia.Controls;
-using Bunyi.Core.Audio;
 using Avalonia.Controls.Documents;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -47,25 +46,7 @@ public partial class HelpWindow : Window
     {
         InitializeComponent();
         Render(HelpDocument.Parse(LoadText()));
-
-        this.FindControl<TextBlock>("AboutLine")!.Text = About();
     }
-
-    /// <summary>
-    /// What the app is, which version, and where it is running.
-    /// </summary>
-    /// <remarks>
-    /// The platform is named because these are the two builds people confuse in
-    /// a bug report — the Windows and Linux apps are one codebase and look
-    /// identical, so "Bunyi 0.1.0" alone does not say which one was running.
-    /// </remarks>
-    internal static string About() =>
-        $"Bunyi {Version} for {OutputMetadata.CurrentPlatform} · "
-        + "Apache-2.0 · Copyright 2026 Shazron Abdullah and Bunyi contributors";
-
-    /// <summary>The version this build was stamped with.</summary>
-    internal static string Version =>
-        typeof(HelpWindow).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
 
     /// <summary>Reads the embedded help text.</summary>
     /// <remarks>

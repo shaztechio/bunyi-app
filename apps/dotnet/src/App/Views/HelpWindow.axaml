@@ -26,22 +26,6 @@ limitations under the License.
       Help Viewer's index for free and this does not. Until then the document
       is short enough to scroll, and the headings carry the structure.
     -->
-    <!--
-      What an About box would say, in the one window that already exists for
-      telling someone about the app.
-
-      macOS gets a real About panel free from AppKit, filled in from the bundle.
-      Windows and Linux get nothing of the sort, and this app has no menu bar to
-      hang one on — so before this, the version was visible only inside a
-      generated clip's details, which is no help to someone who has not
-      generated anything yet or is filing a bug about why they cannot.
-    -->
-    <Border DockPanel.Dock="Bottom" Padding="28,12"
-            BorderThickness="0,1,0,0"
-            BorderBrush="{DynamicResource BunyiCardBorder}">
-      <TextBlock Name="AboutLine" FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
-    </Border>
-
     <ScrollViewer Name="Scroller" Padding="28,24">
       <StackPanel Name="Body" MaxWidth="620" HorizontalAlignment="Left" />
     </ScrollViewer>

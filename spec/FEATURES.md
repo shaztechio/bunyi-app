@@ -412,6 +412,8 @@ tab (platform convention). macOS source: `SettingsView.swift`.
 - **Models**: the three per-mode source fields (repo ID or base URL) + help.
 - **Storage**: models-folder location controls + pre-download commands.
 - **Backup**: back up / restore / stop + status.
+- **About** (.NET only): name, version, platform, licence and copyright —
+  see §9a. macOS has no such tab; AppKit's About panel covers it there.
 
 The appearance setting is why the app's visual design cannot be built on a
 single fixed palette: any colour that only works against one background is a
@@ -458,8 +460,8 @@ macOS source: `WindowCloseGuard.swift`.
   user can reach without generating anything.
   - macOS gets this free: AppKit's About panel, filled from the bundle.
   - **.NET (Win+Linux)**: there is no equivalent and no menu bar to hang one
-    on, so it goes at the foot of the Help window, which §8 already keeps
-    always available.
+    on, so it is an **About tab in Settings** (§7) — where a Windows or Linux
+    user looks for it.
 - The platform is named, not just the version. Windows and Linux are one
   codebase and look identical, so a version alone does not say which build a
   bug report is about.

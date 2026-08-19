@@ -16,6 +16,7 @@ using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.LogicalTree;
 using Avalonia.Styling;
+using Bunyi.App.Infrastructure;
 using Bunyi.App.ViewModels;
 using Bunyi.App.Views;
 using Bunyi.Core;
@@ -55,16 +56,77 @@ public sealed class SettingsTests : HeadlessWindows
     };
 
     [AvaloniaFact]
-    public void The_window_opens_with_four_tabs()
+    public void The_window_opens_with_the_tabs_the_spec_names()
     {
-        // §7: General, Models, Storage, Backup.
+        // §7: General, Models, Storage, Backup — plus About, which §9a puts
+        // here because Windows and Linux have no About panel of their own.
         var window = Open(new SettingsWindow { DataContext = NewModel() });
 
         var tabs = window.GetLogicalDescendants().OfType<TabItem>().ToList();
-        Assert.Equal(4, tabs.Count);
         Assert.Equal(
-            ["General", "Models", "Storage", "Backup"],
+            ["General", "Models", "Storage", "Backup", "About"],
             tabs.Select(t => t.Header as string));
+    }
+
+    // ---- About (spec §9a) ----
+
+    [AvaloniaFact]
+    public void The_about_tab_names_the_app_its_version_and_its_platform()
+    {
+        // Before this there was nowhere to see the version without generating
+        // something first — no menu bar, and Avalonia gives nothing free the
+        // way AppKit does.
+        var window = Open(new SettingsWindow { DataContext = NewModel() });
+
+        var tabs = window.GetLogicalDescendants().OfType<TabControl>().First();
+        tabs.SelectedIndex = 4;
+        window.UpdateLayout();
+
+        var shown = window.GetLogicalDescendants().OfType<TextBlock>()
+            .Select(t => t.Text ?? string.Empty)
+            .ToList();
+
+        Assert.Contains(AboutInfo.Name, shown);
+        Assert.Contains(AboutInfo.VersionLine, shown);
+        Assert.Contains(AboutInfo.Copyright, shown);
+    }
+
+    [AvaloniaFact]
+    public void The_about_tab_titles_the_window()
+    {
+        var window = Open(new SettingsWindow { DataContext = NewModel() });
+
+        var tabs = window.GetLogicalDescendants().OfType<TabControl>().First();
+        tabs.SelectedIndex = 4;
+
+        Assert.Equal("About", window.Title);
+    }
+
+    [Fact]
+    public void The_version_line_carries_both_the_version_and_the_platform()
+    {
+        // Windows and Linux are one codebase and look identical, so a version
+        // alone does not say which build a bug report is about.
+        Assert.Contains(AboutInfo.Version, AboutInfo.VersionLine, StringComparison.Ordinal);
+        Assert.Contains(AboutInfo.Platform, AboutInfo.VersionLine, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_version_comes_from_the_build_rather_than_a_constant()
+    {
+        // This project has already shipped a build whose version said 1.0
+        // because the number lived in two places.
+        Assert.Equal(
+            typeof(AboutInfo).Assembly.GetName().Version?.ToString(3),
+            AboutInfo.Version);
+    }
+
+    [Fact]
+    public void The_platform_matches_the_stamp_written_into_every_clip()
+    {
+        // One wording, so a file's "Made with" line and the About tab can never
+        // disagree about what this build is.
+        Assert.Equal(Bunyi.Core.Audio.OutputMetadata.CurrentPlatform, AboutInfo.Platform);
     }
 
     [AvaloniaFact]

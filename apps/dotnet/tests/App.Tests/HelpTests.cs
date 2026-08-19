@@ -17,7 +17,6 @@ using Avalonia.Controls.Documents;
 using Avalonia.Headless.XUnit;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
-using Bunyi.Core.Audio;
 using Bunyi.App.Views;
 using Bunyi.Core.Help;
 using Xunit;
@@ -238,47 +237,5 @@ public class HelpTests : HeadlessWindows
             .First(p => p.Name == "Body");
 
         Assert.Contains("Help unavailable", TextOf(body), StringComparison.Ordinal);
-    }
-
-    // ---- Naming the build (spec §9a) ----
-
-    [AvaloniaFact]
-    public void The_help_window_says_what_this_app_is()
-    {
-        // There is no About box on Windows or Linux — no menu bar to hang one
-        // on, and Avalonia gives nothing free the way AppKit does. Before this,
-        // the version appeared only inside a generated clip's details, which is
-        // no use to someone who has not generated anything or is filing a bug
-        // about why they cannot.
-        var window = Open(new HelpWindow());
-        window.UpdateLayout();
-
-        var about = window.GetLogicalDescendants().OfType<TextBlock>()
-            .First(t => t.Name == "AboutLine");
-
-        Assert.True(about.IsVisible);
-        Assert.Contains("Bunyi", about.Text!, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void It_names_the_platform_as_well_as_the_version()
-    {
-        // Windows and Linux are one codebase and look identical, so a version
-        // on its own does not say which build a bug report is about.
-        var about = HelpWindow.About();
-
-        Assert.Contains(HelpWindow.Version, about, StringComparison.Ordinal);
-        Assert.Contains(OutputMetadata.CurrentPlatform, about, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void It_says_who_made_it_and_under_what_licence()
-    {
-        // The other half of what an About panel carries. macOS reads its
-        // copyright from the bundle; this has nowhere to read one from.
-        var about = HelpWindow.About();
-
-        Assert.Contains("Apache-2.0", about, StringComparison.Ordinal);
-        Assert.Contains("Shazron Abdullah", about, StringComparison.Ordinal);
     }
 }
