@@ -13,6 +13,7 @@
 // limitations under the License.
 
 using System.Reflection;
+using System.Text.Json;
 using Bunyi.Core.Audio;
 
 namespace Bunyi.App.Infrastructure;
@@ -66,40 +67,37 @@ public static class AboutInfo
     /// <summary>Version and platform together, as the tab shows them.</summary>
     public static string VersionLine => $"Version {Version} for {Platform}";
 
+    // Declared before the lists that use it. Static initialisers run in
+    // declaration order, so the other way round this is null while they load,
+    // the match quietly becomes case-sensitive, and every entry comes back
+    // empty — a credits page that renders as nothing at all.
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+    };
+
+    /// <summary>The name the build gives the embedded credits.</summary>
+    internal const string CreditsResource = "Bunyi.App.CREDITS.json";
+
+    /// <summary>Which app this is, in the shared file's terms.</summary>
+    internal const string AppKey = "dotnet";
+
     /// <summary>
     /// The software this app is built on (spec §9a).
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Every licence here was read from the package's own licence file or the
-    /// model's own card, not from memory. Getting one wrong in a credits list is
-    /// a licence claim the project cannot support.
+    /// Read from <c>/spec/CREDITS.json</c>, which the macOS app reads too. One
+    /// list, so the two cannot end up crediting different things — they share no
+    /// code, but they should not disagree about whose work they are standing on.
     /// </para>
     /// <para>
-    /// What ships or is downloaded, rather than everything that appears in a
-    /// dependency graph — build and test tooling is not part of the app a user
-    /// runs, and listing it would bury the things that are.
+    /// Entries are filtered to this app: most of what the two depend on differs
+    /// entirely, and crediting MLX here would be crediting something that is not
+    /// in the build.
     /// </para>
     /// </remarks>
-    public static IReadOnlyList<Credit> Credits { get; } =
-    [
-        new("Avalonia", "The windows, controls and drawing", "MIT",
-            "https://avaloniaui.net"),
-        new(".NET", "The runtime it all sits on", "MIT",
-            "https://github.com/dotnet/runtime"),
-        new("ONNX Runtime", "Runs the speech models", "MIT",
-            "https://github.com/microsoft/onnxruntime"),
-        new("whisper.cpp, via Whisper.net", "Listens to a reference recording", "MIT",
-            "https://github.com/sandrohanea/whisper.net"),
-        new("SoundFlow", "Plays clips and reads the recordings you choose", "MIT",
-            "https://github.com/LSXPrime/SoundFlow"),
-        new("ElBruno.QwenTTS", "Drives the preset-voice model", "MIT",
-            "https://github.com/elbruno/ElBruno.QwenTTS"),
-        new("CommunityToolkit.Mvvm", "Wires the windows to the code behind them", "MIT",
-            "https://github.com/CommunityToolkit/dotnet"),
-        new("Inter", "The typeface", "SIL Open Font License 1.1",
-            "https://rsms.me/inter/"),
-    ];
+    public static IReadOnlyList<Credit> Credits { get; } = Load("library");
 
     /// <summary>
     /// The models, which are downloaded rather than shipped.
@@ -108,15 +106,34 @@ public static class AboutInfo
     /// Separate from the libraries because they are the part that actually
     /// speaks, they are other people's work, and they arrive after the app does.
     /// </remarks>
-    public static IReadOnlyList<Credit> ModelCredits { get; } =
-    [
-        new("Qwen3-TTS", "The voices, by the Qwen team at Alibaba", "Apache-2.0",
-            "https://github.com/QwenLM/Qwen3-TTS"),
-        new("Qwen3-TTS ONNX exports", "Converted for this runtime by elbruno and wavekat",
-            "Apache-2.0", "https://huggingface.co/wavekat"),
-        new("Whisper models", "Published by ggerganov as whisper.cpp", "MIT",
-            "https://huggingface.co/ggerganov/whisper.cpp"),
-    ];
+    public static IReadOnlyList<Credit> ModelCredits { get; } = Load("model");
+
+    private static IReadOnlyList<Credit> Load(string kind)
+    {
+        using var stream = typeof(AboutInfo).Assembly
+            .GetManifestResourceStream(CreditsResource);
+
+        if (stream is null)
+        {
+            // A build that lost the file. Saying nothing beats inventing a list,
+            // and the tests fail long before anyone sees this.
+            return [];
+        }
+
+        var file = JsonSerializer.Deserialize<CreditsFile>(stream, JsonOptions);
+
+        return file?.Entries?
+            .Where(e => e.Kind == kind && e.Apps?.Contains(AppKey) == true)
+            .Select(e => new Credit(e.Name, e.Does, e.Licence, e.Url))
+            .ToList()
+            ?? [];
+    }
+
+    private sealed record CreditsFile(IReadOnlyList<CreditEntry>? Entries);
+
+    private sealed record CreditEntry(
+        string Name, string Does, string Licence, string Url,
+        string Kind, IReadOnlyList<string>? Apps);
 
     /// <summary>The copyright line, taken from the assembly.</summary>
     public static string Copyright =>

@@ -213,6 +213,36 @@ public sealed class SettingsTests : HeadlessWindows
     }
 
     [Fact]
+    public void The_credits_come_from_the_file_the_macos_app_also_reads()
+    {
+        // /spec/CREDITS.json is shared. If the resource stops shipping, or its
+        // shape changes, the tab renders as nothing at all rather than failing —
+        // so the emptiness is what gets asserted against.
+        Assert.NotEmpty(AboutInfo.Credits);
+        Assert.NotEmpty(AboutInfo.ModelCredits);
+    }
+
+    [Fact]
+    public void Only_this_apps_entries_are_shown()
+    {
+        // The two apps share almost nothing but the models. Crediting MLX here
+        // would be crediting something that is not in this build.
+        var names = AboutInfo.Credits.Select(c => c.Name).ToList();
+
+        Assert.Contains("Avalonia", names);
+        Assert.DoesNotContain(names, n => n.Contains("MLX", StringComparison.Ordinal));
+        Assert.DoesNotContain(names, n => n.StartsWith("swift-", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void The_models_both_apps_use_are_credited_by_both()
+    {
+        // Qwen3-TTS itself is the one entry that is genuinely shared, and it is
+        // the most important one to get right.
+        Assert.Contains(AboutInfo.ModelCredits, c => c.Name == "Qwen3-TTS");
+    }
+
+    [Fact]
     public void No_credit_is_listed_twice()
     {
         var all = AboutInfo.Credits.Concat(AboutInfo.ModelCredits).Select(c => c.Name).ToList();

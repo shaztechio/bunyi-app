@@ -466,10 +466,15 @@ macOS source: `WindowCloseGuard.swift`.
   codebase and look identical, so a version alone does not say which build a
   bug report is about.
 - **Credits** for the software the app is built on, and separately for the
-  models it downloads — each with its licence and where to find it. Every
-  licence stated must have been read from that project's own licence file or
-  model card; a credits list that guesses is a licence claim the project
-  cannot support.
+  models it downloads — each with its licence and a link that opens in the
+  user's browser.
+  - The list lives in **`/spec/CREDITS.json`**, read by both apps, so the two
+    cannot end up crediting different things. Entries are tagged with the app
+    they belong to: the two share the models and almost nothing else.
+  - Every licence stated must have been **read from that project's own licence
+    file, package metadata, or model card** — never from memory. A credits list
+    that guesses is a licence claim the project cannot support. Where a project
+    states no licence, the file says so rather than leaving it out.
 
 ## 10. Error handling & copy tone
 

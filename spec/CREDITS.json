@@ -1,0 +1,186 @@
+{
+  "$comment": [
+    "The software both Bunyi apps are built on, and the models they download.",
+    "",
+    "Shared because the credits should not disagree between platforms, and",
+    "because the two apps genuinely share most of what they depend on for the",
+    "part that matters — the models. They share no code (see /AGENTS.md); this",
+    "is data, and each app reads it in its own way.",
+    "",
+    "Every licence here was read from that project's own licence file, its",
+    "package metadata, or its model card. Never from memory: a credits list",
+    "that guesses is a licence claim the project cannot support. Where a",
+    "project states no licence, this says so — that is information, not an",
+    "omission to be tidied away.",
+    "",
+    "'apps' says which app ships or downloads the entry. 'kind' separates the",
+    "libraries an app is built from ('library') from the models it fetches",
+    "afterwards ('model')."
+  ],
+  "version": 1,
+  "entries": [
+    {
+      "name": "Qwen3-TTS",
+      "does": "The voices, by the Qwen team at Alibaba",
+      "licence": "Apache-2.0",
+      "url": "https://github.com/QwenLM/Qwen3-TTS",
+      "kind": "model",
+      "apps": ["macos", "dotnet"]
+    },
+    {
+      "name": "Qwen3-TTS ONNX exports",
+      "does": "Converted for this runtime by elbruno and wavekat",
+      "licence": "Apache-2.0",
+      "url": "https://huggingface.co/wavekat",
+      "kind": "model",
+      "apps": ["dotnet"]
+    },
+    {
+      "name": "Qwen3-TTS MLX weights",
+      "does": "Converted for Apple silicon",
+      "licence": "Apache-2.0",
+      "url": "https://huggingface.co/mlx-community",
+      "kind": "model",
+      "apps": ["macos"]
+    },
+    {
+      "name": "Whisper models",
+      "does": "Published by ggerganov as whisper.cpp",
+      "licence": "MIT",
+      "url": "https://huggingface.co/ggerganov/whisper.cpp",
+      "kind": "model",
+      "apps": ["dotnet"]
+    },
+
+    {
+      "name": "Avalonia",
+      "does": "The windows, controls and drawing",
+      "licence": "MIT",
+      "url": "https://avaloniaui.net",
+      "kind": "library",
+      "apps": ["dotnet"]
+    },
+    {
+      "name": ".NET",
+      "does": "The runtime it all sits on",
+      "licence": "MIT",
+      "url": "https://github.com/dotnet/runtime",
+      "kind": "library",
+      "apps": ["dotnet"]
+    },
+    {
+      "name": "ONNX Runtime",
+      "does": "Runs the speech models",
+      "licence": "MIT",
+      "url": "https://github.com/microsoft/onnxruntime",
+      "kind": "library",
+      "apps": ["dotnet"]
+    },
+    {
+      "name": "whisper.cpp, via Whisper.net",
+      "does": "Listens to a reference recording",
+      "licence": "MIT",
+      "url": "https://github.com/sandrohanea/whisper.net",
+      "kind": "library",
+      "apps": ["dotnet"]
+    },
+    {
+      "name": "SoundFlow",
+      "does": "Plays clips and reads the recordings you choose",
+      "licence": "MIT",
+      "url": "https://github.com/LSXPrime/SoundFlow",
+      "kind": "library",
+      "apps": ["dotnet"]
+    },
+    {
+      "name": "ElBruno.QwenTTS",
+      "does": "Drives the preset-voice model",
+      "licence": "MIT",
+      "url": "https://github.com/elbruno/ElBruno.QwenTTS",
+      "kind": "library",
+      "apps": ["dotnet"]
+    },
+    {
+      "name": "CommunityToolkit.Mvvm",
+      "does": "Wires the windows to the code behind them",
+      "licence": "MIT",
+      "url": "https://github.com/CommunityToolkit/dotnet",
+      "kind": "library",
+      "apps": ["dotnet"]
+    },
+    {
+      "name": "Inter",
+      "does": "The typeface",
+      "licence": "SIL Open Font License 1.1",
+      "url": "https://rsms.me/inter/",
+      "kind": "library",
+      "apps": ["dotnet"]
+    },
+
+    {
+      "name": "MLX Swift",
+      "does": "Runs the speech models on Apple silicon",
+      "licence": "MIT",
+      "url": "https://github.com/ml-explore/mlx-swift",
+      "kind": "library",
+      "apps": ["macos"]
+    },
+    {
+      "name": "MLX Swift Examples",
+      "does": "Model loading and tokenizer plumbing",
+      "licence": "MIT",
+      "url": "https://github.com/ml-explore/mlx-swift-examples",
+      "kind": "library",
+      "apps": ["macos"]
+    },
+    {
+      "name": "swift-qwen3-tts",
+      "does": "The reference Qwen3-TTS pipeline for MLX",
+      "licence": "No licence stated",
+      "url": "https://github.com/AtomGradient/swift-qwen3-tts",
+      "kind": "library",
+      "apps": ["macos"],
+      "$note": "Checked 2026-08-19: the repository carries no LICENSE file and GitHub reports no licence. Recorded as stated rather than assumed."
+    },
+    {
+      "name": "swift-transformers",
+      "does": "Tokenizers and Hub downloads",
+      "licence": "Apache-2.0",
+      "url": "https://github.com/huggingface/swift-transformers",
+      "kind": "library",
+      "apps": ["macos"]
+    },
+    {
+      "name": "swift-jinja",
+      "does": "Renders the chat template the model expects",
+      "licence": "Apache-2.0",
+      "url": "https://github.com/huggingface/swift-jinja",
+      "kind": "library",
+      "apps": ["macos"]
+    },
+    {
+      "name": "swift-collections",
+      "does": "Data structures the model loader uses",
+      "licence": "Apache-2.0",
+      "url": "https://github.com/apple/swift-collections",
+      "kind": "library",
+      "apps": ["macos"]
+    },
+    {
+      "name": "swift-numerics",
+      "does": "Numeric types the tensor code builds on",
+      "licence": "Apache-2.0",
+      "url": "https://github.com/apple/swift-numerics",
+      "kind": "library",
+      "apps": ["macos"]
+    },
+    {
+      "name": "GzipSwift",
+      "does": "Unpacks downloads",
+      "licence": "MIT",
+      "url": "https://github.com/1024jp/GzipSwift",
+      "kind": "library",
+      "apps": ["macos"]
+    }
+  ]
+}
