@@ -282,20 +282,39 @@ public sealed class BackupManager(ILogSink log)
     {
         ArgumentNullException.ThrowIfNull(archive);
 
+        string? shallowest = null;
+        var best = int.MaxValue;
+
         foreach (var entry in archive.Entries)
         {
             var parts = entry.FullName.Split('/');
 
             for (var i = 0; i < Math.Min(parts.Length, 2); i++)
             {
-                if (string.Equals(parts[i], ModelsEntry, StringComparison.OrdinalIgnoreCase))
+                if (!string.Equals(parts[i], ModelsEntry, StringComparison.OrdinalIgnoreCase))
                 {
-                    return string.Join('/', parts[..(i + 1)]) + "/";
+                    continue;
                 }
+
+                // The shallowest wins, not the first one enumerated. An archive
+                // can hold more than one: earlier builds fetched the Whisper
+                // model into whisper/models/, so a backup from one of those has
+                // a second tree in it — and taking whichever came first made
+                // the answer depend on the order the zip happened to list its
+                // entries.
+                if (i < best)
+                {
+                    best = i;
+                    shallowest = string.Join('/', parts[..(i + 1)]) + "/";
+                }
+
+                break;
             }
+
+            if (best == 0) break;
         }
 
-        return null;
+        return shallowest;
     }
 
     /// <summary>The <c>org/name</c> an entry belongs to, or null.</summary>

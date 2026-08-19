@@ -279,6 +279,23 @@ public sealed class BackupTests : IDisposable
     }
 
     [Fact]
+    public void A_second_models_tree_deeper_in_does_not_win()
+    {
+        // Earlier builds fetched the Whisper model into whisper/models/, so a
+        // backup from one of those holds two. Taking whichever the zip listed
+        // first made the answer depend on enumeration order.
+        var mixed = Path.Combine(_root, "mixed.zip");
+        using (var archive = ZipFile.Open(mixed, ZipArchiveMode.Create))
+        {
+            // The deeper one first, which is the order that used to break it.
+            archive.CreateEntry("whisper/models/ggerganov/whisper.cpp/ggml-base.bin");
+            archive.CreateEntry("models/elbruno/Qwen3/config.json");
+        }
+
+        Assert.Equal(["elbruno/Qwen3"], New().Inspect(mixed).Repos);
+    }
+
+    [Fact]
     public void An_entry_that_climbs_out_of_the_folder_is_refused()
     {
         // The archive's paths decide where files land, so they are checked the
