@@ -91,6 +91,29 @@ public class MainWindowTests : HeadlessWindows
     }
 
     [AvaloniaFact]
+    public void The_script_box_is_the_child_that_fills_its_panel()
+    {
+        // A bounds check would be nicer and does not work: the headless layout
+        // does not reproduce this, reporting a near-full-width box with the bug
+        // in place. So the rule itself is pinned instead.
+        //
+        // In a DockPanel the last child fills and every earlier one docks —
+        // default Left. Adding a validation message after the box made the box
+        // a left-docked child sized to its own text, at half the width of the
+        // card. Anything added below it must be docked and come first.
+        var (window, _, _, _) = Open();
+        window.UpdateLayout();
+
+        var script = window.GetLogicalDescendants().OfType<TextBox>()
+            .First(t => t.Name == "ScriptBox");
+
+        var panel = Assert.IsType<DockPanel>(script.Parent);
+
+        Assert.True(panel.LastChildFill, "the panel no longer fills with its last child");
+        Assert.Same(script, panel.Children[^1]);
+    }
+
+    [AvaloniaFact]
     public void Generate_is_present_and_pressable_on_an_unused_window()
     {
         // It used to be disabled here. A disabled button cannot be hovered for

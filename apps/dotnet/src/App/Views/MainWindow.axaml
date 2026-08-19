@@ -295,14 +295,21 @@ limitations under the License.
             </ItemsControl>
           </StackPanel>
 
+          <!--
+            Docked, and before the box on purpose. In a DockPanel the last child
+            fills and every earlier one docks — default Left — so adding this
+            after the box turned the box into a left-docked child sized to its
+            own text, at half the width of the card. The box stays last.
+          -->
+          <TextBlock DockPanel.Dock="Bottom" Classes="needed" Margin="0,6,0,0"
+                     Text="{Binding MissingReason}"
+                     IsVisible="{Binding NeedsText}" />
+
           <TextBox Name="ScriptBox" Text="{Binding Script}"
                    Classes.needed="{Binding NeedsText}"
                    AcceptsReturn="True" TextWrapping="Wrap"
                    MinHeight="140" FontSize="15"
                    PlaceholderText="Type or paste what you would like spoken." />
-
-          <TextBlock Classes="needed" Text="{Binding MissingReason}"
-                     IsVisible="{Binding NeedsText}" />
         </DockPanel>
       </Border>
 
