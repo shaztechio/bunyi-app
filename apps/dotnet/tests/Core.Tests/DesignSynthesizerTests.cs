@@ -34,11 +34,11 @@ public class DesignSynthesizerTests
         public DesignRequest? Asked { get; private set; }
         public bool Disposed { get; private set; }
         public float[] Samples { get; set; } = [0f, 0.5f, -0.5f];
-        public Func<DesignRequest, DesignResult>? Answer { get; set; }
+        public Func<DesignRequest, SpeechResult>? Answer { get; set; }
 
         public SamplingOptions DefaultSampling => SamplingOptions.Default;
 
-        public DesignResult Generate(
+        public SpeechResult Generate(
             DesignRequest request, SamplingOptions? options = null,
             IProgress<int>? progress = null, int? maxFrames = null,
             CancellationToken ct = default)
@@ -47,7 +47,7 @@ public class DesignSynthesizerTests
             ct.ThrowIfCancellationRequested();
 
             return Answer?.Invoke(request)
-                ?? new DesignResult(Samples, [new int[16], new int[16]]);
+                ?? new SpeechResult(Samples, [new int[16], new int[16]]);
         }
 
         public void Dispose() => Disposed = true;
@@ -199,7 +199,7 @@ public class DesignSynthesizerTests
     {
         var (synth, opened) = New();
         await synth.LoadAsync(@"C:\models\design", default);
-        opened[0].Answer = _ => new DesignResult(new float[2400], [.. Enumerable.Repeat(new int[16], 5)]);
+        opened[0].Answer = _ => new SpeechResult(new float[2400], [.. Enumerable.Repeat(new int[16], 5)]);
 
         var result = await synth.SynthesizeAsync(
             new GenerateRequest(TtsMode.VoiceDesign, "Hello"), default);
