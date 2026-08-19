@@ -13,6 +13,8 @@
 // limitations under the License.
 
 using Avalonia.Controls;
+using Avalonia.Input;
+using Bunyi.App.Infrastructure;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform.Storage;
@@ -47,6 +49,30 @@ public partial class SettingsWindow : Window
         if (sender is TabControl { SelectedItem: TabItem { Header: string header } })
         {
             Title = header;
+        }
+    }
+
+    /// <summary>
+    /// Puts the version and platform on the clipboard (spec §9a).
+    /// </summary>
+    /// <remarks>
+    /// The tab asks people to quote these in a bug report, so taking them has
+    /// to be one click. Reading a version off the screen and typing it back in
+    /// is how the wrong one ends up in the report.
+    /// </remarks>
+    private async void CopyVersion(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (Clipboard is null) return;
+
+        var transfer = new DataTransfer();
+        transfer.Add(DataTransferItem.CreateText($"{AboutInfo.Name} {AboutInfo.VersionLine}"));
+        await Clipboard.SetDataAsync(transfer);
+
+        // §2a's acknowledgement rule, which applies to any copy: one that says
+        // nothing is indistinguishable from one that failed.
+        if (this.FindControl<Button>("CopyVersionButton") is { } button)
+        {
+            ToolTip.SetTip(button, "Copied");
         }
     }
 

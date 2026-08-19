@@ -96,12 +96,18 @@ limitations under the License.
               <DataTemplate x:DataType="core:ModelConfig">
                 <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,3">
                   <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
-                  <Button Grid.Column="1" Content="Use" FontSize="11" Margin="0,0,4,0"
+                  <Button Grid.Column="1" Classes="icon" Margin="0,0,4,0"
                           Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).UseConfigCommand}"
-                          CommandParameter="{Binding}" />
-                  <Button Grid.Column="2" Content="Delete" FontSize="11"
+                          CommandParameter="{Binding}"
+                          ToolTip.Tip="Use these sources for all three modes">
+                    <Path Data="{DynamicResource IconTick}" />
+                  </Button>
+                  <Button Grid.Column="2" Classes="icon"
                           Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).DeleteConfigCommand}"
-                          CommandParameter="{Binding}" />
+                          CommandParameter="{Binding}"
+                          ToolTip.Tip="Delete this configuration">
+                    <Path Data="{DynamicResource IconTrash}" />
+                  </Button>
                 </Grid>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
@@ -140,9 +146,18 @@ limitations under the License.
                       <Run Text="{Binding SizeText}" /><Run Text=" · " /><Run Text="{Binding OriginText}" />
                     </TextBlock>
                   </StackPanel>
-                  <Button Grid.Column="1" Content="Delete" FontSize="11"
+                  <!--
+                    The same trash button a History row has. Four buttons
+                    reading "Delete" down the side of a list is the word
+                    repeated, not information; the icon says it once and the
+                    tooltip says which.
+                  -->
+                  <Button Grid.Column="1" Classes="icon"
                           Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).DeleteModelCommand}"
-                          CommandParameter="{Binding}" />
+                          CommandParameter="{Binding}"
+                          ToolTip.Tip="Move this model to the Trash">
+                    <Path Data="{DynamicResource IconTrash}" />
+                  </Button>
                 </Grid>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
@@ -211,10 +226,25 @@ limitations under the License.
           <TextBlock Text="{x:Static inf:AboutInfo.Tagline}" Opacity="0.8" TextWrapping="Wrap" />
 
           <StackPanel Spacing="4">
-            <TextBlock Text="{x:Static inf:AboutInfo.VersionLine}" />
-            <TextBlock Text="{x:Static inf:AboutInfo.Licence}" Opacity="0.75" FontSize="12" />
-            <TextBlock Text="{x:Static inf:AboutInfo.Copyright}" Opacity="0.75" FontSize="12"
-                       TextWrapping="Wrap" />
+            <!--
+              Selectable, and with a button beside it. This is the line the tab
+              itself asks people to quote in a bug report, so it has to be
+              possible to take it away — reading a version off the screen and
+              typing it back in is how the wrong one ends up in the report.
+            -->
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <SelectableTextBlock Text="{x:Static inf:AboutInfo.VersionLine}"
+                                   VerticalAlignment="Center" />
+              <Button Classes="icon" Name="CopyVersionButton"
+                      Click="CopyVersion"
+                      ToolTip.Tip="Copy the version and platform">
+                <Path Data="{DynamicResource IconCopy}" />
+              </Button>
+            </StackPanel>
+
+            <SelectableTextBlock Text="{x:Static inf:AboutInfo.Licence}" Opacity="0.75" FontSize="12" />
+            <SelectableTextBlock Text="{x:Static inf:AboutInfo.Copyright}" Opacity="0.75" FontSize="12"
+                                 TextWrapping="Wrap" />
             <Button Classes="link" Content="{x:Static inf:AboutInfo.Home}"
                     FontSize="12" HorizontalAlignment="Left"
                     ToolTip.Tip="Open in your browser"
