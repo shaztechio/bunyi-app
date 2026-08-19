@@ -26,7 +26,16 @@ limitations under the License.
                Opacity="0.7" TextWrapping="Wrap" MaxWidth="360"
                TextAlignment="Center" />
 
-    <ScrollViewer IsVisible="{Binding !IsEmpty}">
+    <!--
+      AllowAutoHide is off so the scrollbar takes part in the layout instead of
+      floating over it. Overlaid, it sat on top of the Trash button at the end
+      of every row — the button was still there and still clickable, which is
+      the worst version of this: it looked broken without being broken.
+    -->
+    <ScrollViewer IsVisible="{Binding !IsEmpty}"
+                  AllowAutoHide="False"
+                  VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled">
       <ItemsControl ItemsSource="{Binding Rows}">
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="vm:HistoryRow">

@@ -83,6 +83,34 @@ public sealed class HistoryScrollTests : HeadlessWindows
             .GetLogicalDescendants().OfType<ScrollViewer>().First();
 
     [AvaloniaFact]
+    public void The_scrollbar_does_not_sit_on_top_of_the_row_buttons()
+    {
+        // Reported from using the app: with enough clips to scroll, the bar
+        // covered the Trash button at the end of every row. The button was
+        // still there and still clickable, which is the worst version of this
+        // — it looked broken without being broken.
+        WriteClips(40);
+        var (window, model) = ShowHistory();
+        model.History.Refresh();
+        window.UpdateLayout();
+
+        var scroller = HistoryScroller(window);
+
+        Assert.False(scroller.AllowAutoHide,
+            "the scrollbar floats over the content instead of taking its own space");
+
+        var trash = window.GetLogicalDescendants().OfType<HistoryView>().Single()
+            .GetLogicalDescendants().OfType<Button>()
+            .Last(b => b.Classes.Contains("icon"));
+
+        var right = trash.TranslatePoint(new Point(trash.Bounds.Width, 0), scroller);
+
+        Assert.NotNull(right);
+        Assert.True(right!.Value.X <= scroller.Viewport.Width + 0.5,
+            $"a row button reaches {right.Value.X:0} in a viewport {scroller.Viewport.Width:0} wide");
+    }
+
+    [AvaloniaFact]
     public void The_list_reads_every_clip_on_disk()
     {
         // The rows exist; whether they can be reached is the next test.

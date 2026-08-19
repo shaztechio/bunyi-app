@@ -88,6 +88,18 @@ limitations under the License.
   <StreamGeometry x:Key="IconTick">M5 12.5l4.5 4.5L19 7.5</StreamGeometry>
 
   <!-- Show file: a folder. -->
+  <!--
+    Choosing where models are kept: an open folder, distinct from the closed one
+    that means "show me this in the file manager".
+  -->
+  <StreamGeometry x:Key="IconFolderOpen">M3 19V6.5h6l2 2.5h8v3 M2.5 19.5l2.8-8h17l-2.8 8z</StreamGeometry>
+
+  <!--
+    Putting the models folder back to the default: the circular arrow that means
+    undo everywhere else.
+  -->
+  <StreamGeometry x:Key="IconReset">M20 12a8 8 0 1 1-2.4-5.7 M20.5 3.5v4.5h-4.5</StreamGeometry>
+
   <StreamGeometry x:Key="IconFolder">M3 6.5h6l2 2.5h10v11H3z</StreamGeometry>
 
   <!-- Trash: a bin with a lid. -->
