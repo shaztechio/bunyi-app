@@ -555,6 +555,124 @@ public sealed class VoiceCloneUiTests : HeadlessWindows
         }
     }
 
+    // ---- Saying what is missing (spec §1) ----
+
+    [Fact]
+    public void Nothing_is_marked_before_generate_is_pressed()
+    {
+        // A form that shows errors for fields nobody has reached yet is telling
+        // the user off for not having finished.
+        var model = New();
+        model.Mode = TtsMode.VoiceClone;
+
+        Assert.False(model.HasMissing);
+        Assert.False(model.NeedsText);
+        Assert.False(model.NeedsReference);
+    }
+
+    [Fact]
+    public async Task Pressing_it_early_points_at_the_first_thing_missing()
+    {
+        var model = New();
+        model.Mode = TtsMode.VoiceClone;
+
+        await model.GenerateCommand.ExecuteAsync(null);
+
+        Assert.True(model.NeedsText);
+        Assert.Contains("text to speak", model.MissingReason, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(model.MissingReason, model.Status);
+    }
+
+    [Fact]
+    public async Task With_text_it_points_at_the_recording()
+    {
+        var model = New();
+        model.Mode = TtsMode.VoiceClone;
+        model.Script = "Something to say.";
+
+        await model.GenerateCommand.ExecuteAsync(null);
+
+        Assert.True(model.NeedsReference);
+        Assert.False(model.NeedsText);
+    }
+
+    [Fact]
+    public async Task Design_mode_points_at_the_description()
+    {
+        var model = New();
+        model.Mode = TtsMode.VoiceDesign;
+        model.Script = "Something to say.";
+
+        await model.GenerateCommand.ExecuteAsync(null);
+
+        Assert.True(model.NeedsInstruction);
+    }
+
+    [Fact]
+    public async Task It_asks_the_window_to_put_the_cursor_there()
+    {
+        // Focus is the half that works without sight of the outline.
+        var model = New();
+        model.Mode = TtsMode.VoiceClone;
+        model.Script = "Something to say.";
+
+        RequiredInput? asked = null;
+        model.FocusRequested += (_, input) => asked = input;
+
+        await model.GenerateCommand.ExecuteAsync(null);
+
+        Assert.Equal(RequiredInput.Reference, asked);
+    }
+
+    [Fact]
+    public async Task The_mark_clears_the_moment_it_is_filled_in()
+    {
+        // A mark that outlives its problem is worse than none.
+        var model = New();
+        model.Mode = TtsMode.VoiceClone;
+        model.Script = "Something to say.";
+
+        await model.GenerateCommand.ExecuteAsync(null);
+        Assert.True(model.NeedsReference);
+
+        model.ReferenceAudioPath = "clip.wav";
+        model.ReferenceTranscript = "what it says";
+
+        Assert.False(model.HasMissing);
+    }
+
+    [Fact]
+    public async Task A_run_that_can_start_marks_nothing()
+    {
+        var engine = new FakeEngine();
+        var model = New(engine);
+        model.Script = "Something to say.";
+
+        engine.Pending.SetResult(new GenerateResult("out.wav", default, 0, default));
+        await model.GenerateCommand.ExecuteAsync(null);
+
+        Assert.False(model.HasMissing);
+        Assert.NotNull(engine.LastRequest);
+    }
+
+    [AvaloniaFact]
+    public void Generate_is_pressable_even_when_the_form_is_incomplete()
+    {
+        // The whole point. A disabled button cannot be hovered for the tooltip
+        // that explains it, and a screen reader skips it.
+        var model = New();
+        model.Mode = TtsMode.VoiceClone;
+
+        var window = Open(new MainWindow { DataContext = model });
+        window.UpdateLayout();
+
+        var button = window.GetLogicalDescendants().OfType<Button>()
+            .First(b => b.Name == "GenerateButton");
+
+        Assert.False(model.CanGenerate);
+        Assert.True(button.IsEffectivelyEnabled, "Generate cannot be pressed, so it cannot explain itself");
+    }
+
     // ---- Switching tabs ----
 
     [Fact]
@@ -576,6 +694,7 @@ public sealed class VoiceCloneUiTests : HeadlessWindows
         };
 
         model.ReferenceAudioPath = "clip.wav";
+        model.ReferenceTranscript = "what it says";
 
         Assert.True(model.CanGenerate);
         Assert.True(seen, "nothing announced that Generate had become usable");

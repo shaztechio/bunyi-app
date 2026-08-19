@@ -25,10 +25,70 @@ namespace Bunyi.Core.Engine;
 /// to be told a file is missing. Voice design had no check at all in the
 /// original and would generate an arbitrary voice from an empty description.
 /// </remarks>
+public enum RequiredInput
+{
+    /// <summary>The words to speak.</summary>
+    Text,
+
+    /// <summary>Voice design's description of the voice.</summary>
+    Instruction,
+
+    /// <summary>Voice clone's recording.</summary>
+    Reference,
+
+    /// <summary>What that recording says.</summary>
+    Transcript,
+}
+
+/// <summary>Something the run needs, and a sentence saying so.</summary>
+/// <param name="Input">Which field to point at.</param>
+/// <param name="Reason">What to tell the user, in their words.</param>
+public sealed record MissingInput(RequiredInput Input, string Reason);
+
 public static class GenerationReadiness
 {
     /// <summary>Whether the request can be generated as it stands.</summary>
-    public static bool CanGenerate(GenerateRequest request) => BlockedReason(request) is null;
+    public static bool CanGenerate(GenerateRequest request) => Missing(request) is null;
+
+    /// <summary>
+    /// What is missing, and where to look for it.
+    /// </summary>
+    /// <remarks>
+    /// The field is named as well as the reason, because a sentence alone
+    /// cannot point at anything. Generate stays pressable and says what is
+    /// wrong when pressed — a disabled button explains nothing, cannot be
+    /// hovered for the explanation it is supposed to carry, and is skipped
+    /// entirely by a screen reader.
+    /// </remarks>
+    public static MissingInput? Missing(GenerateRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (IsBlank(request.Text))
+        {
+            return new MissingInput(RequiredInput.Text, "Type or paste some text to speak.");
+        }
+
+        return request.Mode switch
+        {
+            // A speaker is always selected, so text is the only requirement.
+            TtsMode.PresetVoice => null,
+
+            TtsMode.VoiceDesign when IsBlank(request.Instruct) => new MissingInput(
+                RequiredInput.Instruction,
+                "Describe the voice you want, such as “a warm older man with a slight rasp”."),
+
+            TtsMode.VoiceClone when IsBlank(request.ReferenceAudioPath) => new MissingInput(
+                RequiredInput.Reference,
+                "Choose a short recording of the voice to clone."),
+
+            TtsMode.VoiceClone when IsBlank(request.ReferenceTranscript) => new MissingInput(
+                RequiredInput.Transcript,
+                "Type what the recording says, or let it be filled in automatically."),
+
+            _ => null,
+        };
+    }
 
     /// <summary>
     /// Why Generate is unavailable, or null when it is available.
@@ -37,26 +97,7 @@ public static class GenerationReadiness
     /// §1 requires the button to say why on hover, so this is a sentence for a
     /// person rather than a code. Each names the one thing to do next.
     /// </remarks>
-    public static string? BlockedReason(GenerateRequest request)
-    {
-        ArgumentNullException.ThrowIfNull(request);
-
-        if (IsBlank(request.Text)) return "Type or paste some text to speak.";
-
-        return request.Mode switch
-        {
-            // A speaker is always selected, so text is the only requirement.
-            TtsMode.PresetVoice => null,
-
-            TtsMode.VoiceDesign when IsBlank(request.Instruct) =>
-                "Describe the voice you want, such as “a warm older man with a slight rasp”.",
-
-            TtsMode.VoiceClone when IsBlank(request.ReferenceAudioPath) =>
-                "Choose a short recording of the voice to clone.",
-
-            _ => null,
-        };
-    }
+    public static string? BlockedReason(GenerateRequest request) => Missing(request)?.Reason;
 
     /// <summary>
     /// Whether the script is effectively empty. Whitespace counts as nothing.

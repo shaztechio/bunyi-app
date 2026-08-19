@@ -175,9 +175,15 @@ limitations under the License.
             download runs for minutes, and without Stop the only way out is
             closing the window.
           -->
+          <!--
+            Not disabled when the form is incomplete. A disabled button cannot
+            be hovered for the tooltip that was supposed to explain it, and a
+            screen reader skips it — so it was purple, unpressable and silent.
+            It stays live and says what is missing when pressed.
+          -->
           <Button Content="Generate" Name="GenerateButton" Classes="primary"
                   Command="{Binding GenerateCommand}"
-                  IsEnabled="{Binding CanGenerate}" IsVisible="{Binding ShowGenerate}"
+                  IsVisible="{Binding ShowGenerate}"
                   ToolTip.Tip="{Binding BlockedReason}"
                   IsDefault="True" MinWidth="130" />
           <!--
@@ -289,9 +295,14 @@ limitations under the License.
             </ItemsControl>
           </StackPanel>
 
-          <TextBox Text="{Binding Script}" AcceptsReturn="True" TextWrapping="Wrap"
+          <TextBox Name="ScriptBox" Text="{Binding Script}"
+                   Classes.needed="{Binding NeedsText}"
+                   AcceptsReturn="True" TextWrapping="Wrap"
                    MinHeight="140" FontSize="15"
                    PlaceholderText="Type or paste what you would like spoken." />
+
+          <TextBlock Classes="needed" Text="{Binding MissingReason}"
+                     IsVisible="{Binding NeedsText}" />
         </DockPanel>
       </Border>
 
@@ -340,8 +351,13 @@ limitations under the License.
               <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
             <TextBlock Grid.Column="0" Text="{Binding InstructLabel}" Classes="rowLabel" />
-            <TextBox Grid.Column="1" Text="{Binding Instruct}"
-                     PlaceholderText="{Binding InstructPlaceholder}" />
+            <StackPanel Grid.Column="1" Spacing="4">
+              <TextBox Name="InstructBox" Text="{Binding Instruct}"
+                       Classes.needed="{Binding NeedsInstruction}"
+                       PlaceholderText="{Binding InstructPlaceholder}" />
+              <TextBlock Classes="needed" Text="{Binding MissingReason}"
+                         IsVisible="{Binding NeedsInstruction}" />
+            </StackPanel>
           </Grid>
 
           <!-- Clone mode: the recording, and what it says (spec §4, §5). -->
@@ -378,7 +394,8 @@ limitations under the License.
                 <ColumnDefinition Width="*" />
               </Grid.ColumnDefinitions>
               <TextBlock Grid.Column="0" Text="Recording" Classes="rowLabel" />
-              <Button Grid.Column="1" Content="Choose…"
+              <Button Grid.Column="1" Name="ChooseRecordingButton" Content="Choose…"
+                      Classes.needed="{Binding NeedsReference}"
                       Command="{Binding PickReferenceCommand}"
                       IsEnabled="{Binding CanEditTranscript}" />
               <TextBlock Grid.Column="2" Text="{Binding ReferenceName}"
@@ -391,8 +408,12 @@ limitations under the License.
                 <ColumnDefinition Width="Auto" SharedSizeGroup="OptionLabel" />
                 <ColumnDefinition Width="*" />
               </Grid.ColumnDefinitions>
-              <TextBlock Grid.Column="1" Text="{x:Static vm:MainViewModel.ReferenceHint}"
-                         FontSize="12" Opacity="0.65" TextWrapping="Wrap" />
+              <StackPanel Grid.Column="1" Spacing="4">
+                <TextBlock Text="{x:Static vm:MainViewModel.ReferenceHint}"
+                           FontSize="12" Opacity="0.65" TextWrapping="Wrap" />
+                <TextBlock Classes="needed" Text="{Binding MissingReason}"
+                           IsVisible="{Binding NeedsReference}" />
+              </StackPanel>
             </Grid>
 
             <!--
@@ -409,10 +430,15 @@ limitations under the License.
                 <ColumnDefinition Width="Auto" />
               </Grid.ColumnDefinitions>
               <TextBlock Grid.Column="0" Text="It says" Classes="rowLabel" />
-              <TextBox Grid.Column="1" Text="{Binding ReferenceTranscript}"
-                       AcceptsReturn="False" TextWrapping="Wrap"
-                       IsEnabled="{Binding CanEditTranscript}"
-                       PlaceholderText="What the recording says, word for word" />
+              <StackPanel Grid.Column="1" Spacing="4">
+                <TextBox Name="TranscriptBox" Text="{Binding ReferenceTranscript}"
+                         Classes.needed="{Binding NeedsTranscript}"
+                         AcceptsReturn="False" TextWrapping="Wrap"
+                         IsEnabled="{Binding CanEditTranscript}"
+                         PlaceholderText="What the recording says, word for word" />
+                <TextBlock Classes="needed" Text="{Binding MissingReason}"
+                           IsVisible="{Binding NeedsTranscript}" />
+              </StackPanel>
               <Button Grid.Column="2" Content="Listen again"
                       Command="{Binding ListenAgainCommand}"
                       VerticalAlignment="Top"

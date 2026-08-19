@@ -324,8 +324,54 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
+    /// The field being pointed at after Generate was pressed too early.
+    /// </summary>
+    /// <remarks>
+    /// Null until someone presses Generate with something missing, and cleared
+    /// the moment that thing is supplied. Nothing is marked before it is asked
+    /// for: a form that shows errors for fields nobody has reached yet is
+    /// telling the user off for not having finished.
+    /// </remarks>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(NeedsText))]
+    [NotifyPropertyChangedFor(nameof(NeedsInstruction))]
+    [NotifyPropertyChangedFor(nameof(NeedsReference))]
+    [NotifyPropertyChangedFor(nameof(NeedsTranscript))]
+    [NotifyPropertyChangedFor(nameof(MissingReason))]
+    [NotifyPropertyChangedFor(nameof(HasMissing))]
+    private MissingInput? _missing;
+
+    public bool NeedsText => Missing?.Input == RequiredInput.Text;
+
+    public bool NeedsInstruction => Missing?.Input == RequiredInput.Instruction;
+
+    public bool NeedsReference => Missing?.Input == RequiredInput.Reference;
+
+    public bool NeedsTranscript => Missing?.Input == RequiredInput.Transcript;
+
+    /// <summary>Whether anything is being pointed at.</summary>
+    public bool HasMissing => Missing is not null;
+
+    /// <summary>What to say beside the field being pointed at.</summary>
+    public string MissingReason => Missing?.Reason ?? string.Empty;
+
+    /// <summary>Asks the window to put the cursor where the problem is.</summary>
+    /// <remarks>
+    /// The view model knows which field; only the window knows which control.
+    /// Focus matters more than the outline — it is the half a keyboard or
+    /// screen-reader user actually gets.
+    /// </remarks>
+    public event EventHandler<RequiredInput>? FocusRequested;
+
+    /// <summary>
     /// Whether Generate can be pressed (spec §1).
     /// </summary>
+    /// <remarks>
+    /// The button no longer uses this to disable itself. It stays pressable so
+    /// that pressing it can explain what is wrong — a disabled button cannot be
+    /// hovered for its own tooltip, and a screen reader skips it entirely. This
+    /// still says whether a run would start.
+    /// </remarks>
     public bool CanGenerate => !IsBusy && GenerationReadiness.CanGenerate(CurrentRequest());
 
     /// <summary>
@@ -619,7 +665,20 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private async Task GenerateAsync()
     {
-        if (!CanGenerate) return;
+        if (IsBusy) return;
+
+        // Pressed before it is ready: say what is missing, put the cursor in it,
+        // and mark it. Doing nothing was the old behaviour and it is what made
+        // the button look broken.
+        if (GenerationReadiness.Missing(CurrentRequest()) is { } missing)
+        {
+            Missing = missing;
+            Status = missing.Reason;
+            FocusRequested?.Invoke(this, missing.Input);
+            return;
+        }
+
+        Missing = null;
 
         try
         {
@@ -781,6 +840,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>Re-evaluates everything computed from the fields above.</summary>
     private void Refresh()
     {
+        // Cleared as soon as the run would start, so a mark never outlives the
+        // problem it described.
+        if (Missing is not null && GenerationReadiness.CanGenerate(CurrentRequest()))
+        {
+            Missing = null;
+        }
+
         OnPropertyChanged(nameof(CanGenerate));
         OnPropertyChanged(nameof(BlockedReason));
         OnPropertyChanged(nameof(ShowExamples));

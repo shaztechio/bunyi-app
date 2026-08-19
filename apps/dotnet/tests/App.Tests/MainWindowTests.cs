@@ -91,15 +91,19 @@ public class MainWindowTests : HeadlessWindows
     }
 
     [AvaloniaFact]
-    public void Generate_is_present_and_unavailable_on_an_unused_window()
+    public void Generate_is_present_and_pressable_on_an_unused_window()
     {
+        // It used to be disabled here. A disabled button cannot be hovered for
+        // the tooltip that was supposed to explain it, and a screen reader
+        // skips it — so it was purple, unpressable and silent. It stays live
+        // and says what is missing when pressed.
         var (window, model, _, _) = Open();
 
         var generate = ButtonWith(window, "GenerateButton");
         Assert.True(generate.IsVisible);
-        Assert.False(generate.IsEffectivelyEnabled);
+        Assert.True(generate.IsEffectivelyEnabled);
 
-        // §1: it says why on hover.
+        Assert.False(model.CanGenerate);
         Assert.NotNull(model.BlockedReason);
     }
 
