@@ -18,7 +18,8 @@ limitations under the License.
         x:Class="Bunyi.App.Views.HelpWindow"
         Width="720" Height="620" MinWidth="480" MinHeight="360"
         WindowStartupLocation="CenterOwner"
-        Title="Bunyi Help">
+        Title="Bunyi Help"
+        Icon="/Assets/bunyi.png">
 
   <DockPanel>
     <!--

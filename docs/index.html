@@ -280,10 +280,26 @@
            below it jumps. -->
       <img src="assets/screenshot-macos.webp" width="2120" height="1592"
            alt="The Bunyi window in Preset voice mode. A mode switcher across the top — Preset voice, Voice design, Voice clone, History — above an empty script field offering three example prompts to click. Below it, rows for Language, Speaker and Style, and a Generate button reading &quot;Ready — press Command Return to generate&quot;. Doctor, Logs and Help sit in the window toolbar.">
-      <figcaption>Preset voice mode. Type or pick a prompt, choose a speaker, press&nbsp;⌘↩.</figcaption>
+      <figcaption>Preset voice mode on macOS. Type or pick a prompt, choose a speaker, press&nbsp;⌘↩.</figcaption>
+    </figure>
+
+    <figure class="shot-second">
+      <!-- Shown at its own 762px rather than stretched to the column. It is a
+           1x capture, and upscaling a screenshot only blurs the interface text
+           the screenshot exists to show. -->
+      <img src="assets/screenshot-windows.webp" width="762" height="712" loading="lazy"
+           alt="The same Bunyi window on Windows 11. The mode switcher — Preset voice, Voice design, Voice clone, History — sits above an empty script field offering three example prompts. Below it, rows for Language, Speaker and Style, and a Generate button, with Settings, Doctor, Logs and Help as icons in the header.">
+      <figcaption>The same app on Windows. One spec, two codebases &mdash; and a Linux build from the same source.</figcaption>
     </figure>
   </div>
 </section>
+
+<style>
+  /* The second screenshot is a 1x capture and narrower than the column, so it
+     is centred at its own size rather than stretched. */
+  .shot-second { margin-top: 2.5rem; text-align: center; }
+  .shot-second img { max-width: min(100%, 762px); height: auto; }
+</style>
 
 <section id="modes">
   <div class="wrap">
@@ -420,7 +436,7 @@
           <tr>
             <td><strong>Windows and Linux</strong><br><span style="color:var(--muted)">One app, both systems</span></td>
             <td>C# .NET + Avalonia + ONNX Runtime</td>
-            <td><span class="pill pill-wip">Working</span><br><span style="color:var(--muted)">Preset voice and voice design; clone still to come</span></td>
+            <td><span class="pill pill-ok">Working</span><br><span style="color:var(--muted)">All three modes; <a href="https://github.com/shaztechio/bunyi-app/releases">portable download</a></span></td>
           </tr>
         </tbody>
       </table>

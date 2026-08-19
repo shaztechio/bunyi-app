@@ -16,6 +16,9 @@ limitations under the License.
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <!-- What Explorer, the taskbar and the shortcut show. -->
+    <ApplicationIcon>Assets/bunyi.ico</ApplicationIcon>
+
     <OutputType>WinExe</OutputType>
     <RootNamespace>Bunyi.App</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
@@ -42,6 +45,13 @@ limitations under the License.
       assembly so a self-contained build has nothing to lose on the way out.
       Named Bunyi.App.HELP.md by the default resource naming.
     -->
+    <!--
+      The icon, shared with the macOS app so the two look like one product.
+      Built from its asset catalogue by tools/make-icons.py and committed —
+      see that file for why the sizes are what they are.
+    -->
+    <AvaloniaResource Include="Assets/bunyi.png" />
+
     <EmbeddedResource Include="..\..\HELP.md" Link="HELP.md" />
 
     <!--

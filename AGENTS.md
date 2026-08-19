@@ -22,7 +22,7 @@ have no common denominator).
 
 ```
 apps/macos/     Swift + MLX + SwiftUI    → macOS (Apple Silicon)   [built here]
-apps/dotnet/    C# .NET + Avalonia + ONNX → Windows AND Linux       [scaffold]
+apps/dotnet/    C# .NET + Avalonia + ONNX → Windows AND Linux       [built here]
 spec/           platform-agnostic feature & data-format specs (SOURCE OF TRUTH)
 .github/workflows/  per-platform CI
 ```
@@ -99,14 +99,19 @@ everywhere, so copy it from any neighboring file.
 ## Where to work
 
 - Building/maintaining **macOS** → `apps/macos/AGENTS.md`.
-- Building/maintaining **Windows/Linux** → `apps/dotnet/AGENTS.md`
-  (currently a scaffold; the app is not yet implemented).
+- Building/maintaining **Windows/Linux** → `apps/dotnet/AGENTS.md`.
 - Changing **what a feature does** → start in `spec/`, then both apps.
 
 ## Status
 
 - **macOS**: complete and building. See `apps/macos/`.
-- **.NET (Windows + Linux)**: **scaffold only** — project structure, build
-  docs, and stubs that reference the spec. Not yet implemented; cannot be
-  built on a Mac. Pick it up on a Windows or Linux machine with the .NET
-  SDK per `apps/dotnet/AGENTS.md`.
+- **.NET (Windows + Linux)**: complete and building. All three modes, the
+  history, settings, saved voices, backup and restore, Doctor, logs and help.
+  Cannot be built on a Mac — it needs a Windows or Linux machine with the
+  .NET SDK, per `apps/dotnet/AGENTS.md`.
+
+  One known gap, tracked rather than hidden: macOS passes the style
+  instruction to the preset-voice model and this app does not, because the
+  library driving that export refuses it on the 0.6B variant. Design and
+  clone modes are unaffected. Closing it means driving preset voice through
+  this app's own pipeline, which `apps/dotnet/RESEARCH-ONNX.md` scopes.

@@ -13,6 +13,8 @@
 // limitations under the License.
 
 using Avalonia.Controls;
+using Avalonia.Input;
+using Bunyi.App.Infrastructure;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform.Storage;
@@ -33,6 +35,8 @@ public partial class SettingsWindow : Window
         if (DataContext is not SettingsViewModel model) return;
 
         model.ChooseModelsFolder = ChooseModelsFolderAsync;
+        model.ChooseBackupDestination = ChooseBackupDestinationAsync;
+        model.ChooseBackupSource = ChooseBackupSourceAsync;
         model.ConfirmDelete = ConfirmDeleteAsync;
     }
 
@@ -46,6 +50,57 @@ public partial class SettingsWindow : Window
         {
             Title = header;
         }
+    }
+
+    /// <summary>
+    /// Puts the version and platform on the clipboard (spec §9a).
+    /// </summary>
+    /// <remarks>
+    /// The tab asks people to quote these in a bug report, so taking them has
+    /// to be one click. Reading a version off the screen and typing it back in
+    /// is how the wrong one ends up in the report.
+    /// </remarks>
+    private async void CopyVersion(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (Clipboard is null) return;
+
+        var transfer = new DataTransfer();
+        transfer.Add(DataTransferItem.CreateText($"{AboutInfo.Name} {AboutInfo.VersionLine}"));
+        await Clipboard.SetDataAsync(transfer);
+
+        // §2a's acknowledgement rule, which applies to any copy: one that says
+        // nothing is indistinguishable from one that failed.
+        if (this.FindControl<Button>("CopyVersionButton") is { } button)
+        {
+            ToolTip.SetTip(button, "Copied");
+        }
+    }
+
+    /// <summary>§6: where to write the backup.</summary>
+    private async Task<string?> ChooseBackupDestinationAsync()
+    {
+        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Save a backup of your models",
+            SuggestedFileName = $"Bunyi models {DateTime.Now:yyyy-MM-dd}",
+            DefaultExtension = "zip",
+            FileTypeChoices = [new FilePickerFileType("Backup") { Patterns = ["*.zip"] }],
+        });
+
+        return file?.TryGetLocalPath();
+    }
+
+    /// <summary>§6: which backup to restore from.</summary>
+    private async Task<string?> ChooseBackupSourceAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Choose a backup to restore",
+            AllowMultiple = false,
+            FileTypeFilter = [new FilePickerFileType("Backup") { Patterns = ["*.zip"] }],
+        });
+
+        return files.Count > 0 ? files[0].TryGetLocalPath() : null;
     }
 
     private async Task<string?> ChooseModelsFolderAsync()

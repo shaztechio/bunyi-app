@@ -132,13 +132,24 @@ public partial class App : Application
             // comes down through the same downloader as everything else, so
             // §3b's progress, resume and checksums apply to it — and nothing
             // fetches it until someone actually clones a voice.
+            // Anything left at the old path is moved, so an install that
+            // already fetched it does not download it again — and does not keep
+            // 141 MB somewhere nothing can see.
+            LegacyPaths.MoveMisplacedWhisper(settingsStore.ResolveModelsFolder(settings), log);
+
             var transcriber = new WhisperTranscriber(
                 async ct =>
                 {
                     var folder = await downloader.EnsureModelAsync(
                         new ModelSource.Repo(ModelLayout.WhisperSource),
                         ModelLayout.Whisper,
-                        Path.Combine(settingsStore.ResolveModelsFolder(settings), "whisper"),
+                        // The models root itself, not a corner of it. Putting
+                        // it under whisper/ hid 141 MB from Settings ▸ Storage,
+                        // which lists models/<org>/<repo> — so it could not be
+                        // seen or deleted — and it put a second models/ tree
+                        // inside a backup, where the restore looks for exactly
+                        // one.
+                        settingsStore.ResolveModelsFolder(settings),
                         null,
                         ct);
 
