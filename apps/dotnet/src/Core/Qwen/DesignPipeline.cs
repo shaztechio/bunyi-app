@@ -141,6 +141,7 @@ public sealed class DesignPipeline : IDesignPipeline
             maxFrames ?? _config.MaxNewTokens,
             "Voice design",
             progress,
+            vocoderContext: null,
             ct);
     }
 

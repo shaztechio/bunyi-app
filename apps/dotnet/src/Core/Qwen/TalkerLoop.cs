@@ -104,6 +104,13 @@ public sealed class TalkerLoop : IDisposable
     /// finished by the time generation starts, so it pads from here on.
     /// </param>
     /// <param name="what">How this run is named in the log.</param>
+    /// <param name="vocoderContext">
+    /// Frames to vocode ahead of the generated ones and then cut away. Clone
+    /// mode passes the reference recording's own codes: the vocoder carries
+    /// state across frames, so starting it cold on the first generated frame
+    /// makes the opening of a clone worse than the rest of it. Design mode has
+    /// nothing to pass and starts cold, which is what its reference does too.
+    /// </param>
     public SpeechResult Generate(
         float[][] rows,
         float[] trailingHidden,
@@ -111,6 +118,7 @@ public sealed class TalkerLoop : IDisposable
         int cap,
         string what,
         IProgress<int>? progress = null,
+        IReadOnlyList<int[]>? vocoderContext = null,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(rows);
@@ -171,7 +179,7 @@ public sealed class TalkerLoop : IDisposable
         }
 
         _log.Log($"{what}: {frames.Count} frames.");
-        return new SpeechResult(RunVocoder(frames), frames);
+        return new SpeechResult(RunVocoder(frames, vocoderContext), frames);
     }
 
     private (float[] Logits, float[] Hidden, float[] Keys, float[] Values) RunPrefill(float[][] rows)
@@ -335,25 +343,40 @@ public sealed class TalkerLoop : IDisposable
         return next;
     }
 
-    private float[] RunVocoder(List<int[]> frames)
+    private float[] RunVocoder(List<int[]> frames, IReadOnlyList<int[]>? context)
     {
         var groups = _config.CodeGroups;
-        var codes = new DenseTensor<long>([1, groups, frames.Count]);
+        var lead = context?.Count ?? 0;
+        var total = lead + frames.Count;
+
+        var codes = new DenseTensor<long>([1, groups, total]);
 
         // Transposed on the way in: the frames are gathered per frame, and the
         // vocoder wants them per codebook.
-        for (var frame = 0; frame < frames.Count; frame++)
+        void Put(int at, int[] frame)
         {
             for (var group = 0; group < groups; group++)
             {
-                codes.Buffer.Span[(group * frames.Count) + frame] = frames[frame][group];
+                codes.Buffer.Span[(group * total) + at] = frame[group];
             }
         }
+
+        for (var i = 0; i < lead; i++) Put(i, context![i]);
+        for (var i = 0; i < frames.Count; i++) Put(lead + i, frames[i]);
 
         using var results = _vocoderSession.Run(
             [NamedOnnxValue.CreateFromTensor("codes", codes)]);
 
-        return results.First().AsTensor<float>().ToArray();
+        var samples = results.First().AsTensor<float>().ToArray();
+        if (lead == 0) return samples;
+
+        // Cut by the same proportion of frames rather than by a fixed samples
+        // per frame. The two agree whenever the vocoder's ratio is exact, and
+        // when it is not this cuts at the right place anyway — which matters,
+        // because a few samples out here is the reference's last syllable left
+        // at the front of the answer.
+        var cut = (int)((double)lead / total * samples.Length);
+        return samples[cut..];
     }
 
     public void Dispose()
