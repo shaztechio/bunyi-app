@@ -720,7 +720,8 @@ does not — its embeddings are inside the graphs. Where instruction text gets
 embedded for that export is not established here, and assuming it is available
 is how this spike would fail quietly.
 
-Tracked as an issue rather than left in this paragraph.
+Tracked as [#104](https://github.com/shaztechio/bunyi-app/issues/104) rather
+than left in this paragraph.
 
 **How it closes regardless.** M8 and M10 already require writing our own
 inference pipeline, since this library covers CustomVoice only. Prompt
