@@ -29,7 +29,8 @@ same distinction under different names.
 
 **macOS keeps settings in `UserDefaults`** rather than a file, which is the
 platform's own answer to the same question and stays as it is; the keys
-(`appearance`, `modelRepo.<Mode>`) are the contract, not the storage.
+(`appearance`, `modelRepo.<Mode>`, `modelsFolder`, `unloadOnModeSwitch`) are
+the contract, not the storage.
 
 ## Models folder
 

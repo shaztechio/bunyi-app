@@ -46,6 +46,9 @@ public sealed partial class SettingsViewModel : ObservableObject
     private bool _loading;
 
     [ObservableProperty] private Appearance _appearance;
+
+    /// <summary>Spec §3e: whether leaving a mode unloads its model.</summary>
+    [ObservableProperty] private bool _unloadOnModeSwitch = true;
     [ObservableProperty] private string _presetVoiceSource = string.Empty;
     [ObservableProperty] private string _voiceDesignSource = string.Empty;
     [ObservableProperty] private string _voiceCloneSource = string.Empty;
@@ -156,6 +159,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 
         _settings = _store.Load();
         Appearance = _settings.Appearance;
+        UnloadOnModeSwitch = _settings.UnloadOnModeSwitch;
         PresetVoiceSource = _settings.SourceFor(TtsMode.PresetVoice);
         VoiceDesignSource = _settings.SourceFor(TtsMode.VoiceDesign);
         VoiceCloneSource = _settings.SourceFor(TtsMode.VoiceClone);
@@ -205,6 +209,17 @@ public sealed partial class SettingsViewModel : ObservableObject
 
         _applyAppearance(value);
         Persist(_settings with { Appearance = value });
+    }
+
+    /// <summary>
+    /// Spec §3e. Nothing is loaded or unloaded here: the setting only says
+    /// what the next mode switch should do, and acting on it now would unload
+    /// the model of the mode the user is about to go back to.
+    /// </summary>
+    partial void OnUnloadOnModeSwitchChanged(bool value)
+    {
+        if (_loading) return;
+        Persist(_settings with { UnloadOnModeSwitch = value });
     }
 
     partial void OnPresetVoiceSourceChanged(string value) => PersistSource(TtsMode.PresetVoice, value);

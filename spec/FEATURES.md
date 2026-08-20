@@ -349,6 +349,28 @@ than documenting one a user picked, and unverified bytes do not clear it.
   (`hf download <repo> --local-dir <folder>/models/<repo>`), one per mode,
   with the actual folder path filled in.
 
+### 3e. Model residency
+
+Only one mode's model is ever loaded. It loads on the first generate in a mode
+and stays resident, so a second run in the same mode does not pay the load
+again.
+
+- **Switching modes unloads the model of the mode being left**, at the moment
+  of the switch. These are multi-gigabyte models, nothing else will ask for the
+  old one back, and holding it until the next generate means holding it right
+  through the next mode's download — charging both to memory at the worst
+  moment, and making Doctor's memory check (§11) measure a figure that is
+  about to change. The generation-mode tabs are disabled while a run is in
+  progress (§2a), so a switch can never unload a model a running job is
+  using.
+- **Settings → General → "Free memory when switching modes"** turns
+  this off. Default **on**, persisted under `unloadOnModeSwitch`. Off keeps the
+  previous mode's model resident so returning to that mode is instant, at the
+  cost of several gigabytes held for a mode nobody is looking at; the unload
+  then happens at the next generate in another mode instead.
+- Deleting a loaded model evicts it first (§3d) whatever this setting says,
+  and quitting releases everything.
+
 ## 4. Reference audio (voice clone)
 
 macOS source: `TTSEngine.loadReferenceAudio`, `ReferenceTranscriber.swift`.
@@ -417,6 +439,9 @@ tab (platform convention). macOS source: `SettingsView.swift`.
   **every** window the app owns, not only the one in front (macOS: the main
   window, Logs, and Settings itself). Persisted per-user under the key
   `appearance`, defaulting to System.
+  Also **"Free memory when switching modes"**, a checkbox, **on** by default
+  and persisted under `unloadOnModeSwitch` — see §3e for what it does
+  and what turning it off costs.
 - **Models**: the three per-mode source fields (repo ID or base URL) + help.
 - **Storage**: models-folder location controls + pre-download commands.
 - **Backup**: back up / restore / stop + status.
