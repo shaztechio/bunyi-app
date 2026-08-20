@@ -89,6 +89,45 @@ public class SettingsStoreTests : IDisposable
             root.GetProperty("modelRepo").GetProperty("modelRepo.Voice design").GetString());
     }
 
+    [Fact]
+    public void Freeing_memory_on_a_mode_switch_is_on_until_it_is_turned_off()
+    {
+        // §3e. The default is the whole point of the setting: the models
+        // are several gigabytes, and someone who never opens Settings is
+        // exactly who should not be holding one for a mode they left.
+        Assert.True(new AppSettings().UnloadOnModeSwitch);
+    }
+
+    [Fact]
+    public void A_settings_file_from_before_the_setting_existed_reads_as_on()
+    {
+        // An upgrade must not quietly turn it off. An absent key is not false;
+        // it is someone who has never been asked.
+        Directory.CreateDirectory(_folder);
+        File.WriteAllText(SettingsPath, """{"appearance":"dark"}""");
+
+        var (store, _) = NewStore();
+        var loaded = store.Load();
+
+        Assert.True(loaded.UnloadOnModeSwitch);
+        Assert.Equal(Appearance.Dark, loaded.Appearance);
+    }
+
+    [Fact]
+    public void Turning_it_off_is_persisted_under_the_key_the_spec_pins()
+    {
+        // Asserted against the literal JSON rather than a round trip, which
+        // would pass even if both sides were renamed together. macOS keeps the
+        // same key in UserDefaults.
+        var (store, _) = NewStore();
+        store.Save(new AppSettings { UnloadOnModeSwitch = false });
+
+        using var document = JsonDocument.Parse(File.ReadAllText(SettingsPath));
+
+        Assert.False(document.RootElement.GetProperty("unloadOnModeSwitch").GetBoolean());
+        Assert.False(store.Load().UnloadOnModeSwitch);
+    }
+
     [Theory]
     [InlineData(TtsMode.PresetVoice, "modelRepo.Preset voice")]
     [InlineData(TtsMode.VoiceDesign, "modelRepo.Voice design")]

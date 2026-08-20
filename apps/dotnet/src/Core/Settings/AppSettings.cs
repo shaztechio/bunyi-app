@@ -64,6 +64,19 @@ public sealed record AppSettings
     public string? ModelsFolder { get; init; }
 
     /// <summary>
+    /// Whether leaving a mode unloads its model (spec §3e).
+    /// </summary>
+    /// <remarks>
+    /// On by default: the models are several gigabytes and nothing asks for the
+    /// one being left behind again. Off keeps it resident so returning to that
+    /// mode is instant, and the unload happens at the next generate in another
+    /// mode instead. Absent from the file means on — which is what an
+    /// install that predates this setting gets.
+    /// </remarks>
+    [JsonPropertyName("unloadOnModeSwitch")]
+    public bool UnloadOnModeSwitch { get; init; } = true;
+
+    /// <summary>
     /// The configured source for a mode, or the empty string when it has none.
     /// </summary>
     public string SourceFor(TtsMode mode) =>
@@ -90,4 +103,7 @@ public static class SettingsKeys
 
     /// <summary>Spec §3a — <c>modelRepo.Preset voice</c>, and so on.</summary>
     public static string ModelRepo(TtsMode mode) => $"modelRepo.{mode.DisplayName()}";
+
+    /// <summary>Spec §3e.</summary>
+    public const string UnloadOnModeSwitch = "unloadOnModeSwitch";
 }

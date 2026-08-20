@@ -895,8 +895,56 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(ShowExamples));
     }
 
+    /// <summary>
+    /// Lets go of the model of the mode being left (spec §3e).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The engine would unload it anyway, but not until the next generate —
+    /// which is after that run's download, so the model nobody wants is still
+    /// resident for the whole of the next one arriving, and Doctor's memory
+    /// check reads a figure that is about to change. Several gigabytes held for
+    /// a mode nobody is looking at is the case this exists to end.
+    /// </para>
+    /// <para>
+    /// Not awaited: a mode switch is a click, and blocking it on a model being
+    /// released would freeze the window for as long as that takes. Skipped
+    /// while the engine is busy — the tabs are disabled during a run
+    /// (§2a), so this cannot normally happen, but unloading a model out
+    /// from under a running generation is bad enough to be worth refusing
+    /// rather than trusting the view to have prevented it.
+    /// </para>
+    /// </remarks>
+    private void ReleaseModelOfModeBeingLeft()
+    {
+        // Unless it has been turned off. Phrased against the false case so
+        // that a view model built without a Settings window still behaves the
+        // way §3e says the app does, rather than quietly doing nothing.
+        if (Settings is { UnloadOnModeSwitch: false }) return;
+        if (_engine.Status.IsBusy) return;
+
+        _ = UnloadAsync();
+
+        async Task UnloadAsync()
+        {
+            try
+            {
+                await _engine.UnloadAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                // Freeing memory is housekeeping. Failing it must not take down
+                // a mode switch the user asked for, and the log is where §8
+                // says the full text of a failure goes.
+                _log.Log($"Could not free the previous mode's model — {ex.Message}");
+            }
+        }
+    }
+
     partial void OnModeChanged(TtsMode value)
     {
+        ReleaseModelOfModeBeingLeft();
+
         OnPropertyChanged(nameof(SelectedSegment));
         OnPropertyChanged(nameof(Examples));
         OnPropertyChanged(nameof(ExamplePrompt));

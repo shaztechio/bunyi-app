@@ -51,6 +51,15 @@ limitations under the License.
           <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.8"
                      Text="System follows your computer. Light and Dark keep Bunyi that way whatever your computer does. The change applies straight away, to every Bunyi window." />
         </Border>
+
+        <!-- §3e. On by default; the callout says what turning it off costs. -->
+        <TextBlock Text="MEMORY" Classes="eyebrow" Margin="0,8,0,0" />
+        <CheckBox IsChecked="{Binding UnloadOnModeSwitch}"
+                  Content="Free memory when switching modes" />
+        <Border Classes="callout">
+          <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.8"
+                     Text="Each mode uses its own model, and a model can be several gigabytes. Leave this on and Bunyi lets go of a mode&apos;s model as soon as you leave it. Turn it off to keep it loaded, so coming back to that mode starts straight away — at the cost of the memory it holds meanwhile." />
+        </Border>
       </StackPanel>
     </TabItem>
 
