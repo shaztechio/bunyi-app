@@ -688,16 +688,39 @@ synthesizer rather than assumed, and voice design answers **true** through the
 same seam, because there the description is the whole mechanism rather than a
 hint the model may drop.
 
-**What is still unmeasured.** Nobody here has compared audio from the 0.6B with
-and without an instruction. macOS feeds it, so the field is live there, but
-"reaches the model" and "changes the delivery" are different claims and only the
-first is established. Measuring it is the first thing to do before promising
-anything about style control in preset voice.
+**What the export settles.** This was written as an open question — whether the
+ONNX export lacks a conditioning path, or only the library's flag is wrong — and
+the graph comparison above answers it. `talker_prefill` in the CustomVoice
+export takes **`inputs_embeds[b,seq,H]`**: a sequence of embeddings assembled by
+the caller, matching the design export name for name.
 
-The issue leaves open the one thing we could not determine from outside — whether
-the ONNX export itself carries the conditioning path, or only the library's flag
-is wrong. If it is the export, the flag is accurate and only the warning's
-wording misleads.
+A graph that consumes `inputs_embeds` cannot refuse an instruction. It has no
+notion of what the sequence means; whoever builds it decides what is in it.
+There is no conditioning path in the export that could be absent, so
+`SupportsInstruct=false` is not a statement about the export. It describes the
+library's own prompt builder, and it is a policy rather than a capability.
+
+**What is still unmeasured**, and it is about the weights rather than the graph:
+whether an instruction prefix changes what the 0.6B checkpoint produces. Nobody
+here has compared audio from it with and without one. macOS feeds it, so the
+field is live there, but "reaches the model" and "changes the delivery" are
+different claims and only the first is established — on either platform.
+
+**How to measure it without listening.** Decoding is stochastic, so two runs of
+the same text differ regardless, and no amount of listening separates "the
+instruction did something" from "the sampler did something". Compare
+**first-step logits** from `talker_prefill` instead, with and without the
+instruction embeddings prepended: same graph, same weights, one variable, no
+sampling. Identical distributions mean the weights ignore it. Only if they
+diverge is it worth fixing a sampler seed and generating a pair to listen to.
+
+One thing that experiment must establish before it can start: the design export
+ships `embeddings/*.npy` to build a sequence from, and the CustomVoice export
+does not — its embeddings are inside the graphs. Where instruction text gets
+embedded for that export is not established here, and assuming it is available
+is how this spike would fail quietly.
+
+Tracked as an issue rather than left in this paragraph.
 
 **How it closes regardless.** M8 and M10 already require writing our own
 inference pipeline, since this library covers CustomVoice only. Prompt
@@ -708,17 +731,20 @@ than as a project of its own.
 
 ## Open questions
 
-1. **Bare-metal Linux**, and **SoundFlow's `linux-x64` natives**. Inference is
-   proven on WSL2 and NAudio is not a problem; the playback library is still
-   untested on either, and WSL2 is not a substitute for a real distro on the
-   audio path.
+1. **Bare-metal Linux**, and **SoundFlow's `linux-x64` natives**. Partly
+   answered: the app now builds, ships and runs on Ubuntu 24.04, and the
+   runtime library set was measured there from `/proc/<pid>/maps` rather than
+   guessed. What is still not recorded here is playback confirmed by ear on a
+   real distro across the three audio backends miniaudio may pick
+   (ALSA, PulseAudio, PipeWire).
 2. **1.7B `int4` speed.** Memory is answered above: the design export's floor
    is 0.74 GB *below* the shipping model's, and its KV geometry is identical,
    so long text costs the same in both modes. Speed is still unmeasured, and
    cannot be until M8 can run the pipeline.
-3. **Whether wavekat's graphs can be driven through `TtsPipeline`** rather than
-   hand-ported. Their file convention matches; the graph I/O has not been
-   compared. If they match, M8 shrinks a great deal.
+3. ~~**Whether wavekat's graphs can be driven through `TtsPipeline`**~~ —
+   answered above, and by M8 and M10 shipping. The I/O matches name for name;
+   only `hidden_size` differs. The same comparison settles what the
+   style-instruction section used to leave open.
 4. **Whether the vocoder's `node_pad_1` can be fixed** in the export, or worked
    around by rebuilding that graph. It is the only thing keeping the vocoder on
    CPU, and it affects every GPU provider.
