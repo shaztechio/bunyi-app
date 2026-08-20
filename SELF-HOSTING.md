@@ -23,6 +23,33 @@ distributing to a team, or when machines need to fetch the models repeatedly.
 Behaviour is specified in [`spec/FEATURES.md`](spec/FEATURES.md) §3c; this is
 the practical version.
 
+## Which model set you are hosting
+
+**Read this before downloading anything.** Bunyi ships as two apps, and they do
+not use the same weights. macOS runs MLX and wants `.safetensors`; Windows and
+Linux run ONNX Runtime and want `.onnx` graphs. Neither can load the other's
+files, so hosting the wrong set produces a mirror that downloads perfectly and
+then fails to generate.
+
+| | macOS (MLX) | Windows and Linux (ONNX) |
+|---|---|---|
+| Preset voice | `mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-bf16` | `elbruno/Qwen3-TTS-12Hz-0.6B-CustomVoice-ONNX` |
+| Voice design | `mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16` | `wavekat/Qwen3-TTS-1.7B-VoiceDesign-ONNX` (`int4`) |
+| Voice clone | `mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16` | `wavekat/Qwen3-TTS-0.6B-Base-ONNX` (`int4`) |
+| Total to host | 11.6 GB | 15.6 GB |
+
+Windows and Linux share one set exactly — same app, same files, byte for byte —
+so there is nothing to host twice for them. Serving both families means two sets
+of folders in the same bucket, which is fine and costs pennies.
+
+Every step below works for either. Where they differ, the difference is in the
+variables you set in step 5 and nowhere else.
+
+> **Voice clone uses a different model size across the two.** macOS uses the
+> 1.7B Base model and the ONNX apps use the 0.6B one, because no 1.7B ONNX
+> export meets the in-context-learning requirement in §1. This is deliberate,
+> not a mistake to correct while mirroring.
+
 ## Try this first
 
 Self-hosting is real infrastructure. If the goal is only "download faster
@@ -34,8 +61,13 @@ hf download <repo> --local-dir <models-folder>/models/<repo>
 ```
 
 **Settings → Storage** already shows the `hf download` line per mode with your
-models folder filled in. Pre-fetch there and the app finds the files on first
-Generate, with no network access at all.
+models folder filled in — in both apps. Pre-fetch there and the app finds the
+files on first Generate, with no network access at all.
+
+One caveat for the ONNX exports: two of the three publish their weights twice,
+once at `int4/` and once at `fp32/`, and Bunyi only ever reads `int4/`. A plain
+`hf download` fetches both, turning a 5.85 GB download into 18.55 GB. Add
+`--exclude "fp32/*"` and the numbers in the table above are what you get.
 
 Do not reach for `pip install` on macOS without checking which Python you get:
 `/usr/bin/pip` is still Python 2.7 and fails with *"Could not find a version
@@ -60,32 +92,61 @@ machines — not for a one-off download.
 
 The obvious idea does not work. `bunyi.app` is GitHub Pages, which caps
 individual files at **100 MB** (a hard Git limit), sites at about **1 GB**, and
-bandwidth at roughly **100 GB/month**. The models are ~1.4 GB, ~3.4 GB and
-~3.4 GB, and individual `.safetensors` files are far over 100 MB.
+bandwidth at roughly **100 GB/month**. A single model runs to gigabytes either
+way, and individual `.safetensors` and `.onnx.data` files are far over 100 MB.
 
 **GitHub Releases does not work either**, for two reasons. Release assets are
-capped at **2 GB** each and the largest weight file is 3.86 GB. And assets are
-a flat namespace, so there is no way to express `speech_tokenizer/config.json`
-in an asset name — the model needs that path to survive.
+capped at **2 GB** each and the largest MLX weight file is 3.86 GB. And assets
+are a flat namespace, so there is no way to express
+`speech_tokenizer/config.json` — or `int4/talker_decode.onnx` — in an asset
+name, and both models need those paths to survive.
 
 ## What the app requires
 
-From `TTSEngine.downloadFromBaseURL` and `fileList`:
+The same in both apps:
 
 | Requirement | Detail |
 |---|---|
-| **HTTPS** | Plain `http://` is blocked by App Transport Security. Allowing it needs an `NSAppTransportSecurity` exception in `project.yml` and a rebuild. |
-| **`<base>/manifest.txt`** | Newline-separated relative paths. Blank lines and lines starting with `#` are ignored. If it is missing or empty, the app falls back to a built-in Qwen3-TTS file list. |
+| **`<base>/manifest.sha256`, or `manifest.txt`** | Whitespace-separated: a 64-hex first token is a digest, the rest is the path. Blank lines and `#` comments ignored. `manifest.sha256` wins when both are served. If neither is, the app falls back to a built-in file list. |
 | **`<base>/<path>` for each entry** | Must return **200**. Directory structure is preserved on disk, so nested paths must be served as nested paths. |
-| **Required files** | `config.json` and `model.safetensors` — a non-200 on either fails the download. |
-| **Everything else** | Best-effort. A 404 is logged and skipped, because single-shard repos have no `.index.json`, and a missing `tokenizer.json` is backfilled automatically from a known fallback. |
+| **Everything else** | Best-effort. A 404 on a non-required file is logged and skipped. |
 
-No CORS headers are needed — this is a native app, not a browser.
+No CORS headers are needed — these are native apps, not browsers.
 
 Downloaded files land in `models/self-hosted/<slug>` inside your models folder
-and are reused offline from then on, exactly like Hub downloads.
+and are reused offline from then on, exactly like Hub downloads. The slug comes
+from the base URL's host and path, so **changing the URL later means a fresh
+download into a new folder** — pick the folder names in step 5 as though they
+are permanent, because for anyone already using them they are.
+
+And where they differ:
+
+| | macOS (MLX) | Windows and Linux (ONNX) |
+|---|---|---|
+| **Plain `http://`** | Blocked by App Transport Security. Allowing it needs an `NSAppTransportSecurity` exception in `project.yml` and a rebuild. | Allowed as it is — no equivalent gate, so a LAN server on `http://` works. |
+| **Required files** | `config.json` and `model.safetensors`. A non-200 on either fails the download. | A per-export list — see `apps/dotnet/src/Core/Models/ModelLayout.cs`. Roughly: `config.json`, the eight `int4/*.onnx` graphs and their `.data` siblings, every `embeddings/*.npy`, and `tokenizer/{vocab.json,merges.txt}`. Voice clone also requires `speaker_encoder.onnx` and `tokenizer_encoder.onnx` with their `.data` files. |
+| **Fallback file list** | A built-in Qwen3-TTS list, plus `tokenizer.json` backfilled from a known source when missing. | The built-in list for that export. Serving no manifest at all therefore works — but publishing `manifest.sha256` is what lets the app verify what it got, and it is what `spec/FEATURES.md` §3a requires before a mirror can be offered inside the app. |
+| **Counts as complete** | `config.json`, at least one `.safetensors`, and no `.incomplete` files. | Every required entry present at non-zero length, every `.onnx` that declares external data sitting beside its `.onnx.data`, and no `*.incomplete` anywhere. |
+
+**The `.onnx.data` pairing is the one to watch.** A graph file is a few
+megabytes and its external data is hundreds; lose the big half in an upload and
+the folder still looks finished. That is the exact shape the completeness rule
+was written for.
+
+### The manifest overrides the built-in list
+
+This is the mistake that costs your users the most, and it is easy to make.
+When a manifest is served, **it is the file list** — the app fetches what the
+manifest names, not what it knows the model needs. So a manifest generated from
+a folder that still contains `fp32/` makes every client download 12.70 GB of
+weights that nothing will ever open.
+
+Generate manifests from a folder holding exactly what you mean to serve. Step 6
+excludes the right things; step 7 lists whatever survived.
 
 ## What this costs, and how big it is
+
+**macOS (MLX)** — 11.6 GB for all three:
 
 | Model | Total | Largest single file |
 |---|---|---|
@@ -93,13 +154,23 @@ and are reused offline from then on, exactly like Hub downloads.
 | `…1.7B-VoiceDesign-bf16` (voice design) | 4.52 GB | 3.83 GB |
 | `…1.7B-Base-bf16` (voice clone) | 4.54 GB | 3.86 GB |
 
-**All three come to 11.6 GB.** R2's free tier covers 10 GB of storage, so
-hosting the lot costs a few cents a month — about $0.02 at $0.015/GB beyond
-the free allowance. Hosting only the mode you actually use keeps you inside
-the free tier. Downloads (egress) are free from R2 at any volume, which is the
-reason to use it.
+**Windows and Linux (ONNX)** — 15.6 GB for all three, once `fp32/` is left
+behind. The right-hand column is what the repository publishes, and the gap
+between the two columns is the whole reason step 6 has exclusions:
 
-That 3.86 GB file is also the second reason GitHub Releases cannot work:
+| Model | Hosted | Published upstream |
+|---|---|---|
+| `…0.6B-CustomVoice-ONNX` (preset voice) | 5.88 GB | 5.88 GB |
+| `…1.7B-VoiceDesign-ONNX` (voice design) | 5.85 GB | 18.55 GB |
+| `…0.6B-Base-ONNX` (voice clone) | 3.86 GB | 8.77 GB |
+
+R2's free tier covers 10 GB of storage. One family costs a few cents a month
+beyond it — about $0.02 for MLX, $0.08 for ONNX at $0.015/GB — and both
+together, 27.2 GB, is about $0.26. Hosting only the modes you actually use may
+keep you inside the free tier entirely. Downloads (egress) are free from R2 at
+any volume, which is the reason to use it.
+
+That 3.86 GB MLX file is also the second reason GitHub Releases cannot work:
 assets are capped at 2 GB each.
 
 Requests are the other half of the bill, and they are what caching reduces —
@@ -177,7 +248,11 @@ bucket it is meant for.
 Each mode uses a different model. Nothing is shared between them: each needs
 its own download, manifest, folder in the bucket, and base URL in Settings.
 
-Set the list once and the remaining steps follow from it:
+Set these three variables once and every remaining step follows from them.
+**This is the only step that differs between the two apps.** Run the block for
+the models you are hosting; everything after it is identical.
+
+For **macOS (MLX)**:
 
 ```sh
 MODELS=(
@@ -185,15 +260,40 @@ MODELS=(
   "voicedesign:mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16"
   "voiceclone:mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16"
 )
+EXCLUDE=()                                # nothing to leave behind
+PROBE=speech_tokenizer/config.json        # a nested file every model has
 ```
 
-**You do not have to host all three.** A Settings field left blank keeps using
-Hugging Face, so delete the lines you do not want — hosting only preset voice
-is 2.5 GB and stays inside R2's free tier, where all three is 11.6 GB and
-costs a few cents a month.
+For **Windows and Linux (ONNX)**:
 
-The left half of each line is the folder name; the right half is the Hugging
+```sh
+MODELS=(
+  "onnx/customvoice:elbruno/Qwen3-TTS-12Hz-0.6B-CustomVoice-ONNX"
+  "onnx/voicedesign:wavekat/Qwen3-TTS-1.7B-VoiceDesign-ONNX"
+  "onnx/voiceclone:wavekat/Qwen3-TTS-0.6B-Base-ONNX"
+)
+EXCLUDE=(--exclude "fp32/*" --exclude "validation/*")
+PROBE=tokenizer/vocab.json
+```
+
+The left half of each line is the folder name, the right half is the Hugging
 Face repo. Everything below reuses them, so run these in one shell session.
+
+**The folder name becomes part of the URL, and the URL becomes the folder on
+every user's disk.** Choose it once. Serving both families from one bucket is
+why the ONNX names are nested under `onnx/` here — slashes work fine
+throughout, in the bucket and in the base URL — but any scheme does, as long as
+the two sets cannot collide.
+
+**You do not have to host all three modes.** A Settings field left blank keeps
+using Hugging Face, so delete the lines you do not want. Preset voice alone is
+2.50 GB on MLX or 5.88 GB on ONNX; the full sets are 11.6 GB and 15.6 GB.
+
+**`EXCLUDE` is not optional for ONNX.** Two of those repos publish the same
+weights twice, at `int4/` and `fp32/`, and Bunyi reads only `int4/`. Without the
+exclusions you download 18.55 GB instead of 5.85 GB, pay to store it, and — far
+worse — list it in the manifest, so every one of your users downloads it too.
+`validation/` is sample audio from the export process, of use to nobody here.
 
 ### 6. Download them
 
@@ -201,12 +301,24 @@ Face repo. Everything below reuses them, so run these in one shell session.
 uv tool install huggingface_hub      # once; puts `hf` in ~/.local/bin
 
 for pair in "${MODELS[@]}"; do
-  hf download "${pair#*:}" --local-dir ~/bunyi-models/"${pair%%:*}"
+  hf download "${pair#*:}" --local-dir ~/bunyi-models/"${pair%%:*}" "${EXCLUDE[@]}"
 done
 ```
 
-This is the slow part — up to 11.6 GB, once. Everything after it comes from
-your own host.
+This is the slow part — 11.6 GB or 15.6 GB, once. Everything after it comes
+from your own host.
+
+Check you got what you expected before going on, because every later step
+inherits whatever is in these folders:
+
+```sh
+du -sh ~/bunyi-models/*/ ~/bunyi-models/*/*/ 2>/dev/null
+```
+
+An ONNX folder near 18 GB means the exclusions did not apply. Delete it and run
+the download again rather than pruning it by hand — the manifest in step 7 is
+built from whatever is left on disk, so a folder that is only mostly right
+produces a manifest that is confidently wrong.
 
 ### 7. Generate a manifest for each
 
@@ -236,10 +348,25 @@ Check they include the nested entries, not only top-level files:
 
 ```sh
 for pair in "${MODELS[@]}"; do
-  printf '%-12s %s nested entries\n' "${pair%%:*}" \
-    "$(grep -c speech_tokenizer ~/bunyi-models/"${pair%%:*}"/manifest.txt)"
+  printf '%-22s %s nested entries\n' "${pair%%:*}" \
+    "$(grep -c / ~/bunyi-models/"${pair%%:*}"/manifest.txt)"
 done
 ```
+
+Each should report several. A zero means something flattened that folder and
+the upload will not work.
+
+For ONNX, one more look — at what the manifest says, not only how much of it
+there is:
+
+```sh
+for pair in "${MODELS[@]}"; do
+  grep -c '^fp32/' ~/bunyi-models/"${pair%%:*}"/manifest.txt
+done
+```
+
+Every line must be `0`. A manifest **is** the file list, so an `fp32/` entry
+here is an instruction to every client to fetch 12.70 GB it will never open.
 
 ### 7b. Add checksums (recommended)
 
@@ -278,14 +405,12 @@ uploads — the things that actually go wrong. It is not proof of authenticity.
 Anyone who can rewrite a model file on your server can rewrite the manifest
 next to it.
 
-Each should report several. A zero means something flattened that folder and
-the upload will not work.
-
 ### 8. Upload them, keeping the folders as folders
 
-A model is not a flat pile of files — it has a `speech_tokenizer/` subfolder,
-and Bunyi asks for those files by that path. They have to arrive in the bucket
-at the same path (`customvoice/speech_tokenizer/config.json`, not
+A model is not a flat pile of files. The MLX ones have a `speech_tokenizer/`
+subfolder; the ONNX ones have `int4/`, `embeddings/` and `tokenizer/`. Bunyi
+asks for those files by those paths, so they have to arrive in the bucket at the
+same paths (`customvoice/speech_tokenizer/config.json`, not
 `customvoice/config.json`). That is what "preserving directory structure"
 means, and `rclone copy` does it by default.
 
@@ -317,14 +442,32 @@ Both manifests, together — they describe the same file set, and a bucket
 where only one of them has been refreshed is a bucket where new clients and
 old clients disagree about what to download.
 
-Confirm the nesting survived the trip:
+Confirm the whole set survived the trip. `rclone check` compares both sides
+file by file, which catches a truncated upload as well as a flattened one:
 
 ```sh
 for pair in "${MODELS[@]}"; do
-  printf '%-12s %s\n' "${pair%%:*}" \
-    "$(rclone ls r2:bunyi-models/"${pair%%:*}" | grep -c speech_tokenizer)"
+  echo "=== ${pair%%:*} ==="
+  rclone check ~/bunyi-models/"${pair%%:*}" r2:bunyi-models/"${pair%%:*}" \
+    --exclude '.*' --exclude '.*/**'
 done
 ```
+
+`0 differences found` is the line to look for. Anything else names the files,
+and re-running the `rclone copy` above fixes it.
+
+For ONNX especially, confirm no graph lost its external data on the way up — a
+`.onnx` without its `.onnx.data` is the failure that looks like success:
+
+```sh
+for pair in "${MODELS[@]}"; do
+  rclone ls r2:bunyi-models/"${pair%%:*}" | awk '{print $2}' | sort > /tmp/there
+  ( cd ~/bunyi-models/"${pair%%:*}" && find . -name '*.onnx.data' | sed 's|^./||' ) \
+    | sort | comm -23 - /tmp/there | sed "s|^|MISSING ${pair%%:*}/|"
+done
+```
+
+No output means every one arrived.
 
 ### 9. Make the bucket readable over HTTPS
 
@@ -349,13 +492,19 @@ One bucket serves every model; the folder name is what separates them.
 
 ### 10. Point Bunyi at them
 
-**Settings → Models** has one field per mode. Fill in the ones you hosted:
+**Settings → Models** has one field per mode, in both apps. Fill in the ones
+you hosted, using the folder names you chose in step 5:
 
-| Mode | Bunyi setting |
-|---|---|
-| Preset voice | `https://models.bunyi.app/customvoice` |
-| Voice design | `https://models.bunyi.app/voicedesign` |
-| Voice clone | `https://models.bunyi.app/voiceclone` |
+| Mode | macOS (MLX) | Windows and Linux (ONNX) |
+|---|---|---|
+| Preset voice | `https://models.bunyi.app/customvoice` | `https://models.bunyi.app/onnx/customvoice` |
+| Voice design | `https://models.bunyi.app/voicedesign` | `https://models.bunyi.app/onnx/voicedesign` |
+| Voice clone | `https://models.bunyi.app/voiceclone` | `https://models.bunyi.app/onnx/voiceclone` |
+
+**Save the three as a configuration** rather than retyping them. Settings →
+Models has a name field and a Save button for exactly this: the three belong
+together, and switching back to Hugging Face is then one click instead of three
+cleared fields.
 
 With the quick option, substitute `https://pub-xxxxxxxx.r2.dev` for
 `https://models.bunyi.app`.
@@ -370,20 +519,29 @@ field restores the built-in default for that mode.
 BASE=https://models.bunyi.app
 
 for pair in "${MODELS[@]}"; do
-  for f in manifest.txt manifest.sha256 config.json speech_tokenizer/config.json; do
-    printf '%-12s %-28s ' "${pair%%:*}" "$f"
+  for f in manifest.txt manifest.sha256 "$PROBE"; do
+    printf '%-22s %-30s ' "${pair%%:*}" "$f"
     curl -sI "$BASE/${pair%%:*}/$f" | head -1
   done
 done
 ```
 
-Every line must say `200`. The `speech_tokenizer/config.json` line is the one
-that catches a flattened upload — the other two can pass while the model is
-still unusable.
+Every line must say `200`. The `$PROBE` line is the one that catches a
+flattened upload — the manifests can both pass while the model is still
+unusable.
 
-Then press Generate in each mode you hosted, and watch **Window → Logs** (⌘L):
-it names every file as it downloads, and says exactly which one failed and
-with what status code.
+Then press Generate in each mode you hosted and watch the log: it names every
+file as it downloads, and says exactly which one failed and with what status
+code. On macOS that is **Window → Logs** (⌘L); on Windows and Linux it is the
+**Logs** button in the header.
+
+## What self-hosting does not cover
+
+Voice clone transcribes the reference clip with a 141 MB Whisper model, fetched
+through the same downloader with the same progress, resume and checksums. It is
+**not** one of the three configurable sources, so there is no field to point at
+your own copy of it. On a machine that will never reach Hugging Face, fetch it
+ahead of time the way **Settings → Storage** shows.
 
 ## Other hosts
 
@@ -401,11 +559,23 @@ Anything that serves static files over HTTPS with directory structure intact:
 The base URL is wrong, or the upload flattened the structure. Check
 `curl -sI <base>/config.json`.
 
-**Some files 404 but the download completes.** Expected. Only `config.json`
-and `model.safetensors` are required; the rest are best-effort.
+**Some files 404 but the download completes.** Expected — non-required files
+are best-effort. On MLX only `config.json` and `model.safetensors` are
+required; on ONNX the required list is per export and much longer, so a 404
+there usually stops the download instead.
 
-**The download never starts, and the log mentions ATS.** The base URL is
-`http://`. Use HTTPS.
+**The download never starts, and the log mentions ATS.** macOS only: the base
+URL is `http://`. Use HTTPS. The Windows and Linux app has no equivalent gate,
+so plain HTTP on a LAN works there as it is.
+
+**Everything downloads, then generation fails to load the model.** Almost
+always a missing `.onnx.data`. The graph beside it is small enough to arrive
+unnoticed, so the folder looks complete. Re-run the `rclone check` in step 8;
+it names the file.
+
+**Every client is downloading 18 GB.** The manifest lists `fp32/`. Regenerate
+it from a folder that does not contain those files — step 6's `EXCLUDE`, then
+steps 7 and 7b again — and re-upload both manifests.
 
 **`rclone` says `AccessDenied` on `ListBuckets` (HTTP 403).** Expected, and
 not a broken token: a bucket-scoped token cannot enumerate the account's
@@ -427,7 +597,14 @@ curl -sI https://models.bunyi.app/customvoice/.cache/huggingface/download/config
 
 A `404` means gone.
 
-**It re-downloads every time.** A folder counts as complete when it holds a
-`config.json`, at least one `.safetensors`, and no `.incomplete` files. A
-partial download leaves `.incomplete` markers behind — delete the folder under
-`models/self-hosted/` and start again.
+**It re-downloads every time.** The folder is not counting as complete. On
+MLX that means a `config.json`, at least one `.safetensors`, and no
+`.incomplete` files. On ONNX it means every required entry present at non-zero
+length, every `.onnx` that declares external data sitting beside its
+`.onnx.data`, and no `*.incomplete` anywhere. A partial download leaves those
+markers behind — delete the folder under `models/self-hosted/` and start again.
+
+**A mode still downloads from Hugging Face after you changed the URL.** Check
+the trailing slash and the spelling: the folder on disk is derived from the URL,
+so `…/onnx/customvoice` and `…/onnx/customvoice/` are two different mirrors as
+far as the app is concerned, each with its own copy.
