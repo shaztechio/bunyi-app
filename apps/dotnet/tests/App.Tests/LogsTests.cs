@@ -298,6 +298,29 @@ public class LogsTests : HeadlessWindows
     }
 
     [AvaloniaFact]
+    public void A_long_line_wraps_rather_than_scrolling_sideways()
+    {
+        // A log is read by scanning down it. A horizontal scrollbar makes the
+        // right-hand end of every long line — which is where the detail of an
+        // error is — reachable only one line at a time, and puts the thing you
+        // came to read off-screen by default. §8's Copy still takes the whole
+        // untruncated line either way.
+        var (window, _, store, timers) = Open();
+        store.Log(new string('x', 400));
+        timers.Tick();
+        window.UpdateLayout();
+
+        var scroller = window.GetLogicalDescendants().OfType<ScrollViewer>()
+            .First(s => s.Name == "Scroller");
+
+        // The content is no wider than what is on screen, so there is nothing
+        // to scroll to and no bar to show.
+        Assert.True(
+            scroller.Extent.Width <= scroller.Viewport.Width,
+            $"content is {scroller.Extent.Width} wide in a {scroller.Viewport.Width} viewport");
+    }
+
+    [AvaloniaFact]
     public void Clear_from_the_window_empties_the_store()
     {
         var (window, _, store, timers) = Open();

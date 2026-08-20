@@ -52,14 +52,26 @@ limitations under the License.
           does not mean dragging through everything above it — and Copy takes
           the lot in one go anyway.
         -->
-        <ScrollViewer Name="Scroller" HorizontalScrollBarVisibility="Auto">
+        <!--
+          Disabled rather than Auto: it is what holds the lines to the width of
+          the window, and so what makes the wrapping below happen at all. With
+          Auto the ItemsControl is measured against infinite width, every line
+          takes as much as it wants, and nothing ever wraps.
+        -->
+        <ScrollViewer Name="Scroller" HorizontalScrollBarVisibility="Disabled">
           <ItemsControl ItemsSource="{Binding Lines}" Margin="10,8">
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="diag:LogEntry">
+                <!--
+                  Wrapped, because a log is read by scanning down it. A long
+                  line — a path, an exception, a model id — used to put its own
+                  right-hand end off-screen, and that end is where the detail
+                  of an error is. Copy still takes every line whole.
+                -->
                 <SelectableTextBlock Text="{Binding}"
                                      FontFamily="{DynamicResource BunyiMono}"
                                      FontSize="12"
-                                     TextWrapping="NoWrap" />
+                                     TextWrapping="Wrap" />
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
