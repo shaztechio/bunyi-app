@@ -13,9 +13,11 @@
 // limitations under the License.
 
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Styling;
+using Avalonia.Threading;
 using Bunyi.App.ViewModels;
 using Bunyi.App.Views;
 using Bunyi.Core;
@@ -37,7 +39,20 @@ public partial class App : Application
 {
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromMinutes(30) };
 
-    public override void Initialize() => AvaloniaXamlLoader.Load(this);
+    public override void Initialize()
+    {
+        // Avalonia has windowing and rendering up by the time it calls this. On
+        // Linux that span is X11, the GL probe, DBus and the font manager — the
+        // phase most likely to be the slow one, and the one this app cannot see
+        // from anywhere later.
+        Program.Startup?.Mark("platform");
+
+        AvaloniaXamlLoader.Load(this);
+
+        // App.axaml pulls in the Fluent theme and this app's own dictionaries.
+        // Parsing them is real work, and not the same work as the line above.
+        Program.Startup?.Mark("theme");
+    }
 
     public override void OnFrameworkInitializationCompleted()
     {
@@ -191,9 +206,34 @@ public partial class App : Application
             desktop.ShutdownRequested += async (_, _) => await engine.DisposeAsync();
 
             log.Log("Bunyi started.");
+
+            Program.Startup?.Mark("app");
+            ReportStartupOnFirstFrame(desktop.MainWindow, log);
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    /// <summary>
+    /// Writes the startup line once the first window has been drawn (spec §8).
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Window.Opened"/> fires when the window is shown, which is
+    /// before anything has been rendered into it. The post is at a priority
+    /// below Render, so it runs after the first layout and render pass rather
+    /// than merely after they were queued — as close to "there is something to
+    /// look at" as the dispatcher can answer.
+    /// </remarks>
+    private static void ReportStartupOnFirstFrame(Window window, ILogSink log)
+    {
+        void Drawn(object? sender, EventArgs e)
+        {
+            window.Opened -= Drawn;
+            Dispatcher.UIThread.Post(
+                () => Program.Startup?.Report(log), DispatcherPriority.Background);
+        }
+
+        window.Opened += Drawn;
     }
 
     /// <summary>
