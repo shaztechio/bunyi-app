@@ -47,34 +47,32 @@ limitations under the License.
             Padding="2">
       <Panel>
         <!--
-          §8: timestamped, selectable, monospaced. Selectable per line rather
-          than one big text block, so copying a single line out of a long run
-          does not mean dragging through everything above it — and Copy takes
-          the lot in one go anyway.
-        -->
-        <!--
-          Disabled rather than Auto: it is what holds the lines to the width of
+          §8: timestamped, selectable, monospaced. One block for the whole log
+          rather than one control per line: a selection cannot cross from one
+          control into the next, so a control per line meant dragging down the
+          log selected nothing past the line it started in — and copying a run
+          of lines is the ordinary reason to select any of it. Copy still takes
+          the whole log in one go.
+
+          Disabled rather than Auto: it is what holds the text to the width of
           the window, and so what makes the wrapping below happen at all. With
-          Auto the ItemsControl is measured against infinite width, every line
-          takes as much as it wants, and nothing ever wraps.
+          Auto the text is measured against infinite width, every line takes as
+          much as it wants, and nothing ever wraps.
         -->
         <ScrollViewer Name="Scroller" HorizontalScrollBarVisibility="Disabled">
-          <ItemsControl ItemsSource="{Binding Lines}" Margin="10,8">
-            <ItemsControl.ItemTemplate>
-              <DataTemplate x:DataType="diag:LogEntry">
-                <!--
-                  Wrapped, because a log is read by scanning down it. A long
-                  line — a path, an exception, a model id — used to put its own
-                  right-hand end off-screen, and that end is where the detail
-                  of an error is. Copy still takes every line whole.
-                -->
-                <SelectableTextBlock Text="{Binding}"
-                                     FontFamily="{DynamicResource BunyiMono}"
-                                     FontSize="12"
-                                     TextWrapping="Wrap" />
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
+          <!--
+            Wrapped, because a log is read by scanning down it. A long line — a
+            path, an exception, a model id — used to put its own right-hand end
+            off-screen, and that end is where the detail of an error is.
+
+            The text is set from the code-behind rather than bound, so that an
+            arriving line cannot clear a selection someone is in the middle of.
+          -->
+          <SelectableTextBlock Name="LogText"
+                               Margin="10,8"
+                               FontFamily="{DynamicResource BunyiMono}"
+                               FontSize="12"
+                               TextWrapping="Wrap" />
         </ScrollViewer>
 
         <!--

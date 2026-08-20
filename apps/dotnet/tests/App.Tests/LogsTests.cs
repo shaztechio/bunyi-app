@@ -221,16 +221,20 @@ public class LogsTests : HeadlessWindows
         return (window, model, store, timers);
     }
 
-    /// <summary>The realised line controls, after a layout pass.</summary>
+    /// <summary>The realised text controls, after a layout pass.</summary>
     /// <remarks>
-    /// A headless window lays out only when asked, and an ItemsControl builds
-    /// nothing for items it has not laid out yet.
+    /// A headless window lays out only when asked. There is one of these — the
+    /// log is a single block so a selection can run across lines — and the
+    /// tests below say so rather than assuming it.
     /// </remarks>
     private static List<SelectableTextBlock> Rows(LogsWindow window)
     {
         window.UpdateLayout();
         return [.. window.GetLogicalDescendants().OfType<SelectableTextBlock>()];
     }
+
+    /// <summary>The one block the log is shown in.</summary>
+    private static SelectableTextBlock Block(LogsWindow window) => Rows(window).Single();
 
     [AvaloniaFact]
     public void Every_line_is_selectable_and_monospaced()
@@ -318,6 +322,92 @@ public class LogsTests : HeadlessWindows
         Assert.True(
             scroller.Extent.Width <= scroller.Viewport.Width,
             $"content is {scroller.Extent.Width} wide in a {scroller.Viewport.Width} viewport");
+    }
+
+    [AvaloniaFact]
+    public void A_selection_can_run_across_lines()
+    {
+        // The log is one block, not one control per line. A selection cannot
+        // cross from one control into the next, so a control per line meant
+        // dragging down the log selected nothing past the line it started in -
+        // and copying a run of lines is the ordinary reason to select any of it.
+        var (window, _, store, timers) = Open();
+        store.Log("first thing");
+        store.Log("second thing");
+        timers.Tick();
+
+        var block = Block(window);
+        block.SelectionStart = 0;
+        block.SelectionEnd = block.Text!.Length;
+
+        Assert.Contains("first thing", block.SelectedText, StringComparison.Ordinal);
+        Assert.Contains("second thing", block.SelectedText, StringComparison.Ordinal);
+    }
+
+    [AvaloniaFact]
+    public void An_arriving_line_does_not_clear_a_selection_in_progress()
+    {
+        // Replacing the text drops the selection in it, and a generation
+        // rewrites the log several times a second. Someone selecting a line to
+        // paste into a bug report is doing it while the run is going, which is
+        // exactly when the log is busiest.
+        var (window, _, store, timers) = Open();
+        store.Log("the line being copied");
+        timers.Tick();
+
+        var block = Block(window);
+        block.SelectionStart = 0;
+        block.SelectionEnd = 8;
+        var selected = block.SelectedText;
+
+        store.Log("an arrival mid-selection");
+        timers.Tick();
+        window.UpdateLayout();
+
+        Assert.Equal(selected, block.SelectedText);
+        Assert.DoesNotContain("an arrival mid-selection", block.Text!, StringComparison.Ordinal);
+    }
+
+    [AvaloniaFact]
+    public void The_held_back_lines_appear_once_the_selection_is_released()
+    {
+        // Held back, not dropped. A log that stopped updating because of a
+        // stray click would be worse than one that clears a selection.
+        var (window, _, store, timers) = Open();
+        store.Log("the line being copied");
+        timers.Tick();
+
+        var block = Block(window);
+        block.SelectionStart = 0;
+        block.SelectionEnd = 8;
+
+        store.Log("an arrival mid-selection");
+        timers.Tick();
+
+        // Letting go: the caret collapses and the log catches up.
+        block.SelectionEnd = block.SelectionStart;
+
+        Assert.Contains("an arrival mid-selection", block.Text!, StringComparison.Ordinal);
+    }
+
+    [AvaloniaFact]
+    public void Clearing_while_a_selection_is_held_still_empties_the_window()
+    {
+        // Clear is the one update that must not wait for a selection: §8 offers
+        // it as the way to get rid of what is there, and text that outlived it
+        // would be the log claiming lines the store no longer has.
+        var (window, _, store, timers) = Open();
+        store.Log("something to select");
+        timers.Tick();
+
+        var block = Block(window);
+        block.SelectionStart = 0;
+        block.SelectionEnd = 5;
+
+        store.Clear();
+        window.UpdateLayout();
+
+        Assert.Equal(string.Empty, block.Text ?? string.Empty);
     }
 
     [AvaloniaFact]

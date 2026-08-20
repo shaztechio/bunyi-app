@@ -13,6 +13,7 @@
 // limitations under the License.
 
 using System.Collections.ObjectModel;
+using System.Text;
 using Bunyi.App.Infrastructure;
 using Bunyi.Core.Diagnostics;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -62,6 +63,20 @@ public sealed partial class LogsViewModel : ObservableObject, IDisposable
     private bool _isEmpty;
 
     /// <summary>
+    /// Every line as one block of text, which is what the window shows.
+    /// </summary>
+    /// <remarks>
+    /// One string rather than one control per line, because a selection cannot
+    /// cross from one control into the next: with a control per line, dragging
+    /// down the log selected nothing beyond the line it started in. Copying a
+    /// run of lines out of a log is the ordinary reason to select any of it.
+    /// <see cref="Lines" /> stays as the model of what is shown — the count
+    /// beside the buttons reads from it, and it is what the cap is applied to.
+    /// </remarks>
+    [ObservableProperty]
+    private string _document = string.Empty;
+
+    /// <summary>
     /// Raised when lines have been added, so the view can scroll.
     /// </summary>
     /// <remarks>
@@ -78,6 +93,7 @@ public sealed partial class LogsViewModel : ObservableObject, IDisposable
 
         foreach (var entry in _store.Snapshot()) Lines.Add(entry);
         IsEmpty = Lines.Count == 0;
+        Rebuild();
 
         _store.Appended += OnAppended;
         _store.Cleared += OnCleared;
@@ -96,6 +112,7 @@ public sealed partial class LogsViewModel : ObservableObject, IDisposable
 
         Lines.Clear();
         IsEmpty = true;
+        Rebuild();
     });
 
     /// <summary>Moves everything gathered since the last tick into the list.</summary>
@@ -117,7 +134,35 @@ public sealed partial class LogsViewModel : ObservableObject, IDisposable
         while (Lines.Count > LogStore.Capacity) Lines.RemoveAt(0);
 
         IsEmpty = Lines.Count == 0;
+
+        // Before the event, so the view has the new text to lay out by the time
+        // it is asked to scroll to the end of it.
+        Rebuild();
+
         LinesAppended?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Rebuilds <see cref="Document" /> from <see cref="Lines" />.
+    /// </summary>
+    /// <remarks>
+    /// The whole string each time rather than an append, because the cap drops
+    /// lines from the front: at a steady state of a full log, most batches both
+    /// add and remove, and an appending buffer would have to be rebuilt anyway.
+    /// It is bounded work — <see cref="LogStore.Capacity" /> lines — and it
+    /// happens at most once per <see cref="BatchInterval" />.
+    /// </remarks>
+    private void Rebuild()
+    {
+        var builder = new StringBuilder();
+
+        foreach (var entry in Lines)
+        {
+            if (builder.Length > 0) builder.Append('\n');
+            builder.Append(entry.ToString());
+        }
+
+        Document = builder.ToString();
     }
 
     /// <summary>Everything on screen, as text (spec §8: Copy).</summary>
