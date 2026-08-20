@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -37,18 +38,113 @@ public partial class LogsWindow : Window
     public LogsWindow()
     {
         InitializeComponent();
+
+        if (this.FindControl<SelectableTextBlock>("LogText") is { } block)
+        {
+            block.PropertyChanged += OnSelectionChanged;
+        }
+
         DataContextChanged += (_, _) => Attach();
         Attach();
     }
 
     private LogsViewModel? _attached;
 
+    /// <summary>Whether the block is showing text older than the view model's.</summary>
+    private bool _textIsStale;
+
+    /// <summary>Guards the re-entry caused by collapsing the selection below.</summary>
+    private bool _applying;
+
     private void Attach()
     {
-        if (_attached is not null) _attached.LinesAppended -= OnLinesAppended;
+        if (_attached is not null)
+        {
+            _attached.LinesAppended -= OnLinesAppended;
+            _attached.PropertyChanged -= OnModelChanged;
+        }
 
         _attached = DataContext as LogsViewModel;
-        if (_attached is not null) _attached.LinesAppended += OnLinesAppended;
+
+        if (_attached is not null)
+        {
+            _attached.LinesAppended += OnLinesAppended;
+            _attached.PropertyChanged += OnModelChanged;
+        }
+
+        ShowText();
+    }
+
+    private void OnModelChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(LogsViewModel.Document)) ShowText();
+    }
+
+    /// <summary>
+    /// Puts the view model's text on screen, unless something is selected.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Replacing the text drops any selection in it. A live log rewrites itself
+    /// several times a second during a generation, so binding it directly would
+    /// clear a selection the moment someone made one — which is exactly when
+    /// they are trying to copy a line out to report it. The update waits for
+    /// them to let go, and <see cref="OnSelectionChanged" /> applies it then.
+    /// </para>
+    /// <para>
+    /// Clear is the exception, and has to be: §8 offers it as the way to get
+    /// rid of what is there, so text that outlived it would be the window
+    /// showing lines the store no longer has — and holding it back would leave
+    /// no way to clear a log at all while anything was selected.
+    /// </para>
+    /// </remarks>
+    private void ShowText()
+    {
+        var block = this.FindControl<SelectableTextBlock>("LogText");
+        if (block is null || _attached is null || _applying) return;
+
+        var cleared = _attached.Document.Length == 0;
+
+        if (!cleared && block.SelectionStart != block.SelectionEnd)
+        {
+            _textIsStale = true;
+            return;
+        }
+
+        _applying = true;
+        try
+        {
+            // The selection is dropped with the text it pointed into, rather
+            // than left addressing offsets that no longer exist.
+            if (cleared)
+            {
+                block.SelectionStart = 0;
+                block.SelectionEnd = 0;
+            }
+
+            block.Text = _attached.Document;
+            _textIsStale = false;
+        }
+        finally
+        {
+            _applying = false;
+        }
+    }
+
+    /// <summary>Catches up the text once a selection is released.</summary>
+    private void OnSelectionChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (e.Property != SelectableTextBlock.SelectionStartProperty
+            && e.Property != SelectableTextBlock.SelectionEndProperty)
+        {
+            return;
+        }
+
+        if (_textIsStale && sender is SelectableTextBlock { } block
+            && block.SelectionStart == block.SelectionEnd)
+        {
+            ShowText();
+        }
     }
 
     private void OnLinesAppended(object? sender, EventArgs e)

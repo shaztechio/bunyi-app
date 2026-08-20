@@ -433,6 +433,21 @@ rule/badge treatments, which survive both — not in a window background.
 macOS source: `LogStore.swift`, `LogsView.swift`.
 - A separate Logs window (macOS: Window → Logs, ⌘L) with timestamped,
   selectable, monospaced lines, autoscroll, Copy + Clear.
+- **The log is one text pane, not one control per line.** A selection must run
+  across lines: copying a run of them into a bug report is what the window is
+  for. A control per line cannot do it — a drag cannot cross from one view
+  into the next, so each line selects alone however the line is built, and
+  moving the boundary (a timestamp column beside a message) only moves the
+  problem. macOS uses an `NSTextView`; .NET uses a single `SelectableTextBlock`.
+  Both are read-only rather than disabled, because a disabled text view will not
+  let you select either.
+- **Lines wrap; the pane never scrolls sideways.** A log line can be a file path
+  hundreds of characters long, and a horizontal scrollbar puts the end of every
+  long line — which is where the detail of an error is — off-screen,
+  reachable only one line at a time.
+- An arriving line must not disturb someone reading: autoscroll only follows the
+  tail when the view was already at the bottom, and a redraw must not clear a
+  selection in progress. Clear is the exception, and empties the pane at once.
 - Mirror to the platform's system log **where the app can write to one
   unprivileged**. macOS uses OSLog. Windows' Event Log needs an
   administrator-created source, so a per-user app does not qualify: mirror to
