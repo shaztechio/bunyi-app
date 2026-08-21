@@ -45,15 +45,31 @@ client-side HTML, it is write-only (events in, nothing out), and it is not
 the personal API key that reads data back — that one never lands in the
 repository.
 
-Analytics load from `us-assets.i.posthog.com` and send to
-`us.i.posthog.com`, so a strict CSP or a blocklist will drop them. Nothing
-else on the page depends on the script: `p.onerror` gives up quietly and
-the site renders the same either way.
+Analytics go through **`t.sandfort.app`**, a managed reverse proxy in front
+of PostHog's US region, rather than straight to `us.i.posthog.com`. One host
+now, not two: the snippet derives the asset URL by replacing `.i.posthog.com`
+with `-assets.i.posthog.com` inside `api_host`, and a proxy domain does not
+contain that substring — so the replacement does nothing and `array.js`
+comes from the proxy as well. That only works because the proxy serves
+`/static/` too; a proxy that forwarded only the ingest endpoints would load
+nothing at all.
+
+`ui_host: 'https://us.posthog.com'` exists solely because of the proxy. Without
+it, links PostHog generates back into its own UI would point at the proxy
+domain, which does not host a UI.
+
+The domain is first-party, so a blocklist keyed on `posthog.com` no longer
+matches — worth knowing rather than discovering. A CSP still would, and
+nothing else on the page depends on the script: `p.onerror` gives up quietly
+and the site renders the same either way.
 
 `posthog.init` carries two flags that exist only to stop PostHog fetching
 modules this page has no use for. Both were measured, not guessed — the
-check is to load the page and look at what comes back from
-`us-assets.i.posthog.com`.
+check is to load the page and look at what comes back from `t.sandfort.app`.
+
+They are also the two lines missing from the snippet PostHog's dashboard hands
+you, so pasting a fresh one over this file silently removes them and costs
+every visitor about 40 KB again. They are kept on purpose.
 
 - `disable_surveys: true` — surveys are enabled per PostHog project, and
   leaving them on made every visitor fetch a 33 KB `surveys.js`. Remove the
