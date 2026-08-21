@@ -45,7 +45,7 @@ client-side HTML, it is write-only (events in, nothing out), and it is not
 the personal API key that reads data back — that one never lands in the
 repository.
 
-Analytics go through **`t.sandfort.app`**, a managed reverse proxy in front
+Analytics go through **`t.shaztech.io`**, a managed reverse proxy in front
 of PostHog's US region, rather than straight to `us.i.posthog.com`. One host
 now, not two: the snippet derives the asset URL by replacing `.i.posthog.com`
 with `-assets.i.posthog.com` inside `api_host`, and a proxy domain does not
@@ -58,14 +58,17 @@ nothing at all.
 it, links PostHog generates back into its own UI would point at the proxy
 domain, which does not host a UI.
 
-The domain is first-party, so a blocklist keyed on `posthog.com` no longer
-matches — worth knowing rather than discovering. A CSP still would, and
-nothing else on the page depends on the script: `p.onerror` gives up quietly
-and the site renders the same either way.
+The domain is one this project controls rather than PostHog's, so a blocklist
+keyed on `posthog.com` no longer matches. It is **not** first-party to the site
+in the sense that matters for cookies: `t.shaztech.io` and `bunyi.app` are
+different registrable domains, so a browser treats the proxy as third-party
+exactly as it treated `us.i.posthog.com`. A CSP still applies, and nothing else
+on the page depends on the script — `p.onerror` gives up quietly and the site
+renders the same either way.
 
 `posthog.init` carries two flags that exist only to stop PostHog fetching
 modules this page has no use for. Both were measured, not guessed — the
-check is to load the page and look at what comes back from `t.sandfort.app`.
+check is to load the page and look at what comes back from `t.shaztech.io`.
 
 They are also the two lines missing from the snippet PostHog's dashboard hands
 you, so pasting a fresh one over this file silently removes them and costs
