@@ -32,19 +32,35 @@ limitations under the License.
       first time, which is why this is worth its size here and would not be in
       a long-running process.
 
-      Measured on Linux with the §8 startup line, not assumed. 1554 ms to
-      first frame becomes 1080 ms — 30% off, for 15% more download:
+      Measured with the §8 startup line, not assumed. Two builds of one
+      commit, published self-contained, run on the same machine as each other:
 
-        theme  225 →  46 ms    the Fluent theme and this app's dictionaries
-        app    390 → 267 ms    the composition root and MainWindow's XAML
-        show   294 → 139 ms    Window.Show through to Opened
-        frame  304 → 264 ms
+                    Linux              Windows
+        runtime    40 →  40 ms      32 →  27 ms
+        platform  301 → 324 ms     319 → 239 ms
+        theme     225 →  46 ms      86 →  42 ms
+        app       390 → 267 ms     372 → 185 ms
+        show      294 → 139 ms     194 →  85 ms
+        frame     304 → 264 ms     186 → 119 ms
+        total    1554 → 1080 ms   1189 → 698 ms
+                      -30%              -41%
 
-      The two phases it does not touch are the two with no IL of ours in them:
-      `runtime`, which is over before Main, and `platform`, which is X11, GL,
-      DBus and the font manager. `theme` falling by 80% is the surprise —
-      that phase was almost entirely JIT rather than the XAML parsing its name
-      suggests.
+      The columns are two different machines and are not a comparison of the
+      platforms — only each column against itself is a measurement. The
+      Windows figures are the mean of three runs, which agreed to within 80 ms.
+
+      `runtime` is the only phase this cannot help: it is over before Main, so
+      no amount of precompiled IL is in it yet. Everything else moves, because
+      everything else is managed code being run for the first time —
+      including `platform`, which is Avalonia bringing up windowing and
+      rendering. That phase is a quarter faster on Windows and flat on Linux,
+      where more of it is genuinely native: X11, GL and DBus round trips, and
+      the font manager.
+
+      `theme` is the surprise: named for parsing the Fluent theme and this
+      app's dictionaries, and almost entirely JIT. The parsing was never the
+      cost. `show` moving is the other one — Window.Show runs a great deal
+      of Avalonia for the first time.
 
       Set here rather than on the publish command lines so that CI, the release
       workflow and the commands in AGENTS.md all produce the same binary. It is
