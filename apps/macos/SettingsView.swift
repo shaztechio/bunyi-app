@@ -24,6 +24,9 @@ import UniformTypeIdentifiers
 struct SettingsView: View {
     @State private var backup = BackupManager()
     @AppStorage("appearance") private var appearance: AppAppearance = .system
+    /// Spec §3e. On unless it has been turned off — an absent key is
+    /// someone who has never been asked, not someone who said no.
+    @AppStorage("unloadOnModeSwitch") private var unloadOnModeSwitch = true
     @AppStorage("modelRepo.Preset voice") private var presetRepo = ""
     @AppStorage("modelRepo.Voice design") private var designRepo = ""
     @AppStorage("modelRepo.Voice clone") private var cloneRepo = ""
@@ -132,12 +135,13 @@ struct SettingsView: View {
 
     private var generalTab: some View {
         Form {
-            // No eyebrow on this one. The tab is called General, the only
-            // section in it holds a row labelled Appearance, and a header
-            // between them could say nothing that is not already on screen
-            // twice — the same trap Stage 3 fell into with the mode heading.
-            // Backup, also a single unnamed section, is left alone for the
-            // same reason.
+            // No eyebrow on either of these. The rows label themselves —
+            // Appearance, and a checkbox that is a whole sentence — so a
+            // header above each could say nothing that is not already on
+            // screen twice, which is the trap Stage 3 fell into with the mode
+            // heading. Two unnamed sections rather than one: appearance and
+            // memory have nothing to do with each other, and the gap between
+            // groups is what says so.
             Section {
                 Picker("Appearance", selection: $appearance) {
                     ForEach(AppAppearance.allCases) { mode in
@@ -147,6 +151,18 @@ struct SettingsView: View {
                 .pickerStyle(.segmented)
                 Text("System follows your macOS appearance; Light and Dark "
                     + "pin the app regardless. Applies immediately.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .calloutBlock()
+            }
+
+            Section {
+                Toggle("Free memory when switching modes", isOn: $unloadOnModeSwitch)
+                Text("Each mode uses its own model, and a model can be several "
+                    + "gigabytes. Leave this on and Bunyi lets go of a mode's "
+                    + "model as soon as you leave it. Turn it off to keep it "
+                    + "loaded, so coming back to that mode starts straight "
+                    + "away — at the cost of the memory it holds meanwhile.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .calloutBlock()

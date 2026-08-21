@@ -54,6 +54,10 @@ struct ContentView: View {
     }
 
     @State private var lastGenerateMode: TTSMode = .presetVoice
+
+    /// Spec §3e. Read here rather than passed in, because the setting is
+    /// about what leaving a mode does and this is where a mode is left.
+    @AppStorage("unloadOnModeSwitch") private var unloadOnModeSwitch = true
     @State private var text: String = ""
     @State private var speaker: String = "Ryan"
     @State private var instruct: String = ""
@@ -271,7 +275,13 @@ struct ContentView: View {
             reconcileSpeaker(with: new)
         }
         .onChange(of: tab) { _, new in
-            if case .generate(let mode) = new { lastGenerateMode = mode }
+            guard case .generate(let mode) = new else { return }
+            // Compared against the mode being left rather than the previous
+            // tab, so that going Preset → History → Design still counts
+            // as leaving preset voice. History is not a mode and never holds a
+            // model of its own.
+            if mode != lastGenerateMode { releaseModelOfModeBeingLeft() }
+            lastGenerateMode = mode
         }
         .onReceive(playbackTimer) { _ in
             guard isPlaying, let player else { return }
@@ -285,6 +295,24 @@ struct ContentView: View {
             }
         }
         .toolbar { windowToolbar }
+    }
+
+    /// Lets go of the model belonging to the mode just left (spec §3e).
+    ///
+    /// The engine would drop it anyway at the next `prepare`, which is the
+    /// path that still has to work when this is turned off. Doing it here is
+    /// what stops several gigabytes sitting in unified memory for a mode
+    /// nobody is looking at until the next time one is generated.
+    private func releaseModelOfModeBeingLeft() {
+        guard unloadOnModeSwitch else { return }
+
+        // The generation modes are disabled mid-run, so this should not be
+        // reachable — but unloading a model out from under a running
+        // generation is bad enough to refuse rather than to trust the picker
+        // to have prevented.
+        guard !engine.status.isBusy else { return }
+
+        engine.unload(reason: "left \(lastGenerateMode.rawValue)")
     }
 
     // MARK: Mode bar
@@ -815,6 +843,14 @@ struct ContentView: View {
         // back to the file from before.
         engine.clearLastOutput()
         genTask = Task {
+            // §3e: before the preflight, not merely before the download.
+            // Doctor's memory check is a prediction about the run that is about
+            // to start, and measured with another mode's model still resident
+            // it describes a machine that will not exist by the time it does.
+            // Ordinarily already done — leaving the mode released it —
+            // but this is the path that still has to hold with that turned off.
+            engine.releaseModel(unlessNeededFor: mode)
+
             // Before `engine.generate`, so a blocker is reported before a
             // download starts rather than after several gigabytes of one. Deep
             // checks are left out: hashing the weights ahead of every run would
