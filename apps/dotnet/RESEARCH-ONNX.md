@@ -732,12 +732,24 @@ than as a project of its own.
 
 ## Open questions
 
-1. **Bare-metal Linux**, and **SoundFlow's `linux-x64` natives**. Partly
-   answered: the app now builds, ships and runs on Ubuntu 24.04, and the
-   runtime library set was measured there from `/proc/<pid>/maps` rather than
-   guessed. What is still not recorded here is playback confirmed by ear on a
-   real distro across the three audio backends miniaudio may pick
-   (ALSA, PulseAudio, PipeWire).
+1. **Bare-metal Linux**, and **SoundFlow's `linux-x64` natives**. Mostly
+   answered: the app builds, ships and runs on Ubuntu 24.04, the runtime
+   library set was measured there from `/proc/<pid>/maps` rather than guessed,
+   and playback is confirmed by ear in all three modes.
+
+   This question used to say "the three audio backends miniaudio may pick
+   (ALSA, PulseAudio, PipeWire)", and **there is no PipeWire backend** —
+   `MiniAudioBackend` is `Null, Wasapi, DirectSound, WinMm, CoreAudio, Sndio,
+   Audio4, Oss, PulseAudio, Alsa, Jack, AAudio, OpenSl, WebAudio, Custom`. A
+   PipeWire desktop is reached through `pipewire-pulse` and selected as
+   **PulseAudio**, so it can never be the thing that is picked and the Linux
+   candidates are two, not three.
+
+   What is still open is whether the *other* one works. The app now logs
+   `Audio backend: <chosen> (available: …)` the first time it plays
+   anything, so the answer is a line in the log rather than an inference from
+   the desktop — which was the reason this went unanswered: the two are not
+   the same, and nothing recorded the one that mattered.
 2. **1.7B `int4` speed.** Memory is answered above: the design export's floor
    is 0.74 GB *below* the shipping model's, and its KV geometry is identical,
    so long text costs the same in both modes. Speed is still unmeasured, and

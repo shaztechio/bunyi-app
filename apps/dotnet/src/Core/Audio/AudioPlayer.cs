@@ -109,6 +109,44 @@ public sealed class SoundFlowAudioPlayer : IAudioPlayer
     /// <inheritdoc />
     public event EventHandler? Finished;
 
+    /// <summary>
+    /// Records which audio backend miniaudio chose, once per engine.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// miniaudio picks a backend from what the machine offers, and on Linux
+    /// that is one of ALSA, PulseAudio or PipeWire. Which one it landed on
+    /// decided whether playback worked, and nothing anywhere said which it was
+    /// — leaving "does playback work on Linux?" answerable only as "it
+    /// worked on mine", with no way to tell whether the other two had ever been
+    /// exercised.
+    /// </para>
+    /// <para>
+    /// It cannot be inferred from the desktop either: PipeWire normally
+    /// presents a PulseAudio-compatible server, so a PipeWire machine can be
+    /// driven through the PulseAudio backend and look like neither from
+    /// outside. Asking the engine is the only answer that is not a guess.
+    /// </para>
+    /// <para>
+    /// The available list goes in the same line. A backend that is missing from
+    /// it was never a candidate, which is a different problem from one that was
+    /// chosen and did not work.
+    /// </para>
+    /// </remarks>
+    private void LogTheBackend(MiniAudioEngine engine)
+    {
+        try
+        {
+            var available = string.Join(", ", MiniAudioEngine.AvailableBackends);
+            _log.Log($"Audio backend: {engine.ActiveBackend} (available: {available}).");
+        }
+        catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException)
+        {
+            // A diagnostic line is never worth failing playback for.
+            _log.Log($"Audio backend could not be read: {ex.Message}");
+        }
+    }
+
     /// <inheritdoc />
     public void Play(string path)
     {
@@ -120,7 +158,11 @@ public sealed class SoundFlowAudioPlayer : IAudioPlayer
             {
                 StopInternal();
 
-                _engine ??= new MiniAudioEngine();
+                if (_engine is null)
+                {
+                    _engine = new MiniAudioEngine();
+                    LogTheBackend(_engine);
+                }
 
                 var format = new AudioFormat
                 {
