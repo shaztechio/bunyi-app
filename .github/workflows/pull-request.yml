@@ -1,0 +1,50 @@
+# Copyright 2026 Shazron Abdullah and Bunyi contributors
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: Pull request
+
+# `edited` is the one that matters and is not on by default: a title fixed
+# after the first red run has to re-run the check, or the only way to clear it
+# is an empty commit. `synchronize` keeps the result attached to the head
+# commit that will be squashed.
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+# Read-only. This job needs the event payload and nothing else, and a title is
+# text from outside the repository — it is passed to the checker as an argument
+# rather than interpolated into a shell line, where a backtick in a PR title
+# would run as a command.
+permissions:
+  contents: read
+
+jobs:
+  title:
+    name: Title is a Conventional Commit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # The checker has no test project to live in, so it carries its own
+      # cases. Running them here first means a broken checker fails as a
+      # broken checker, rather than as everyone's title suddenly being wrong.
+      - name: The checker checks itself
+        run: python3 tools/check-pull-request.py --self-test
+
+      # No argument: it reads the title from $GITHUB_EVENT_PATH, so nothing
+      # about the title passes through a shell.
+      - name: Check the title
+        run: python3 tools/check-pull-request.py
