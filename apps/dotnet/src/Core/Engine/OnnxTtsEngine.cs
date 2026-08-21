@@ -204,6 +204,21 @@ public sealed class OnnxTtsEngine : ITtsEngine
                 var token = run.Token;
                 var mode = request.Mode;
 
+                // Before anything else, because everything else is worse while
+                // the model of the mode being left is still resident. The
+                // download below would hold both at once - gigabytes for a mode
+                // nobody is looking at, exactly while the next one needs the
+                // room - and §11's memory check would measure a figure
+                // that is about to change, then warn about swapping that is not
+                // going to happen.
+                //
+                // Nothing here needs the old model, and the new one is not
+                // touched until it has been downloaded, so there is nothing to
+                // be gained by waiting. Generating twice in the same mode still
+                // unloads nothing: the synthesizer is the same object, and this
+                // returns without doing anything.
+                await UseSynthesizerFor(mode).ConfigureAwait(false);
+
                 // §11: Doctor runs BEFORE any download begins, because the
                 // point is not to discover after 3.4 GB that there was never
                 // room for it. Blockers stop the run; warnings only go to the
@@ -240,8 +255,6 @@ public sealed class OnnxTtsEngine : ITtsEngine
                     token).ConfigureAwait(false);
 
                 token.ThrowIfCancellationRequested();
-
-                await UseSynthesizerFor(mode).ConfigureAwait(false);
 
                 if (!_synth.IsLoaded || _loadedFolder != folder)
                 {

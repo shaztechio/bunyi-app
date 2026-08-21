@@ -74,9 +74,13 @@ public sealed class EngineRoutingTests : IAsyncLifetime
             return Task.CompletedTask;
         }
 
+        /// <summary>Called as the unload happens, for asserting on ordering.</summary>
+        public Action? OnUnload { get; set; }
+
         public Task UnloadAsync()
         {
             Unloads++;
+            OnUnload?.Invoke();
             IsLoaded = false;
             return Task.CompletedTask;
         }
@@ -144,6 +148,56 @@ public sealed class EngineRoutingTests : IAsyncLifetime
         Assert.False(preset.IsLoaded);
         Assert.Equal(1, preset.Unloads);
         Assert.True(design.IsLoaded);
+    }
+
+    [Fact]
+    public async Task The_model_being_left_is_released_before_the_next_one_downloads()
+    {
+        // Order, not merely eventual tidiness. The unload used to run after the
+        // download, so the mode nobody had left for was resident for the whole
+        // of the next model arriving - two exports at once, exactly while the
+        // second one needed the room. It is also why Doctor's memory check
+        // (§11) could warn about swapping that was not going to happen: it
+        // measured a figure that was about to change.
+        var preset = new TrackingSynthesizer("preset") { Speakers = ["ryan"] };
+        var design = new TrackingSynthesizer("design");
+
+        // A source of its own for the design mode, so the switch has a model
+        // that is not on disk yet and therefore a real download to be ordered
+        // against. The download folder is keyed by source, not by layout.
+        _server.AddBinary("design/model.onnx", 2_048);
+        var designSource = new ModelSource.BaseUrl(new Uri(_server.BaseUrl, "design/"));
+
+        var engine = new OnnxTtsEngine(
+            mode => mode == TtsMode.VoiceDesign ? design : preset,
+            new ModelDownloader(_http, _log),
+            _log,
+            mode => mode == TtsMode.VoiceDesign
+                ? designSource
+                : new ModelSource.BaseUrl(_server.BaseUrl),
+            _ => Layout,
+            () => _root,
+            () => Path.Combine(_root, "Outputs"));
+
+        await using var _ = engine;
+
+        // The first run loads preset, and downloads its model.
+        await engine.GenerateAsync(Request(TtsMode.PresetVoice), null, default);
+
+        // How much of the design model had been fetched when preset was let go.
+        var servedWhenUnloaded = -1;
+        preset.OnUnload = () => servedWhenUnloaded = _server.BodyRequestCount("design/model.onnx");
+
+        await engine.GenerateAsync(Request(TtsMode.VoiceDesign), null, default);
+
+        // None of it — the room was made before it was needed, not after.
+        Assert.Equal(0, servedWhenUnloaded);
+
+        // And the switch really did download, so the assertion above is about
+        // an ordering that happened rather than a download that never ran.
+        Assert.True(
+            _server.BodyRequestCount("design/model.onnx") > 0,
+            "the mode switch should have downloaded its own model");
     }
 
     [Fact]

@@ -356,13 +356,17 @@ and stays resident, so a second run in the same mode does not pay the load
 again.
 
 - **Switching modes unloads the model of the mode being left**, at the moment
-  of the switch. These are multi-gigabyte models, nothing else will ask for the
-  old one back, and holding it until the next generate means holding it right
-  through the next mode's download — charging both to memory at the worst
-  moment, and making Doctor's memory check (§11) measure a figure that is
-  about to change. The generation-mode tabs are disabled while a run is in
-  progress (§2a), so a switch can never unload a model a running job is
+  of the switch. These are multi-gigabyte models and nothing else will ask for
+  the old one back; several of them held for a mode nobody is looking at is the
+  case this exists to end. The generation-mode tabs are disabled while a run is
+  in progress (§2a), so a switch can never unload a model a running job is
   using.
+- **A generate releases the previous mode's model before it needs the next
+  one** — before the preflight, and before any download. Two models are
+  never resident at once, whatever the setting below says, and Doctor's memory
+  check (§11) measures the memory the run will actually have rather than a
+  figure that is about to change. Generating twice in the same mode releases
+  nothing: it is the same model, and it stays loaded.
 - **Settings → General → "Free memory when switching modes"** turns
   this off. Default **on**, persisted under `unloadOnModeSwitch`. Off keeps the
   previous mode's model resident so returning to that mode is instant, at the
