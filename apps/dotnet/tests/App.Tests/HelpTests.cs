@@ -18,6 +18,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Bunyi.App.Views;
+using Bunyi.Core;
 using Bunyi.Core.Help;
 using Xunit;
 
@@ -84,13 +85,35 @@ public class HelpTests : HeadlessWindows
     }
 
     [AvaloniaFact]
-    public void The_help_says_what_this_version_cannot_do_yet()
+    public void The_help_covers_every_mode_the_app_has()
     {
-        // Two of three modes do not exist here. Help describing them would be
-        // help that lies, and §10 asks for plain, accurate copy.
+        // This assertion used to be its own opposite: it required the help to
+        // say two of the three modes were "not here yet", which was true when
+        // it was written and stopped being true three milestones later. The
+        // help went on claiming voice clone, saved voices and backup were
+        // missing while the app shipped all of them, and the test held it
+        // there. Pinned to the mode list instead, it fails when a mode is added
+        // without being written up rather than when one stops being missing.
         var text = HelpWindow.LoadText();
 
-        Assert.Contains("not here yet", text, StringComparison.OrdinalIgnoreCase);
+        foreach (var mode in Enum.GetValues<TtsMode>())
+        {
+            Assert.Contains(mode.DisplayName(), text, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    [AvaloniaFact]
+    public void The_help_still_admits_the_style_instruction_does_nothing_in_preset_voice()
+    {
+        // §10 asks for plain, accurate copy, and this is the one thing the
+        // Windows and Linux app genuinely cannot do that the Mac app can. It
+        // sits next to a lot of text that was stale, so it is worth a test of
+        // its own: the correction that removed the stale claims must not take
+        // an accurate warning with it. Delete this when the gap closes, with
+        // the sentence it guards.
+        var text = HelpWindow.LoadText();
+
+        Assert.Contains("has no effect", text, StringComparison.OrdinalIgnoreCase);
     }
 
     [AvaloniaFact]

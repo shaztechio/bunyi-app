@@ -24,36 +24,60 @@ Bunyi turns text into speech on your own computer. Nothing you type and no audio
 
 The word is Malay and Indonesian for **sound**.
 
-## What this version can do
-
-This is the Windows and Linux version of Bunyi, and it is still being built. **Preset voice** works end to end. **Voice design** and **Voice clone** are not here yet, and neither are saved voices or backup — the macOS version has them, and they are coming.
-
-Everything below describes what this version actually does today.
-
 ## Start here
 
 1. Type or paste your text in the big box.
-2. Click **Generate**.
+2. Pick a mode at the top: **Preset voice**, **Voice design**, or **Voice clone**. (The fourth tab, **History**, is where everything you have made is kept.)
+3. Click **Generate**.
 
-The first time you generate, Bunyi downloads the voice model — about 5.9 GB — and shows a progress bar with an estimate of the time remaining. This happens once. Every generation after that is offline and much faster.
+The first time you use each mode, Bunyi downloads that mode's model — between about 3.9 GB and 5.9 GB — and shows a progress bar with an estimate of the time remaining. This happens once per mode. Every generation after that is offline and much faster.
 
 When generation finishes the audio plays automatically. **Play** repeats it, and the folder button opens the folder where the file was saved.
 
-If the download is a lot to ask for before hearing anything, the **Storage** tab in Settings gives you a command to fetch the model in advance instead.
+If the download is a lot to ask for before hearing anything, the **Storage** tab in Settings gives you a command per mode to fetch a model in advance instead.
 
-## Preset voice
+## The three modes
+
+### Preset voice
 
 Choose a speaker from the list that comes with the model, and Bunyi reads your text in that voice.
 
 There is a **style instruction** box — a short phrase describing how the text should be said, such as "cheerful and quick" or "calm, like a bedtime story". Leave it blank for a neutral reading.
 
-**The instruction has no effect in this version.** The speech library this app currently uses does not pass it to the small preset-voice model, so it changes nothing — and rather than pretend otherwise, Bunyi leaves the style out of the file's saved details when that happens, so a clip never claims a delivery it did not have.
+**The instruction has no effect in this mode.** The speech library this app currently uses does not pass it to the small preset-voice model, so it changes nothing — and rather than pretend otherwise, Bunyi leaves the style out of the file's saved details when that happens, so a clip never claims a delivery it did not have.
 
 This is a difference from the Mac version, where the instruction does reach the model, and it is being worked on. In the meantime, **Voice design** takes a description and acts on it.
+
+### Voice design
+
+Instead of picking a speaker, describe the voice you want: "a warm older man with a slight rasp", or "a bright, energetic presenter". Bunyi builds a voice to match the description.
+
+Style instructions work here too, and they do a different job from the description. The description is *who is speaking*; the instruction is *how they are speaking right now*.
+
+### Voice clone
+
+Give Bunyi a short recording of a voice and it reads your text in that voice.
+
+Two things matter for a good clone:
+
+- **The transcript.** Cloning works by lining up the recording with the words in it, so Bunyi needs to know what the clip says. Leave the transcript box blank and it listens to the clip and writes the transcript for you, on your own computer. Whatever you type yourself is always used instead.
+- **The recording.** A few clean seconds of a single person speaking, without music or background noise, beats a long noisy clip. Bunyi converts the audio to the rate the model needs, so you do not have to prepare the file.
+
+Only the first ten seconds of the clip are used, and the transcript is taken from exactly that much — a transcript running past the audio makes the clone finish the recording instead of speaking your text.
+
+There is no style instruction in this mode. The model behind cloning cannot take one, so the emotion of a cloned voice comes from the delivery in the reference clip. If you want the same cloned voice in different moods, save one voice per mood.
 
 ## Language
 
 The language menu covers English, Chinese, Japanese, Korean, German, French, Russian, Portuguese, Spanish, and Italian, plus **auto**, which lets the model decide from your text. Auto is a good default; set the language explicitly when your text is short or mixes languages.
+
+## Saved voices
+
+In Voice clone mode you can save a clone as a named voice. Bunyi copies the recording into its own storage, so the saved voice keeps working even if you later move or delete the original file.
+
+Pick a saved voice from the menu and its recording and transcript fill in for you. Deleting a saved voice removes the copy Bunyi made.
+
+Saved voices are not the same as the preset speakers. A preset is a voice the model was trained on; a saved voice is a shortcut that re-runs the clone with the inputs you stored.
 
 ## Stopping
 
@@ -105,11 +129,25 @@ Models are large, so you can keep them wherever you like — an external drive, 
 
 Keep models on a reasonably fast drive if you can. Bunyi reads the model straight from disk as it speaks rather than loading all of it first, so a slow drive makes generating slower, not just starting up.
 
-This tab also shows the ready-made download command, if you would rather fetch the model in advance instead of waiting on first use, and lists what you have already downloaded so you can delete a model you no longer want.
+This tab also shows ready-made download commands, one per mode, if you would rather fetch a model in advance instead of waiting on first use, and lists what you have already downloaded so you can delete a model you no longer want.
+
+### Backup
+
+**Back up** collects everything in your models folder into a single `.zip` file, so you do not have to download several gigabytes again after rebuilding a machine or moving to a new one.
+
+**Restore** unpacks a backup back into your models folder. Models you already have are left alone — restoring never overwrites what is already there.
+
+Both show progress and can be stopped part way.
 
 ### Appearance
 
 Light, dark, or follow the system. It applies to every Bunyi window straight away.
+
+**Free memory when switching modes** is on this tab too. Each mode uses its own model, and a model can be several gigabytes, so Bunyi lets go of one as soon as you leave its tab. Turn it off to keep it loaded and come back to that mode without waiting for it again — at the cost of the memory it holds meanwhile.
+
+### About
+
+The version you are running, the platform it was built for, and the licence and credits.
 
 ## Doctor
 

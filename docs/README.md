@@ -117,6 +117,9 @@ Keep them in step with the file you point at.
 
 The site describes what the apps actually do, so it's downstream of the
 spec like everything else — see [`/AGENTS.md`](../AGENTS.md). If a feature
-changes in [`spec/FEATURES.md`](../spec/FEATURES.md), or the .NET app stops
-being a scaffold, update the matching copy here (the "Features",
-"Platforms", and "Get it running" sections).
+changes in [`spec/FEATURES.md`](../spec/FEATURES.md), update the matching copy
+here (the "Features", "Platforms", and "Get it running" sections).
+
+This used to say "or the .NET app stops being a scaffold". It did, and nothing
+here was updated — which is the argument for the sentence above rather than
+against it.
