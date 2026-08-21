@@ -616,6 +616,9 @@ Findings follow §10: sizes are stated, and each says what to do.
 - Settings tabs → `SettingsView.swift`
 - Appearance (System/Light/Dark) → `BunyiApp.swift` (`AppAppearance`),
   `SettingsView.generalTab`
+- Model residency / free-on-mode-switch → `TTSEngine.unload`,
+  `TTSEngine.prepare`, `ContentView` (`onChange(of: tab)`),
+  `SettingsView.generalTab`
 - Logs → `LogStore.swift`, `LogsView.swift`
 - Busy-close → `WindowCloseGuard.swift`
 - Doctor / preflight checks → `Doctor.swift`, `ContentView.generate`

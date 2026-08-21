@@ -246,10 +246,48 @@ final class TTSEngine {
     private func forgetModel(at dir: URL) {
         guard let loadedDir,
               loadedDir.standardizedFileURL == dir.standardizedFileURL else { return }
-        log.log("Unloading \(loadedRepo ?? "the model") — its files were deleted")
+        unload(reason: "its files were deleted")
+    }
+
+    /// Lets go of whatever model is loaded (spec §3e).
+    ///
+    /// On unified memory a loaded model is real RAM, and nothing asks for the
+    /// mode you walked away from again — so the app should not be holding
+    /// several gigabytes for one nobody is looking at.
+    ///
+    /// The MLX cache goes with it. Freed buffers are kept for reuse rather than
+    /// returned, which is the right default while work is ongoing and the wrong
+    /// state to sit in once the model they belong to is gone.
+    ///
+    /// Safe to call when nothing is loaded: that is the ordinary case when a
+    /// mode is left before it has ever generated, and it says nothing then
+    /// rather than logging an unload that did not happen.
+    /// Releases the loaded model unless it is the one `mode` needs (spec §3e).
+    ///
+    /// Called before the preflight as well as before the download, because
+    /// §11's memory check is a prediction about the run that is about to
+    /// start: measured with the previous mode's model still resident it
+    /// describes a machine that will not exist by the time the run begins, and
+    /// warns about swapping that is not going to happen.
+    ///
+    /// Generating twice in the same mode releases nothing — it is the same
+    /// model, and reloading several gigabytes per run would make every run as
+    /// slow as the first.
+    func releaseModel(unlessNeededFor mode: TTSMode) {
+        guard loadedRepo != mode.effectiveRepoID else { return }
+        unload(reason: "preparing \(mode.rawValue)")
+    }
+
+    func unload(reason: String) {
+        let wasLoaded = model != nil || loadedRepo != nil
+        let what = loadedRepo ?? "the model"
+
         model = nil
         loadedRepo = nil
-        self.loadedDir = nil
+        loadedDir = nil
+
+        guard wasLoaded else { return }
+        log.log("Unloading \(what) — \(reason)")
         MLX.GPU.clearCache()
     }
 
@@ -260,12 +298,12 @@ final class TTSEngine {
         let repoID = mode.effectiveRepoID
         if let model, loadedRepo == repoID { return model }
 
-        // Evict the previous model before loading the next one.
-        if loadedRepo != nil { log.log("Unloading previous model") }
-        self.model = nil
-        self.loadedRepo = nil
-        self.loadedDir = nil
-        MLX.GPU.clearCache()
+        // By here the model for another mode must already be gone, or two are
+        // resident at once for exactly as long as the download below needs the
+        // room. Ordinarily it is: leaving the mode released it, and the
+        // generate path releases it again ahead of the preflight. This is the
+        // backstop for any caller that did neither.
+        releaseModel(unlessNeededFor: mode)
 
         log.log("Preparing \(mode.rawValue) — \(repoID)")
         let source = mode.effectiveSource
