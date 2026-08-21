@@ -732,6 +732,11 @@ than as a project of its own.
 
 ## Open questions
 
+Each of these is also a tracked issue. They spent a long time here where
+nothing surfaces them, which is how question 2 went on naming a blocker that
+had already shipped, and how question 1 went on asking about an audio backend
+that does not exist.
+
 1. **Bare-metal Linux**, and **SoundFlow's `linux-x64` natives**. Mostly
    answered: the app builds, ships and runs on Ubuntu 24.04, the runtime
    library set was measured there from `/proc/<pid>/maps` rather than guessed,
@@ -750,10 +755,13 @@ than as a project of its own.
    anything, so the answer is a line in the log rather than an inference from
    the desktop — which was the reason this went unanswered: the two are not
    the same, and nothing recorded the one that mattered.
+   Tracked as [#121](https://github.com/shaztechio/bunyi-app/issues/121).
 2. **1.7B `int4` speed.** Memory is answered above: the design export's floor
    is 0.74 GB *below* the shipping model's, and its KV geometry is identical,
-   so long text costs the same in both modes. Speed is still unmeasured, and
-   cannot be until M8 can run the pipeline.
+   so long text costs the same in both modes. Speed is still unmeasured — but
+   no longer blocked: this said "cannot be until M8 can run the pipeline", and
+   M8 shipped, as question 3 below says four lines further down. Tracked as
+   [#122](https://github.com/shaztechio/bunyi-app/issues/122).
 3. ~~**Whether wavekat's graphs can be driven through `TtsPipeline`**~~ —
    answered above, and by M8 and M10 shipping. The I/O matches name for name;
    only `hidden_size` differs. The same comparison settles what the
@@ -761,3 +769,4 @@ than as a project of its own.
 4. **Whether the vocoder's `node_pad_1` can be fixed** in the export, or worked
    around by rebuilding that graph. It is the only thing keeping the vocoder on
    CPU, and it affects every GPU provider.
+   Tracked as [#123](https://github.com/shaztechio/bunyi-app/issues/123).
