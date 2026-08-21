@@ -1,11 +1,19 @@
 # AGENTS.md — Windows + Linux app (.NET + Avalonia + ONNX)
 
-> **Status: preset voice works end to end; two of the three modes do not
-> exist yet.**
-> Spec sections §1 (preset voice only), §2, §2a, §3, §7, §8, §9, §10 and §11
-> are implemented, with the main window, History, Settings, Doctor, Logs and
-> Help. Voice design, transcription (§4), voice clone, the saved voices library
-> (§5), backup and restore (§6) and packaging are still to come.
+> **Status: complete. All three modes work end to end.**
+> Every spec section is implemented — the three modes (§1), generation and
+> History (§2, §2a), model management (§3), reference audio and transcription
+> (§4), the saved voices library (§5), backup and restore (§6), Settings (§7),
+> Logs (§8), busy-close (§9), error copy (§10) and Doctor (§11) — with the
+> main window, Settings, Doctor, Logs and Help around them, and packaging for
+> both platforms.
+>
+> One gap remains, and it is a real one: the style instruction does not reach
+> the preset-voice model, where macOS passes it. It is described in the root
+> [`AGENTS.md`](../../AGENTS.md), scoped in
+> [`RESEARCH-ONNX.md`](RESEARCH-ONNX.md), and stated plainly in the shipped
+> help — which is the only feature claim in there that is a limitation
+> rather than a description.
 >
 > `dotnet build`, `dotnet test` and a self-contained `dotnet publish` are green
 > on Windows and Linux, and CI runs all three on both. The research gate is

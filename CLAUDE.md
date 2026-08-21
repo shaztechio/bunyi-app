@@ -7,4 +7,4 @@ developers. Start there:
 - [`/spec/FEATURES.md`](spec/FEATURES.md) — feature spec (source of truth)
 - [`/spec/DATA-FORMATS.md`](spec/DATA-FORMATS.md) — on-disk formats
 - [`/apps/macos/AGENTS.md`](apps/macos/AGENTS.md) — the macOS app (Swift/MLX)
-- [`/apps/dotnet/AGENTS.md`](apps/dotnet/AGENTS.md) — the Windows+Linux app (.NET/Avalonia, scaffold)
+- [`/apps/dotnet/AGENTS.md`](apps/dotnet/AGENTS.md) — the Windows+Linux app (.NET/Avalonia)
