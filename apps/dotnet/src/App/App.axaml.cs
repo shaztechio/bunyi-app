@@ -218,17 +218,33 @@ public partial class App : Application
     /// Writes the startup line once the first window has been drawn (spec §8).
     /// </summary>
     /// <remarks>
-    /// <see cref="Window.Opened"/> fires when the window is shown, which is
-    /// before anything has been rendered into it. The post is at a priority
-    /// below Render, so it runs after the first layout and render pass rather
-    /// than merely after they were queued — as close to "there is something to
-    /// look at" as the dispatcher can answer.
+    /// <para>
+    /// Two phases, because they answer different questions and the first Linux
+    /// reading is why. <see cref="Window.Opened"/> fires when the window is
+    /// shown, which is before anything has been rendered into it: that is
+    /// <c>show</c>, and on X11 it is the window being mapped and the round
+    /// trips that go with it. <c>first frame</c> is what happens after — the
+    /// render surface, and the first pass that puts pixels in the window.
+    /// </para>
+    /// <para>
+    /// Together they were 696 ms on Linux against 254 ms on Windows: the only
+    /// phase of the five where Linux was slower, and the gap between a window
+    /// appearing and a window having anything in it is exactly what reads as a
+    /// slow start. One number could not say which half of it was the problem.
+    /// </para>
+    /// <para>
+    /// The post is at a priority below Render, so it runs after the first
+    /// layout and render pass rather than merely after they were queued — as
+    /// close to "there is something to look at" as the dispatcher can answer.
+    /// </para>
     /// </remarks>
     private static void ReportStartupOnFirstFrame(Window window, ILogSink log)
     {
         void Drawn(object? sender, EventArgs e)
         {
             window.Opened -= Drawn;
+            Program.Startup?.Mark("show");
+
             Dispatcher.UIThread.Post(
                 () => Program.Startup?.Report(log), DispatcherPriority.Background);
         }

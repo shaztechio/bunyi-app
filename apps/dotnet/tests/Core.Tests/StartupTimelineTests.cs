@@ -130,6 +130,87 @@ public class StartupTimelineTests
             timeline.Summary());
     }
 
+    // ---- Reading the pre-Main span from /proc (Linux) ----
+
+    /// <summary>
+    /// A /proc/self/stat line shaped like the real thing.
+    /// </summary>
+    /// <remarks>
+    /// Field 22 is the start time in USER_HZ. The fields before it are real
+    /// enough to be parsed wrongly by anything that splits the whole line on
+    /// spaces, which is the point of having them.
+    /// </remarks>
+    private static string Stat(string startTicks, string name = "Bunyi.App") =>
+        $"1234 ({name}) S 1200 1234 1234 0 -1 4194304 5000 0 0 0 120 30 0 0 20 0 12 0 {startTicks} "
+        + "60000000 4000 18446744073709551615 1 1 0 0 0 0 0 0 0";
+
+    private const string Uptime = "9000.42 71000.10\n";
+
+    [Fact]
+    public void The_time_before_Main_is_the_gap_between_the_two_proc_clocks()
+    {
+        // Both are counted from boot, so subtracting one from the other cancels
+        // the boot time out — which is the whole reason to read them rather
+        // than ask Process.StartTime, whose answer goes through /proc/stat's
+        // btime and is therefore rounded to a whole second.
+        // 9000.42 s up, started at 899_000 ticks = 8990.00 s: 10.42 s old.
+        var age = StartupTimeline.AgeFromProc(Stat("899000"), Uptime);
+
+        Assert.NotNull(age);
+        Assert.Equal(10.42, age.Value.TotalSeconds, precision: 2);
+    }
+
+    [Fact]
+    public void The_resolution_is_better_than_the_second_that_btime_gives()
+    {
+        // The reading this replaced said "41 ms" for a phase that could have
+        // been anything up to a second. Two starts a hundredth of a second
+        // apart have to come out a hundredth of a second apart.
+        var earlier = StartupTimeline.AgeFromProc(Stat("899000"), Uptime);
+        var later = StartupTimeline.AgeFromProc(Stat("899001"), Uptime);
+
+        Assert.NotNull(earlier);
+        Assert.NotNull(later);
+        // To the millisecond, not beyond it: the arithmetic is in doubles and
+        // the claim is about a hundredth of a second against a whole one.
+        Assert.Equal(10, (earlier.Value - later.Value).TotalMilliseconds, precision: 3);
+    }
+
+    [Fact]
+    public void An_executable_name_with_spaces_and_brackets_is_not_read_as_fields()
+    {
+        // The second field is the executable's name, and a name may contain
+        // both spaces and brackets. Counting from the start of the line — the
+        // classic way to read this file wrong — would take a piece of the name
+        // as the start time here.
+        var age = StartupTimeline.AgeFromProc(Stat("899000", "My App (beta) 2"), Uptime);
+
+        Assert.NotNull(age);
+        Assert.Equal(10.42, age.Value.TotalSeconds, precision: 2);
+    }
+
+    [Theory]
+    [InlineData("", Uptime)]
+    [InlineData("1234 (Bunyi.App) S 1 2 3", Uptime)]
+    [InlineData("no brackets here at all", Uptime)]
+    public void An_unreadable_stat_line_says_nothing_rather_than_guessing(
+        string stat, string uptime)
+    {
+        // A phase that is wrong without looking wrong is worse than a phase
+        // that is missing: the summary line reports a missing one as a lower
+        // bound, and a bad one as fact.
+        Assert.Null(StartupTimeline.AgeFromProc(stat, uptime));
+    }
+
+    [Fact]
+    public void A_process_that_reads_as_older_than_the_machine_is_rejected()
+    {
+        // Started 9000 seconds before a boot 9000.42 seconds ago is not a
+        // process, it is a misread.
+        Assert.Null(StartupTimeline.AgeFromProc(Stat("-100"), Uptime));
+        Assert.Null(StartupTimeline.AgeFromProc(Stat("899000"), "5.00 1.00"));
+    }
+
     private sealed class FakeClock
     {
         public TimeSpan Elapsed { get; private set; }

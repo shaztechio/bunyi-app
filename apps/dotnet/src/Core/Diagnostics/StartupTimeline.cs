@@ -155,13 +155,43 @@ public sealed class StartupTimeline
     /// How long this process has been running, or null if that cannot be read.
     /// </summary>
     /// <remarks>
-    /// Defensive: this is a diagnostic, and a container or a hardened host that
-    /// will not report a start time must cost the app a phase of a log line,
-    /// not its ability to start. UTC on both sides, so a start either side of a
-    /// daylight-saving change cannot produce an hour of imaginary startup.
+    /// <para>
+    /// Linux is read from <c>/proc</c> rather than through
+    /// <see cref="Process.StartTime"/>, which on that platform is the boot time
+    /// from <c>/proc/stat</c>'s <c>btime</c> plus the process's own offset.
+    /// <c>btime</c> is a whole number of seconds, so the answer carries up to a
+    /// second of quantisation — which on a start that takes about a second
+    /// and a half is not a rounding error, it is the measurement. The first
+    /// Linux reading this produced said 41 ms for a phase that could have been
+    /// anything up to a second.
+    /// </para>
+    /// <para>
+    /// Defensive throughout: this is a diagnostic, and a container or a
+    /// hardened host that will not report a start time must cost the app a
+    /// phase of a log line, not its ability to start. UTC on both sides of the
+    /// fallback, so a start either side of a daylight-saving change cannot
+    /// produce an hour of imaginary startup.
+    /// </para>
     /// </remarks>
     private static TimeSpan? SinceProcessStart()
     {
+        if (OperatingSystem.IsLinux())
+        {
+            try
+            {
+                var fromProc = AgeFromProc(
+                    File.ReadAllText("/proc/self/stat"),
+                    File.ReadAllText("/proc/uptime"));
+
+                if (fromProc is not null) return fromProc;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Fall through: an unreadable /proc is not worth a second
+                // failure mode when the portable path is right there.
+            }
+        }
+
         try
         {
             using var process = Process.GetCurrentProcess();
@@ -172,5 +202,59 @@ public sealed class StartupTimeline
         {
             return null;
         }
+    }
+
+    /// <summary>
+    /// How long a process has been running, from the two <c>/proc</c> files
+    /// that answer it without going through the boot clock.
+    /// </summary>
+    /// <param name="selfStat">The contents of <c>/proc/self/stat</c>.</param>
+    /// <param name="uptime">The contents of <c>/proc/uptime</c>.</param>
+    /// <remarks>
+    /// <para>
+    /// Both are measured from boot, so subtracting one from the other cancels
+    /// the boot time out. <c>/proc/uptime</c> is given to a hundredth of a
+    /// second, which is the resolution this ends up with — two orders
+    /// better than the second that <c>btime</c> is rounded to.
+    /// </para>
+    /// <para>
+    /// The starting field is counted from the last <c>)</c> rather than from
+    /// the start of the line, because the second field is the executable's name
+    /// and a name may contain both spaces and brackets. Splitting the whole
+    /// line on spaces is the classic way to read this file wrong.
+    /// </para>
+    /// <para>
+    /// The unit is <c>USER_HZ</c>, which the kernel fixes at 100 for everything
+    /// it exports here regardless of its own tick rate — it is an ABI
+    /// constant, not a property of the machine.
+    /// </para>
+    /// </remarks>
+    internal static TimeSpan? AgeFromProc(string selfStat, string uptime)
+    {
+        const double UserHz = 100.0;
+
+        if (selfStat is null || uptime is null) return null;
+
+        var afterName = selfStat.LastIndexOf(')');
+        if (afterName < 0) return null;
+
+        // Field 22 is the process start time. The split below begins at field
+        // 3, the state, so the one wanted is nineteen along from it.
+        var fields = selfStat[(afterName + 1)..]
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        if (fields.Length <= 19) return null;
+
+        if (!double.TryParse(fields[19], NumberStyles.Float, CultureInfo.InvariantCulture, out var startedTicks)) return null;
+
+        var secondsField = uptime.Split(' ', StringSplitOptions.RemoveEmptyEntries)[0];
+        if (!double.TryParse(secondsField, NumberStyles.Float, CultureInfo.InvariantCulture, out var upSeconds)) return null;
+
+        var age = upSeconds - (startedTicks / UserHz);
+
+        // A negative age, or one longer than the machine has been up, means
+        // something was misread. Saying nothing is better than a phase that is
+        // wrong without looking wrong.
+        return age >= 0 && age <= upSeconds ? TimeSpan.FromSeconds(age) : null;
     }
 }
