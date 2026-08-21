@@ -115,11 +115,18 @@ by humans or agents — including docs, spec edits, and one-line fixes.
    the base first strands whatever sits above it, which is how #2's work
    missed `main` entirely and needed #3 to rescue it.
 
-The title rule is documented, not enforced — nothing rejects a
-non-conforming title today. Sandfort's `tools/packaging/check-pull-request.py`
-implements exactly this check and was deliberately left unported; bring it
-over, plus the `pull_request: types: [… edited]` trigger it needs, if the
-rule should become a gate.
+The title rule is enforced. `tools/check-pull-request.py` runs on every pull
+request from `.github/workflows/pull-request.yml`, on `opened`, `edited`,
+`reopened` and `synchronize` — `edited` being the one that is not on by
+default and the one that matters, since a title fixed after a red run has to
+re-run the check.
+
+The **structural** half is the gate: the type, the colon and space, a lowercase
+summary, no trailing full stop. The **imperative mood** half is a warning
+beside it rather than part of the gate, because a regex cannot tell a verb from
+a noun — `fix(site): downloads for every platform` is in this history, and an
+earlier version of the checker rejected it. A gate that blocks correct work
+gets deleted, and takes the mechanical rules with it.
 
 ## Licensing
 
