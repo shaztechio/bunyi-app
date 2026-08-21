@@ -87,8 +87,14 @@ dotnet publish src/App -c Release -r win-x64   --self-contained -o artifacts/win
 dotnet publish src/App -c Release -r linux-x64 --self-contained -o artifacts/linux-x64
 ```
 
-A self-contained publish is ~206 MB on Windows and ~104 MB on Linux before a
-single model is downloaded. Worth knowing before promising a small download.
+A self-contained publish is ~260 MB on Windows and ~165 MB on Linux before a
+single model is downloaded; the archives a release ships are ~95 MB and ~69 MB.
+Worth knowing before promising a small download.
+
+About 21 MB of each is ReadyToRun — native code pre-compiled beside the IL
+so a cold start does not pay the JIT for it. It buys 30% off time-to-first-frame
+(see the comment in `src/App/Bunyi.App.csproj`), which is the trade being made
+deliberately rather than by accident.
 
 ## Layout
 
