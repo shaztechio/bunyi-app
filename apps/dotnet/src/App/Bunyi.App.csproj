@@ -25,6 +25,33 @@ limitations under the License.
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <!-- Both are shipped as portable self-contained builds. -->
     <RuntimeIdentifiers>win-x64;linux-x64</RuntimeIdentifiers>
+
+    <!--
+      Pre-compile IL to native at publish time, so the first call to a method
+      does not wait for the JIT. A cold start runs almost everything for the
+      first time, which is why this is worth its size here and would not be in
+      a long-running process.
+
+      Measured on Linux with the §8 startup line, not assumed. 1554 ms to
+      first frame becomes 1080 ms — 30% off, for 15% more download:
+
+        theme  225 →  46 ms    the Fluent theme and this app's dictionaries
+        app    390 → 267 ms    the composition root and MainWindow's XAML
+        show   294 → 139 ms    Window.Show through to Opened
+        frame  304 → 264 ms
+
+      The two phases it does not touch are the two with no IL of ours in them:
+      `runtime`, which is over before Main, and `platform`, which is X11, GL,
+      DBus and the font manager. `theme` falling by 80% is the surprise —
+      that phase was almost entirely JIT rather than the XAML parsing its name
+      suggests.
+
+      Set here rather than on the publish command lines so that CI, the release
+      workflow and the commands in AGENTS.md all produce the same binary. It is
+      a publish-time property: `dotnet build` and `dotnet run` ignore it, so
+      the inner loop is not slowed by crossgen2.
+    -->
+    <PublishReadyToRun>true</PublishReadyToRun>
   </PropertyGroup>
 
   <ItemGroup>
