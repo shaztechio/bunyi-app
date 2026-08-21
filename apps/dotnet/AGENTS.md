@@ -93,8 +93,10 @@ Worth knowing before promising a small download.
 
 About 21 MB of each is ReadyToRun — native code pre-compiled beside the IL
 so a cold start does not pay the JIT for it. It buys 30% off time-to-first-frame
-(see the comment in `src/App/Bunyi.App.csproj`), which is the trade being made
-deliberately rather than by accident.
+on Linux and 41% on Windows (1189 ms to 698 ms), which is the trade being made
+deliberately rather than by accident. The per-phase figures, and what they say
+about where a cold start actually goes, are in the comment on the property in
+`src/App/Bunyi.App.csproj`.
 
 ## Layout
 
