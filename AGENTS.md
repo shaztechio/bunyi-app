@@ -76,12 +76,17 @@ GB of buffer cache released after each run, against a Windows *peak working
 set* of 8.73 GB for the same short text — but nothing suggests MLX is the
 heavier of the two.
 
-**It is still not machine-for-machine.** The ONNX numbers come from Windows 11
-with an RTX 4090, and the CPU provider's 17.7 GB peak is most of the reason
-closing that gap here is awkward: a 16 GB Mac is precisely the case that does
-not fit. What the gap on the comparable figure does settle is the question this
-section asks — a fivefold difference is not plausibly the machine — so a
-same-machine run would tighten the number rather than change the conclusion.
+**This is settled, and no further measurement is planned.** The remaining
+imprecision — the ONNX numbers come from Windows 11 with an RTX 4090, not from
+a Mac — cannot change the outcome, because speed was never the binding
+constraint. **Memory is.** The CPU provider peaked at 17.7 GB on 22 seconds of
+audio from the *smallest* model, and it grows with output length because the KV
+cache grows per frame. A 16 GB Mac is the common case, not the edge case, so an
+ONNX build there would fail on the machines it most needs to work on.
+
+So MLX stays on macOS on resource grounds first and speed second, and the
+fivefold gap is a supporting figure rather than the argument. A same-machine
+run would refine a number that is not deciding anything.
 
 ONNX Runtime's WebGPU provider, reaching Metal through Dawn, is the only
 plausible GPU path and is likewise unmeasured.
