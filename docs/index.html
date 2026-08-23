@@ -717,6 +717,13 @@ chmod +x Bunyi.App
       <p style="margin:.6rem 0 0">Local text-to-speech, no terminal required.</p>
     </div>
     <div class="foot-links">
+      <!-- Written as a plain mailto. Cloudflare's Scrape Shield rewrites it at
+           the edge into /cdn-cgi/l/email-protection with a JS decoder, so the
+           address is not in what a harvester fetches — the same way
+           sandfort.app carries its own. Nothing to do in the markup, and
+           hand-obfuscating here would defeat it: the rewrite only finds
+           addresses it can recognise. -->
+      <a href="mailto:hello@bunyi.app">Contact</a>
       <a href="#signing">Code signing policy</a>
       <a href="https://github.com/shaztechio/bunyi-app">Repository</a>
       <a href="https://github.com/shaztechio/bunyi-app/blob/main/spec/FEATURES.md">Feature spec</a>
