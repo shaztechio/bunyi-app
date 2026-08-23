@@ -150,6 +150,10 @@ A segmented picker selects one of three modes. macOS source:
   button (Escape). Not merely disabled: a model download runs for minutes,
   and without Stop the only way out is closing the window and confirming
   (§9).
+  - **Both carry a glyph beside the label** — a waveform on Generate, a filled
+    square on Stop — and both are the same width, so the swap changes what the
+    button says without moving the row. Centred as a pair: with an icon, aligning
+    the words alone would push the glyph off the edge to compensate.
 - **Cancellation is cooperative, and the app stays busy until the engine has
   actually stopped.** Cancelling stops the consumer; the inference engine may
   run to completion regardless (macOS: the package generates on its own

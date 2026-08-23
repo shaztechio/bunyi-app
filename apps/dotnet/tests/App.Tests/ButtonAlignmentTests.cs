@@ -88,12 +88,19 @@ public class ButtonAlignmentTests : HeadlessWindows
 
         var button = ButtonNamed(window, name);
         var text = button.GetVisualDescendants().OfType<TextBlock>().First();
+        // The glyph and the label together, not the label alone. Both buttons
+        // now carry an icon, and centring the words on their own would mean
+        // pushing the icon off the left edge to compensate — which is not what
+        // centred means for a button with an icon. The presenter is still the
+        // wrong thing to measure, for the reason above; this is the pair the
+        // eye actually judges.
+        var content = (Visual)text.GetVisualParent()!;
 
-        var left = text.Bounds.X;
-        var right = button.Bounds.Width - (text.Bounds.X + text.Bounds.Width);
+        var left = content.Bounds.X;
+        var right = button.Bounds.Width - (content.Bounds.X + content.Bounds.Width);
 
         Assert.True(Math.Abs(left - right) < 2,
-            $"'{text.Text}' sits {left:F1} from the left and {right:F1} from the right");
+            $"'{text.Text}' and its glyph sit {left:F1} from the left and {right:F1} from the right");
     }
 
     [AvaloniaFact]

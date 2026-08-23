@@ -182,21 +182,36 @@ limitations under the License.
             screen reader skips it — so it was purple, unpressable and silent.
             It stays live and says what is missing when pressed.
           -->
-          <Button Content="Generate" Name="GenerateButton" Classes="primary"
+          <Button Name="GenerateButton" Classes="primary"
                   Command="{Binding GenerateCommand}"
                   IsVisible="{Binding ShowGenerate}"
                   ToolTip.Tip="{Binding BlockedReason}"
-                  IsDefault="True" MinWidth="130" />
+                  IsDefault="True" MinWidth="130">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <Path Data="{DynamicResource IconWaveform16}" Stretch="None"
+                    Width="16" Height="16" VerticalAlignment="Center" />
+              <TextBlock Text="Generate" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
           <!--
             The same width as Generate, not merely a similar one. §2 replaces
             one button with the other, and 110 was enough for "Stop" but not for
             "Generate" — so the row resized on every swap, drawing the eye to
             the layout at exactly the moment it should be on the status line.
           -->
-          <Button Content="Stop" Name="StopButton" Classes="danger"
+          <Button Name="StopButton" Classes="danger"
                   Command="{Binding StopCommand}"
                   IsVisible="{Binding IsBusy}" IsCancel="True" MinWidth="130"
-                  ToolTip.Tip="Stop the current operation" />
+                  ToolTip.Tip="Stop the current operation">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <!-- Filled, so it reads as a stop sign rather than an empty box.
+                   Overrides the stroke the style above gives sibling glyphs. -->
+              <Path Data="{DynamicResource IconStop16}" Stretch="None"
+                    Width="16" Height="16" VerticalAlignment="Center"
+                    Fill="{Binding $parent[Button].Foreground}" Stroke="{x:Null}" />
+              <TextBlock Text="Stop" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
         </StackPanel>
       </Grid>
     </StackPanel>
