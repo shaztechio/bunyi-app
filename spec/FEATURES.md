@@ -583,9 +583,14 @@ and are written to the Logs. When nothing is wrong, the run starts with no
 dialog and no interruption — a preflight the user notices on a healthy machine
 is a bug.
 
-**On demand**, from a stethoscope button in the window toolbar. The three sit
-in one group, ordered **Doctor, Logs, Help** — by how far the answer is from
-the app: whether it can run at all, what it did, what it is. All are available
+**On demand**, from a stethoscope button in the window toolbar. The buttons sit
+in one group, ordered **Settings, Doctor, Logs, Help** — a gear, then the three
+that read by how far the answer is from the app: whether it can run at all,
+what it did, what it is. Settings leads because it is the one that changes
+something rather than reporting on it. macOS also reaches Settings from the app
+menu and ⌘,, which Windows and Linux have no equivalent of; the button is
+duplicated there rather than dropped, so a user moving between the two apps
+finds the same row in the same order. All are available
 while work is in progress for the same reason (§8): a run behaving strangely is exactly when it is wanted. The on-demand run
 reports **every** check in a dialog, passes included — "everything is fine" is
 the most common useful answer — and writes the same findings to the Logs so
