@@ -78,6 +78,22 @@ limitations under the License.
   <StreamGeometry x:Key="IconPlayRound32">M12.33 9.5 L23.33 16 L12.33 22.5 Z</StreamGeometry>
   <StreamGeometry x:Key="IconStopRound32">M11 11 h10 v10 h-10 z</StreamGeometry>
 
+  <!--
+    Generate and Stop, drawn at their final 16px rather than scaled.
+
+    The same reason as the round player glyphs above: Stretch scales the stroke
+    with the geometry, so a 24px outline shrunk to 16 comes out lighter than
+    every other icon in the window. Authored at size, the 1.6 stroke is the 1.6
+    stroke.
+
+    The waveform's bars are centred on y=8 with unequal heights — a symmetric
+    set reads as a bar chart, not as sound.
+  -->
+  <StreamGeometry x:Key="IconWaveform16">M2 5.5v5 M6 2.5v11 M10 4v8 M14 6.5v3</StreamGeometry>
+  <!-- Filled, matching macOS's stop.fill: an outlined square at this size
+       reads as an empty checkbox. -->
+  <StreamGeometry x:Key="IconStop16">M4.5 4.5h7v7h-7z</StreamGeometry>
+
   <!-- Save a copy: an arrow into a tray. -->
   <StreamGeometry x:Key="IconSave">M12 3v11 M8 10.5l4 4 4-4 M4 17v2.5h16V17</StreamGeometry>
 
