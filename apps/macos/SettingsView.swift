@@ -376,7 +376,20 @@ struct SettingsView: View {
                             Text(model.byteCount.formatted(.byteCount(style: .file)))
                                 .foregroundStyle(.secondary)
                                 .monospacedDigit()
-                            Button("Delete") { pendingDeletion = model }
+                            // Icon, matching History's rows. "Delete" also
+                            // overstated it: the folder goes to the Trash, and
+                            // the tooltip now says so. Secondary rather than
+                            // red for History's reason — the confirmation is
+                            // what protects the files, not the colour.
+                            Button {
+                                pendingDeletion = model
+                            } label: {
+                                Image(systemName: "trash")
+                            }
+                            .buttonStyle(RowIconButtonStyle())
+                            .foregroundStyle(.secondary)
+                            .help("Move to Trash")
+                            .accessibilityLabel("Move \(model.name) to Trash")
                         }
                     }
                     Text("Deleting moves the folder to the Trash. The model "

@@ -353,28 +353,40 @@ struct ContentView: View {
         }
     }
 
-    /// Logs and Help, in the window's toolbar.
+    /// The window's toolbar: Settings, Doctor, Logs, Help.
     ///
-    /// They used to float at the right of the subtitle row as two unlabelled
-    /// grey glyphs, which read as debris rather than as controls. In the
-    /// toolbar they get the platform's own treatment.
+    /// Logs and Help used to float at the right of the subtitle row as two
+    /// unlabelled grey glyphs, which read as debris rather than as controls. In
+    /// the toolbar they get the platform's own treatment; Doctor and Settings
+    /// were added to the same group afterwards.
     ///
-    /// The move also makes an invariant structural. Both must stay usable
+    /// The move also makes an invariant structural. All four must stay usable
     /// while work is in progress — a long download is exactly when someone
-    /// wants to read the help or watch the log, and neither touches the
-    /// running job — and previously that held only because they sat outside
-    /// the `.disabled(engine.status.isBusy)` scope in the view tree, which a
-    /// comment had to defend. A toolbar is outside that scope by construction.
+    /// wants to read the help, watch the log, or ask what is wrong, and none of
+    /// them touches the running job — and previously that held only because
+    /// they sat outside the `.disabled(engine.status.isBusy)` scope in the view
+    /// tree, which a comment had to defend. A toolbar is outside that scope by
+    /// construction.
     @ToolbarContentBuilder
     private var windowToolbar: some ToolbarContent {
-        // Ordered by how far the answer is from the app: Doctor decides
-        // whether it can run at all, Logs says what it did, Help explains what
-        // it is. All three sit in this group and not beside Generate, because
-        // all three are wanted most while something is wrong — which is often
-        // while something is running. The group is outside the
-        // `.disabled(engine.status.isBusy)` scope, so that holds by
-        // construction rather than by remembering.
+        // Settings, then Doctor, Logs, Help — the order the .NET app's header
+        // row uses, so the two apps do not disagree about where a button is.
+        // The last three still read by how far the answer is from the app:
+        // whether it can run at all, what it did, what it is.
         ToolbarItemGroup(placement: .primaryAction) {
+            // Settings has a home on macOS that Windows and Linux do not give
+            // it — the app menu, and ⌘, — so this button is redundant here in a
+            // way it is not there. It is here anyway, first, because the .NET
+            // app puts it first and a user moving between the two should find
+            // the same row in the same order. `SettingsLink` rather than a
+            // hand-rolled action: it is the only supported way to open the
+            // Settings scene, and it focuses the window if it is already up
+            // instead of doing nothing.
+            SettingsLink {
+                Label("Settings", systemImage: "gearshape")
+            }
+            .help("Settings (⌘,)")
+
             Button {
                 runDoctorOnDemand()
             } label: {
