@@ -94,7 +94,7 @@ public class ButtonAlignmentTests : HeadlessWindows
         // centred means for a button with an icon. The presenter is still the
         // wrong thing to measure, for the reason above; this is the pair the
         // eye actually judges.
-        var content = (Visual)text.GetVisualParent()!;
+        var content = (Control)text.GetVisualParent()!;
 
         var left = content.Bounds.X;
         var right = button.Bounds.Width - (content.Bounds.X + content.Bounds.Width);
