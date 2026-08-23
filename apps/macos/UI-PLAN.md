@@ -135,6 +135,10 @@ control and its caption, 4 inside a label/value pair.
 
 No behaviour change. No parity risk — plain box model, native in Avalonia.
 
+> **Done, and seen running.** Both cards carry the border, the text card fills
+> the space down to the option rows, and the window opens at 760x680 rather
+> than at its minimum.
+
 ### Stage 2 — Give the app its own colour · ½ day
 
 New `Assets.xcassets/AccentColor.colorset`, `project.yml`
@@ -151,6 +155,11 @@ One colorset re-tints the segmented selection, Generate, the playback bar,
 History's ring, focus rings and every Settings picker. No behaviour change,
 and it makes parity *easier* — the .NET app can read the same hex from the
 spec instead of inheriting a different OS accent.
+
+> **Done, and seen running.** The indigo is on the selected segment, on
+> Generate, on History's play ring and on the Settings pickers — in a session
+> whose system accent is something else, so the colorset is being read rather
+> than inherited.
 
 > **`Theme.swift` was deliberately left out of this stage**, though earlier
 > drafts of this plan put it here. Its gradient, radius and spacing constants
@@ -187,6 +196,10 @@ you type.
 > actually supplies hierarchy here is contrast between chrome and content —
 > the 15 pt editor, the accent, and Stage 4's button — not another line of
 > prose.
+
+> **Done, and seen running.** The window shows the segmented control, one line
+> of explanation, then the editor. No mode heading, and none missed. The
+> character counter reads *31 characters* and holds its width as it changes.
 
 ### Stage 4 — Generate/Stop and the bottom bar · 1 day
 
@@ -248,7 +261,11 @@ worth one sentence in the spec so it is not later read as drift.
 **Do not** relitigate History-as-a-fourth-segment. §2a pins it, and any custom
 control that separates it visually is a spec change *and* a parity liability.
 
-### Stage 6 — History · 1–1½ days · *source-only, not seen running*
+> **Done, and seen running.** The toolbar carries four buttons — Settings,
+> Doctor, Logs, Help — and the picker labels are text alone. History is still a
+> segment beside the three modes, as §2a requires.
+
+### Stage 6 — History · 1–1½ days
 
 Row hierarchy: title 13 semibold; a `.tag` pill for the mode, then voice · date
 at `.caption`, size at `.caption2`. The current `" · "`-joined string gives four
@@ -269,6 +286,16 @@ Note that §2a's opening paragraph says "play/pause per row", contradicting its
 own detailed bullet ("play/stop … No pause", with reasons). The detailed
 bullet is what the app implements and is the intent; the summary line is
 stale. Do not read the opener as licence to add a pause.
+
+> **Done, and seen running** — the *source-only* caveat in the heading above no
+> longer applies. Rows read title, then a mode pill, then voice · date · size.
+> All four row buttons are icon-only, the trash is secondary rather than red,
+> and the rows alternate at a comfortable height.
+>
+> The three §2a pins were exercised rather than read: pressing play turns the
+> triangle into a ring with a stop square inside it — progress on the ring, no
+> pause anywhere — and Copy details answers with a green tick before returning
+> to its icon.
 
 ### Stage 7 — Settings · 1–1½ days · *source-only*
 
@@ -307,7 +334,7 @@ Spec first, separate PR.
 > as a fill or as nothing at all in light appearance — the rule is drawn to
 > carry the block on its own if it does not.
 
-### Stage 8 — Logs · ½ day · *source-only*
+### Stage 8 — Logs · ½ day · *walked, and not met*
 
 Each line is a single interpolated `Text("\(time)  \(message)")`, so the
 timestamp column cannot align and a long message wraps *under* the timestamp
@@ -318,6 +345,18 @@ must not change**, so this is presentational only.
 
 **Out of scope:** severity colours. `LogStore.Entry` has only `date` and
 `message`; adding a level touches every `log()` call site and changes §8.
+
+> **Walked, and this stage's goal is not met** — see
+> [#137](https://github.com/shaztechio/bunyi-app/issues/137).
+>
+> The `HStack` did fix it. It was then replaced by an `NSTextView` in #48 so a
+> selection could span lines, and the hanging indent went with it: with no
+> `NSParagraphStyle`, `headIndent` is 0 and a wrapped line returns to the left
+> margin — under the timestamp, which is the state this stage was written to
+> end. Long paths are the common case here, so it shows constantly.
+>
+> The rest of the stage holds: the timestamp is its own fixed, dimmer column,
+> and the copy format is unchanged. Left unmarked deliberately.
 
 ### Stage 9 — First-run state · optional, spec first
 
