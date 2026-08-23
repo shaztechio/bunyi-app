@@ -186,7 +186,7 @@ limitations under the License.
                   Command="{Binding GenerateCommand}"
                   IsVisible="{Binding ShowGenerate}"
                   ToolTip.Tip="{Binding BlockedReason}"
-                  IsDefault="True" MinWidth="130">
+                  IsDefault="True" MinWidth="160">
             <StackPanel Orientation="Horizontal" Spacing="6">
               <Path Data="{DynamicResource IconWaveform16}" Stretch="None"
                     Width="16" Height="16" VerticalAlignment="Center" />
@@ -198,10 +198,15 @@ limitations under the License.
             one button with the other, and 110 was enough for "Stop" but not for
             "Generate" — so the row resized on every swap, drawing the eye to
             the layout at exactly the moment it should be on the status line.
+
+            160 rather than 130 since the glyphs arrived: "Generate" with its
+            waveform measures 152, so at 130 it sat at its natural width while
+            Stop stayed on the floor, and the row jumped again. The headroom is
+            so a word of copy does not silently bring the jump back.
           -->
           <Button Name="StopButton" Classes="danger"
                   Command="{Binding StopCommand}"
-                  IsVisible="{Binding IsBusy}" IsCancel="True" MinWidth="130"
+                  IsVisible="{Binding IsBusy}" IsCancel="True" MinWidth="160"
                   ToolTip.Tip="Stop the current operation">
             <StackPanel Orientation="Horizontal" Spacing="6">
               <!-- Filled, so it reads as a stop sign rather than an empty box.
