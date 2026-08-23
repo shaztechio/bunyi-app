@@ -297,7 +297,7 @@ stale. Do not read the opener as licence to add a pause.
 > pause anywhere — and Copy details answers with a green tick before returning
 > to its icon.
 
-### Stage 7 — Settings · 1–1½ days · *source-only*
+### Stage 7 — Settings · 1–1½ days
 
 The problem is structural, not stylistic: Models has three fields followed by
 ~nine lines of caption prose, Storage eight more. It reads as a README with
@@ -325,14 +325,21 @@ Spec first, separate PR.
 > the treatment. The fourth, `voiceError`, is in `ContentView.swift` and was
 > left for that view's own change rather than reached into from here.
 >
-> **Not seen running.** Settings cannot be opened from outside the app without
-> Accessibility permission, which this machine does not grant, so ⌘, is not
-> reachable and there is no screenshot behind any of this. Assessed from
-> source and from a clean build. The specific things a first look should check
-> are the accent eyebrow inside a grouped `Form`'s own header slot, which
-> macOS styles itself, and whether `.quinary` under a section's surface reads
-> as a fill or as nothing at all in light appearance — the rule is drawn to
-> carry the block on its own if it does not.
+> **Seen running.** Both questions this note left open are answered, on a Mac
+> with Accessibility granted so ⌘, is reachable.
+>
+> **The accent eyebrow survives the `Form`'s own header slot.** MODEL SOURCES,
+> CONFIGURATIONS, LOCATION and DOWNLOADED MODELS all render in the accent,
+> uppercase and tracked. macOS does not restyle them.
+>
+> **`.quinary` reads as nothing.** In light appearance the fill under a callout
+> is not perceptible; what separates the block from the surface is the accent
+> rule alone. So the contingency this note anticipated is the actual state —
+> and it is the reason to leave the rule at 3 pt rather than trimming it as
+> decoration later.
+>
+> Backup carries no eyebrow, matching the decision recorded above rather than
+> contradicting it: one unnamed section under a tab already called Backup.
 
 ### Stage 8 — Logs · ½ day · *walked, and not met*
 
