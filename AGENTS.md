@@ -61,11 +61,30 @@ accept. The second half is inference from the op set rather than a measurement.
 
 The measured CPU cost is **RTF 5.0 and a 17.7 GB peak working set** on long
 text — on a 16 GB Mac that may not fit at all. So the trade is retiring a
-native app that uses the hardware for a portable one that ignores it. The
-comparison is not yet exact: nothing here records an MLX figure on the same
-text and machine, and getting one is the cheap experiment that would settle the
-question properly. ONNX Runtime's WebGPU provider, reaching Metal through Dawn,
-is the only plausible GPU path and is likewise unmeasured.
+native app that uses the hardware for a portable one that ignores it.
+
+**The MLX figure on the same text: RTF 1.16**, mean of three warm runs ranging
+0.96–1.53, on an Apple M3 with 16 GB, generating *"Hello! We'll begin in just a
+few minutes."* through Preset voice's 0.6B CustomVoice model. The ONNX CPU
+provider is **RTF 5.68** on that same text. Roughly five times, and the
+absolute matters as much as the ratio: MLX is at realtime, so the wait a user
+notices is the 2.6 s model load rather than the speech. Including that load a
+cold run is RTF 2.14. Measured 2026-08-24 from the shipping app's own log.
+
+Memory is not directly comparable — MLX reports 2.45 GB resident with 3.3–5.0
+GB of buffer cache released after each run, against a Windows *peak working
+set* of 8.73 GB for the same short text — but nothing suggests MLX is the
+heavier of the two.
+
+**It is still not machine-for-machine.** The ONNX numbers come from Windows 11
+with an RTX 4090, and the CPU provider's 17.7 GB peak is most of the reason
+closing that gap here is awkward: a 16 GB Mac is precisely the case that does
+not fit. What the gap on the comparable figure does settle is the question this
+section asks — a fivefold difference is not plausibly the machine — so a
+same-machine run would tighten the number rather than change the conclusion.
+
+ONNX Runtime's WebGPU provider, reaching Metal through Dawn, is the only
+plausible GPU path and is likewise unmeasured.
 
 Two smaller facts worth having: ONNX Runtime 1.29 ships no `osx-x64` build, so
 a port would not extend reach to Intel Macs; and the macOS app is sandboxed,
