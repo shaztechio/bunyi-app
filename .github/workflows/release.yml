@@ -314,7 +314,7 @@ jobs:
           } > "$notes"
           gh release create "${{ steps.mode.outputs.tag }}" \
             "dist/macos/$name.dmg" "dist/macos/$name.zip" "dist/macos/$name.sha256" \
-            --title "Bunyi ${{ steps.version.outputs.short }}" \
+            --title "Bunyi for Mac ${{ steps.version.outputs.short }}" \
             --notes-file "$notes" \
             --verify-tag
 
