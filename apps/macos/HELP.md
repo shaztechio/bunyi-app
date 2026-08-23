@@ -108,9 +108,12 @@ Open Settings with **⌘,**, or the gear in the toolbar.
 
 **Appearance** is light, dark, or follow the system. It applies to every Bunyi window straight away.
 
-**Free memory when switching modes** is on this tab too. Each mode uses its own model, and a model can be several gigabytes, so Bunyi lets go of one as soon as you leave its tab. Turn it off to keep it loaded and come back to that mode without waiting for it again — at the cost of the memory it holds meanwhile.
+**Free memory when switching modes** decides *when* Bunyi lets go of a model, not whether it does. Each mode uses its own model, and a model can be several gigabytes.
 
-Either way, Bunyi never holds two models at once: whatever this is set to, the model for the mode you were in is released before the next one is fetched or loaded.
+- **On**, the default: the model goes as soon as you leave its tab. Coming back to that mode means loading it again.
+- **Off**: it stays while you look at other tabs, so going back to it is instant. It is released the next time you generate in a *different* mode — the moment the memory is actually wanted.
+
+Either way you never hold two models at once. The setting moves when the memory comes back, not whether it does.
 
 ### Models
 
