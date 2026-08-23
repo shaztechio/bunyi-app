@@ -123,13 +123,33 @@ private struct LogTextView: NSViewRepresentable {
     /// than as two views.
     private static func attributed(_ entries: [LogStore.Entry]) -> NSAttributedString {
         let font = NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)
+        // One character's advance. The font is monospaced, so this is every
+        // character's advance, which is what lets the indent below be derived
+        // from a column count rather than guessed in points.
+        let character = ("0" as NSString).size(withAttributes: [.font: font]).width
         let out = NSMutableAttributedString()
         for (index, entry) in entries.enumerated() {
             let time = entry.date.formatted(date: .omitted, time: .standard)
+            let columns = max(13, time.count) + 2
+            // Hang the wrap under the message, not under the timestamp.
+            //
+            // Without this a long line returns to the left margin, which puts
+            // its continuation in the timestamp's column — the exact fault
+            // UI-PLAN Stage 8 exists to fix, reintroduced when this view became
+            // an NSTextView so a selection could span lines. Log lines are
+            // frequently file paths, so it showed on almost every launch.
+            //
+            // Derived from `columns` rather than written as a number, because
+            // the two would drift and the failure is silent: the indent would
+            // simply stop lining up with the column it is supposed to match.
+            let paragraph = NSMutableParagraphStyle()
+            paragraph.headIndent = CGFloat(columns) * character
             out.append(NSAttributedString(
                 string: time.padding(toLength: max(13, time.count),
                                      withPad: " ", startingAt: 0) + "  ",
-                attributes: [.font: font, .foregroundColor: NSColor.tertiaryLabelColor]))
+                attributes: [.font: font,
+                             .foregroundColor: NSColor.tertiaryLabelColor,
+                             .paragraphStyle: paragraph]))
             // Newline *between* entries, not after each. Appending one to the
             // last line too would make ⌘A ⌘C end in a newline that the Copy
             // button's string does not have — two ways to copy the same log,
@@ -137,7 +157,9 @@ private struct LogTextView: NSViewRepresentable {
             let isLast = index == entries.count - 1
             out.append(NSAttributedString(
                 string: entry.message + (isLast ? "" : "\n"),
-                attributes: [.font: font, .foregroundColor: NSColor.labelColor]))
+                attributes: [.font: font,
+                             .foregroundColor: NSColor.labelColor,
+                             .paragraphStyle: paragraph]))
         }
         return out
     }

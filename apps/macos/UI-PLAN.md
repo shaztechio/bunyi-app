@@ -341,7 +341,7 @@ Spec first, separate PR.
 > Backup carries no eyebrow, matching the decision recorded above rather than
 > contradicting it: one unnamed section under a tab already called Backup.
 
-### Stage 8 — Logs · ½ day · *walked, and not met*
+### Stage 8 — Logs · ½ day
 
 Each line is a single interpolated `Text("\(time)  \(message)")`, so the
 timestamp column cannot align and a long message wraps *under* the timestamp
@@ -353,17 +353,20 @@ must not change**, so this is presentational only.
 **Out of scope:** severity colours. `LogStore.Entry` has only `date` and
 `message`; adding a level touches every `log()` call site and changes §8.
 
-> **Walked, and this stage's goal is not met** — see
-> [#137](https://github.com/shaztechio/bunyi-app/issues/137).
+> **Done, and seen running** — but it took two goes, which is the part worth
+> keeping.
 >
-> The `HStack` did fix it. It was then replaced by an `NSTextView` in #48 so a
-> selection could span lines, and the hanging indent went with it: with no
-> `NSParagraphStyle`, `headIndent` is 0 and a wrapped line returns to the left
-> margin — under the timestamp, which is the state this stage was written to
-> end. Long paths are the common case here, so it shows constantly.
+> The `HStack` this stage prescribed did fix the wrap. #48 then replaced the
+> whole view with an `NSTextView` so a selection could span lines, and the
+> hanging indent went with it: with no `NSParagraphStyle`, `headIndent` is 0
+> and a wrapped line returns to the left margin — under the timestamp, the
+> state this stage was written to end. It survived review because #48 was read
+> for selection, which it does correctly, and nobody asked what it cost. #137
+> restored it with a paragraph style whose indent is derived from the same
+> column count the padding uses, so the two cannot drift.
 >
-> The rest of the stage holds: the timestamp is its own fixed, dimmer column,
-> and the copy format is unchanged. Left unmarked deliberately.
+> The rest of the stage held throughout: the timestamp is its own fixed, dimmer
+> column, and the copy format never changed.
 
 ### Stage 9 — First-run state · optional, spec first
 
