@@ -487,6 +487,22 @@ macOS source: `LogStore.swift`, `LogsView.swift`.
   self-host downloads, tokenizer step, transcription result, generation
   token milestones, saved output path + timing, backup/restore steps, and
   full error text.
+- **How long the app took to start, as one line, once the window is up.** "It
+  is slow to launch" is otherwise a report with no number in it, and which
+  phase was slow is the whole question — the runtime coming up, the UI
+  framework, or the app's own work. The line carries the total and the phases
+  that make it up.
+  - Phase names are the platform's own. What differs between a Mac and a Linux
+    box is which subsystem is slow, so a shared vocabulary here would describe
+    neither honestly.
+  - **Timed from process start, not from the app's first line of code.** Much
+    of a slow launch happens before the app is running, and a total that begins
+    when the app takes control measures only the part already known to be fast.
+  - Where that pre-start span cannot be read, the total says **"at least"**
+    rather than counting the missing phase as zero. A lower bound reported as
+    an exact figure is a wrong number in a bug report.
+  - Measured on a clock that cannot run backwards, so a clock adjustment during
+    launch cannot produce a negative phase.
 
 ## 9. Busy-close confirmation
 
@@ -625,5 +641,6 @@ Findings follow §10: sizes are stated, and each says what to do.
   `TTSEngine.prepare`, `ContentView` (`onChange(of: tab)`),
   `SettingsView.generalTab`
 - Logs → `LogStore.swift`, `LogsView.swift`
+- Startup timing → `StartupTimeline.swift`
 - Busy-close → `WindowCloseGuard.swift`
 - Doctor / preflight checks → `Doctor.swift`, `ContentView.generate`

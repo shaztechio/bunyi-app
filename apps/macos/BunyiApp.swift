@@ -40,10 +40,22 @@ enum AppAppearance: String, CaseIterable, Identifiable {
 struct BunyiApp: App {
     @AppStorage("appearance") private var appearance: AppAppearance = .system
 
+    init() {
+        // Everything up to here is dyld, the Objective-C runtime and SwiftUI
+        // starting: on a cold launch, with MLX and Metal to resolve, the bulk
+        // of the wait. Closing the phase here is what separates it from the
+        // app's own work, which is the next one.
+        StartupTimeline.shared.note("launch")
+    }
+
     var body: some Scene {
         WindowGroup("Bunyi") {
             ContentView()
                 .preferredColorScheme(appearance.colorScheme)
+                // Runs after the first frame is on screen, which is the moment
+                // the user would call the app "started" — not when the scene is
+                // declared, which is before anything is drawn.
+                .task { StartupTimeline.shared.report() }
         }
         // Without this the main window opens at whatever SwiftUI derives from
         // ContentView's 620×580 minimum — the smallest the app is allowed to
