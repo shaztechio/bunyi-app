@@ -41,11 +41,11 @@ struct BunyiApp: App {
     @AppStorage("appearance") private var appearance: AppAppearance = .system
 
     init() {
-        // Everything up to here is dyld, the Objective-C runtime and SwiftUI
-        // starting: on a cold launch, with MLX and Metal to resolve, the bulk
-        // of the wait. Closing the phase here is what separates it from the
-        // app's own work, which is the next one.
-        StartupTimeline.shared.note("launch")
+        // The earliest line of this app's own code. Everything before it —
+        // dyld resolving MLX and Metal, the Objective-C runtime, SwiftUI
+        // starting — is the `before main` phase, and on a cold launch it is
+        // the bulk of the wait.
+        StartupTimeline.shared.begin()
     }
 
     var body: some Scene {

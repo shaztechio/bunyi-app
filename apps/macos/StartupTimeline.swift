@@ -25,12 +25,11 @@ import Foundation
 /// One line in the log (spec §8), so "it is slow to start" reaches a bug report
 /// as a number with the slow phase named.
 ///
-/// The phases are chosen to separate things that actually differ between
-/// machines: everything before `main` — dyld resolving the MLX and Metal
-/// frameworks, which is the bulk of it on a cold launch — then SwiftUI bringing
-/// the app up, then the first frame. What this app's own code does is small
-/// against those, and the point of splitting them is to show that rather than
-/// assert it.
+/// Two phases, because two are all that can honestly be measured from inside a
+/// SwiftUI app: everything before the app's first line — dyld resolving the MLX
+/// and Metal frameworks, which is the bulk of a cold launch — and everything
+/// from there to the first frame. There is no hook between them to mark; a
+/// third phase was tried and could only ever report zero.
 ///
 /// The clock is `ContinuousClock`, not wall time: a clock adjustment mid-launch
 /// must not produce a negative phase. Only the span before `main` is wall time,
@@ -51,6 +50,17 @@ final class StartupTimeline {
         beforeMain = Self.timeSinceProcessStart()
         mark = started
     }
+
+    /// Start the clock. Call from the first line of app code that runs;
+    /// everything before it is attributed to `before main`.
+    ///
+    /// Exists because the instance is a lazy `static let`, created on first
+    /// access. Without an explicit call the first access is whatever records
+    /// the first phase, so that phase starts and ends at the same instant and
+    /// is always zero — which is what shipped, reporting `launch 0 ms` on a
+    /// launch that took 1.2 seconds. Naming the call is what makes the moment
+    /// the clock starts a decision rather than a side effect of ordering.
+    func begin() {}
 
     /// Close the phase that just finished.
     func note(_ name: String) {
