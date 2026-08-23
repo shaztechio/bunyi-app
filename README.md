@@ -21,7 +21,7 @@ toolbar.](docs/assets/screenshot-macos.png)
 
 Home: [bunyi.app](https://bunyi.app)
 
-**Download:** [Bunyi 1.0.0](https://github.com/shaztechio/bunyi-app/releases/latest)
+**Download:** [Bunyi 1.2.0](https://github.com/shaztechio/bunyi-app/releases/latest)
 — a signed and notarized `.dmg` for Apple Silicon Macs on macOS 15 or later.
 Drag it to Applications and launch; no Gatekeeper warnings, no terminal.
 
