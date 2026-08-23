@@ -172,9 +172,56 @@ Three things follow, all now in the spec:
 
 ## Measurements
 
-Short text = "Hello! We'll begin in just a few minutes." (~4.4–5.1 s of audio).
-Long text = a three-sentence paragraph (~22 s of audio, 267–280 frames).
 RTF = wall-clock / audio duration; **lower is better, 1.0 is realtime**.
+
+### The benchmark texts
+
+Written out so a run on another machine is the same run. Paste them verbatim —
+punctuation included, since it changes the phrasing the model produces and
+therefore the frame count.
+
+**Short** (~4.4–5.1 s of audio). Also the first example chip in the macOS app,
+which is where it came from:
+
+```
+Hello! We'll begin in just a few minutes.
+```
+
+**Long** (~20–25 s of audio):
+
+```
+The harbour was still that morning, and the boats had not yet gone out. A gull settled on the rail beside me and watched the water with the patience of something that had done this every day of its life. By the time the sun cleared the headland, the tide had turned and the whole bay was moving.
+```
+
+> **The long-text rows in the table below predate this paragraph.** They were
+> measured against *a* three-sentence paragraph of about the same length, which
+> was never written down — this file described it and did not quote it, and the
+> text is gone. Those rows stay because their relative ordering is still
+> informative, but a long-text run against the paragraph above is not
+> comparable to them and should be recorded as a new row rather than filed
+> beside one. Short-text rows are unaffected: that text was always recorded.
+
+### Conditions for the MLX row
+
+Recorded because the row was taken through the shipping app rather than a
+benchmark harness, so the settings are the app's:
+
+| | |
+|---|---|
+| Machine | Apple M3, 16 GB |
+| App | Bunyi macOS, Release build of `af19b79` |
+| Mode | Preset voice |
+| Model | `Qwen3-TTS-12Hz-0.6B-CustomVoice-bf16` |
+| Source | the `models.bunyi.app` mirror — byte-identical to the Hugging Face repo, checksum-verified on download |
+| Speaker | Ryan |
+| Language | Auto |
+| Wall clock | the app's own `(N s total)` log line, which spans prepare through file written |
+| Audio duration | `afinfo` on the produced WAV |
+| Date | 2026-08-24 |
+
+Sampling is stochastic, so audio length varies between runs of the same text —
+3.68 s to 6.00 s across the three warm runs. That is why three were taken and
+the mean reported; a single run is not a figure.
 
 | EP | Text | Frames | Wall | RTF | Peak working set |
 |---|---|---|---|---|---|
@@ -189,9 +236,24 @@ RTF = wall-clock / audio duration; **lower is better, 1.0 is realtime**.
 | Linux CPU (WSL2) | short | 45 | 29.9 s | 8.30 | 8.35 GB |
 | Linux CPU (WSL2) | long | 224 | 99.4 s | **5.54** | 16.03 GB |
 | Linux CPU, models on `/mnt/c` | short | 59 | 52.7 s | 11.16 | 8.66 GB |
+| **MLX, Apple M3 16 GB** *(different machine)* | short | — | 3.9 s | **1.16** | not comparable — see below |
 
 Frame counts vary between runs of the same text because sampling is stochastic;
 RTF is the comparable figure, and the gaps here are far larger than that noise.
+
+**The MLX row is a different machine** — an M3 Mac, not the Windows box the
+rest of the table was taken on — and is included because it is the number the
+Swift-versus-ONNX argument in the root `AGENTS.md` turns on. Its RTF is the
+mean of three warm runs (0.96, 1.53, 1.01); a cold run including the 2.6 s
+model load is 2.14. Its memory is left out rather than filled in: MLX reports
+2.45 GB resident with 3.3–5.0 GB of buffer cache released per run, which is not
+the same measurement as a Windows peak working set, and putting a number in
+that column would invite a comparison it does not support.
+
+**To re-run this on Windows**, use the short text above, the CPU execution
+provider, and record wall clock and audio duration the same way. The point of
+interest is whether the roughly fivefold gap survives being taken on one
+machine.
 
 **CUDA, with the vocoder on CPU, is the fastest configuration by a wide margin
 — 3.7x faster than CPU on long text and 5.8 GB lighter.** It is the difference
