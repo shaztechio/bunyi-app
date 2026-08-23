@@ -102,7 +102,15 @@ Generated audio is saved automatically as a WAV file named for the mode and the 
 
 ## Settings
 
-Open Settings with **⌘,**.
+Open Settings with **⌘,**, or the gear in the toolbar.
+
+### General
+
+**Appearance** is light, dark, or follow the system. It applies to every Bunyi window straight away.
+
+**Free memory when switching modes** is on this tab too. Each mode uses its own model, and a model can be several gigabytes, so Bunyi lets go of one as soon as you leave its tab. Turn it off to keep it loaded and come back to that mode without waiting for it again — at the cost of the memory it holds meanwhile.
+
+Either way, Bunyi never holds two models at once: whatever this is set to, the model for the mode you were in is released before the next one is fetched or loaded.
 
 ### Models
 
