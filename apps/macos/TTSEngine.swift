@@ -162,6 +162,14 @@ final class TTSEngine {
     /// Output lives in the app's own Application Support folder: the sandbox
     /// grants it without extra entitlements (unlike ~/Music), and "Show in
     /// Finder" still surfaces the files.
+    /// The floor in swift-qwen3-tts's runaway guard, `max(75, textTokens * 6)`.
+    ///
+    /// Hard-coded because the package exposes neither the multiplier nor the
+    /// floor, and the value only matters for recognising that it bound. If
+    /// upstream changes it this stops reporting rather than misreporting, which
+    /// is the right way round for a diagnostic.
+    private static let upstreamFrameFloor = 75
+
     private let outputDir: URL = {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory,
                                            in: .userDomainMask)[0]
@@ -979,6 +987,23 @@ final class TTSEngine {
                         }
                     }
                     throw error
+                }
+                // swift-qwen3-tts stops a run at `max(75, textTokens * 6)` codec
+                // frames as a runaway guard (Qwen3.swift:616). For short text the
+                // floor binds, and the model is cut off whether or not it has
+                // finished the sentence — measured at roughly one run in seven
+                // ending mid-word on the app's own first example prompt.
+                //
+                // Nothing upstream says when this happens, and `min(maxTokens, …)`
+                // means a caller cannot raise it. So the least we can do is stop
+                // it being silent: landing on exactly the floor is the signature,
+                // since the model finishing of its own accord on that precise
+                // count, repeatedly, is not what the length distribution looks
+                // like. See issue #145.
+                if tokenCount == Self.upstreamFrameFloor {
+                    log.log("The clip stopped at the \(tokenCount)-frame limit, so it "
+                          + "may be cut off mid-word. Generating again usually "
+                          + "produces a take that fits.")
                 }
                 guard let wav = final else { throw TTSError.noAudio }
                 audio = wav
