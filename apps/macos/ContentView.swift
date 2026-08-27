@@ -511,8 +511,7 @@ struct ContentView: View {
             Button(example) { apply(example: example) }
                 .buttonStyle(ExampleChipStyle())
                 // The chip's own text, said out loud — see the note on
-                // Generate: this does not reach the tree yet, because the
-                // custom style swallows it. #162.
+                // Generate about what is and is not known here. #162.
                 .accessibilityLabel(example)
         }
     }
@@ -720,12 +719,12 @@ struct ContentView: View {
                 // "says why on hover" — surfacing this inline is a behaviour
                 // change and needs the spec edited first, not a visual PR.
                 .help(generateBlockedReason ?? "Generate audio (⌘↩)")
-                // Does not currently reach the accessibility tree: any
-                // button carrying a custom ButtonStyle comes out unnamed, and
-                // three ways of saying it — this, the label inside the content,
-                // and children: .ignore with an explicit trait — all read back
-                // as an anonymous "button". Kept because the intent is right
-                // and the fix belongs where the cause is. See #162.
+                // Whether this reaches a screen reader is unsettled: buttons
+                // here expose their name as AXAttributedDescription, which
+                // AppleScript cannot read, so "no name" and "a name I cannot
+                // decode" look identical from outside. #162 is the spike.
+                // Stated explicitly regardless — it costs nothing and removes
+                // the doubt for anything that reads a plain label.
                 .accessibilityLabel("Generate")
             }
         }
