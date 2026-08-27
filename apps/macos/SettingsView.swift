@@ -228,7 +228,27 @@ struct SettingsView: View {
                         // disk. Saving your own config under the same name
                         // replaces it in the list.
                         if !ModelConfigLibrary.isBuiltIn(config) {
-                            Button("Delete") { pendingConfigDeletion = config }
+                            // The same treatment as Storage's row and
+                            // History's: an icon, hover-highlighted, secondary
+                            // rather than red. A worded button beside "Restore"
+                            // gave the destructive action the same weight as
+                            // the safe one.
+                            //
+                            // The wording is not copied across, though. Storage
+                            // says "Move to Trash" because it moves a folder
+                            // there; a saved configuration is three URLs in
+                            // preferences and goes nowhere. Matching the icon
+                            // is consistency; matching the sentence would be a
+                            // small lie.
+                            Button {
+                                pendingConfigDeletion = config
+                            } label: {
+                                Image(systemName: "trash")
+                            }
+                            .buttonStyle(RowIconButtonStyle())
+                            .foregroundStyle(.secondary)
+                            .help("Delete this configuration")
+                            .accessibilityLabel("Delete the configuration \(config.name)")
                         }
                     }
                 }
