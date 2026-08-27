@@ -83,30 +83,38 @@ final class StartupTimeline {
     /// The line `report()` writes. Separate so it can be checked without a log.
     var line: String {
         var parts: [String] = []
-        var total: Duration = .zero
-        if let beforeMain {
-            parts.append("before main \(Self.ms(beforeMain))")
-            total += beforeMain
+        // The total is the sum of the *rounded* parts, not a rounding of the
+        // summed durations. Rounding the same quantity twice makes the printed
+        // numbers disagree — 698 and 650 beside a total of 1347 — and this line
+        // exists to be read in a bug report, where an arithmetic that does not
+        // work invites the reader to wonder which phase is missing. A total a
+        // millisecond off the true elapsed time is the cheaper error.
+        var total = 0
+        func add(_ name: String, _ took: Duration) {
+            let ms = Self.milliseconds(took)
+            parts.append("\(name) \(ms) ms")
+            total += ms
         }
-        for phase in phases {
-            parts.append("\(phase.name) \(Self.ms(phase.took))")
-            total += phase.took
-        }
+        if let beforeMain { add("before main", beforeMain) }
+        for phase in phases { add(phase.name, phase.took) }
         // "at least" when the pre-main span could not be read. Reporting a lower
         // bound as though it were the figure is how a startup number ends up
         // arguing that the slow part does not exist.
         let bound = beforeMain == nil ? "at least " : ""
         guard let last = phases.last else {
-            return "Startup: \(bound)\(Self.ms(total))."
+            return "Startup: \(bound)\(total) ms."
         }
-        return "Startup: \(bound)\(Self.ms(total)) to \(last.name) — "
+        return "Startup: \(bound)\(total) ms to \(last.name) — "
             + parts.joined(separator: ", ") + "."
     }
 
-    private static func ms(_ duration: Duration) -> String {
-        let milliseconds = Double(duration.components.seconds) * 1000
+    /// Whole milliseconds. Returns the number rather than a formatted string so
+    /// the caller can add them up; formatting one and parsing it back is how the
+    /// two roundings got out of step in the first place.
+    private static func milliseconds(_ duration: Duration) -> Int {
+        let ms = Double(duration.components.seconds) * 1000
             + Double(duration.components.attoseconds) / 1e15
-        return "\(Int(milliseconds.rounded())) ms"
+        return Int(ms.rounded())
     }
 
     /// Wall time since the kernel started this process.
