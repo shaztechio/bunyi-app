@@ -152,6 +152,26 @@ a noun — `fix(site): downloads for every platform` is in this history, and an
 earlier version of the checker rejected it. A gate that blocks correct work
 gets deleted, and takes the mechanical rules with it.
 
+### Verifying signatures locally
+
+Commits made locally are SSH-signed, and SSH verification needs a file naming
+the keys to trust. Point git at the one in this repo, once per clone:
+
+```sh
+git config gpg.ssh.allowedSignersFile .allowed_signers
+```
+
+Without it `git verify-commit` and `git log --show-signature` fail with
+*"gpg.ssh.allowedSignersFile needs to be configured and exist"*, which reads
+like a broken setup rather than a missing setting.
+
+**This covers locally-authored commits only.** Commits on `main` are squash
+merges, committed by `GitHub <noreply@github.com>` and signed with GitHub's
+*PGP* key — a different mechanism, needing gpg and GitHub's public key rather
+than anything here. The web UI verifies those; locally they will report
+`cannot run gpg` unless you have set that up separately, and that is expected
+rather than a problem to fix.
+
 ## Licensing
 
 The project is **Apache-2.0** (`/LICENSE`). Every source file carries the

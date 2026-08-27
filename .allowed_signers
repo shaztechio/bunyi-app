@@ -1,0 +1,20 @@
+# Who may sign commits in this repository, for `git verify-commit` and
+# `git log --show-signature`.
+#
+# Commits made locally are SSH-signed (`gpg.format = ssh`), and SSH signature
+# verification needs a file naming the keys to trust. Without one, git reports
+#
+#     error: gpg.ssh.allowedSignersFile needs to be configured and exist
+#
+# which reads like a broken setup rather than a missing config. Point git at
+# this file once:
+#
+#     git config gpg.ssh.allowedSignersFile .allowed_signers
+#
+# This covers locally-authored commits only. Commits on `main` are squash
+# merges committed by `GitHub <noreply@github.com>` and signed with GitHub's
+# *PGP* key, which is a different mechanism entirely — verifying those needs
+# GitHub's public PGP key in your keyring, and nothing here affects them.
+
+36107+shazron@users.noreply.github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAHkuKmZUjjY6NaS3PWkE7opm4EFF/+CI7oOg51mqNe6
+shazron@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAHkuKmZUjjY6NaS3PWkE7opm4EFF/+CI7oOg51mqNe6
