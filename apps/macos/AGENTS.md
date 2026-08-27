@@ -54,6 +54,32 @@ xcodebuild -scheme "Bunyi" -destination 'platform=macOS' build
   in the app's `Outputs` folder (Application Support, inside the sandbox
   container).
 
+### Checking accessibility
+
+**Do not audit names with AppleScript.** System Events reports the same
+thing — the bare role, `button` — for a control with no name and for one
+whose name it merely cannot decode, because SwiftUI exposes names as
+`AXAttributedDescription` and System Events cannot read attributed
+strings. Measuring that way reports a working app as broken; it did, in
+[#162](https://github.com/shaztechio/bunyi-app/issues/162).
+
+Two instruments do work:
+
+- **VoiceOver's Item Chooser.** Turn VoiceOver on (⌘F5), focus the window,
+  press VO+I (⌃⌥I). It lists every item with the exact phrase VoiceOver
+  speaks — `Generate dimmed button`, `Ryan Speaker pop up button` — which is
+  the whole audit in one screen. Enable the caption panel first
+  (`defaults write com.apple.VoiceOver4/default SCREnableCaptionPanel -bool
+  true`) to read announcements as text instead of listening; VoiceOver
+  deletes that preference file when it quits, so back it up and restore it.
+- **A small AX client**, calling `AXUIElementCopyAttributeValue` for
+  `kAXAttributedDescriptionAttribute` and printing the string. Launched from
+  a terminal it inherits that terminal's Accessibility grant, so it needs no
+  grant of its own.
+
+Keyboard reachability is the opposite case: `AXFocusedUIElement` reads
+reliably from AppleScript, and the gaps it finds are real.
+
 ## Project structure
 
 - `BunyiApp.swift` — @main entry point; WindowGroup + Logs Window +

@@ -510,8 +510,9 @@ struct ContentView: View {
         ForEach(mode.examples, id: \.self) { example in
             Button(example) { apply(example: example) }
                 .buttonStyle(ExampleChipStyle())
-                // The chip's own text, said out loud — see the note on
-                // Generate about what is and is not known here. #162.
+                // The chip's own text, said out loud. SwiftUI derives this
+                // from the button's label already; stated anyway so the name
+                // cannot drift if the chip's rendering changes.
                 .accessibilityLabel(example)
         }
     }
@@ -719,12 +720,10 @@ struct ContentView: View {
                 // "says why on hover" — surfacing this inline is a behaviour
                 // change and needs the spec edited first, not a visual PR.
                 .help(generateBlockedReason ?? "Generate audio (⌘↩)")
-                // Whether this reaches a screen reader is unsettled: buttons
-                // here expose their name as AXAttributedDescription, which
-                // AppleScript cannot read, so "no name" and "a name I cannot
-                // decode" look identical from outside. #162 is the spike.
-                // Stated explicitly regardless — it costs nothing and removes
-                // the doubt for anything that reads a plain label.
+                // Redundant, and kept: the Label already names this, as an
+                // AX client reading what VoiceOver reads confirmed (#162).
+                // The explicit label pins the name if the Label ever becomes
+                // an icon.
                 .accessibilityLabel("Generate")
             }
         }
