@@ -55,7 +55,13 @@ struct OutputMetadata: Codable, Hashable {
     /// For a clone the reference transcript is the only thing that identifies
     /// which voice it was, so it stands in rather than a generic label.
     var voiceSummary: String? {
-        if let speaker, !speaker.isEmpty { return speaker }
+        // The stored value is the model's identifier, and this is the only place
+        // it is read by a person — so it is presented the way the picker
+        // presents it. A clip made with "ryan" and one made with "Ryan" are the
+        // same voice and must not read as two, which is what History showed
+        // before: the same speaker under both spellings, because the fallback
+        // list is capitalised and the model's own list is not.
+        if let speaker, !speaker.isEmpty { return DisplayName.of(speaker) }
         if let voiceDescription, !voiceDescription.isEmpty { return voiceDescription }
         if let referenceTranscript, !referenceTranscript.isEmpty {
             return "Clone of “\(referenceTranscript)”"
@@ -256,5 +262,32 @@ enum WAVMetadata {
             case .notAWAVFile: "That file is not a WAV."
             }
         }
+    }
+}
+
+
+/// A model identifier as a person should read it.
+///
+/// The mirror of the .NET app's `DisplayName.For`, and deliberately the same
+/// rules: split on underscores and spaces, capitalise each word, leave the rest
+/// of the word alone. Both apps read the same `speaker_ids.json`, so a name has
+/// to render the same in both or History disagrees across platforms about what
+/// a voice is called.
+enum DisplayName {
+    static func of(_ identifier: String) -> String {
+        let words = identifier
+            .trimmingCharacters(in: .whitespaces)
+            .split(whereSeparator: { $0 == "_" || $0 == " " })
+        guard !words.isEmpty else { return identifier.trimmingCharacters(in: .whitespaces) }
+        return words.map(capitalise).joined(separator: " ")
+    }
+
+    /// Single letters are uppercased whole; longer words keep their tail.
+    /// Lowercasing the tail would turn a name the model spelled deliberately
+    /// into a different one.
+    private static func capitalise(_ word: Substring) -> String {
+        word.count == 1
+            ? word.uppercased()
+            : word.prefix(1).uppercased() + word.dropFirst()
     }
 }
