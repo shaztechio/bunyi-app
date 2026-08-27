@@ -154,16 +154,6 @@ struct ContentView: View {
         engine.speakers.isEmpty ? defaultSpeakers : engine.speakers
     }
 
-    /// Speakers are identified to the model by its exact spelling, which is
-    /// lowercase and underscored ("uncle_fu"). Only the label is prettified, so
-    /// the list does not visibly change the moment a model finishes loading.
-    private static func speakerLabel(_ speaker: String) -> String {
-        speaker
-            .replacingOccurrences(of: "_", with: " ")
-            .split(separator: " ")
-            .map { $0.prefix(1).uppercased() + $0.dropFirst() }
-            .joined(separator: " ")
-    }
 
     /// Keep the chosen speaker across the swap from the fallback list to the
     /// model's. The names match apart from case, so a plain identity check
@@ -554,7 +544,7 @@ struct ContentView: View {
                 optionRow(icon: "person.wave.2", label: "Speaker") {
                     Picker("Speaker", selection: $speaker) {
                         ForEach(availableSpeakers, id: \.self) {
-                            Text(Self.speakerLabel($0))
+                            Text(DisplayName.of($0))
                         }
                     }
                     .labelsHidden()
