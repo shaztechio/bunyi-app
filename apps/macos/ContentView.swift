@@ -414,6 +414,11 @@ struct ContentView: View {
     private var textCard: some View {
         TextEditor(text: $text)
             .focused($scriptFocused)
+            // Otherwise it announces itself as "text entry area" — the role,
+            // not the field. This is the thing the whole window is for, and a
+            // screen reader had no way to say which of the two text inputs it
+            // had landed in.
+            .accessibilityLabel("Script")
             .font(.bunyiEditor)
             .scrollContentBackground(.hidden)
             .padding(Space.tight)
@@ -505,6 +510,9 @@ struct ContentView: View {
         ForEach(mode.examples, id: \.self) { example in
             Button(example) { apply(example: example) }
                 .buttonStyle(ExampleChipStyle())
+                // The chip's own text, said out loud — see the note on
+                // Generate about what is and is not known here. #162.
+                .accessibilityLabel(example)
         }
     }
 
@@ -553,6 +561,10 @@ struct ContentView: View {
                 rowDivider
                 optionRow(icon: "sparkles", label: "Style") {
                     TextField("Optional — e.g. calm news anchor", text: $instruct)
+                        // The placeholder is a hint, not a name: it disappears
+                        // the moment anything is typed, taking the only clue
+                        // about what the field is with it.
+                        .accessibilityLabel("Style")
                         .textFieldStyle(.roundedBorder)
                 }
 
@@ -643,6 +655,10 @@ struct ContentView: View {
             Image(systemName: icon)
                 .foregroundStyle(.secondary)
                 .frame(width: OptionRow.iconColumn)
+                // Decoration. The row says Language, Speaker or Style right
+                // beside it, so announcing the glyph reads the row twice — §12,
+                // and the treatment DoctorView's severity icons already get.
+                .accessibilityHidden(true)
             Text(label)
                 .foregroundStyle(.secondary)
                 .frame(width: 76, alignment: .leading)
@@ -686,6 +702,11 @@ struct ContentView: View {
                 .keyboardShortcut(.cancelAction)
                 .buttonStyle(ActionButtonStyle(role: .destructive))
                 .help("Stop the current operation")
+                // A custom ButtonStyle does not carry the Label's text into the
+                // accessibility tree, so both action buttons announce nothing
+                // without this — the two most important controls in the window,
+                // silent. Read out of the tree rather than assumed.
+                .accessibilityLabel("Stop")
             } else if tab != .history {
                 Button(action: generate) {
                     Label("Generate", systemImage: "waveform")
@@ -698,6 +719,13 @@ struct ContentView: View {
                 // "says why on hover" — surfacing this inline is a behaviour
                 // change and needs the spec edited first, not a visual PR.
                 .help(generateBlockedReason ?? "Generate audio (⌘↩)")
+                // Whether this reaches a screen reader is unsettled: buttons
+                // here expose their name as AXAttributedDescription, which
+                // AppleScript cannot read, so "no name" and "a name I cannot
+                // decode" look identical from outside. #162 is the spike.
+                // Stated explicitly regardless — it costs nothing and removes
+                // the doubt for anything that reads a plain label.
+                .accessibilityLabel("Generate")
             }
         }
         .padding(.horizontal, Space.card)

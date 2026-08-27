@@ -139,6 +139,10 @@ struct HistoryView: View {
                 Label("Refresh", systemImage: "arrow.clockwise")
             }
             .help("Re-read the Outputs folder")
+            // The five per-row buttons carry labels; this one was missed. Its
+            // tooltip is not a substitute — .help maps to AXHelp, which a
+            // screen reader treats as a hint rather than a name.
+            .accessibilityLabel("Refresh")
 
             Button {
                 NSWorkspace.shared.open(engine.outputsFolder)
