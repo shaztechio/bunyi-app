@@ -625,6 +625,50 @@ with, which is only sensible behaviour if the report says which one that was.
 
 Findings follow §10: sizes are stated, and each says what to do.
 
+## 12. Keyboard and assistive access
+
+The audience §1 is written for includes people who do not use a pointer, and
+people who cannot see the window. Everything below is observable behaviour and
+therefore binding on both apps; the *mechanics* are the platform's, so the
+chords differ and only the requirement is pinned.
+
+- **Anything that can be done with a pointer can be done from the keyboard.**
+  Every control is reachable and operable, including the per-row buttons in
+  History that §2a enumerates as affordances. A control that exists only to a
+  mouse is a control some users do not have.
+- **Focus order follows the visual order.** Tabbing through a window should
+  walk it the way a reader does, not the order the view tree happens to
+  declare.
+- **Lists of the user's own work are navigable.** History holds every clip a
+  person has made; reaching the older ones must not require a trackpad.
+- **Every window has a keyboard route.** Settings, Logs, Help and Doctor are
+  each reachable without clicking a toolbar.
+- **Every control announces what it is.** An icon-only button carries a name
+  for assistive technology — the tooltip's words are usually right, but a name
+  is a separate property and is not inherited from a tooltip on either
+  platform.
+- **Decorative imagery is not announced.** Glyphs that repeat what an adjacent
+  label already says are hidden from assistive technology rather than read
+  twice.
+- **Nothing that matters is carried by colour alone.** Doctor's severities, a
+  destructive action, an error state: each says what it is in words. Colour
+  reinforces; it does not inform.
+- **Dialogs behave predictably.** Escape dismisses without acting, Return takes
+  the safe default. §9's busy-close prompt already pins *Keep Working* as that
+  default.
+
+> **Neither app satisfies all of this today, and this section is written as the
+> target rather than a description.** macOS History cannot be scrolled from the
+> keyboard at all, and the .NET app declares no accessibility names anywhere —
+> [#157](https://github.com/shaztechio/bunyi-app/issues/157),
+> [#158](https://github.com/shaztechio/bunyi-app/issues/158) and
+> [#159](https://github.com/shaztechio/bunyi-app/issues/159) are the audits.
+>
+> It is recorded here first for the reason the parity rule exists: both apps
+> reached the same gap independently — a list of user content with no
+> selectable row — because nothing said they had to do otherwise. A fix in one
+> app that is not written down here becomes a divergence in the other.
+
 ---
 
 ## Feature → macOS source map (parity checklist)
@@ -648,3 +692,4 @@ Findings follow §10: sizes are stated, and each says what to do.
 - Startup timing → `StartupTimeline.swift`
 - Busy-close → `WindowCloseGuard.swift`
 - Doctor / preflight checks → `Doctor.swift`, `ContentView.generate`
+- Keyboard & assistive access → every view; see §12
