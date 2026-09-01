@@ -14,6 +14,7 @@
 
 using Bunyi.Core.Audio;
 using Bunyi.Core.Diagnostics;
+using Bunyi.Core.Engine;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 
@@ -94,7 +95,8 @@ public sealed class ClonePipeline : IClonePipeline
         string folder,
         string variant,
         ILogSink log,
-        TokenSampler? sampler = null)
+        TokenSampler? sampler = null,
+        ExecutionProviderChoice? provider = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(folder);
         _log = log ?? throw new ArgumentNullException(nameof(log));
@@ -133,7 +135,8 @@ public sealed class ClonePipeline : IClonePipeline
             _talkerCodec,
             _groupCodec,
             sampler ?? new TokenSampler(),
-            _log);
+            _log,
+            provider);
     }
 
     /// <inheritdoc />

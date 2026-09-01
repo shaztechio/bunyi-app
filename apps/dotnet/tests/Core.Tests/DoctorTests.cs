@@ -13,6 +13,7 @@
 // limitations under the License.
 
 using Bunyi.Core.Diagnostics;
+using Bunyi.Core.Engine;
 using Bunyi.Core.Models;
 using Xunit;
 
@@ -58,13 +59,16 @@ public sealed class DoctorTests : IDisposable
         long? disk = 500_000_000_000,
         bool reachable = true,
         bool deep = false,
+        ExecutionProviderChoice? provider = ExecutionProviderChoice.Cpu,
+        bool? nvidia = null,
         Func<string, CancellationToken, Task<IReadOnlyList<string>>>? verify = null) =>
         Doctor.RunAsync(
             TtsMode.PresetVoice, Source, Layout, _root, Outputs,
-            new FakeProbe(memory, disk),
+            new FakeProbe(memory, disk, nvidia),
             (_, _) => Task.FromResult(reachable),
             verify,
-            deep);
+            deep,
+            provider);
 
     private static DoctorFinding Finding(DoctorReport report, string title) =>
         report.Findings.Single(f => f.Title == title);
@@ -325,9 +329,73 @@ public sealed class DoctorTests : IDisposable
             "a factor below what was measured would under-predict and never warn");
     }
 
-    private sealed class FakeProbe(long? memory, long? disk) : ISystemProbe
+    [Fact]
+    public async Task It_names_the_provider_the_talker_will_use()
+    {
+        // #143: an invisible choice cannot be debugged from a bug report, and a
+        // speedup nobody is told about is one nobody uses.
+        InstallModel();
+
+        var report = await Run(provider: ExecutionProviderChoice.Cuda);
+
+        var finding = Finding(report, "Acceleration");
+        Assert.Contains("Cuda", finding.Detail, StringComparison.Ordinal);
+        // The vocoder's CPU pinning is stated wherever the provider is, because
+        // "on the GPU" would otherwise read as all of it.
+        Assert.Contains("vocoder", finding.Detail, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task It_says_what_is_missing_when_a_card_is_present_and_unused()
+    {
+        // §11 requires a finding to say what would resolve it. "You are on the
+        // CPU" on a machine with a 4090 in it is a state, not an answer.
+        InstallModel();
+
+        var report = await Run(provider: ExecutionProviderChoice.Cpu, nvidia: true);
+
+        var finding = Finding(report, "Acceleration");
+        Assert.Contains("CUDA Toolkit", finding.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Running_on_the_CPU_without_a_card_is_not_a_complaint()
+    {
+        // Telling someone with no NVIDIA card what they are missing is telling
+        // them to buy hardware, so that branch says nothing about the toolkit.
+        InstallModel();
+
+        var report = await Run(provider: ExecutionProviderChoice.Cpu, nvidia: false);
+
+        var finding = Finding(report, "Acceleration");
+        Assert.DoesNotContain("Toolkit", finding.Detail, StringComparison.Ordinal);
+        Assert.Equal(DoctorSeverity.Ok, finding.Severity);
+    }
+
+    [Fact]
+    public async Task The_provider_row_never_warns()
+    {
+        // Doctor runs before EVERY generation, and §11: "a preflight the user
+        // notices on a healthy machine is a bug". A machine correctly using its
+        // CPU is healthy, however much faster it could be.
+        InstallModel();
+
+        foreach (var (p, card) in new (ExecutionProviderChoice, bool?)[]
+                 {
+                     (ExecutionProviderChoice.Cpu, true),
+                     (ExecutionProviderChoice.Cpu, false),
+                     (ExecutionProviderChoice.Cuda, true),
+                 })
+        {
+            var finding = Finding(await Run(provider: p, nvidia: card), "Acceleration");
+            Assert.Equal(DoctorSeverity.Ok, finding.Severity);
+        }
+    }
+
+    private sealed class FakeProbe(long? memory, long? disk, bool? nvidia = null) : ISystemProbe
     {
         public long? AvailableMemoryBytes() => memory;
         public long? FreeSpaceBytes(string path) => disk;
+        public bool? HasNvidiaDriver() => nvidia;
     }
 }

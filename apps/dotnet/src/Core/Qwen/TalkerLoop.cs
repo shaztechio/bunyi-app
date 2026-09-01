@@ -14,6 +14,7 @@
 
 using System.Diagnostics;
 using Bunyi.Core.Diagnostics;
+using Bunyi.Core.Engine;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 
@@ -80,13 +81,18 @@ public sealed class TalkerLoop : IDisposable
     /// <param name="graphs">The folder holding the four <c>.onnx</c> files.</param>
     /// <param name="talkerCodec">The first codebook's table. Not disposed here.</param>
     /// <param name="groupCodec">The other fifteen. Not disposed here.</param>
+    /// <param name="provider">
+    /// The provider for the talker graphs, or null for the detected one. The
+    /// vocoder is not affected: it runs on the CPU whatever this says.
+    /// </param>
     public TalkerLoop(
         QwenConfig config,
         string graphs,
         NpyArray talkerCodec,
         NpyArray[] groupCodec,
         TokenSampler sampler,
-        ILogSink log)
+        ILogSink log,
+        ExecutionProviderChoice? provider = null)
     {
         _config = config ?? throw new ArgumentNullException(nameof(config));
         _talkerCodec = talkerCodec ?? throw new ArgumentNullException(nameof(talkerCodec));
@@ -96,19 +102,72 @@ public sealed class TalkerLoop : IDisposable
 
         ArgumentException.ThrowIfNullOrWhiteSpace(graphs);
 
+        var talker = provider ?? OnnxRuntimeEnv.Current;
+
+        _prefillSession = Open(graphs, "talker_prefill.onnx", talker);
+
         // The arena is left off on the decode session. It was measured at 0.5 GB
         // over 267 frames for about 9% wall-clock, and every step allocates a
         // cache one token longer than the last, so there is nothing for an arena
         // to reuse. RESEARCH-ONNX.md has the figures.
-        var decodeOptions = new SessionOptions { EnableCpuMemArena = false };
+        _decodeSession = Open(
+            graphs, "talker_decode.onnx", talker, o => o.EnableCpuMemArena = false);
 
-        _prefillSession = new InferenceSession(Path.Combine(graphs, "talker_prefill.onnx"));
-        _decodeSession = new InferenceSession(Path.Combine(graphs, "talker_decode.onnx"), decodeOptions);
-        _codePredictorSession = new InferenceSession(Path.Combine(graphs, "code_predictor.onnx"));
+        _codePredictorSession = Open(graphs, "code_predictor.onnx", talker);
 
         // The vocoder gets a CPU session whatever the others use: its graph
         // fails on every GPU provider tried, on the same node.
-        _vocoderSession = new InferenceSession(Path.Combine(graphs, "vocoder.onnx"));
+        _vocoderSession = Open(graphs, "vocoder.onnx", ExecutionProviderChoice.Cpu);
+
+        // Said once per load, because an invisible choice cannot be debugged
+        // from a bug report — the same reason the audio backend is logged.
+        _log.Log($"Talker graphs on {OnnxRuntimeEnv.Current}, vocoder on CPU.");
+    }
+
+    /// <summary>
+    /// Opens one session, dropping to the CPU rather than failing the load.
+    /// </summary>
+    /// <remarks>
+    /// Detection has already established that the provider builds; this is the
+    /// case where it builds and then this particular graph will not run on it.
+    /// Falling back costs a slower generation, and throwing costs the
+    /// generation — so a machine that cannot use its accelerator gets the
+    /// answer late rather than not at all.
+    /// </remarks>
+    private InferenceSession Open(
+        string graphs,
+        string file,
+        ExecutionProviderChoice choice,
+        Action<SessionOptions>? configure = null)
+    {
+        var path = Path.Combine(graphs, file);
+
+        if (choice != ExecutionProviderChoice.Cpu)
+        {
+            try
+            {
+                using var accelerated = OnnxRuntimeEnv.CreateSessionOptions(choice);
+                configure?.Invoke(accelerated);
+                return new InferenceSession(path, accelerated);
+            }
+            catch (Exception ex)
+            {
+                // Once for the process, not once per session: four sessions
+                // would otherwise say the same thing four times per load.
+                if (OnnxRuntimeEnv.Current != ExecutionProviderChoice.Cpu)
+                {
+                    _log.Log(
+                        $"{choice} could not run {file}, so this run is on the CPU "
+                        + $"instead — it will be slower, not wrong. {ex.Message}");
+                }
+
+                OnnxRuntimeEnv.CudaFailed();
+            }
+        }
+
+        using var options = new SessionOptions();
+        configure?.Invoke(options);
+        return new InferenceSession(path, options);
     }
 
     /// <summary>Codec frames per second of speech.</summary>

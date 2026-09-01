@@ -15,6 +15,8 @@
 using System.Text;
 using Bunyi.Core.Models;
 
+using Bunyi.Core.Engine;
+
 namespace Bunyi.Core.Diagnostics;
 
 /// <summary>How bad a finding is (spec §11).</summary>
@@ -132,6 +134,7 @@ public static class Doctor
         Func<Uri, CancellationToken, Task<bool>> reachable,
         Func<string, CancellationToken, Task<IReadOnlyList<string>>>? verifyFiles = null,
         bool deep = false,
+        ExecutionProviderChoice? provider = null,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(source);
@@ -158,6 +161,7 @@ public static class Doctor
             findings.Add(await SourceFinding(source, layout, reachable, ct).ConfigureAwait(false));
         }
 
+        findings.Add(ProviderFinding(provider ?? OnnxRuntimeEnv.Current, probe));
         findings.Add(OutputFinding(outputFolder));
 
         if (deep && verifyFiles is not null && isPresent)
@@ -341,6 +345,48 @@ public static class Doctor
                 url.Url.AbsoluteUri.TrimEnd('/') + "/" + first),
             _ => throw new ArgumentOutOfRangeException(nameof(source)),
         };
+    }
+
+    /// <summary>
+    /// Check 5a. Which provider the talker will use, and what is missing when
+    /// it is not the fast one.
+    /// </summary>
+    /// <remarks>
+    /// <b>Never a warning</b>, even on a machine that could be 3.7x faster.
+    /// Doctor runs before every generation, and §11 is explicit that "a
+    /// preflight the user notices on a healthy machine is a bug" — a machine
+    /// running correctly on the CPU is healthy. It is a row in the report
+    /// someone opens, which is where a speedup they did not know about is
+    /// findable without being nagged about it on every run.
+    /// </remarks>
+    private static DoctorFinding ProviderFinding(
+        ExecutionProviderChoice provider,
+        ISystemProbe probe)
+    {
+        if (provider != ExecutionProviderChoice.Cpu)
+        {
+            return new DoctorFinding(
+                "Acceleration",
+                $"The talker runs on {provider}. The vocoder always runs on the CPU: "
+                + "its exported graph fails on every GPU provider tried.",
+                DoctorSeverity.Ok);
+        }
+
+        // "CPU on a machine with an NVIDIA card" is the case worth explaining.
+        // "CPU on a machine without one" is simply the answer, and saying what
+        // is missing there would be telling someone to buy hardware.
+        return probe.HasNvidiaDriver() == true
+            ? new DoctorFinding(
+                "Acceleration",
+                "The talker runs on the CPU, though this machine has an NVIDIA driver. "
+                + "CUDA measured 3.7x faster on long text. It needs the CUDA build of "
+                + "Bunyi and NVIDIA's CUDA Toolkit: the provider links against cuBLAS "
+                + "and cudart, which ONNX Runtime does not ship.",
+                DoctorSeverity.Ok)
+            : new DoctorFinding(
+                "Acceleration",
+                "The talker runs on the CPU, which is the supported configuration here.",
+                DoctorSeverity.Ok);
     }
 
     /// <summary>Check 5. Blocker: there is nowhere to put the result.</summary>

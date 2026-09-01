@@ -32,11 +32,48 @@ public interface ISystemProbe
 
     /// <summary>Free space on the volume holding a path, or null if unknown.</summary>
     long? FreeSpaceBytes(string path);
+
+    /// <summary>
+    /// Whether an NVIDIA driver is installed, or null if it cannot be told.
+    /// </summary>
+    /// <remarks>
+    /// Only ever asked to explain a CPU answer: "this machine has the card and
+    /// is still not using it" is a different report from "this machine has no
+    /// card", and §11 requires a finding to say what would resolve it. Default
+    /// implemented as "cannot tell" so a test probe need not answer it.
+    /// </remarks>
+    bool? HasNvidiaDriver() => null;
 }
 
 /// <summary>Reads the real machine.</summary>
 public sealed class SystemProbe : ISystemProbe
 {
+    /// <inheritdoc />
+    /// <remarks>
+    /// The driver's own CUDA library, not the toolkit: <c>nvcuda</c> ships with
+    /// the display driver, so finding it means "there is an NVIDIA card here"
+    /// rather than "CUDA will work". Whether CUDA works is a separate and
+    /// harder question, answered by building session options — see
+    /// <see cref="Engine.OnnxRuntimeEnv.CudaLoads"/>.
+    /// </remarks>
+    public bool? HasNvidiaDriver()
+    {
+        if (!OperatingSystem.IsWindows() && !OperatingSystem.IsLinux()) return null;
+
+        var name = OperatingSystem.IsWindows() ? "nvcuda.dll" : "libcuda.so.1";
+
+        try
+        {
+            if (!NativeLibrary.TryLoad(name, out var handle)) return false;
+            NativeLibrary.Free(handle);
+            return true;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
     /// <inheritdoc />
     public long? AvailableMemoryBytes()
     {
