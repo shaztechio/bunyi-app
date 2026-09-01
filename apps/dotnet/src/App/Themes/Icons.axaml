@@ -86,13 +86,27 @@ limitations under the License.
     every other icon in the window. Authored at size, the 1.6 stroke is the 1.6
     stroke.
 
-    The waveform's bars are centred on y=8 with unequal heights — a symmetric
-    set reads as a bar chart, not as sound.
+    The waveform's bars have unequal heights — a symmetric set reads as a bar
+    chart, not as sound.
+
+    They are centred on **y=9, not y=8**, and so is the square below. Both sit
+    beside a word, and a label's ink stops at its baseline while a glyph fills
+    its box, so a glyph centred in its own box lands a pixel above the letters
+    next to it. Measured on the window: glyph ink centre 674.5 against the
+    label's 675.5.
+
+    Authored into the geometry because the alternatives do not work here. A
+    Margin grows the row — the Path already fills its 16px, and these two
+    buttons are held to the same width so the row does not jump when they swap.
+    A RenderTransform was tried in both the `translate(0px, 1px)` shorthand and
+    an explicit TranslateTransform, and neither moved the ink at all; the style
+    applied, the pixels did not move. These two are drawn for these two buttons
+    and nothing else, so the pairing is what they should be correct for.
   -->
-  <StreamGeometry x:Key="IconWaveform16">M2 5.5v5 M6 2.5v11 M10 4v8 M14 6.5v3</StreamGeometry>
+  <StreamGeometry x:Key="IconWaveform16">M2 6.5v5 M6 3.5v11 M10 5v8 M14 7.5v3</StreamGeometry>
   <!-- Filled, matching macOS's stop.fill: an outlined square at this size
        reads as an empty checkbox. -->
-  <StreamGeometry x:Key="IconStop16">M4.5 4.5h7v7h-7z</StreamGeometry>
+  <StreamGeometry x:Key="IconStop16">M4.5 5.5h7v7h-7z</StreamGeometry>
 
   <!-- Save a copy: an arrow into a tray. -->
   <StreamGeometry x:Key="IconSave">M12 3v11 M8 10.5l4 4 4-4 M4 17v2.5h16V17</StreamGeometry>

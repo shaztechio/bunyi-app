@@ -188,6 +188,66 @@ public class ButtonAlignmentTests : HeadlessWindows
     }
 
     [AvaloniaTheory]
+    [InlineData("GenerateButton")]
+    [InlineData("StopButton")]
+    public void The_glyph_is_the_same_colour_as_the_label(string name)
+    {
+        // Reported from the app, and measured: the waveform rendered
+        // rgb(23,21,61) on an accent-purple button while "Generate" beside it
+        // was pure white.
+        //
+        // The cause is worth keeping in a test rather than a comment. Both
+        // button styles set Foreground on the ContentPresenter, not on the
+        // Button, so a TextBlock inherits white while a Path binding
+        // $parent[Button].Foreground reaches one level too far out and gets the
+        // Fluent default. Nothing about that is visible in the markup.
+        var (window, model) = Show();
+        ((FakeEngine)model.Engine).Publish(new EngineStatus(EngineState.Generating));
+        window.UpdateLayout();
+
+        var path = ButtonNamed(window, name).GetVisualDescendants().OfType<Shapes.Path>().Single();
+
+        // Stroked on Generate, filled on Stop; whichever carries the ink is the
+        // one that has to be white.
+        var ink = (path.Stroke ?? path.Fill) as ISolidColorBrush;
+
+        Assert.NotNull(ink);
+        Assert.Equal(Colors.White, ink!.Color);
+    }
+
+    [AvaloniaTheory]
+    [InlineData("GenerateButton")]
+    [InlineData("StopButton")]
+    public void The_glyph_sits_on_the_labels_optical_centre_not_its_own(string name)
+    {
+        // Reported from the app: the waveform looked a shade high. It was, by
+        // exactly one pixel — glyph ink centre 674.5 against the label's 675.5,
+        // measured off the window.
+        //
+        // Both controls are 16 tall and centred on the same line, so they agree
+        // by layout and disagree by eye: a label's ink stops at its baseline and
+        // leaves the descender space empty, while a glyph fills its box. So the
+        // geometry is authored a pixel low — centred on 9 in a 16 box, not 8.
+        //
+        // Asserted on the geometry because that is where the correction lives.
+        // A Margin would grow the row, and these two buttons are held to one
+        // width so the row does not jump when they swap; a RenderTransform was
+        // tried both ways and moved no pixels at all.
+        var (window, model) = Show();
+        ((FakeEngine)model.Engine).Publish(new EngineStatus(EngineState.Generating));
+        window.UpdateLayout();
+
+        var path = ButtonNamed(window, name).GetVisualDescendants().OfType<Shapes.Path>().Single();
+        var ink = path.DefiningGeometry!.Bounds;
+
+        Assert.Equal(9, ink.Y + ink.Height / 2, 1);
+        // Still inside the box it is drawn in, stroke included.
+        Assert.Equal(16, path.Bounds.Height);
+        Assert.True(ink.Bottom + path.StrokeThickness / 2 <= 16,
+            $"the glyph on {name} overflows its box: ink ends at {ink.Bottom}");
+    }
+
+    [AvaloniaTheory]
     [InlineData("IconWaveform16")]
     [InlineData("IconStop16")]
     public void The_action_glyphs_resolve(string key)
