@@ -301,6 +301,38 @@ a preset-path number.
 The preset path also wanders far more: 54 to 80 frames for one short text,
 against 38 to 43 for design. Same stochastic sampling, much wider spread.
 
+#### The 3x memory gap is not the model
+
+Worth separating, because "the bigger model uses less memory" invites the wrong
+conclusion. Three things rule the weights out:
+
+- **On disk the two are comparable.** The preset export's talker graphs carry
+  1.65 GB of weights each; the design export's `int4` ones carry 1.40 GB. An 18%
+  difference on disk, against a 3x difference resident.
+- **The KV geometry is identical** — `[28,b,8,past,128]` in both — so a token of
+  context costs the same in either mode. This was already established above; it
+  is why long text was expected to cost the same in both.
+- **The design export's static floor is lower**, by 0.74 GB, also measured above.
+
+So a model whose cache costs the same per token, whose weights are slightly
+larger on disk, and whose floor is lower, peaks at **4.37 GB where the other
+peaks at 13.20 GB**. That difference has to be in how the two pipelines run,
+not in what they run.
+
+**Which retires the open question two sections down.** "So the 17.68 GB is not
+yet explained" ends by saying the remainder is "somewhere in how the shipping
+pipeline holds what it produces", and that this is a better position than it
+sounds because M8 would write our own pipeline. M8 did, and our pipeline peaks
+at 4.37 GB on a larger model. The unexplained gigabytes were the library's.
+
+This is inference from two measurements rather than a profile of the library, so
+it names the suspect rather than convicting it. But it is a strong enough
+suspect to change what to try next: **drive the preset export through
+`TalkerLoop` too.** The graph table below says the inference driver is already
+shared — "whatever drives one drives the other, if it reads the width from
+config" — and what differs is input preparation, which for preset voice is
+picking a speaker from `speaker_ids.json` rather than embedding a description.
+
 ### The vocoder graph only works on the CPU execution provider
 
 One defect explains every GPU failure below. The vocoder dies on the **same
