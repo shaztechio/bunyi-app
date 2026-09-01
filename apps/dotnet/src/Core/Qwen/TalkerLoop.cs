@@ -121,7 +121,7 @@ public sealed class TalkerLoop : IDisposable
 
         // Said once per load, because an invisible choice cannot be debugged
         // from a bug report — the same reason the audio backend is logged.
-        _log.Log($"Talker graphs on {OnnxRuntimeEnv.Current}, vocoder on CPU.");
+        _log.Log($"Speech model on {OnnxRuntimeEnv.Current.Label()}, audio step on CPU.");
     }
 
     /// <summary>
@@ -313,10 +313,15 @@ public sealed class TalkerLoop : IDisposable
             ? 100.0 * vocoder.TotalSeconds / total.TotalSeconds
             : 0.0;
 
+        // "speech model" and "audio", not "talker" and "vocoder". The log is
+        // part of the product — §8 makes it what a user is asked to copy into a
+        // bug report — and those two words appear nowhere else a user can see,
+        // not even in HELP.md. The code keeps them, because the files on disk
+        // really are talker_prefill.onnx and vocoder.onnx.
         _log.Log(
             $"{what}: {frames.Count} frames in {total.TotalSeconds:0.0}s — "
-            + $"talker {talker.TotalSeconds:0.0}s, "
-            + $"vocoder {vocoder.TotalSeconds:0.0}s ({share:0}%).");
+            + $"speech model {talker.TotalSeconds:0.0}s, "
+            + $"audio {vocoder.TotalSeconds:0.0}s ({share:0}%).");
 
         return new SpeechResult(samples, frames)
         {

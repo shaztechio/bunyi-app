@@ -339,10 +339,15 @@ public sealed class DoctorTests : IDisposable
         var report = await Run(provider: ExecutionProviderChoice.Cuda);
 
         var finding = Finding(report, "Acceleration");
-        Assert.Contains("Cuda", finding.Detail, StringComparison.Ordinal);
-        // The vocoder's CPU pinning is stated wherever the provider is, because
-        // "on the GPU" would otherwise read as all of it.
-        Assert.Contains("vocoder", finding.Detail, StringComparison.OrdinalIgnoreCase);
+        // CUDA, not Cuda: the enum spells it for C#, the finding for a person.
+        Assert.Contains("CUDA", finding.Detail, StringComparison.Ordinal);
+        // That the last step stays on the CPU is stated wherever the provider
+        // is, because "on the GPU" would otherwise read as all of it. Asserted
+        // on "sound" rather than "vocoder": the finding is user-facing and
+        // deliberately does not use the model's internal vocabulary.
+        Assert.Contains("sound", finding.Detail, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("vocoder", finding.Detail, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("talker", finding.Detail, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

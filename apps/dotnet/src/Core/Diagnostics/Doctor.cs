@@ -348,8 +348,8 @@ public static class Doctor
     }
 
     /// <summary>
-    /// Check 5a. Which provider the talker will use, and what is missing when
-    /// it is not the fast one.
+    /// Check 5a. Which provider the speech model will use, and what is missing
+    /// when it is not the fast one.
     /// </summary>
     /// <remarks>
     /// <b>Never a warning</b>, even on a machine that could be 3.7x faster.
@@ -367,8 +367,8 @@ public static class Doctor
         {
             return new DoctorFinding(
                 "Acceleration",
-                $"The talker runs on {provider}. The vocoder always runs on the CPU: "
-                + "its exported graph fails on every GPU provider tried.",
+                $"The speech model runs on {provider.Label()}. The final step, which turns "
+                + "the result into sound, always runs on the CPU.",
                 DoctorSeverity.Ok);
         }
 
@@ -378,14 +378,13 @@ public static class Doctor
         return probe.HasNvidiaDriver() == true
             ? new DoctorFinding(
                 "Acceleration",
-                "The talker runs on the CPU, though this machine has an NVIDIA driver. "
-                + "CUDA measured 3.7x faster on long text. It needs the CUDA build of "
-                + "Bunyi and NVIDIA's CUDA Toolkit: the provider links against cuBLAS "
-                + "and cudart, which ONNX Runtime does not ship.",
+                "The speech model runs on the CPU, though this machine has an NVIDIA "
+                + "graphics card. CUDA measured 3.7x faster on long text. It needs the "
+                + "CUDA build of Bunyi and NVIDIA's CUDA Toolkit.",
                 DoctorSeverity.Ok)
             : new DoctorFinding(
                 "Acceleration",
-                "The talker runs on the CPU, which is the supported configuration here.",
+                "The speech model runs on the CPU, which is the supported configuration here.",
                 DoctorSeverity.Ok);
     }
 

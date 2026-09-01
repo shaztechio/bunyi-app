@@ -90,7 +90,7 @@ public sealed class QwenSpeechSynthesizer(ILogSink log) : ISpeechSynthesizer
 
             _log.Log(
                 $"Loading the model from {modelFolder} " +
-                $"(talker on {OnnxRuntimeEnv.Current}, vocoder on CPU).");
+                $"(speech model on {OnnxRuntimeEnv.Current.Label()}, audio step on CPU).");
 
             _pipeline = await TtsPipeline.CreateAsync(
                 modelDir: modelFolder,
