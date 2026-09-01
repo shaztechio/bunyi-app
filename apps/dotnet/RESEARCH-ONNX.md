@@ -262,6 +262,45 @@ between 107 s and 23 s for 17–22 s of speech.
 Model download: 5.88 GB in 210 s (~28 MB/s). Subsequent runs load in **1.8 s**
 from disk with no network — offline reuse works.
 
+### The 1.7B export is faster than the 0.6B, and a third of the weight
+
+Open question 2 asked what 1.7B `int4` costs in speed, assuming it was the
+expensive one. It is not. Both exports on this machine (Ryzen 9 7950X, 95 GB),
+CPU provider, the benchmark texts above, three warm runs each:
+
+| Export | Text | Frames | Audio | Generation | RTF | Peak memory |
+|---|---|---|---|---|---|---|
+| 1.7B `int4` voice design | short | 38-43 | 3.0-3.4 s | 5.8-6.8 s | **1.93** | |
+| 1.7B `int4` voice design | long | 218-244 | 17.4-19.5 s | 43.6-46.8 s | **2.48** | **4.37 GB** |
+| 0.6B preset voice | short | 54-80 | 4.3-6.4 s | 20.0-33.8 s | 4.82 | |
+| 0.6B preset voice | long | 255-301 | 20.4-24.1 s | 93.1-113.4 s | 4.62 | **13.20 GB** |
+
+**The 2.8x larger model is roughly 1.9x faster on long text and uses a third of
+the memory.** Load is 5.6 s against 2.0 s, and the first frame arrives 0.2-0.5 s
+into a design run — the preset path reports no per-frame progress at all, so
+there is no equivalent figure for it.
+
+**This is not a result about model size, and must not be read as one.** It is
+`int4` through our own `TalkerLoop` against the library's pipeline at full
+precision: two variables moving at once, quantisation and implementation, and
+nothing here separates them. What it does establish is that the export the app
+uses for design mode is the cheaper of the two in both time and memory, which is
+the opposite of what the open question assumed.
+
+**It also reconciles the table above.** Those CPU rows read RTF 5.00 where the
+design measurements read 2.5, and that gap was previously left as "taken
+earlier". It is not a conditions artifact: the CPU rows were the **preset**
+path, and the two models differ by about this much.
+
+**The product consequence is the uncomfortable part.** Preset voice is the
+default mode, the first one a user meets, and it is the heavy one: 13.2 GB peak
+makes a 16 GB machine tight for exactly the mode most people will try first,
+while voice design sits at 4.4 GB. The `~17 GB` warning in the memory section is
+a preset-path number.
+
+The preset path also wanders far more: 54 to 80 frames for one short text,
+against 38 to 43 for design. Same stochastic sampling, much wider spread.
+
 ### The vocoder graph only works on the CPU execution provider
 
 One defect explains every GPU failure below. The vocoder dies on the **same
@@ -312,9 +351,10 @@ is not the lever. The defect is still worth reporting upstream; it is not worth
 fixing for speed here.
 
 The wall-clock figures are lower than the CPU rows in the table above (RTF
-1.9-2.7 against 5.0), which were taken earlier and are not being compared here:
-this measurement exists for the ratio between the two halves of one run, and
-that ratio is what carries.
+1.9-2.7 against 5.0) because those rows are the **preset** path and these are
+voice design — a different model through a different pipeline, measured since
+and found to be about twice as quick. See "The 1.7B export is faster than the
+0.6B" above.
 
 ### CUDA on our own pipeline, and what it costs to reach
 
@@ -901,17 +941,21 @@ that does not exist.
    the desktop — which was the reason this went unanswered: the two are not
    the same, and nothing recorded the one that mattered.
    Tracked as [#121](https://github.com/shaztechio/bunyi-app/issues/121).
-2. **1.7B `int4` speed.** Memory is answered above: the design export's floor
-   is 0.74 GB *below* the shipping model's, and its KV geometry is identical,
-   so long text costs the same in both modes. Speed is still unmeasured — but
-   no longer blocked: this said "cannot be until M8 can run the pipeline", and
-   M8 shipped, as question 3 below says four lines further down. Tracked as
-   [#122](https://github.com/shaztechio/bunyi-app/issues/122).
+2. ~~**1.7B `int4` speed**~~ — measured, and the assumption behind the
+   question was wrong. It is **faster** than the 0.6B preset export, RTF 2.48
+   against 4.62 on long text, at 4.37 GB peak against 13.20 GB. See "The 1.7B
+   export is faster than the 0.6B" above for the caveat that this compares two
+   pipelines as well as two models. The question stood unanswered for months
+   because it said "cannot be until M8 can run the pipeline" and nothing
+   revisited it when M8 shipped.
 3. ~~**Whether wavekat's graphs can be driven through `TtsPipeline`**~~ —
    answered above, and by M8 and M10 shipping. The I/O matches name for name;
    only `hidden_size` differs. The same comparison settles what the
    style-instruction section used to leave open.
 4. **Whether the vocoder's `node_pad_1` can be fixed** in the export, or worked
    around by rebuilding that graph. It is the only thing keeping the vocoder on
-   CPU, and it affects every GPU provider.
-   Tracked as [#123](https://github.com/shaztechio/bunyi-app/issues/123).
+   CPU, and it affects every GPU provider. Still open as a question, but
+   [#123](https://github.com/shaztechio/bunyi-app/issues/123) is **closed as
+   not worth doing**: the vocoder is 9-12% of a CPU generation, so fixing it
+   could never buy more than a tenth of the wall clock. Worth reporting
+   upstream, not worth fixing here.
