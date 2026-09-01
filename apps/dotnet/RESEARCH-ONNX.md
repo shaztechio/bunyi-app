@@ -283,6 +283,39 @@ to be harmless under the CPU kernel's implementation.
 later; it is the configuration, and it is why `TtsPipeline` taking a separate
 `vocoderSessionOptionsFactory` matters so much. Worth reporting upstream.
 
+### The vocoder is a tenth of a generation, so moving it would not pay
+
+Measured **in the shipping pipeline**, not as a component in isolation:
+`TalkerLoop` times prefill and the decode loop separately from the single
+vocoder call, and `SpeechResult` carries both as `TalkerTime` and
+`VocoderTime`. Voice design, `int4`, CPU provider, the benchmark texts above,
+three warm runs each.
+
+| Text | Frames | Audio | Talker | Vocoder | Total | Vocoder share |
+|---|---|---|---|---|---|---|
+| short | 39 | 3.12 s | 5.75 s | 0.81 s | 6.55 s | 12.3% |
+| short | 36 | 2.88 s | 5.53 s | 0.68 s | 6.21 s | 10.9% |
+| short | 38 | 3.04 s | 5.03 s | 0.67 s | 5.70 s | 11.7% |
+| long | 231 | 18.48 s | 45.54 s | 4.73 s | 50.28 s | 9.4% |
+| long | 212 | 16.96 s | 34.48 s | 4.09 s | 38.57 s | 10.6% |
+| long | 211 | 16.88 s | 34.78 s | 4.12 s | 38.89 s | 10.6% |
+
+**The vocoder is 9-12% of a generation, and its share does not grow with the
+clip — if anything it falls slightly.** The decode loop runs once per frame and
+dominates; the vocoder is one `Run` whose cost also grows with length, but from
+a far lower base.
+
+So the **ceiling** on fixing the pad-shape defect above is about a tenth of the
+wall clock, and only if the vocoder became free. Against putting the talker on
+CUDA — 3.7x, with the vocoder left on the CPU where it already is — the vocoder
+is not the lever. The defect is still worth reporting upstream; it is not worth
+fixing for speed here.
+
+The wall-clock figures are lower than the CPU rows in the table above (RTF
+1.9-2.7 against 5.0), which were taken earlier and are not being compared here:
+this measurement exists for the ratio between the two halves of one run, and
+that ratio is what carries.
+
 ### DirectML does not earn its place; CUDA does
 
 With the vocoder on CPU either way, the two GPU providers separate sharply:

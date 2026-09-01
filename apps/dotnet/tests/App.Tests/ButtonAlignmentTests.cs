@@ -17,12 +17,14 @@ using Avalonia.Controls.Presenters;
 using Avalonia.Headless.XUnit;
 using Avalonia.Layout;
 using Avalonia.LogicalTree;
+using Avalonia.Media;
 using Avalonia.VisualTree;
 using Bunyi.App.ViewModels;
 using Bunyi.App.Views;
 using Bunyi.Core;
 using Bunyi.Core.Engine;
 using Xunit;
+using Shapes = Avalonia.Controls.Shapes;
 
 namespace Bunyi.App.Tests;
 
@@ -183,5 +185,57 @@ public class ButtonAlignmentTests : HeadlessWindows
         var stop = ButtonNamed(window, "StopButton").Bounds.Width;
 
         Assert.Equal(generate, stop, 1);
+    }
+
+    [AvaloniaTheory]
+    [InlineData("IconWaveform16")]
+    [InlineData("IconStop16")]
+    public void The_action_glyphs_resolve(string key)
+    {
+        // The same failure as the colours above, one control further in. A
+        // DynamicResource naming nothing leaves Path.Data null, and a Path with
+        // no data draws nothing: no error, no hole in the layout, just a button
+        // that quietly lost its icon.
+        Assert.True(Avalonia.Application.Current!.TryFindResource(key, out var value), $"missing {key}");
+        Assert.IsAssignableFrom<Geometry>(value);
+    }
+
+    private static void AssertGlyphIsDrawn(Button button)
+    {
+        var path = button.GetVisualDescendants().OfType<Shapes.Path>().Single();
+
+        Assert.NotNull(path.Data);
+        // Ink of one kind or the other: the waveform is stroked, Stop is
+        // filled. A Path with neither is as invisible as one with no data.
+        Assert.True(path.Stroke is not null || path.Fill is not null,
+            $"the glyph on {button.Name} has neither a stroke nor a fill");
+        // And it occupies space. Width and Height are set on the Path, but a
+        // style or a zero-size parent can still collapse it to nothing.
+        Assert.True(path.Bounds is { Width: > 0, Height: > 0 },
+            $"the glyph on {button.Name} measures {path.Bounds.Width}x{path.Bounds.Height}");
+    }
+
+    [AvaloniaFact]
+    public void Generate_carries_its_waveform()
+    {
+        // Reported from the app: the Mac buttons have an icon and these did
+        // not. They do on main; the shipped 1.0.0 build predates it.
+        var (window, _) = Show();
+        window.UpdateLayout();
+
+        AssertGlyphIsDrawn(ButtonNamed(window, "GenerateButton"));
+    }
+
+    [AvaloniaFact]
+    public void Stop_carries_its_square()
+    {
+        // Measured while it is the visible one of the pair: a hidden button is
+        // laid out at zero, which would make the size check above meaningless.
+        var (window, model) = Show();
+
+        ((FakeEngine)model.Engine).Publish(new EngineStatus(EngineState.Generating));
+        window.UpdateLayout();
+
+        AssertGlyphIsDrawn(ButtonNamed(window, "StopButton"));
     }
 }
