@@ -273,7 +273,9 @@ public sealed class ClonePrefillTests : IDisposable
             new float[Hidden + 1],
             [Frame(0)]));
 
-        Assert.Contains("does not match the talker", error.Message);
+        // "speech model", not "talker": the message is shown to a user, and the
+        // model's internal names for its halves are taught nowhere in the app.
+        Assert.Contains("does not match the speech model", error.Message);
     }
 
     // ---- Language ----

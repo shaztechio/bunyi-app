@@ -596,13 +596,20 @@ Each check reports *ok*, *warning*, or *blocker*.
    the check that catches a truncated or half-synced model, the failure that
    otherwise loads and speaks nonsense.
 
-7. **Acceleration.** Which execution provider the talker will run on, and —
-   where that is the CPU on a machine that has an NVIDIA driver — what is
-   missing. **Never a warning**, however much faster the machine could be:
-   Doctor runs before every generation, and a machine correctly using its CPU
-   is healthy, so this is a row in the report someone opens rather than
-   something raised at them. The vocoder is always on the CPU and the finding
-   says so, because "running on the GPU" would otherwise read as all of it.
+7. **Acceleration.** Which execution provider the speech model will run on,
+   and — where that is the CPU on a machine that has an NVIDIA graphics card —
+   what is missing. **Never a warning**, however much faster the machine could
+   be: Doctor runs before every generation, and a machine correctly using its
+   CPU is healthy, so this is a row in the report someone opens rather than
+   something raised at them. The step that turns the result into sound is
+   always on the CPU and the finding says so, because "running on the GPU"
+   would otherwise read as all of it.
+
+   **In the words the user meets, not the model's.** The two halves are the
+   *talker* and the *vocoder* in the exports, the code and the research notes,
+   and neither word appears anywhere a user can see — not in `HELP.md` on
+   either platform. A finding or a log line that used them would be the only
+   place the product taught them, which is no place at all.
 
    **Windows and Linux only — a permitted divergence.** macOS has no
    equivalent: MLX always runs on the GPU there, so there is no choice to

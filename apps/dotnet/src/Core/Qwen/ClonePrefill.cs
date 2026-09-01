@@ -101,7 +101,8 @@ public sealed class ClonePrefill(
         {
             throw new ArgumentException(
                 $"The speaker encoder returned {speaker.Length} numbers where this model "
-                + $"expects {_config.HiddenSize}. The encoder does not match the talker.",
+                + $"expects {_config.HiddenSize}. The encoder does not match the "
+                + "speech model.",
                 nameof(speaker));
         }
 

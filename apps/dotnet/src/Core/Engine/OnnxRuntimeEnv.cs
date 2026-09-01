@@ -34,6 +34,23 @@ public enum ExecutionProviderChoice
     Cuda,
 }
 
+/// <summary>Provider names as a person writes them.</summary>
+/// <remarks>
+/// The enum spells them <c>Cpu</c> and <c>Cuda</c>, which is right for C# and
+/// wrong in a sentence — "Speech model on Cpu, audio step on CPU" was one line
+/// disagreeing with itself about how to capitalise the same acronym. Both are
+/// initialisms everywhere except in this enum.
+/// </remarks>
+public static class ExecutionProviderNames
+{
+    /// <summary>How to write this provider in something a person reads.</summary>
+    public static string Label(this ExecutionProviderChoice choice) => choice switch
+    {
+        ExecutionProviderChoice.Cuda => "CUDA",
+        _ => "CPU",
+    };
+}
+
 /// <summary>
 /// How ONNX Runtime sessions are configured (see apps/dotnet/RESEARCH-ONNX.md).
 /// </summary>
