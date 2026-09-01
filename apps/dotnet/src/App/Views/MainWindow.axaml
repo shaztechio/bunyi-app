@@ -210,10 +210,13 @@ limitations under the License.
                   ToolTip.Tip="Stop the current operation">
             <StackPanel Orientation="Horizontal" Spacing="6">
               <!-- Filled, so it reads as a stop sign rather than an empty box.
-                   Overrides the stroke the style above gives sibling glyphs. -->
+                   Overrides the stroke the style above gives sibling glyphs.
+                   White for the same reason the style says: Foreground is set
+                   on the ContentPresenter, so binding the Button's own gave
+                   near-black. -->
               <Path Data="{DynamicResource IconStop16}" Stretch="None"
                     Width="16" Height="16" VerticalAlignment="Center"
-                    Fill="{Binding $parent[Button].Foreground}" Stroke="{x:Null}" />
+                    Fill="White" Stroke="{x:Null}" />
               <TextBlock Text="Stop" VerticalAlignment="Center" />
             </StackPanel>
           </Button>

@@ -182,7 +182,17 @@ limitations under the License.
     on its own and wrong for one beside a word.
   -->
   <Style Selector="Button.primary Path, Button.danger Path">
-    <Setter Property="Stroke" Value="{Binding $parent[Button].Foreground}" />
+    <!--
+      White, not the button's Foreground. It was bound to
+      `$parent[Button].Foreground`, and both these styles set Foreground on the
+      *ContentPresenter* rather than on the Button — so the label inherited
+      white and the glyph, binding one level further out, got the Fluent
+      default. It rendered rgb(23,21,61): near-black ink on an accent-purple
+      button, measured from a screenshot rather than argued about. White is
+      what the presenter sets two rules above, so this now says the same thing
+      in the same words.
+    -->
+    <Setter Property="Stroke" Value="White" />
     <Setter Property="StrokeThickness" Value="1.6" />
     <Setter Property="StrokeLineCap" Value="Round" />
     <Setter Property="StrokeJoin" Value="Round" />
