@@ -67,9 +67,13 @@ Signing differs by platform, because the three do not offer the same thing.
 and stapled. The release workflow verifies both the app and the disk image
 before publishing, so Gatekeeper accepts them offline.
 
-**Windows** — free code signing provided by [SignPath.io](https://signpath.io),
-certificate by [SignPath Foundation](https://signpath.org). *The 1.0.0 build is
-not yet signed; signing applies from the next release.*
+**Windows** — **not signed yet.** Free code signing from
+[SignPath.io](https://signpath.io), with a certificate by
+[SignPath Foundation](https://signpath.org), has been applied for and is not
+yet in place — so Windows SmartScreen warns on first run. Until the
+certificate exists there is nothing to sign with, and each release says which
+of the two it is rather than stating a policy. Verify the archive against the
+SHA-256 checksum published with it.
 
 **Linux** — nothing signs a portable tarball in a way the system checks, so
 there is no equivalent to claim. Every release publishes a SHA-256 checksum for
