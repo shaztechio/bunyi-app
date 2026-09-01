@@ -267,6 +267,27 @@ public class DesignPipelineTests
         Assert.InRange(seen, 2, 4);
     }
 
+    [SkippableFact]
+    public void It_reports_where_the_time_went()
+    {
+        // The split issue #123 turns on: the talker moves when the execution
+        // provider changes, the vocoder is pinned to the CPU, so the ratio
+        // between them is the ceiling on what moving the vocoder could buy.
+        // Measured at 9-12% for the vocoder; see RESEARCH-ONNX.md.
+        //
+        // The figure itself is not asserted — it is a property of the machine,
+        // and a test that pinned it would fail on a faster one. What must hold
+        // is that both halves are actually measured and that they account for
+        // the run rather than exceeding it.
+        var result = Ours();
+
+        Assert.True(result.TalkerTime > TimeSpan.Zero, "the talker was not timed");
+        Assert.True(result.VocoderTime > TimeSpan.Zero, "the vocoder was not timed");
+        Assert.True(
+            result.TalkerTime + result.VocoderTime <= Run.Value.Elapsed,
+            "the two halves add up to more than the generation they came from");
+    }
+
     /// <summary>Reports on the calling thread, so a test can act between frames.</summary>
     private sealed class SynchronousProgress(Action<int> report) : IProgress<int>
     {

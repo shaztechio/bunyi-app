@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using System.Diagnostics;
 using Bunyi.Core.Diagnostics;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
@@ -29,6 +30,19 @@ public sealed record SpeechResult(float[] Samples, IReadOnlyList<int[]> Codes)
     /// <summary>How long the audio runs.</summary>
     public TimeSpan Duration(int sampleRate) =>
         TimeSpan.FromSeconds(Samples.Length / (double)sampleRate);
+
+    /// <summary>Prefill and the decode loop — everything before the vocoder.</summary>
+    /// <remarks>
+    /// Split out because this is the half that moves when the execution
+    /// provider changes; the vocoder is pinned to the CPU
+    /// (<see cref="Engine.OnnxRuntimeEnv.VocoderRunsOnCpu"/>) and stays where
+    /// it is. Defaults to zero on a result that was not produced by a real
+    /// run.
+    /// </remarks>
+    public TimeSpan TalkerTime { get; init; }
+
+    /// <summary>The single vocoder call over every frame.</summary>
+    public TimeSpan VocoderTime { get; init; }
 }
 
 /// <summary>
@@ -159,6 +173,8 @@ public sealed class TalkerLoop : IDisposable
 
         _log.Log($"{what}: {rows.Length} tokens of context.");
 
+        var talkerClock = Stopwatch.StartNew();
+
         var (logits, hidden, pastKeys, pastValues) = RunPrefill(rows);
 
         var frames = new List<int[]>();
@@ -221,8 +237,33 @@ public sealed class TalkerLoop : IDisposable
                 + "model did not finish on its own. Generating again usually works.");
         }
 
-        _log.Log($"{what}: {frames.Count} frames.");
-        return new SpeechResult(RunVocoder(frames, vocoderContext), frames);
+        var talker = talkerClock.Elapsed;
+
+        var vocoderClock = Stopwatch.StartNew();
+        var samples = RunVocoder(frames, vocoderContext);
+        var vocoder = vocoderClock.Elapsed;
+
+        // Split at the one seam that matters. The talker runs on whatever
+        // provider was chosen; the vocoder is pinned to the CPU and stays
+        // there, so this ratio is the whole of what moving it to a GPU could
+        // ever buy. It was previously unknowable from a bug report, and
+        // unknowable is what kept the question open — see RESEARCH-ONNX.md,
+        // "The vocoder graph only works on the CPU execution provider".
+        var total = talker + vocoder;
+        var share = total > TimeSpan.Zero
+            ? 100.0 * vocoder.TotalSeconds / total.TotalSeconds
+            : 0.0;
+
+        _log.Log(
+            $"{what}: {frames.Count} frames in {total.TotalSeconds:0.0}s — "
+            + $"talker {talker.TotalSeconds:0.0}s, "
+            + $"vocoder {vocoder.TotalSeconds:0.0}s ({share:0}%).");
+
+        return new SpeechResult(samples, frames)
+        {
+            TalkerTime = talker,
+            VocoderTime = vocoder,
+        };
     }
 
     private (float[] Logits, float[] Hidden, float[] Keys, float[] Values) RunPrefill(float[][] rows)
