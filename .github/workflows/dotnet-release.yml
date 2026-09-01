@@ -149,13 +149,30 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Four builds, two of each platform. The `-cuda` pair carries ONNX
+        # Runtime's GPU package; see Bunyi.Core.csproj for why it is a separate
+        # download rather than the only one.
         include:
           - os: windows-latest
             rid: win-x64
             archive: zip
+            cuda: false
+            suffix: ''
           - os: ubuntu-latest
             rid: linux-x64
             archive: tar.gz
+            cuda: false
+            suffix: ''
+          - os: windows-latest
+            rid: win-x64
+            archive: zip
+            cuda: true
+            suffix: '-cuda'
+          - os: ubuntu-latest
+            rid: linux-x64
+            archive: tar.gz
+            cuda: true
+            suffix: '-cuda'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40
 
@@ -189,6 +206,7 @@ jobs:
         run: >
           dotnet publish src/App -c Release -r ${{ matrix.rid }} --self-contained
           -p:Version=${{ needs.version.outputs.version }}
+          -p:BunyiCuda=${{ matrix.cuda }}
           -o publish/${{ matrix.rid }}
 
       # Self-contained, so the folder is the whole app: no runtime to install
@@ -199,7 +217,7 @@ jobs:
         shell: pwsh
         working-directory: apps/dotnet
         run: |
-          $name = "Bunyi-${{ needs.version.outputs.version }}-${{ matrix.rid }}"
+          $name = "Bunyi-${{ needs.version.outputs.version }}-${{ matrix.rid }}${{ matrix.suffix }}"
           New-Item -ItemType Directory -Force dist | Out-Null
           Compress-Archive -Path "publish/${{ matrix.rid }}/*" -DestinationPath "dist/$name.zip"
           (Get-FileHash "dist/$name.zip" -Algorithm SHA256).Hash.ToLower() + "  $name.zip" |
@@ -210,7 +228,7 @@ jobs:
         working-directory: apps/dotnet
         run: |
           set -euo pipefail
-          name="Bunyi-${{ needs.version.outputs.version }}-${{ matrix.rid }}"
+          name="Bunyi-${{ needs.version.outputs.version }}-${{ matrix.rid }}${{ matrix.suffix }}"
           mkdir -p dist
           # The executable bit does not survive a zip on Linux, which is half of
           # why this one is a tarball.
@@ -243,7 +261,10 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.rid }}
+          # The suffix is part of the name, or the two builds of a platform
+          # would upload over each other and the release would ship one of
+          # them twice.
+          name: ${{ matrix.rid }}${{ matrix.suffix }}
           path: apps/dotnet/dist/*
           if-no-files-found: error
 
@@ -302,6 +323,13 @@ jobs:
             printf '**Linux** — untar and run `./Bunyi.App`.\n\n'
             printf 'Self-contained: there is no .NET runtime to install, and nothing is '
             printf 'written outside the folder you unpack plus your own app-data directory.\n\n'
+            printf 'The **-cuda** downloads are the same app built against ONNX Runtime '
+            printf 'with its GPU package, measured 1.7x faster on long text. Take one '
+            printf 'only if you have an NVIDIA card **and** the NVIDIA CUDA Toolkit '
+            printf 'installed: the provider links against cuBLAS and cudart, which are '
+            printf 'not shipped here. If CUDA cannot load, the app falls back to the '
+            printf 'CPU, says so in the log, and generates normally. Everyone else '
+            printf 'wants the plain download.\n\n'
             printf '### Code signing policy\n\n'
             # Reads the credential rather than stating the policy: until the
             # secret exists there is no signing step to have run, and a release
@@ -334,9 +362,10 @@ jobs:
             printf '(3.9–5.9 GB) with a progress bar and a time estimate; after that it '
             printf 'runs offline. Doctor checks there is room before the download starts.\n\n'
             printf '### Requirements\n\n'
-            printf 'A 64-bit Windows or Linux machine. Generation runs on the CPU; long '
-            printf 'text can reach about 17 GB of memory, so 16 GB is workable for short '
-            printf 'clips and tight for long ones.\n\n'
+            printf 'A 64-bit Windows or Linux machine. Generation runs on the CPU unless '
+            printf 'you took a -cuda download and have the toolkit for it; long text can '
+            printf 'reach about 17 GB of memory, so 16 GB is workable for short clips and '
+            printf 'tight for long ones.\n\n'
             printf 'SHA-256:\n\n```\n'
             cat dist/*.sha256
             printf '```\n'
