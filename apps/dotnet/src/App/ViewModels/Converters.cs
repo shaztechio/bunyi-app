@@ -115,6 +115,80 @@ public sealed class SegmentEnabled : IMultiValueConverter
     }
 }
 
+/// <summary>
+/// One colour per generation mode, for the History pills.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Ported from <c>apps/macos/Theme.swift</c>, <c>TTSMode.pillColor</c>, which is
+/// the reference implementation. Every pill here wore
+/// <c>BunyiAccent</c> — one colour for all three modes, and the wrong one:
+/// <b>in History the accent already means "this row is playing"</b>, because it
+/// is the progress ring drawn around the play button. A pill wearing it
+/// competed with the only colour in that view carrying state.
+/// </para>
+/// <para>
+/// Violet is the brand's own second stop; teal and amber are not, and are the
+/// only invented colours in the app. They earn it by making a long list
+/// scannable without reading every row. The mode name stays spelled out inside
+/// the pill, so the colour is redundant rather than load-bearing — nothing is
+/// lost to anyone who cannot separate these hues.
+/// </para>
+/// <para>
+/// Fixed sRGB rather than theme brushes, for the reason macOS gives: these must
+/// stay recognisably the same three in light and dark.
+/// </para>
+/// </remarks>
+public sealed class ModeTint : IValueConverter
+{
+    public static ModeTint Instance { get; } = new();
+
+    // The macOS values, converted from sRGB fractions: 0.10/0.55/0.55,
+    // 0.63/0.24/0.89, 0.72/0.45/0.05.
+    private static readonly Color Preset = Color.FromRgb(26, 140, 140);
+    private static readonly Color Design = Color.FromRgb(161, 61, 227);
+    private static readonly Color Clone = Color.FromRgb(184, 115, 13);
+
+    /// <summary>The pill's background opacity, as macOS draws it.</summary>
+    private const double Faint = 0.14;
+
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+    {
+        var tint = Tint(value as string);
+
+        // "faint" asks for the pill's fill, anything else for its ink. One
+        // converter rather than two, because the two must not drift apart.
+        return string.Equals(parameter as string, "faint", StringComparison.Ordinal)
+            ? new SolidColorBrush(tint, Faint)
+            : new SolidColorBrush(tint);
+    }
+
+    /// <summary>
+    /// The mode's colour, or a neutral one for anything unrecognised.
+    /// </summary>
+    /// <remarks>
+    /// Matched on the distinguishing word rather than the whole string.
+    /// <c>GeneratedOutput.Mode</c> is whatever the file's metadata recorded and
+    /// falls back to "Unknown" when there is none, so an exact match would put
+    /// a clip written by an older build into the default branch on a
+    /// technicality. Unknown gets grey, which is macOS's fallback too — an
+    /// invented colour for "we do not know" would be a lie with a hue.
+    /// </remarks>
+    private static Color Tint(string? mode)
+    {
+        if (mode is null) return Colors.Gray;
+
+        if (mode.Contains("design", StringComparison.OrdinalIgnoreCase)) return Design;
+        if (mode.Contains("clone", StringComparison.OrdinalIgnoreCase)) return Clone;
+        if (mode.Contains("preset", StringComparison.OrdinalIgnoreCase)) return Preset;
+
+        return Colors.Gray;
+    }
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
+}
+
 /// <summary>Play or stop, per row. There is deliberately no pause (spec §2a).</summary>
 public sealed class PlayGlyph : IValueConverter
 {

@@ -97,10 +97,21 @@ limitations under the License.
                 -->
                 <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                   <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
-                    <Border Grid.Column="0" Background="{DynamicResource BunyiAccent}"
+                    <!--
+                      One colour per mode, not the accent. The accent is the
+                      progress ring on the row that is playing, so a pill in the
+                      same purple competed with the only colour in this view
+                      that carries state - and all three modes wore it, so it
+                      said nothing about which mode a row was either. Colours
+                      and the faint fill are ported from the macOS app; see
+                      ModeTint.
+                    -->
+                    <Border Grid.Column="0"
+                            Background="{Binding Mode, Converter={x:Static vm:ModeTint.Instance}, ConverterParameter=faint}"
                             CornerRadius="{DynamicResource BunyiPillRadius}"
                             Padding="6,1" VerticalAlignment="Center">
-                      <TextBlock Text="{Binding Mode}" FontSize="10" Foreground="White" />
+                      <TextBlock Text="{Binding Mode}" FontSize="10" FontWeight="SemiBold"
+                                 Foreground="{Binding Mode, Converter={x:Static vm:ModeTint.Instance}}" />
                     </Border>
                     <TextBlock Grid.Column="1" Text="{Binding Summary}"
                                TextTrimming="CharacterEllipsis"
