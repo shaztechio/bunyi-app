@@ -286,14 +286,6 @@ jobs:
       - name: Create the GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-          # Whether Windows builds are actually signed, decided by whether the
-          # credential to sign them exists. The notes below read this rather
-          # than stating a policy: a release cannot then claim a signature it
-          # has no way to have produced, which is what would have happened the
-          # first time anyone cut one while the SignPath application was still
-          # in flight. Adding the secret is what flips the text — and adding
-          # the signing step, which goes in the packaging job above.
-          SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
         run: |
           set -euo pipefail
           tag="${{ needs.version.outputs.tag }}"
@@ -331,20 +323,10 @@ jobs:
             printf 'CPU, says so in the log, and generates normally. Everyone else '
             printf 'wants the plain download.\n\n'
             printf '### Code signing policy\n\n'
-            # Reads the credential rather than stating the policy: until the
-            # secret exists there is no signing step to have run, and a release
-            # that claims a signature it does not carry is worse than one that
-            # says so.
-            if [ -n "${SIGNPATH_API_TOKEN:-}" ]; then
-              printf '**Windows** — free code signing provided by '
-              printf '[SignPath.io](https://signpath.io), certificate by '
-              printf '[SignPath Foundation](https://signpath.org).\n\n'
-            else
-              printf '**Windows** — not signed yet: the SignPath Foundation '
-              printf 'application is still in flight. Windows will warn on first '
-              printf 'run. Verify the archive against the SHA-256 checksum '
-              printf 'published below.\n\n'
-            fi
+            printf '**Windows** — not code-signed. SmartScreen warns the first '
+            printf 'time you run it: choose *More info*, then *Run anyway*. There is no '
+            printf 'certificate behind the download, so nothing would make that warning '
+            printf 'go away. Verify the archive against the SHA-256 checksum below.\n\n'
             printf '**Linux** — nothing signs a portable tarball in a way the system '
             printf 'checks, so there is no equivalent to claim. Verify the archive against '
             printf 'the SHA-256 checksum published below.\n\n'
