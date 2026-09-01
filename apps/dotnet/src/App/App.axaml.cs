@@ -100,7 +100,8 @@ public partial class App : Application
                     Reachable,
                     (folder, token) => downloader.VerifyAsync(SourceFor(mode), layout, folder, token),
                     deep,
-                    ct);
+                    provider: null,
+                    ct: ct);
             }
 
             // One synthesizer per mode. They are different pipelines over

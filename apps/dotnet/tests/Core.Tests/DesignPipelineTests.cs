@@ -15,6 +15,7 @@
 using System.Text.Json;
 using Bunyi.Core.Qwen;
 using Bunyi.Core.Diagnostics;
+using Bunyi.Core.Engine;
 using Xunit;
 
 namespace Bunyi.Core.Tests;
@@ -81,9 +82,18 @@ public class DesignPipelineTests
     /// Loading four sessions and generating takes seconds; doing it per test
     /// would take minutes. The run is deterministic, so one is enough.
     /// </remarks>
+    /// <remarks>
+    /// <b>Pinned to the CPU</b>, and every other pipeline in this file with it.
+    /// These tests check the port against the export's own Python reference,
+    /// which is a claim about CPU arithmetic — under CUDA the same greedy input
+    /// produces a different number of frames (15 against the reference's 12),
+    /// deterministically but not identically. Left to detect, all six parity
+    /// tests would fail on any machine with the CUDA build and the toolkit,
+    /// reporting a working accelerator as a broken port. See #143.
+    /// </remarks>
     private static readonly Lazy<(SpeechResult Result, TimeSpan Elapsed)> Run = new(() =>
     {
-        using var pipeline = new DesignPipeline(Root!, "int4", new NullLog());
+        using var pipeline = new DesignPipeline(Root!, "int4", new NullLog(), provider: ExecutionProviderChoice.Cpu);
 
         var clock = System.Diagnostics.Stopwatch.StartNew();
         var result = pipeline.Generate(
@@ -212,7 +222,7 @@ public class DesignPipelineTests
         // comparison above meaningless.
         Skip.If(Root is null, "The voice-design export is not on this machine.");
 
-        using var pipeline = new DesignPipeline(Root!, "int4", new NullLog());
+        using var pipeline = new DesignPipeline(Root!, "int4", new NullLog(), provider: ExecutionProviderChoice.Cpu);
 
         var again = pipeline.Generate(
             new DesignRequest(Reference.text, Reference.instruct, Reference.language),
@@ -231,7 +241,7 @@ public class DesignPipelineTests
     {
         Skip.If(Root is null, "The voice-design export is not on this machine.");
 
-        using var pipeline = new DesignPipeline(Root!, "int4", new NullLog());
+        using var pipeline = new DesignPipeline(Root!, "int4", new NullLog(), provider: ExecutionProviderChoice.Cpu);
 
         var capped = pipeline.Generate(
             new DesignRequest(Reference.text, Reference.instruct, Reference.language),
@@ -247,7 +257,7 @@ public class DesignPipelineTests
         // the only way out otherwise is closing the window.
         Skip.If(Root is null, "The voice-design export is not on this machine.");
 
-        using var pipeline = new DesignPipeline(Root!, "int4", new NullLog());
+        using var pipeline = new DesignPipeline(Root!, "int4", new NullLog(), provider: ExecutionProviderChoice.Cpu);
         using var cancelled = new CancellationTokenSource();
 
         var seen = 0;

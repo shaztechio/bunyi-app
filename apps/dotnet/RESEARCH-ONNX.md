@@ -316,6 +316,56 @@ The wall-clock figures are lower than the CPU rows in the table above (RTF
 this measurement exists for the ratio between the two halves of one run, and
 that ratio is what carries.
 
+### CUDA on our own pipeline, and what it costs to reach
+
+The 3.7x above was taken through the preset-voice path. Voice design runs on
+`TalkerLoop`, which until #143 created its sessions with no options at all and
+never asked which provider to use — so design and clone were CPU-only whatever
+`BUNYI_EP` said. With the provider threaded through, on one machine
+(Ryzen 9 7950X, 95 GB, RTX 4090 24 GB, driver 616.56, CUDA Toolkit 13.3, no
+cuDNN), voice design `int4`, three warm runs each:
+
+| Text | Provider | Talker | Vocoder | Vocoder share | RTF |
+|---|---|---|---|---|---|
+| short | CPU | 5.44 s | 0.72 s | 11.6% | 2.12 |
+| short | **CUDA** | **3.27 s** | 0.86 s | 20.9% | **1.43** |
+| long | CPU | 38.27 s | 4.31 s | 10.2% | 2.44 |
+| long | **CUDA** | **23.09 s** | 5.56 s | 19.4% | **1.42** |
+
+**1.7x on long text, not 3.7x** — a different pipeline and a different model
+from the row above, so the two are not the same claim.
+
+**The vocoder's share doubles, from ~10% to ~20%.** Nothing about the vocoder
+changed; it is pinned to the CPU and stayed there while the talker got faster.
+That is the arithmetic the ceiling in the section above predicts, and it is
+worth stating plainly because it looks like a regression and is not. It does
+not revive the case for moving the vocoder: a fifth of an RTF-1.4 run is a
+smaller prize than a tenth of an RTF-2.4 one.
+
+**CUDA does not reproduce the CPU's output.** Greedy decoding — nothing left to
+sample — gives 15 frames where the CPU and the export's own Python reference
+both give 12. Each provider is internally deterministic: three greedy runs under
+CUDA agreed with each other exactly, as did three under CPU. So this is float
+arithmetic differing between kernels, not a race; ORT also warns that the
+graph's `ScatterND` "only guarantees to be correct if indices are not
+duplicated" under CUDA. The consequence for the suite is that the reference
+parity tests **pin the CPU provider explicitly** — they are a claim about the
+port, and left to detect they would fail on any machine where CUDA works,
+reporting a working accelerator as a broken port.
+
+**Reaching it costs 128.6 MB of download and a toolkit install.** Publishing
+`win-x64` self-contained against `Microsoft.ML.OnnxRuntime.Gpu` instead of the
+CPU package: 249 MB to 417 MB unpacked, **90.4 MB to 219.0 MB zipped**. Almost
+all of it is one file, `onnxruntime_providers_cuda.dll` at 166.4 MB — and that
+file is not sufficient on its own. With the CUDA Toolkit off the PATH it fails
+to load, needing `cublasLt64_13.dll`, which ONNX Runtime does not ship. cuDNN is
+*not* required: this machine has none and CUDA sessions build in 0.2 s.
+
+**`GetAvailableProviders()` cannot be used to detect this.** It listed
+`CUDAExecutionProvider` in both the working and the failing configuration. The
+only honest test is building the session options, which is what loads the
+provider library — and needs no model file to ask.
+
 ### DirectML does not earn its place; CUDA does
 
 With the vocoder on CPU either way, the two GPU providers separate sharply:

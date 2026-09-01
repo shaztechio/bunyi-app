@@ -596,6 +596,18 @@ Each check reports *ok*, *warning*, or *blocker*.
    the check that catches a truncated or half-synced model, the failure that
    otherwise loads and speaks nonsense.
 
+7. **Acceleration.** Which execution provider the talker will run on, and —
+   where that is the CPU on a machine that has an NVIDIA driver — what is
+   missing. **Never a warning**, however much faster the machine could be:
+   Doctor runs before every generation, and a machine correctly using its CPU
+   is healthy, so this is a row in the report someone opens rather than
+   something raised at them. The vocoder is always on the CPU and the finding
+   says so, because "running on the GPU" would otherwise read as all of it.
+
+   **Windows and Linux only — a permitted divergence.** macOS has no
+   equivalent: MLX always runs on the GPU there, so there is no choice to
+   report and nothing that could be missing.
+
 **Before every generation.** Doctor runs before any download begins, because
 the point is not to discover after 3.4 GB that there was never room for it.
 Blockers stop the run and are reported in a dialog. Warnings do not stop it
