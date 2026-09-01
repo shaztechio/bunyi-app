@@ -43,7 +43,23 @@ limitations under the License.
       implements none of spec §3b.
     -->
     <PackageReference Include="ElBruno.QwenTTS" />
-    <PackageReference Include="Microsoft.ML.OnnxRuntime" />
+
+    <!--
+      Two flavours of the same runtime, chosen by `-p:BunyiCuda=true` at publish
+      time and by nothing at all otherwise.
+
+      The GPU package is not the default and will not become one. It adds
+      128.6 MB to the download (90.4 MB to 219.0 MB zipped, measured on
+      win-x64), almost all of it onnxruntime_providers_cuda.dll — and that file
+      links against cuBLAS and cudart, which ONNX Runtime does not ship. So a
+      user without NVIDIA's CUDA Toolkit installed would pay 2.4x for a
+      provider that cannot load. The separate artifact goes to the people who
+      already have the toolkit; everyone else downloads what they can use.
+    -->
+    <PackageReference Include="Microsoft.ML.OnnxRuntime"
+                      Condition="'$(BunyiCuda)' != 'true'" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu"
+                      Condition="'$(BunyiCuda)' == 'true'" />
 
     <!--
       Playback, through miniaudio: identical on Windows and Linux, and the

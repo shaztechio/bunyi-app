@@ -206,6 +206,13 @@ What ships, per release:
 - `Bunyi-<version>-win-x64.zip`
 - `Bunyi-<version>-linux-x64.tar.gz`, which is a tarball rather than a zip
   because the executable bit does not survive the latter
+- `Bunyi-<version>-win-x64-cuda.zip` and `-linux-x64-cuda.tar.gz`, the same
+  app published with `-p:BunyiCuda=true` so it carries ONNX Runtime's GPU
+  package. **Not the default download and not on its way to becoming one:**
+  it is 128.6 MB larger zipped, and the provider still needs NVIDIA's CUDA
+  Toolkit, which ONNX Runtime does not ship. It is for people who already have
+  the toolkit; the app detects CUDA and falls back to the CPU when it cannot
+  load, so taking the wrong one is slow rather than broken
 - a `.sha256` beside each
 
 Both are **self-contained**: no .NET runtime to install, and nothing written
