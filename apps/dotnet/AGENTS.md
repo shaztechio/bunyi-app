@@ -219,13 +219,13 @@ Both are **self-contained**: no .NET runtime to install, and nothing written
 outside the unpacked folder plus the app-data directories in
 `/spec/DATA-FORMATS.md`.
 
-- **Not code-signed, and not pending.** There is no certificate for either
-  platform, so Windows SmartScreen warns on first run, and the release notes
-  say so rather than leaving people to guess. **The SignPath Foundation
-  application was rejected**, so this is the state rather than a wait — every
-  claim that Windows builds are signed has been removed from the README, the
-  site and the release notes, and one should not go back without a
-  certificate that actually exists behind it.
+- **Not code-signed.** There is no certificate for either platform, so Windows
+  SmartScreen warns on first run, and the release notes say so rather than
+  leaving people to guess. The SignPath Foundation application was **rejected**;
+  a Certum open-source certificate is **in progress**. Until one exists, no
+  claim that Windows builds are signed goes back into the README, the site or
+  the release notes — that is what had to be removed once already.
+  [`RESEARCH-SIGNING.md`](RESEARCH-SIGNING.md) has the routes and their state.
 - **CPU only.** `RESEARCH-ONNX.md` measured DirectML as slower than plain CPU
   and CUDA as worth an opt-in — but CUDA needs a user-installed toolkit, which
   is the wrong trade for this audience. Anyone who wants it can publish with the
