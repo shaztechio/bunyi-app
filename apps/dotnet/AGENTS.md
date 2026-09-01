@@ -220,8 +220,10 @@ outside the unpacked folder plus the app-data directories in
   is the wrong trade for this audience. Anyone who wants it can publish with the
   GPU package themselves.
 - Release notes come from `tools/release-notes.py`, scoped with
-  `--path apps/dotnet --path spec` so a release does not list the other app's
-  commits. A hand-written `release-notes/dotnet-v<version>.md` wins when present,
+  `--path apps/dotnet` so a release does not list the other app's commits.
+  Deliberately not `--path spec`: behaviour changes start in /spec by this
+  repository's own rule, so every macOS feature touches it too, and scoping
+  to it put fifteen `feat(macos)` lines into this app's first release. A hand-written `release-notes/dotnet-v<version>.md` wins when present,
   because squashed merges make one line out of a PR that carried five changes.
 
 ## Rules
