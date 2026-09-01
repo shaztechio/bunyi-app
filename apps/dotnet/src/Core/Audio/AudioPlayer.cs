@@ -16,6 +16,7 @@ using Bunyi.Core.Diagnostics;
 using SoundFlow.Abstracts;
 using SoundFlow.Abstracts.Devices;
 using SoundFlow.Backends.MiniAudio;
+using SoundFlow.Backends.MiniAudio.Enums;
 using SoundFlow.Components;
 using SoundFlow.Enums;
 using SoundFlow.Providers;
@@ -110,6 +111,39 @@ public sealed class SoundFlowAudioPlayer : IAudioPlayer
     public event EventHandler? Finished;
 
     /// <summary>
+    /// The engine, told which backends to consider so that it can report which
+    /// one it chose.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <c>MiniAudioEngine</c> takes a backend priority, and its
+    /// <c>ActiveBackend</c> reports <b>what was asked for</b> rather than what
+    /// it selected. Asked for nothing, it stays at the enum's zero value —
+    /// <c>Null</c> — for the life of the engine: measured before and after
+    /// <c>InitializePlaybackDevice</c> and after <c>Start</c>, on a machine
+    /// playing audible speech at the time.
+    /// </para>
+    /// <para>
+    /// So it is handed <see cref="MiniAudioEngine.AvailableBackends"/>, which is
+    /// miniaudio's own order — the same order it would have applied itself, so
+    /// this changes which backend is chosen not at all, and changes the report
+    /// from a constant to the truth. A list whose first entry cannot start falls
+    /// through to the next and reports the one that worked: verified by putting
+    /// WinMm, which throws on its own here, at the front of the list.
+    /// </para>
+    /// <para>
+    /// Empty list, no priority: an engine given an empty one has nothing to try,
+    /// and the diagnostic is never worth losing playback for.
+    /// </para>
+    /// </remarks>
+    private static MiniAudioEngine CreateEngine()
+    {
+        var available = MiniAudioEngine.AvailableBackends;
+
+        return available.Count > 0 ? new MiniAudioEngine(available) : new MiniAudioEngine();
+    }
+
+    /// <summary>
     /// Records which audio backend miniaudio chose, once per engine.
     /// </summary>
     /// <remarks>
@@ -132,13 +166,37 @@ public sealed class SoundFlowAudioPlayer : IAudioPlayer
     /// it was never a candidate, which is a different problem from one that was
     /// chosen and did not work.
     /// </para>
+    /// <para>
+    /// <b>This only works because the engine is told what to consider</b> — see
+    /// <see cref="CreateEngine"/>. Constructed with no priority it reported
+    /// <c>Null</c> forever, which is both the enum's zero value and the name of
+    /// miniaudio's do-nothing backend, so the line read as "audio is going
+    /// nowhere" on machines whose audio was audible.
+    /// </para>
     /// </remarks>
+    /// <summary>The backend line, given what the engine reported.</summary>
+    /// <remarks>
+    /// Separated from the logging so the wording can be tested without an audio
+    /// device, which is what CI has. <c>Null</c> is rendered as "not reported"
+    /// rather than printed: it is the name of miniaudio's do-nothing backend as
+    /// well as the enum's zero value, and a reader cannot tell which is meant —
+    /// which is exactly how this was first read as silent playback on a machine
+    /// that was audibly working.
+    /// </remarks>
+    internal static string Describe(
+        MiniAudioBackend active,
+        IReadOnlyList<MiniAudioBackend> available)
+    {
+        var chosen = active == MiniAudioBackend.Null ? "not reported" : active.ToString();
+
+        return $"Audio backend: {chosen} (available: {string.Join(", ", available)}).";
+    }
+
     private void LogTheBackend(MiniAudioEngine engine)
     {
         try
         {
-            var available = string.Join(", ", MiniAudioEngine.AvailableBackends);
-            _log.Log($"Audio backend: {engine.ActiveBackend} (available: {available}).");
+            _log.Log(Describe(engine.ActiveBackend, MiniAudioEngine.AvailableBackends));
         }
         catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException)
         {
@@ -160,7 +218,7 @@ public sealed class SoundFlowAudioPlayer : IAudioPlayer
 
                 if (_engine is null)
                 {
-                    _engine = new MiniAudioEngine();
+                    _engine = CreateEngine();
                     LogTheBackend(_engine);
                 }
 
