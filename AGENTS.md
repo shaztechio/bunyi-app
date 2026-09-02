@@ -88,8 +88,11 @@ So MLX stays on macOS on resource grounds first and speed second, and the
 fivefold gap is a supporting figure rather than the argument. A same-machine
 run would refine a number that is not deciding anything.
 
-ONNX Runtime's WebGPU provider, reaching Metal through Dawn, is the only
-plausible GPU path and is likewise unmeasured.
+ONNX Runtime's WebGPU provider was the last unmeasured GPU path, and it is now
+closed: the packages the app can reference (`Microsoft.ML.OnnxRuntime` 1.29 and
+its `.Gpu` twin) do not carry it — `AppendExecutionProvider("WebGPU")` answers
+"not supported in this build" — so there is nothing to measure without
+building ONNX Runtime ourselves. See `apps/dotnet/RESEARCH-ONNX.md`.
 
 Two smaller facts worth having: ONNX Runtime 1.29 ships no `osx-x64` build, so
 a port would not extend reach to Intel Macs; and the macOS app is sandboxed,
