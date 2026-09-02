@@ -38,6 +38,16 @@ public sealed partial class HistoryRow(GeneratedOutput output) : ObservableObjec
     public string SizeText => Output.SizeText();
     public string Details => Output.Details();
 
+    /// <summary>
+    /// The row as one sentence, for a screen reader.
+    /// </summary>
+    /// <remarks>
+    /// Mode first, because it is the category; then what was said; then who,
+    /// when and how big. The same three things the eye reads left to right and
+    /// top to bottom, in that order, as one announced item (spec §12).
+    /// </remarks>
+    public string AccessibleName => $"{Mode}: {Summary}. {Subtitle}";
+
     /// <summary>The single line beneath the summary: voice, date and size.</summary>
     public string Subtitle
     {

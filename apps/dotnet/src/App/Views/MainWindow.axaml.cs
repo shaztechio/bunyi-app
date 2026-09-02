@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using Avalonia.Automation;
+using Avalonia.Automation.Peers;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
@@ -160,29 +162,43 @@ public partial class MainWindow : Window
                      .OrderByDescending(f => f.Severity == DoctorSeverity.Blocker)
                      .ThenByDescending(f => f.Severity == DoctorSeverity.Warning))
         {
-            var mark = finding.Severity switch
+            var (mark, word) = finding.Severity switch
             {
-                DoctorSeverity.Blocker => "✕",
-                DoctorSeverity.Warning => "!",
-                _ => "✓",
+                DoctorSeverity.Blocker => ("✕", "Blocker"),
+                DoctorSeverity.Warning => ("!", "Warning"),
+                _ => ("✓", "OK"),
             };
 
-            lines.Children.Add(new StackPanel
+            // The glyph is for the eye; a screen reader was reading it as
+            // "multiplication sign" or nothing. It and the title leave the
+            // accessibility tree, and the row itself becomes the announced
+            // element, named "Blocker: Output folder" (spec §12: severity in
+            // words, not colour or a symbol). The row rather than the title
+            // because a TextBlock's peer reports its text and ignores a name
+            // set on it — measured — while a panel given a control type and a
+            // name is announced as exactly that.
+            var glyph = new TextBlock { Text = mark, Width = 14, FontWeight = Avalonia.Media.FontWeight.Bold };
+            AutomationProperties.SetAccessibilityView(glyph, AccessibilityView.Raw);
+
+            var title = new TextBlock
+            {
+                Text = finding.Title,
+                FontWeight = Avalonia.Media.FontWeight.SemiBold,
+            };
+            AutomationProperties.SetAccessibilityView(title, AccessibilityView.Raw);
+
+            var row = new StackPanel
             {
                 Orientation = Avalonia.Layout.Orientation.Horizontal,
                 Spacing = 8,
                 Children =
                 {
-                    new TextBlock { Text = mark, Width = 14, FontWeight = Avalonia.Media.FontWeight.Bold },
+                    glyph,
                     new StackPanel
                     {
                         Children =
                         {
-                            new TextBlock
-                            {
-                                Text = finding.Title,
-                                FontWeight = Avalonia.Media.FontWeight.SemiBold,
-                            },
+                            title,
                             new SelectableTextBlock
                             {
                                 Text = finding.Detail,
@@ -193,7 +209,12 @@ public partial class MainWindow : Window
                         },
                     },
                 },
-            });
+            };
+            AutomationProperties.SetName(row, $"{word}: {finding.Title}");
+            AutomationProperties.SetControlTypeOverride(row, AutomationControlType.Group);
+            AutomationProperties.SetIsControlElementOverride(row, true);
+
+            lines.Children.Add(row);
         }
 
 

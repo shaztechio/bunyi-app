@@ -113,8 +113,16 @@ limitations under the License.
       <Grid ColumnDefinitions="Auto,*,Auto">
         <Path Grid.Column="0" Classes="spinner" IsVisible="{Binding ShowSpinner}"
               Margin="0,0,8,0" VerticalAlignment="Center" />
+        <!--
+          A live region, so a screen reader announces the status as it changes
+          rather than only when focus lands on it: "Generating… 49 frames · 3.9s
+          of speech so far" is the one thing a person waiting on a run wants to
+          hear (spec §12). Polite, not assertive — it must not talk over what
+          the user is doing.
+        -->
         <TextBlock Grid.Column="1" Text="{Binding Status}" FontSize="12" Opacity="0.75"
-                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                   AutomationProperties.LiveSetting="Polite" />
         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
           <Button Classes="icon" Name="PlayButton" Command="{Binding PlayCommand}"
                   IsVisible="{Binding HasResult}"
