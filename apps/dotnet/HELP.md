@@ -16,7 +16,7 @@ limitations under the License.
 
 # Bunyi Help
 
-Bunyi turns text into speech on your own computer. Nothing you type and no audio you make is sent anywhere: the voice models run locally, and after the first download the app works with no internet connection at all.
+Bunyi turns text into speech on your own computer. Nothing you type and no audio you make is sent anywhere: the voice models run locally, and after the first download the app works with no internet connection at all. Press **F1** to open this help at any time.
 
 ## Saying the name
 
@@ -110,7 +110,7 @@ Generated audio is saved automatically as a WAV file named for the mode and the 
 
 ## Settings
 
-The **gear** in the top right opens Settings.
+The **gear** in the top right opens Settings, and so does **Ctrl+,** (Control and the comma key).
 
 ### Models
 
@@ -154,7 +154,7 @@ The version you are running, the platform it was built for, and the licence and 
 
 ## Doctor
 
-The **stethoscope** in the top right checks whether this computer can finish a generation, and tells you what it found.
+The **stethoscope** in the top right — or **Ctrl+D** — checks whether this computer can finish a generation, and tells you what it found.
 
 It looks at whether the model is downloaded, whether there is room on the disk for it, whether there is memory to load it, whether the server it comes from is answering, and whether Bunyi can write into the folder it saves to. Ask it directly and it also checks the files you have already downloaded against the checksums your server publishes — this is what catches a model that arrived incomplete and would otherwise load and produce nonsense.
 
@@ -168,7 +168,7 @@ Doctor stays available while Bunyi is working, which is usually when you want it
 
 ## Logs
 
-The **lines** button in the top right opens a running account of what Bunyi is doing: downloads, generation progress, where each file was saved, and the full text of any error. Select and copy from it when you want to report a problem, or use **Copy** to take all of it at once.
+The **lines** button in the top right — or **Ctrl+L** — opens a running account of what Bunyi is doing: downloads, generation progress, where each file was saved, and the full text of any error. Select and copy from it when you want to report a problem, or use **Copy** to take all of it at once.
 
 The same lines are also written to a file, so a run that ended badly still left a record. On Windows it is in `%LOCALAPPDATA%\Bunyi\Logs`; on Linux, `~/.local/share/Bunyi/Logs`.
 
