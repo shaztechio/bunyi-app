@@ -58,8 +58,7 @@ the on-disk formats in `/spec/DATA-FORMATS.md`. The macOS app
   > transcript is silently ignored; and memory, not speed, is the binding
   > constraint — 17.7 GB peak for 22 s of audio on the *smallest* model. The
   > three repos this file used to name are all rejected there, with reasons.
-  > Linux is proven (WSL2): NAudio arrives but is never called, and speed and
-  > memory match Windows. One trap it records: ONNX weights are memory-mapped,
+  > Linux is proven (WSL2): speed and memory match Windows. One trap it records: ONNX weights are memory-mapped,
   > so a models folder on a slow volume makes **generation** slower, not just
   > loading.
 - **Tokenizer:** **our own**, `src/Core/Qwen/QwenTokenizer.cs`. Not
