@@ -77,20 +77,35 @@ limitations under the License.
           it changes the app rather than explaining it — and putting it between
           Doctor and Logs would be the one arrangement §11 rules out.
         -->
+        <!--
+          Each tooltip ends with its chord. The accessible name is set apart
+          without it — a screen reader has its own property for the key, and a
+          name that reads "Logs, what Bunyi has been doing, open bracket control
+          L close bracket" is the kind of thing #159 exists to prevent. The
+          local name outranks the tooltip-derived one in Controls.axaml.
+        -->
         <Button Classes="icon" Click="OnSettingsClicked" Name="SettingsButton"
-                ToolTip.Tip="Settings — models, storage and appearance">
+                ToolTip.Tip="Settings — models, storage and appearance (Ctrl+,)"
+                AutomationProperties.Name="Settings — models, storage and appearance"
+                AutomationProperties.AcceleratorKey="Ctrl+,">
           <Path Data="{DynamicResource IconSettings}" />
         </Button>
         <Button Classes="icon" Click="OnDoctorClicked" Name="DoctorButton"
-                ToolTip.Tip="Doctor — can this machine generate right now?">
+                ToolTip.Tip="Doctor — can this machine generate right now? (Ctrl+D)"
+                AutomationProperties.Name="Doctor — can this machine generate right now?"
+                AutomationProperties.AcceleratorKey="Ctrl+D">
           <Path Data="{DynamicResource IconDoctor}" />
         </Button>
         <Button Classes="icon" Click="OnLogsClicked" Name="LogsButton"
-                ToolTip.Tip="Logs — what Bunyi has been doing">
+                ToolTip.Tip="Logs — what Bunyi has been doing (Ctrl+L)"
+                AutomationProperties.Name="Logs — what Bunyi has been doing"
+                AutomationProperties.AcceleratorKey="Ctrl+L">
           <Path Data="{DynamicResource IconLogs}" />
         </Button>
         <Button Classes="icon" Click="OnHelpClicked" Name="HelpButton"
-                ToolTip.Tip="Help — how to use Bunyi">
+                ToolTip.Tip="Help — how to use Bunyi (F1)"
+                AutomationProperties.Name="Help — how to use Bunyi"
+                AutomationProperties.AcceleratorKey="F1">
           <Path Data="{DynamicResource IconHelp}" />
         </Button>
       </StackPanel>
