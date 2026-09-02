@@ -32,7 +32,13 @@ limitations under the License.
       of every row — the button was still there and still clickable, which is
       the worst version of this: it looked broken without being broken.
     -->
-    <ScrollViewer IsVisible="{Binding !IsEmpty}"
+    <!--
+      Named, because the code-behind gives it the keys Avalonia does not: Home,
+      End and the arrows. Page Up/Down and Tab already reach it — see
+      HistoryView.axaml.cs for what was measured.
+    -->
+    <ScrollViewer x:Name="List"
+                  IsVisible="{Binding !IsEmpty}"
                   AllowAutoHide="False"
                   VerticalScrollBarVisibility="Auto"
                   HorizontalScrollBarVisibility="Disabled">
