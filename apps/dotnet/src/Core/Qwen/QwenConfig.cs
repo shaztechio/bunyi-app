@@ -30,9 +30,12 @@ namespace Bunyi.Core.Qwen;
 /// </para>
 /// <para>
 /// The wavekat exports keep these flat at the top level
-/// (<c>talker_hidden_size</c>); elbruno's nests them under a <c>talker</c>
-/// object in <c>embeddings/config.json</c>. Both spellings are read, because
-/// the graphs are otherwise identical and one pipeline should drive both.
+/// (<c>talker_hidden_size</c>, <c>codec_eos_token_id</c>); elbruno's nests
+/// them under <c>talker</c>, <c>code_predictor</c> and <c>tts</c> objects in
+/// <c>embeddings/config.json</c>, spells the language map <c>language_ids</c>,
+/// and keeps its speakers in a separate <c>speaker_ids.json</c>. Every spelling
+/// is read, because the graphs are otherwise identical and one pipeline drives
+/// both.
 /// </para>
 /// </remarks>
 public sealed record QwenConfig
@@ -79,6 +82,29 @@ public sealed record QwenConfig
     /// <summary>The token that ends generation.</summary>
     public required int CodecEosTokenId { get; init; }
 
+    /// <summary>
+    /// The chat template's two specials, when the config names them; null
+    /// otherwise.
+    /// </summary>
+    /// <remarks>
+    /// Most exports register these in the tokenizer's own files. The preset-voice
+    /// export ships a bare <c>vocab.json</c> and <c>merges.txt</c> and puts the
+    /// ids in its config instead — and a tokenizer that does not know them
+    /// splits <c>&lt;|im_start|&gt;</c> into six ordinary pieces, producing a
+    /// sequence of plausible length that primes the model with garbage. That
+    /// happened; see <see cref="QwenTokenizer.Load"/>.
+    /// </remarks>
+    public int? ImStartTokenId { get; init; }
+
+    /// <inheritdoc cref="ImStartTokenId"/>
+    public int? ImEndTokenId { get; init; }
+
+    /// <summary>The chat specials as a tokenizer takes them, or null.</summary>
+    public IReadOnlyDictionary<string, int>? ChatSpecials =>
+        ImStartTokenId is { } start && ImEndTokenId is { } end
+            ? new Dictionary<string, int> { ["<|im_start|>"] = start, ["<|im_end|>"] = end }
+            : null;
+
     /// <summary>Padding in the codec stream.</summary>
     public required int CodecPadId { get; init; }
 
@@ -122,12 +148,32 @@ public sealed record QwenConfig
     public bool IsVoiceDesign => SpeakerIds.Count == 0;
 
     /// <summary>Reads an export's <c>config.json</c>.</summary>
-    public static QwenConfig Load(string path)
+    /// <param name="path">The config file.</param>
+    /// <param name="speakerIdsPath">
+    /// A separate <c>speaker_ids.json</c> holding <c>{name: id}</c>, or null. The
+    /// preset-voice export keeps its speakers there rather than in the config,
+    /// and the ids are rows of the codec embedding table.
+    /// </param>
+    public static QwenConfig Load(string path, string? speakerIdsPath = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
-        using var document = JsonDocument.Parse(File.ReadAllBytes(path));
-        return Parse(document.RootElement, path);
+        QwenConfig config;
+        using (var document = JsonDocument.Parse(File.ReadAllBytes(path)))
+        {
+            config = Parse(document.RootElement, path);
+        }
+
+        if (speakerIdsPath is null) return config;
+
+        using var speakers = JsonDocument.Parse(File.ReadAllBytes(speakerIdsPath));
+        var ids = Map(speakers.RootElement, self: true);
+        if (ids.Count == 0)
+        {
+            throw new InvalidDataException($"{speakerIdsPath} names no speakers.");
+        }
+
+        return config with { SpeakerIds = ids };
     }
 
     /// <summary>Reads a config from parsed JSON.</summary>
@@ -153,19 +199,23 @@ public sealed record QwenConfig
             CodePredictorVocabSize =
                 Int(root, source, "cp_vocab_size", "code_predictor", "vocab_size"),
 
-            TtsPadTokenId = Int(root, source, "tts_pad_token_id"),
-            TtsBosTokenId = Int(root, source, "tts_bos_token_id"),
-            TtsEosTokenId = Int(root, source, "tts_eos_token_id"),
+            // Flat at the top level in the wavekat exports; elbruno's nests the
+            // text-side ids under "tts" and the codec-side ones under "talker".
+            TtsPadTokenId = Int(root, source, "tts_pad_token_id", "tts", "tts_pad_token_id"),
+            TtsBosTokenId = Int(root, source, "tts_bos_token_id", "tts", "tts_bos_token_id"),
+            TtsEosTokenId = Int(root, source, "tts_eos_token_id", "tts", "tts_eos_token_id"),
 
-            CodecEosTokenId = Int(root, source, "codec_eos_token_id"),
-            CodecPadId = Int(root, source, "codec_pad_id"),
-            CodecBosId = Int(root, source, "codec_bos_id"),
-            CodecThinkId = Int(root, source, "codec_think_id"),
-            CodecNoThinkId = Int(root, source, "codec_nothink_id"),
-            CodecThinkBosId = Int(root, source, "codec_think_bos_id"),
-            CodecThinkEosId = Int(root, source, "codec_think_eos_id"),
+            CodecEosTokenId = Int(root, source, "codec_eos_token_id", "talker", "codec_eos_token_id"),
+            ImStartTokenId = Optional(root, "im_start_token_id", "tts", "im_start_token_id"),
+            ImEndTokenId = Optional(root, "im_end_token_id", "tts", "im_end_token_id"),
+            CodecPadId = Int(root, source, "codec_pad_id", "talker", "codec_pad_id"),
+            CodecBosId = Int(root, source, "codec_bos_id", "talker", "codec_bos_id"),
+            CodecThinkId = Int(root, source, "codec_think_id", "talker", "codec_think_id"),
+            CodecNoThinkId = Int(root, source, "codec_nothink_id", "talker", "codec_nothink_id"),
+            CodecThinkBosId = Int(root, source, "codec_think_bos_id", "talker", "codec_think_bos_id"),
+            CodecThinkEosId = Int(root, source, "codec_think_eos_id", "talker", "codec_think_eos_id"),
 
-            LanguageIds = Map(root, "codec_language_id"),
+            LanguageIds = Map(root, "codec_language_id", "language_ids"),
             SpeakerIds = Map(root, "spk_id"),
 
             SampleRate = root.TryGetProperty("sample_rate", out var rate) ? rate.GetInt32() : 24_000,
@@ -206,15 +256,42 @@ public sealed record QwenConfig
         throw new InvalidDataException($"{source} has no '{flat}'{also}.");
     }
 
-    private static IReadOnlyDictionary<string, int> Map(JsonElement root, string name)
+    /// <summary>
+    /// Reads a <c>{name: id}</c> object under the first of the given names that
+    /// exists, or the element itself when <paramref name="self"/> is set.
+    /// </summary>
+    private static IReadOnlyDictionary<string, int> Map(
+        JsonElement root, params string[] names) => Map(root, false, names);
+
+    private static IReadOnlyDictionary<string, int> Map(
+        JsonElement root, bool self, params string[] names)
     {
-        if (!root.TryGetProperty(name, out var element) ||
-            element.ValueKind != JsonValueKind.Object)
+        var element = default(JsonElement);
+        var found = false;
+
+        if (self)
         {
-            return new Dictionary<string, int>();
+            element = root;
+            found = root.ValueKind == JsonValueKind.Object;
+        }
+        else
+        {
+            foreach (var name in names)
+            {
+                if (root.TryGetProperty(name, out element) &&
+                    element.ValueKind == JsonValueKind.Object)
+                {
+                    found = true;
+                    break;
+                }
+            }
         }
 
+        // Insertion order is kept, because it is the order the export lists its
+        // speakers in and the order a picker shows them.
         var map = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        if (!found) return map;
+
         foreach (var entry in element.EnumerateObject())
         {
             if (entry.Value.ValueKind == JsonValueKind.Number)
@@ -224,6 +301,24 @@ public sealed record QwenConfig
         }
 
         return map;
+    }
+
+    /// <summary>An integer that may be absent, tried flat and then nested.</summary>
+    private static int? Optional(JsonElement root, string flat, string group, string nested)
+    {
+        if (root.TryGetProperty(flat, out var direct) && direct.ValueKind == JsonValueKind.Number)
+        {
+            return direct.GetInt32();
+        }
+
+        if (root.TryGetProperty(group, out var section) &&
+            section.TryGetProperty(nested, out var value) &&
+            value.ValueKind == JsonValueKind.Number)
+        {
+            return value.GetInt32();
+        }
+
+        return null;
     }
 
     private static float Float(JsonElement parent, string name, float fallback) =>

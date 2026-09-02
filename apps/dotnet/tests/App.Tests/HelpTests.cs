@@ -103,17 +103,19 @@ public class HelpTests : HeadlessWindows
     }
 
     [AvaloniaFact]
-    public void The_help_still_admits_the_style_instruction_does_nothing_in_preset_voice()
+    public void The_help_no_longer_says_the_style_instruction_does_nothing_in_preset_voice()
     {
-        // §10 asks for plain, accurate copy, and this is the one thing the
-        // Windows and Linux app genuinely cannot do that the Mac app can. It
-        // sits next to a lot of text that was stale, so it is worth a test of
-        // its own: the correction that removed the stale claims must not take
-        // an accurate warning with it. Delete this when the gap closes, with
-        // the sentence it guards.
+        // The inverse of the test that used to sit here. For a while this was
+        // the one thing the Windows and Linux app genuinely could not do that
+        // the Mac app could, and the help said so; #178 closed the gap by
+        // driving the preset export through our own pipeline, where the
+        // instruction is text conditioning like any other. The old sentence
+        // was accurate then and would be a false warning now, so its absence
+        // is what is pinned — together with the claim that replaced it.
         var text = HelpWindow.LoadText();
 
-        Assert.Contains("has no effect", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("has no effect", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("reaches the model", text, StringComparison.OrdinalIgnoreCase);
     }
 
     [AvaloniaFact]

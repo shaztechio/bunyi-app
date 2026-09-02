@@ -80,6 +80,20 @@ public sealed record ModelLayout(
             new ModelFile("vocoder.onnx.data", Required: true),
             new ModelFile("tokenizer/vocab.json", Required: true),
             new ModelFile("tokenizer/merges.txt", Required: true),
+
+            // The embedding tables, which our own pipeline reads directly to
+            // build the prefill sequence. The library that used to drive this
+            // export read the same files, so any install that ran it already
+            // has them; a completeness rule that omitted them was describing
+            // the export incompletely rather than describing a smaller one.
+            new ModelFile("embeddings/text_embedding.npy", Required: true),
+            new ModelFile("embeddings/talker_codec_embedding.npy", Required: true),
+            new ModelFile("embeddings/text_projection_fc1_weight.npy", Required: true),
+            new ModelFile("embeddings/text_projection_fc1_bias.npy", Required: true),
+            new ModelFile("embeddings/text_projection_fc2_weight.npy", Required: true),
+            new ModelFile("embeddings/text_projection_fc2_bias.npy", Required: true),
+            .. Enumerable.Range(0, 15).Select(g =>
+                new ModelFile($"embeddings/cp_codec_embedding_{g}.npy", Required: true)),
         ],
         ApproxDownloadBytes: 5_880_000_000);
 
