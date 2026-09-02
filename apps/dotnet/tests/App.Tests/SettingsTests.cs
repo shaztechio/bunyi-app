@@ -151,7 +151,11 @@ public sealed class SettingsTests : HeadlessWindows
         Assert.Contains("ONNX Runtime", names);
         Assert.Contains("SoundFlow", names);
         Assert.Contains(names, n => n.Contains("whisper.cpp", StringComparison.Ordinal));
-        Assert.Contains(names, n => n.Contains("QwenTTS", StringComparison.Ordinal));
+
+        // And nothing the app no longer ships. The preset-voice library left
+        // in #178; a credit that outlives the dependency is a licence claim
+        // about software the download does not contain.
+        Assert.DoesNotContain(names, n => n.Contains("QwenTTS", StringComparison.Ordinal));
 
         // And the models, which arrive after the app does.
         Assert.Contains(AboutInfo.ModelCredits, c => c.Name.Contains("Qwen3-TTS", StringComparison.Ordinal));

@@ -53,12 +53,10 @@ public interface IPresetPipeline : IDisposable
 /// — and that lives in <see cref="PresetPrefill"/>.
 /// </para>
 /// <para>
-/// This replaced the <c>ElBruno.QwenTTS</c> pipeline over the same export. That
-/// library ran the model in Qwen's streaming layout, fed the text in during
-/// decode, dropped the style instruction for this variant, reported no
-/// per-frame progress, and peaked at 13.2 GB where this pipeline peaks at a
-/// third of that on a larger model. Measured in RESEARCH-ONNX.md; the memory
-/// gap was the pipeline, not the model.
+/// Preset voice ran on a third-party library until #178. WHY-NOT-ELBRUNO.md
+/// says why it was replaced and RESEARCH-ONNX.md has the measurements: about
+/// half the memory, the same speed, a style instruction that reaches the
+/// model, and progress reported frame by frame.
 /// </para>
 /// <para>
 /// Two things about this export's layout that the design one does not share:

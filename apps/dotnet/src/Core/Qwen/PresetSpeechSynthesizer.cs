@@ -23,8 +23,8 @@ namespace Bunyi.Core.Qwen;
 /// <remarks>
 /// <para>
 /// The third mode to run on our own pipeline, and the last: with it, one
-/// inference driver serves all three, and the <c>ElBruno.QwenTTS</c> package
-/// that used to serve this one is gone.
+/// inference driver serves all three, and the third-party library that used
+/// to serve this one is gone (WHY-NOT-ELBRUNO.md).
 /// </para>
 /// <para>
 /// <b>It offers the export's speakers</b>, in the export's order, once a model

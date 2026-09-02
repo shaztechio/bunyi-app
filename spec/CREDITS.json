@@ -98,14 +98,6 @@
       "apps": ["dotnet"]
     },
     {
-      "name": "ElBruno.QwenTTS",
-      "does": "Drives the preset-voice model",
-      "licence": "MIT",
-      "url": "https://github.com/elbruno/ElBruno.QwenTTS",
-      "kind": "library",
-      "apps": ["dotnet"]
-    },
-    {
       "name": "CommunityToolkit.Mvvm",
       "does": "Wires the windows to the code behind them",
       "licence": "MIT",
