@@ -45,9 +45,22 @@ limitations under the License.
       <ItemsControl ItemsSource="{Binding Rows}">
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="vm:HistoryRow">
+            <!--
+              One item to a screen reader, not five fragments. The Border has no
+              automation peer of its own, so a reader walking the list met the
+              pill, the summary and the subtitle as three unrelated pieces of
+              text before reaching the buttons. With a name, a control type and
+              a place in the control view, the row announces as "Preset voice:
+              Hello there. Ryan · 2 Sep 2026" and the five buttons follow as its
+              children; the three text blocks are taken out of the tree so they
+              are not read twice (spec §12).
+            -->
             <Border BorderThickness="0,0,0,1" Padding="4,10"
                     BorderBrush="{DynamicResource BunyiCardBorder}"
-                    ToolTip.Tip="{Binding Details}">
+                    ToolTip.Tip="{Binding Details}"
+                    AutomationProperties.Name="{Binding AccessibleName}"
+                    AutomationProperties.ControlTypeOverride="ListItem"
+                    AutomationProperties.IsControlElementOverride="True">
               <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
 
                 <!--
@@ -117,13 +130,16 @@ limitations under the License.
                             CornerRadius="{DynamicResource BunyiPillRadius}"
                             Padding="6,1" VerticalAlignment="Center">
                       <TextBlock Text="{Binding Mode}" FontSize="10" FontWeight="SemiBold"
+                                 AutomationProperties.AccessibilityView="Raw"
                                  Foreground="{Binding Mode, Converter={x:Static vm:ModeTint.Instance}}" />
                     </Border>
                     <TextBlock Grid.Column="1" Text="{Binding Summary}"
+                               AutomationProperties.AccessibilityView="Raw"
                                TextTrimming="CharacterEllipsis"
                                VerticalAlignment="Center" />
                   </Grid>
                   <TextBlock Text="{Binding Subtitle}" FontSize="11" Opacity="0.7"
+                             AutomationProperties.AccessibilityView="Raw"
                              TextTrimming="CharacterEllipsis" />
                 </StackPanel>
 
