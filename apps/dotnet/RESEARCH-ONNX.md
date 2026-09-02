@@ -333,6 +333,67 @@ shared — "whatever drives one drives the other, if it reads the width from
 config" — and what differs is input preparation, which for preset voice is
 picking a speaker from `speaker_ids.json` rather than embedding a description.
 
+### The preset export on our own pipeline (#178)
+
+Done, and measured. The plain-language version is [`WHY-NOT-ELBRUNO.md`](WHY-NOT-ELBRUNO.md). Voice design's `TalkerLoop` now drives the 0.6B preset
+export too, with `PresetPrefill` putting the speaker's codec-table row in the
+slot the design layout leaves empty. Same machine, CPU, the benchmark texts,
+three warm runs each; the library rows are the ones measured above.
+
+| Pipeline | Text | Frames | Generation | RTF | Peak memory |
+|---|---|---|---|---|---|
+| `ElBruno.QwenTTS` | short | 54-80 | 20.0-33.8 s | 4.82 | |
+| **`TalkerLoop`** | short | 59-86 | 22.4-33.7 s | **4.81** | |
+| `ElBruno.QwenTTS` | long | 255-301 | 93.1-113.4 s | 4.62 | **13.20 GB** |
+| **`TalkerLoop`** | long | 236-267 | 99.5-112.3 s | **5.30** | **7.06 GB** |
+
+**The memory hypothesis was right and the speed hope was wrong.** Peak memory
+roughly halves — 13.2 GB to 7.1 GB on long text, 5.3 GB on short — which is
+what moves a 16 GB machine from tight to comfortable for the default mode.
+Wall clock does not move: the same speed on short text and about 15% slower on
+long, where the per-frame overhead of a loop that returns its memory shows up
+(the decode arena is off by design; see the arena section). So the gap between
+the two exports measured in the section above is **precision**, `int4` against
+full width, and not the pipeline. The pipeline was only ever the memory.
+
+**Two things this fixes that were never about speed:**
+
+- **The style instruction reaches the model.** Greedy decoding, everything else
+  held fixed: "Whisper, very softly and slowly." changes 1,267 of the codes ryan
+  produces for the short text. [#104](https://github.com/shaztechio/bunyi-app/issues/104)
+  asked whether it would; the answer is yes, and it now ships rather than being
+  dropped by a per-variant flag.
+- **Per-frame progress**, which the library did not report at all, so preset
+  mode could not show frames arriving and #122 could not time its first frame.
+
+**Output length matches the library's.** Frame counts for the same texts land in
+the same range, run for run — the sanity check that the layout is the model's
+rather than merely a layout the model tolerates. The first attempt did not pass
+it, which is the next paragraph.
+
+**The bug the gate caught.** The preset export's `tokenizer/` is a bare
+`vocab.json` and `merges.txt` with no `added_tokens.json`; the ids of
+`<|im_start|>` and `<|im_end|>` are in its config, and the library hardcodes
+them. Loaded without them, our tokenizer split each special into its
+characters and built a sequence of the right shape primed with nonsense: 34
+tokens of context where the layout predicts 21, 153 greedy frames for a
+three-second sentence, and one long-text run that stopped after 28. `QwenConfig`
+now reads the ids and `QwenTokenizer.Load` refuses to load a folder that
+registers no chat specials and is offered none — loudly, because the failure
+it replaces was silent.
+
+**Greedy decoding runs long on this export.** 81 frames (6.5 s) for a sentence
+the sampled runs speak in 4.7-6.9 s. Deterministic — two greedy runs agree in
+every code — but not the length a person would want, so the gate tests use it
+for determinism and comparison, not for judging duration.
+
+**What the library did differently.** It used Qwen's other prompt layout: the
+first text token in the prefill and the rest fed in one per decode step as
+"trailing text". Design mode, the wavekat reference and the macOS app all use
+the full-text prefill, which is what `TalkerLoop` implements, and the length
+distributions above say the model is happy with it. Both are the model's own
+layouts; this app now uses one of them for all three modes.
+
 ### The vocoder graph only works on the CPU execution provider
 
 One defect explains every GPU failure below. The vocoder dies on the **same
@@ -931,11 +992,15 @@ instruction embeddings prepended: same graph, same weights, one variable, no
 sampling. Identical distributions mean the weights ignore it. Only if they
 diverge is it worth fixing a sampler seed and generating a pair to listen to.
 
-One thing that experiment must establish before it can start: the design export
-ships `embeddings/*.npy` to build a sequence from, and the CustomVoice export
-does not — its embeddings are inside the graphs. Where instruction text gets
-embedded for that export is not established here, and assuming it is available
-is how this spike would fail quietly.
+~~One thing that experiment must establish before it can start: the design
+export ships `embeddings/*.npy` to build a sequence from, and the CustomVoice
+export does not — its embeddings are inside the graphs.~~ **Wrong, and checked
+the hard way.** The CustomVoice export ships the same twenty-two tables —
+`text_embedding.npy`, the two projection matrices with their biases,
+`talker_codec_embedding.npy` and fifteen `cp_codec_embedding_*.npy` — and the
+library's own `EmbeddingStore` reads exactly those files. They were on disk all
+along; only `ModelLayout` failed to list them. #178 builds the preset sequence
+from them.
 
 Tracked as [#104](https://github.com/shaztechio/bunyi-app/issues/104) rather
 than left in this paragraph.

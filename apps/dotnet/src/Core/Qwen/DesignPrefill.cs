@@ -97,18 +97,55 @@ public sealed class DesignPrefill(
     public float[][] Build(DesignRequest request, QwenTokenizer tokenizer)
     {
         ArgumentNullException.ThrowIfNull(request);
+
+        return Build(request.Text, request.Instruction, request.Language, tokenizer, speaker: default);
+    }
+
+    /// <summary>
+    /// The layout itself, shared with preset voice.
+    /// </summary>
+    /// <param name="speaker">
+    /// A speaker embedding for the slot design mode leaves empty, or empty for
+    /// design mode. For a preset-voice export it is the speaker's row of the
+    /// codec table: the model's hidden width, so it sits in the codec stream
+    /// directly rather than being projected into it — exactly where the clone
+    /// layout places the encoder's output.
+    /// </param>
+    /// <remarks>
+    /// One method rather than a copy per mode, so that "preset voice is the
+    /// design layout plus one row" is true by construction rather than by
+    /// inspection. <see cref="ClonePrefill"/> makes the same claim of its own
+    /// layout and proves it in a test; here the two cannot drift, because
+    /// there is only one of them.
+    /// </remarks>
+    internal float[][] Build(
+        string text,
+        string? instruction,
+        string language,
+        QwenTokenizer tokenizer,
+        ReadOnlySpan<float> speaker)
+    {
         ArgumentNullException.ThrowIfNull(tokenizer);
+
+        if (!speaker.IsEmpty && speaker.Length != _config.HiddenSize)
+        {
+            throw new ArgumentException(
+                $"A speaker embedding of {speaker.Length} numbers cannot sit in a "
+                + $"{_config.HiddenSize}-wide sequence. The embeddings folder does not "
+                + "match this model.",
+                nameof(speaker));
+        }
 
         // The chat template the model was trained with. The role turn is opened
         // twice on purpose: once around the text, and once left open for the
         // answer the model is about to speak.
         var chat = tokenizer.Encode(
-            $"<|im_start|>assistant\n{request.Text}<|im_end|>\n<|im_start|>assistant\n");
+            $"<|im_start|>assistant\n{text}<|im_end|>\n<|im_start|>assistant\n");
 
         if (chat.Count < 9)
         {
             throw new ArgumentException(
-                "There is nothing to say: the text tokenized to nothing.", nameof(request));
+                "There is nothing to say: the text tokenized to nothing.", nameof(text));
         }
 
         var rows = new List<float[]>();
@@ -122,12 +159,12 @@ public sealed class DesignPrefill(
         // 1. The voice description, if there is one, ahead of everything. It is
         //    the whole of what design mode adds, and it goes before the role so
         //    the model reads it as instruction rather than as speech.
-        if (!string.IsNullOrWhiteSpace(request.Instruction))
+        if (!string.IsNullOrWhiteSpace(instruction))
         {
-            var instruction = tokenizer.Encode(
-                $"<|im_start|>user\n{request.Instruction}<|im_end|>\n");
+            var instructionTokens = tokenizer.Encode(
+                $"<|im_start|>user\n{instruction}<|im_end|>\n");
 
-            foreach (var token in instruction) rows.Add(_text.Project(token));
+            foreach (var token in instructionTokens) rows.Add(_text.Project(token));
         }
 
         // 2. The role prefix: <|im_start|>, "assistant", newline. Text only —
@@ -136,14 +173,19 @@ public sealed class DesignPrefill(
 
         // 3. The codec prefix, each position pairing text padding with one
         //    codec token.
-        foreach (var token in CodecPrefix(request.Language))
+        foreach (var token in CodecPrefix(language))
         {
             rows.Add(Add(ttsPad, _codec.Row(token)));
         }
 
-        // 4. A speaker embedding would go here for a preset-voice export. A
-        //    design export has no speakers — spk_id is empty — and the
-        //    description in step 1 is what stands in for one.
+        // 4. The speaker slot. A preset-voice export fills it with the chosen
+        //    speaker's row of the codec table. A design export has no speakers
+        //    — spk_id is empty — and the description in step 1 is what stands
+        //    in for one, so for design mode the slot is simply absent.
+        if (!speaker.IsEmpty)
+        {
+            rows.Add(Add(ttsPad, speaker));
+        }
 
         // 5. The turn: the text stream opens while the codec stream pads.
         rows.Add(Add(ttsBos, codecPad));

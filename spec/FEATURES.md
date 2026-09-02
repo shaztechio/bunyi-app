@@ -121,9 +121,16 @@ A segmented picker selects one of three modes. macOS source:
   them outside the disabled scope by construction; a toolkit without a native
   window toolbar (Avalonia) keeps them in a header row beside the mode
   subtitle. Same two actions, same always-available guarantee, same tooltips.
-- Live progress: a token counter during generation. macOS uses
+- **Live progress in the status line during generation**, in every mode: how
+  many codec frames have been produced **and the seconds of speech they amount
+  to** — frames are 12.5 a second, and a count of frames means nothing to a
+  person while "3.9s of speech so far" tells them whether the run is on its
+  way to what they asked for or rambling. Both apps show the same two numbers,
+  updated as frames arrive (macOS updates every five). macOS uses
   `generateStream` (preset/design) and an `onToken` callback bridged over a
-  stream (clone). Any backend must surface incremental progress.
+  stream (clone); Avalonia reads the per-frame progress its own pipeline
+  reports. Any backend must surface incremental progress, and a generation
+  that shows only a spinner for a minute is a bug, not a slow model.
 - **The UI thread never does inference work, and never writes the output.**
   Includes the step that forces a lazily-evaluated tensor to be materialized:
   on macOS the generator yields an unevaluated MLX graph and

@@ -37,14 +37,6 @@ limitations under the License.
 
   <ItemGroup>
     <!--
-      Preset-voice inference. This brings ONNX Runtime with it, and NAudio,
-      whose Windows-only assemblies are inert on Linux — verified, see
-      ../../RESEARCH-ONNX.md. Its downloader is deliberately unused: it
-      implements none of spec §3b.
-    -->
-    <PackageReference Include="ElBruno.QwenTTS" />
-
-    <!--
       Two flavours of the same runtime, chosen by `-p:BunyiCuda=true` at publish
       time and by nothing at all otherwise.
 

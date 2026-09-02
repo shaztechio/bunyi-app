@@ -107,7 +107,7 @@ public partial class App : Application
             // One synthesizer per mode. They are different pipelines over
             // different exports, and the engine unloads whichever is being left
             // behind when the mode changes.
-            var preset = new QwenSpeechSynthesizer(log);
+            var preset = new PresetSpeechSynthesizer(log);
             var design = new DesignSpeechSynthesizer(log);
             var clone = new CloneSpeechSynthesizer(log);
 

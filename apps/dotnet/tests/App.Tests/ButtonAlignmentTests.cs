@@ -276,6 +276,25 @@ public class ButtonAlignmentTests : HeadlessWindows
     }
 
     [AvaloniaFact]
+    public void The_status_line_shows_how_far_a_generation_has_got()
+    {
+        // Reported from the app: "I don't see the progress." The engine had
+        // been publishing a per-frame detail line since #105; the status text
+        // mapped the Generating state to a bare "Generating…" and dropped it,
+        // so no mode ever showed a count. macOS shows one. This pins the
+        // detail reaching the words a person reads.
+        var (window, model) = Show();
+
+        ((FakeEngine)model.Engine).Publish(
+            new EngineStatus(EngineState.Generating, Detail: "49 frames · 3.9s of speech so far", Frames: 49));
+        window.UpdateLayout();
+
+        Assert.Contains("49 frames", model.Status, StringComparison.Ordinal);
+        Assert.Contains("3.9s of speech", model.Status, StringComparison.Ordinal);
+        Assert.StartsWith("Generating", model.Status, StringComparison.Ordinal);
+    }
+
+    [AvaloniaFact]
     public void Generate_carries_its_waveform()
     {
         // Reported from the app: the Mac buttons have an icon and these did

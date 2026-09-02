@@ -297,7 +297,7 @@ public sealed class OnnxTtsEngine : ITtsEngine
                     // reproducing it down the wrong path.
                     _log.Log(
                         "The style instruction was not applied, so it is not recorded " +
-                        "in the file. The current preset-voice pipeline ignores one.");
+                        "in the file. This model does not take one.");
                     effective = request with { Instruct = null };
                 }
 

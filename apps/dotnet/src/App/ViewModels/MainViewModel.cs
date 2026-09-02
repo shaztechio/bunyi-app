@@ -845,7 +845,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         EngineState.Downloading => status.Detail ?? "Getting the model…",
         EngineState.Loading => "Loading the model…",
         EngineState.Transcribing => "Listening to the recording…",
-        EngineState.Generating => "Generating…",
+        // With the count when there is one. The engine has published "N frames
+        // · X.Xs of speech so far" per frame since #105 and nothing showed it:
+        // a window that said only "Generating…" for a minute, which is the
+        // exact complaint that line was written to answer. macOS shows the
+        // count too ("Generating… (N tokens)"), so this is parity as well.
+        EngineState.Generating => status.Detail is { Length: > 0 } detail
+            ? $"Generating… {detail}"
+            : "Generating…",
         EngineState.Stopping => "Stopping…",
         EngineState.Error => status.Message ?? "Something went wrong.",
         _ => string.Empty,

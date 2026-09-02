@@ -40,9 +40,13 @@ the on-disk formats in `/spec/DATA-FORMATS.md`. The macOS app
   - voice design — `wavekat/Qwen3-TTS-1.7B-VoiceDesign-ONNX` (`int4`)
   - voice clone  — `wavekat/Qwen3-TTS-0.6B-Base-ONNX` (`int4`, ICL)
 
-  C# pipeline for preset voice: the `ElBruno.QwenTTS` NuGet package (MIT). It
-  covers **CustomVoice only** — design and clone need their own inference code
-  against the Python reference scripts those exports ship.
+  One inference driver for all three modes: `src/Core/Qwen/TalkerLoop.cs`
+  over each export, with a prefill builder per mode (`PresetPrefill`,
+  `DesignPrefill`, `ClonePrefill`). Preset voice ran on the `ElBruno.QwenTTS`
+  NuGet package until #178. [`WHY-NOT-ELBRUNO.md`](WHY-NOT-ELBRUNO.md) is
+  the plain-language account of why it was replaced — half the memory, a
+  style box that works, progress while it runs — and `RESEARCH-ONNX.md` has
+  the measurements, including the half that did not pan out: speed.
 
   > **Read [`RESEARCH-ONNX.md`](RESEARCH-ONNX.md) before changing any of this.**
   > It records what was measured, and four things that are easy to get wrong:
@@ -136,7 +140,7 @@ versions are already pinned centrally for when they do.
 | Spec section | macOS source | .NET type (in `src/Core`) |
 |---|---|---|
 | §1 modes / §2 output | `TTSEngine.generate` | `Engine.ITtsEngine` / `OnnxTtsEngine` |
-| §1 preset-voice inference | `swift-qwen3-tts` | `Engine.QwenSpeechSynthesizer` (`ISpeechSynthesizer`) |
+| §1 preset-voice inference | `swift-qwen3-tts` | `Qwen.PresetSpeechSynthesizer` over `Qwen.PresetPipeline` (`ISpeechSynthesizer`) |
 | §2 output WAV + metadata | `OutputMetadata.swift` | `Audio.WavWriter`, `Audio.WavMetadata` |
 | §3 model source | `ModelSettings.effectiveSource` | `ModelSource`, `ModelSettings` |
 | §3b download, resume, progress | `TTSEngine.download*` | `Models.ModelDownloader`, `HttpFileDownloader`, `StallMonitor` |
@@ -265,10 +269,9 @@ outside the unpacked folder plus the app-data directories in
 - **ONNX defaults differ from MLX**: the per-mode defaults are the three repos
   above (pinned in `/spec/FEATURES.md` §3a); the source-selection UX is
   identical to macOS.
-- **Never let the library write the output file.** Use `SynthesizeToPcmAsync`
-  and write the WAV ourselves, so the filename, the folder and the RIFF
-  `LIST`/`INFO` chunk are ours (§2).
-- **Never use `ElBruno.HuggingFace.Downloader`**, which arrives transitively.
-  It implements none of §3b — no byte-level progress, resume, stall detection
-  or checksums. Our `ModelDownloader` fills the folder; the pipeline only
-  reads it.
+- **The pipelines return samples; `WavWriter` writes the file.** So the
+  filename, the folder and the RIFF `LIST`/`INFO` chunk are ours (§2).
+- **`ModelDownloader` fills the folder; the pipelines only read it.** §3b —
+  byte-level progress, resume, stall detection, checksums — lives in one place.
+  A model library's own downloader, if one ever comes back with a dependency,
+  implements none of it and must stay unused.

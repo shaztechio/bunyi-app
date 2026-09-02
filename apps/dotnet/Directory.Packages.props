@@ -43,7 +43,6 @@ limitations under the License.
     -->
     <PackageVersion Include="Microsoft.ML.OnnxRuntime" Version="1.29.0" />
     <PackageVersion Include="Microsoft.ML.OnnxRuntime.Gpu" Version="1.29.0" />
-    <PackageVersion Include="ElBruno.QwenTTS" Version="1.7.2" />
     <PackageVersion Include="Microsoft.ML.Tokenizers" Version="2.0.0" />
   </ItemGroup>
 

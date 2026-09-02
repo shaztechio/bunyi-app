@@ -59,8 +59,10 @@ public interface ISpeechSynthesizer : IAsyncDisposable
     /// <para>
     /// A property of the implementation, not of the model. §1 is right that
     /// preset voice takes a style instruction, and the 0.6B CustomVoice model
-    /// does support one — Qwen's model card documents it. What does not is the
-    /// pipeline currently driving it, which refuses on that variant.
+    /// does support one — Qwen's model card documents it. For a while the
+    /// pipeline driving that export refused it by a per-variant flag; since
+    /// #178 every mode runs on our own prefill and the instruction reaches the
+    /// model wherever the mode offers one. Clone mode does not, by §1.
     /// </para>
     /// <para>
     /// The engine asks so that it never records a style that had no effect. It

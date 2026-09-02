@@ -254,6 +254,11 @@ public class PrefillTests
         var one = QwenConfig.Parse(a.RootElement, "flat");
         var two = QwenConfig.Parse(b.RootElement, "nested");
 
+        // Neither names the chat specials, so neither offers any: the
+        // tokenizer's own files are expected to.
+        Assert.Null(one.ChatSpecials);
+        Assert.Null(two.ChatSpecials);
+
         Assert.Equal(2048, one.HiddenSize);
         Assert.Equal(one.HiddenSize, two.HiddenSize);
         Assert.Equal(one.Layers, two.Layers);
@@ -272,6 +277,77 @@ public class PrefillTests
             () => QwenConfig.Parse(document.RootElement, "partial.json"));
 
         Assert.Contains("partial.json", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_preset_exports_spelling_is_read_too()
+    {
+        // elbruno's embeddings/config.json nests the text-side ids under "tts",
+        // the codec-side ones under "talker", spells the language map
+        // "language_ids", and keeps its speakers in a separate file. One parser
+        // reads both exports, or one pipeline could not drive both.
+        const string preset = """
+            {"tts":{"tts_bos_token_id":151672,"tts_eos_token_id":151673,"tts_pad_token_id":151671,
+                    "im_start_token_id":151644,"im_end_token_id":151645},
+             "language_ids":{"english":2050,"chinese":2055},
+             "talker":{"hidden_size":1024,"text_hidden_size":2048,"vocab_size":3072,
+               "num_hidden_layers":28,"num_key_value_heads":8,"head_dim":128,"num_code_groups":16,
+               "codec_eos_token_id":2150,"codec_think_id":2154,"codec_nothink_id":2155,
+               "codec_think_bos_id":2156,"codec_think_eos_id":2157,"codec_pad_id":2148,"codec_bos_id":2149},
+             "code_predictor":{"hidden_size":1024,"vocab_size":2048,"num_hidden_layers":5,
+               "num_key_value_heads":8,"head_dim":128}}
+            """;
+
+        using var document = JsonDocument.Parse(preset);
+        var config = QwenConfig.Parse(document.RootElement, "preset");
+
+        Assert.Equal(1024, config.HiddenSize);
+        Assert.Equal(151671, config.TtsPadTokenId);
+        Assert.Equal(2150, config.CodecEosTokenId);
+        Assert.Equal(2149, config.CodecBosId);
+        Assert.Equal(2050, config.LanguageIds["english"]);
+        Assert.Equal(24_000, config.SampleRate);
+        // The chat specials, which this export's tokenizer files do not carry.
+        Assert.Equal(151644, config.ChatSpecials!["<|im_start|>"]);
+        Assert.Equal(151645, config.ChatSpecials["<|im_end|>"]);
+        // No generate_config: the same defaults the previous pipeline used.
+        Assert.Equal(0.9f, config.Sampling.Temperature);
+        Assert.Equal(50, config.Sampling.TopK);
+    }
+
+    [Fact]
+    public void Speakers_can_come_from_a_file_beside_the_config()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "bunyi-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var config = Path.Combine(root, "config.json");
+            File.WriteAllText(config, """
+                {"talker_hidden_size":1024,"talker_num_layers":28,"talker_num_kv_heads":8,
+                 "talker_head_dim":128,"talker_vocab_size":3072,"talker_num_code_groups":16,
+                 "cp_num_layers":5,"cp_num_kv_heads":8,"cp_head_dim":128,"cp_vocab_size":2048,
+                 "tts_pad_token_id":151671,"tts_bos_token_id":151672,"tts_eos_token_id":151673,
+                 "codec_eos_token_id":2150,"codec_pad_id":2148,"codec_bos_id":2149,
+                 "codec_think_id":2154,"codec_nothink_id":2155,
+                 "codec_think_bos_id":2156,"codec_think_eos_id":2157}
+                """);
+            var speakers = Path.Combine(root, "speaker_ids.json");
+            File.WriteAllText(speakers, """{"serena": 3066, "ryan": 3061}""");
+
+            var without = QwenConfig.Load(config);
+            var with = QwenConfig.Load(config, speakers);
+
+            Assert.True(without.IsVoiceDesign);
+            Assert.False(with.IsVoiceDesign);
+            // In the file's own order, which is the order a picker shows them.
+            Assert.Equal(["serena", "ryan"], with.SpeakerIds.Keys);
+            Assert.Equal(3061, with.SpeakerIds["RYAN"]);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
     }
 
     [SkippableFact]

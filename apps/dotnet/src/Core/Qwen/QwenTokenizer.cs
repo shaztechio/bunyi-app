@@ -99,15 +99,39 @@ public sealed partial class QwenTokenizer
     /// <c>added_tokens.json</c> the special ones. When the last is missing the
     /// specials are taken from <c>tokenizer.json</c>, which every export ships.
     /// </remarks>
-    public static QwenTokenizer Load(string folder)
+    /// <param name="folder">Holding <c>vocab.json</c> and <c>merges.txt</c>.</param>
+    /// <param name="specials">
+    /// The chat specials to use when the folder registers none — an export may
+    /// carry them in its config instead. Ignored when the folder has its own.
+    /// </param>
+    /// <exception cref="InvalidDataException">
+    /// Neither the folder nor the caller knows <c>&lt;|im_start|&gt;</c>. Not a
+    /// warning: a tokenizer without it splits the chat template into ordinary
+    /// pieces and builds a sequence of plausible length that means nothing,
+    /// and the model answers with speech of the wrong length rather than an
+    /// error. That is how this went unnoticed once.
+    /// </exception>
+    public static QwenTokenizer Load(string folder, IReadOnlyDictionary<string, int>? specials = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(folder);
 
         var vocabulary = ReadVocabulary(Path.Combine(folder, "vocab.json"));
         var ranks = ReadMerges(Path.Combine(folder, "merges.txt"));
-        var specials = ReadSpecials(folder);
 
-        return new QwenTokenizer(vocabulary, ranks, specials);
+        var fromFiles = ReadSpecials(folder);
+        var chosen = fromFiles.Count > 0
+            ? fromFiles
+            : new Dictionary<string, int>(specials ?? new Dictionary<string, int>());
+
+        if (!chosen.ContainsKey("<|im_start|>") || !chosen.ContainsKey("<|im_end|>"))
+        {
+            throw new InvalidDataException(
+                $"{folder} registers no chat specials (<|im_start|>, <|im_end|>) and none "
+                + "were supplied. Without them the chat template is tokenized as ordinary "
+                + "text and the model is primed with nonsense.");
+        }
+
+        return new QwenTokenizer(vocabulary, ranks, chosen);
     }
 
     /// <summary>Builds one directly, for tests.</summary>

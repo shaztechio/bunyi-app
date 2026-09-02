@@ -346,8 +346,8 @@ jobs:
             printf '### Requirements\n\n'
             printf 'A 64-bit Windows or Linux machine. Generation runs on the CPU unless '
             printf 'you took a -cuda download and have the toolkit for it; long text can '
-            printf 'reach about 17 GB of memory, so 16 GB is workable for short clips and '
-            printf 'tight for long ones.\n\n'
+            printf 'reach about 7 GB of memory on preset voice, so 8 GB is tight and '
+            printf '16 GB is comfortable.\n\n'
             printf 'SHA-256:\n\n```\n'
             cat dist/*.sha256
             printf '```\n'
