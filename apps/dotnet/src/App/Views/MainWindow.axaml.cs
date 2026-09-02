@@ -423,8 +423,43 @@ public partial class MainWindow : Window
         Close();
     }
 
+    /// <summary>
+    /// Left and Right move the mode picker's selection (spec §12).
+    /// </summary>
+    /// <remarks>
+    /// The picker is a ListBox laid out by a UniformGrid, and a UniformGrid is
+    /// not a navigable container, so the arrows did nothing while macOS's
+    /// segmented control moves with them. Only enabled segments are candidates:
+    /// while work runs the mode segments are disabled and History is not, and
+    /// arrowing onto a disabled one would change a model mid-run.
+    /// </remarks>
+    private void OnModePickerKeyDown(object? sender, Avalonia.Input.KeyEventArgs e)
+    {
+        if (sender is not ListBox picker || e.Handled) return;
+
+        var step = e.Key switch
+        {
+            Avalonia.Input.Key.Right or Avalonia.Input.Key.Down => 1,
+            Avalonia.Input.Key.Left or Avalonia.Input.Key.Up => -1,
+            _ => 0,
+        };
+        if (step == 0) return;
+
+        var count = picker.ItemCount;
+        for (var next = picker.SelectedIndex + step; next >= 0 && next < count; next += step)
+        {
+            if (picker.ContainerFromIndex(next) is Control { IsEnabled: true })
+            {
+                picker.SelectedIndex = next;
+                (picker.ContainerFromIndex(next) as Control)?.Focus();
+                e.Handled = true;
+                return;
+            }
+        }
+    }
+
     /// <summary>Returns whether the user chose to keep working.</summary>
-    private Task<bool> ConfirmAsync() =>
+    internal Task<bool> ConfirmAsync() =>
         AskAsync(
             "Stop the current operation?",
             "Bunyi is still working. Stopping will discard what it is doing. "
@@ -441,11 +476,16 @@ public partial class MainWindow : Window
     /// "confirmed" — §9 wants Keep Working as the safe default and the
     /// destructive choice as the other one.
     /// </param>
-    private async Task<bool> AskAsync(
+    internal async Task<bool> AskAsync(
         string title, string message, string confirm, string cancel, bool invert = false)
     {
-        var cancelButton = new Button { Content = cancel, IsDefault = true, MinWidth = 120 };
-        var confirmButton = new Button { Content = confirm, IsCancel = true, MinWidth = 120 };
+        // The safe choice answers both Return and Escape. IsCancel means "Escape
+        // presses this", not "this is not the default" - it had been on the
+        // destructive button, so Escape on "Stop the current operation?"
+        // stopped the operation. Measured in KeyboardOperationTests; spec §12
+        // says Escape dismisses without acting.
+        var cancelButton = new Button { Content = cancel, IsDefault = true, IsCancel = true, MinWidth = 120 };
+        var confirmButton = new Button { Content = confirm, MinWidth = 120 };
 
         var dialog = new Window
         {
