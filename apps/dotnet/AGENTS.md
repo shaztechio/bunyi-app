@@ -43,9 +43,10 @@ the on-disk formats in `/spec/DATA-FORMATS.md`. The macOS app
   One inference driver for all three modes: `src/Core/Qwen/TalkerLoop.cs`
   over each export, with a prefill builder per mode (`PresetPrefill`,
   `DesignPrefill`, `ClonePrefill`). Preset voice ran on the `ElBruno.QwenTTS`
-  NuGet package until #178; `RESEARCH-ONNX.md` records why it was replaced —
-  ~2x the wall clock, 3x the memory, no per-frame progress, and a dropped
-  style instruction, all of it the pipeline rather than the model.
+  NuGet package until #178. [`WHY-NOT-ELBRUNO.md`](WHY-NOT-ELBRUNO.md) is
+  the plain-language account of why it was replaced — half the memory, a
+  style box that works, progress while it runs — and `RESEARCH-ONNX.md` has
+  the measurements, including the half that did not pan out: speed.
 
   > **Read [`RESEARCH-ONNX.md`](RESEARCH-ONNX.md) before changing any of this.**
   > It records what was measured, and four things that are easy to get wrong:

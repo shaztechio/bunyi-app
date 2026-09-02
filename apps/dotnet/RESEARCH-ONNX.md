@@ -335,7 +335,7 @@ picking a speaker from `speaker_ids.json` rather than embedding a description.
 
 ### The preset export on our own pipeline (#178)
 
-Done, and measured. Voice design's `TalkerLoop` now drives the 0.6B preset
+Done, and measured. The plain-language version is [`WHY-NOT-ELBRUNO.md`](WHY-NOT-ELBRUNO.md). Voice design's `TalkerLoop` now drives the 0.6B preset
 export too, with `PresetPrefill` putting the speaker's codec-table row in the
 slot the design layout leaves empty. Same machine, CPU, the benchmark texts,
 three warm runs each; the library rows are the ones measured above.
