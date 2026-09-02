@@ -499,6 +499,36 @@ to load, needing `cublasLt64_13.dll`, which ONNX Runtime does not ship. cuDNN is
 only honest test is building the session options, which is what loads the
 provider library — and needs no model file to ask.
 
+### WebGPU is not in the packages, so it cannot be measured (#149)
+
+The root `AGENTS.md` said for a month that ONNX Runtime's WebGPU provider was
+"the only plausible GPU path and is likewise unmeasured". Checked the way #143
+taught: not by reading a provider list, but by asking the runtime to build the
+options and then a session.
+
+`Microsoft.ML.OnnxRuntime` 1.29.0, `win-x64`, on the RTX 4090 machine:
+
+```
+providers reported available: AzureExecutionProvider, CPUExecutionProvider
+AppendExecutionProvider("WebGPU")
+  -> [ErrorCode:InvalidArgument] WebGPU execution provider is not supported in this build.
+```
+
+The package's native payload is `onnxruntime.dll` and `onnxruntime_providers_shared.dll`
+and nothing else; the `.Gpu` package adds CUDA and TensorRT (measured in the
+CUDA section above) and no WebGPU either. So the provider is not merely
+unmeasured — **it is not present in any build this app can reference**, and
+measuring it would mean building ONNX Runtime from source with `--use_webgpu`.
+
+That closes the question rather than answering it, which is the outcome #149
+said would be acceptable: a door that read as open is now marked shut. Nothing
+was waiting on it — CUDA is the fast path where an NVIDIA card exists, and no
+user has a WebGPU-only machine that this app promises anything to.
+
+Not established here, and not claimed: whether a source build's WebGPU provider
+would load these graphs, or what the vocoder's `node_pad_1` would do under it.
+Both need a runtime that does not exist as a package.
+
 ### DirectML does not earn its place; CUDA does
 
 With the vocoder on CPU either way, the two GPU providers separate sharply:
