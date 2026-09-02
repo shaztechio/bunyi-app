@@ -91,26 +91,30 @@ public class MainWindowTests : HeadlessWindows
     }
 
     [AvaloniaFact]
-    public void The_script_box_is_the_child_that_fills_its_panel()
+    public void The_script_box_is_the_child_that_fills_its_card()
     {
         // A bounds check would be nicer and does not work: the headless layout
         // does not reproduce this, reporting a near-full-width box with the bug
         // in place. So the rule itself is pinned instead.
         //
-        // In a DockPanel the last child fills and every earlier one docks —
-        // default Left. Adding a validation message after the box made the box
-        // a left-docked child sized to its own text, at half the width of the
-        // card. Anything added below it must be docked and come first.
+        // The card was a DockPanel, where the last child fills and every earlier
+        // one docks Left; a validation message added after the box once made
+        // the box a left-docked child at half the card's width. It is a Grid
+        // now (#159: a DockPanel forced the examples to be declared before the
+        // box they sit under, and Tab walked them first), so the rule becomes:
+        // the box owns the card's one star row, and stretches across it.
         var (window, _, _, _) = Open();
         window.UpdateLayout();
 
         var script = window.GetLogicalDescendants().OfType<TextBox>()
             .First(t => t.Name == "ScriptBox");
 
-        var panel = Assert.IsType<DockPanel>(script.Parent);
+        var grid = Assert.IsType<Grid>(script.Parent);
+        var row = grid.RowDefinitions[Grid.GetRow(script)];
 
-        Assert.True(panel.LastChildFill, "the panel no longer fills with its last child");
-        Assert.Same(script, panel.Children[^1]);
+        Assert.True(row.Height.IsStar, "the script box no longer sits in the row that takes the space");
+        Assert.Single(grid.RowDefinitions, r => r.Height.IsStar);
+        Assert.Equal(Avalonia.Layout.HorizontalAlignment.Stretch, script.HorizontalAlignment);
     }
 
     [AvaloniaFact]

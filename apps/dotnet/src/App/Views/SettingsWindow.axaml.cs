@@ -126,10 +126,14 @@ public partial class SettingsWindow : Window
             confirm: "Delete",
             cancel: "Keep");
 
-    private async Task<bool> AskAsync(string title, string message, string confirm, string cancel)
+    internal async Task<bool> AskAsync(string title, string message, string confirm, string cancel)
     {
-        var cancelButton = new Button { Content = cancel, IsDefault = true, MinWidth = 110 };
-        var confirmButton = new Button { Content = confirm, IsCancel = true, MinWidth = 110 };
+        // Keep answers both Return and Escape; Delete answers neither. IsCancel
+        // means "Escape presses this" - it had been on Delete, so Escape on
+        // "Delete this model?" deleted the model. Spec §12: Escape dismisses
+        // without acting.
+        var cancelButton = new Button { Content = cancel, IsDefault = true, IsCancel = true, MinWidth = 110 };
+        var confirmButton = new Button { Content = confirm, MinWidth = 110 };
 
         var dialog = new Window
         {

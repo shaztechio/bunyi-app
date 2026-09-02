@@ -51,7 +51,16 @@ limitations under the License.
   </Window.Styles>
 
   <!-- 20 window inset, 16 between cards: the spacing scale from UI-PLAN.md. -->
-  <DockPanel Margin="20">
+  <!--
+    A Grid declared top to bottom rather than a DockPanel, and the reason is
+    the keyboard. Tab walks the declaration order, and a DockPanel's fill
+    child has to be declared LAST - so the bottom bar came before the
+    content, and Generate was the fifth thing Tab reached, straight after
+    the header buttons and before the mode picker. TabIndex cannot fix it:
+    it orders the whole window, not one container, and put the script box
+    in front of everything. Measured in KeyboardOperationTests.
+  -->
+  <Grid Margin="20" RowDefinitions="Auto,*,Auto">
 
     <!--
       Header. §2 requires Help and the log to be one click from the main window
@@ -61,7 +70,7 @@ limitations under the License.
       Avalonia has none, so they live here, outside the disabled scope by
       construction.
     -->
-    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,16">
+    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,16">
       <StackPanel>
         <TextBlock Text="BUNYI" Classes="eyebrow" />
         <TextBlock Text="{Binding ModeSubtitle}" FontSize="12" Opacity="0.75" />
@@ -111,141 +120,6 @@ limitations under the License.
       </StackPanel>
     </Grid>
 
-    <!--
-      Bottom bar: status, progress, and the Generate/Stop swap. Outside the
-      disabled group so Stop stays pressable.
-    -->
-    <StackPanel DockPanel.Dock="Bottom" Spacing="8" Margin="0,16,0,0">
-      <!--
-        A bar only where there is something to measure. A download reports a
-        fraction; loading a model and generating do not — and a bar pulsing
-        across the whole window says less than a spinner does, while implying a
-        measurement it does not have. macOS shows a spinner for exactly these
-        phases.
-      -->
-      <ProgressBar Minimum="0" Maximum="1" Value="{Binding Progress}"
-                   IsVisible="{Binding ShowProgressBar}" Height="4" />
-      <Grid ColumnDefinitions="Auto,*,Auto">
-        <Path Grid.Column="0" Classes="spinner" IsVisible="{Binding ShowSpinner}"
-              Margin="0,0,8,0" VerticalAlignment="Center" />
-        <!--
-          A live region, so a screen reader announces the status as it changes
-          rather than only when focus lands on it: "Generating… 49 frames · 3.9s
-          of speech so far" is the one thing a person waiting on a run wants to
-          hear (spec §12). Polite, not assertive — it must not talk over what
-          the user is doing.
-        -->
-        <TextBlock Grid.Column="1" Text="{Binding Status}" FontSize="12" Opacity="0.75"
-                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
-                   AutomationProperties.LiveSetting="Polite" />
-        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
-          <Button Classes="icon" Name="PlayButton" Command="{Binding PlayCommand}"
-                  IsVisible="{Binding HasResult}"
-                  ToolTip.Tip="{Binding IsPlaying, Converter={x:Static vm:PlayTip.Instance}}">
-            <Panel>
-              <!--
-                Play is replaced by Stop while a clip runs, as in History and
-                on macOS. A button whose picture never changes gives no way to
-                tell a clip that is playing from one that has finished.
-
-                Both are drawn at final size with the centre of area already on
-                the button's centre; see Icons.axaml for why Stretch cannot do
-                this for a triangle.
-              -->
-              <Path Data="{DynamicResource IconPlayRound32}"
-                    Fill="{Binding $parent[Button].Foreground}" Stroke="{x:Null}"
-                    Stretch="None" Width="32" Height="32"
-                    IsVisible="{Binding !IsPlaying}" />
-              <Path Data="{DynamicResource IconStopRound32}"
-                    Fill="{Binding $parent[Button].Foreground}" Stroke="{x:Null}"
-                    Stretch="None" Width="32" Height="32"
-                    IsVisible="{Binding IsPlaying}" />
-            </Panel>
-          </Button>
-
-          <!--
-            §2's playback progress, as on macOS: a thin bar with the elapsed
-            and total time under it. Only while something is playing — a bar
-            sitting at zero next to a finished clip reads as a stalled one.
-
-            Two Borders rather than a ProgressBar. A ProgressBar animates
-            between values, which is invisible while the fraction creeps
-            forward and very visible at the end, where it drops the full width
-            at once and reads as the bar draining backwards. The macOS app
-            reached the same conclusion for the same reason.
-          -->
-          <StackPanel Name="PlaybackBar" Width="130" VerticalAlignment="Center" Spacing="3"
-                      IsVisible="{Binding IsPlaying}">
-            <Border Height="4" CornerRadius="2" Background="{DynamicResource BunyiSurface}">
-              <Border Height="4" CornerRadius="2" HorizontalAlignment="Left"
-                      Background="{DynamicResource BunyiAccent}"
-                      Width="{Binding PlayProgress, Converter={x:Static vm:BarWidth.Instance},
-                                      ConverterParameter=130}" />
-            </Border>
-            <Grid ColumnDefinitions="Auto,*,Auto">
-              <TextBlock Grid.Column="0" Text="{Binding ElapsedText}" FontSize="10" Opacity="0.7"
-                         FontFamily="{DynamicResource BunyiMono}" />
-              <TextBlock Grid.Column="2" Text="{Binding DurationText}" FontSize="10" Opacity="0.7"
-                         FontFamily="{DynamicResource BunyiMono}" />
-            </Grid>
-          </StackPanel>
-          <Button Classes="icon" Name="RevealButton" Command="{Binding RevealCommand}"
-                  IsVisible="{Binding HasResult}" ToolTip.Tip="Show the file on disk">
-            <Path Data="{DynamicResource IconFolder}" />
-          </Button>
-
-          <!--
-            §2: Generate is REPLACED by Stop, not merely disabled. A model
-            download runs for minutes, and without Stop the only way out is
-            closing the window.
-          -->
-          <!--
-            Not disabled when the form is incomplete. A disabled button cannot
-            be hovered for the tooltip that was supposed to explain it, and a
-            screen reader skips it — so it was purple, unpressable and silent.
-            It stays live and says what is missing when pressed.
-          -->
-          <Button Name="GenerateButton" Classes="primary" AutomationProperties.Name="Generate"
-                  Command="{Binding GenerateCommand}"
-                  IsVisible="{Binding ShowGenerate}"
-                  ToolTip.Tip="{Binding BlockedReason}"
-                  IsDefault="True" MinWidth="160">
-            <StackPanel Orientation="Horizontal" Spacing="6">
-              <Path Data="{DynamicResource IconWaveform16}" Stretch="None"
-                    Width="16" Height="16" VerticalAlignment="Center" />
-              <TextBlock Text="Generate" VerticalAlignment="Center" />
-            </StackPanel>
-          </Button>
-          <!--
-            The same width as Generate, not merely a similar one. §2 replaces
-            one button with the other, and 110 was enough for "Stop" but not for
-            "Generate" — so the row resized on every swap, drawing the eye to
-            the layout at exactly the moment it should be on the status line.
-
-            160 rather than 130 since the glyphs arrived: "Generate" with its
-            waveform measures 152, so at 130 it sat at its natural width while
-            Stop stayed on the floor, and the row jumped again. The headroom is
-            so a word of copy does not silently bring the jump back.
-          -->
-          <Button Name="StopButton" Classes="danger" AutomationProperties.Name="Stop"
-                  Command="{Binding StopCommand}"
-                  IsVisible="{Binding IsBusy}" IsCancel="True" MinWidth="160"
-                  ToolTip.Tip="Stop the current operation">
-            <StackPanel Orientation="Horizontal" Spacing="6">
-              <!-- Filled, so it reads as a stop sign rather than an empty box.
-                   Overrides the stroke the style above gives sibling glyphs.
-                   White for the same reason the style says: Foreground is set
-                   on the ContentPresenter, so binding the Button's own gave
-                   near-black. -->
-              <Path Data="{DynamicResource IconStop16}" Stretch="None"
-                    Width="16" Height="16" VerticalAlignment="Center"
-                    Fill="White" Stroke="{x:Null}" />
-              <TextBlock Text="Stop" VerticalAlignment="Center" />
-            </StackPanel>
-          </Button>
-        </StackPanel>
-      </Grid>
-    </StackPanel>
 
     <!--
       Everything the run was started from. §2: while work is in progress the
@@ -265,7 +139,7 @@ limitations under the License.
       child is collapsed still gets its share of RowSpacing, which would leave a
       gap where the hidden card used to be.
     -->
-    <Grid RowDefinitions="Auto,*,Auto,Auto">
+    <Grid Grid.Row="1" RowDefinitions="Auto,*,Auto,Auto">
 
       <!--
         §1 opens "A segmented picker selects one of three modes"; §2a adds "A
@@ -277,8 +151,8 @@ limitations under the License.
         running job is using (§2). History is not, so it stays reachable — which
         is why the segments are individually disabled rather than the control.
       -->
-      <ListBox Grid.Row="0" ItemsSource="{Binding AllSegments}" SelectedItem="{Binding SelectedSegment}"
-               SelectionMode="Single" Height="36">
+      <ListBox Grid.Row="0" Name="ModePicker" ItemsSource="{Binding AllSegments}" SelectedItem="{Binding SelectedSegment}"
+               SelectionMode="Single" Height="36" KeyDown="OnModePickerKeyDown">
         <ListBox.ItemsPanel>
           <ItemsPanelTemplate>
             <UniformGrid Rows="1" />
@@ -316,16 +190,32 @@ limitations under the License.
 
       <Border Grid.Row="1" Classes="card" IsVisible="{Binding !ShowingHistory}"
               IsEnabled="{Binding !IsBusy}" Margin="0,16,0,0">
-        <DockPanel>
-          <TextBlock DockPanel.Dock="Top" Text="SCRIPT" Classes="eyebrow" />
+        <!--
+          A Grid in reading order - eyebrow, box, the missing-input line, the
+          examples - for the same keyboard reason as the window's outer Grid.
+          As a DockPanel the examples had to be declared before the box they
+          are drawn under, and Tab reached them first.
+        -->
+        <Grid RowDefinitions="Auto,*,Auto,Auto">
+          <TextBlock Grid.Row="0" Text="SCRIPT" Classes="eyebrow" />
 
+
+          <TextBlock Grid.Row="2" Classes="needed" Margin="0,6,0,0"
+                     Text="{Binding MissingReason}"
+                     IsVisible="{Binding NeedsText}" />
+
+          <TextBox Grid.Row="1" Name="ScriptBox" Text="{Binding Script}"
+                   Classes.needed="{Binding NeedsText}"
+                   AcceptsReturn="True" TextWrapping="Wrap"
+                   MinHeight="140" FontSize="15"
+                   PlaceholderText="Type or paste what you would like spoken." />
           <!--
             The examples. They vanish once the script has anything in it and do
             not return over a generated result — an invitation to try something
             belongs to a window that has not been used yet, not beside audio the
             user just made.
           -->
-          <StackPanel DockPanel.Dock="Bottom" IsVisible="{Binding ShowExamples}"
+          <StackPanel Grid.Row="3" Name="Examples" IsVisible="{Binding ShowExamples}"
                       Margin="0,8,0,0" Spacing="4">
             <TextBlock Text="{Binding ExamplePrompt}" FontSize="11" Opacity="0.7" />
             <ItemsControl ItemsSource="{Binding Examples}">
@@ -341,23 +231,7 @@ limitations under the License.
               </ItemsControl.ItemTemplate>
             </ItemsControl>
           </StackPanel>
-
-          <!--
-            Docked, and before the box on purpose. In a DockPanel the last child
-            fills and every earlier one docks — default Left — so adding this
-            after the box turned the box into a left-docked child sized to its
-            own text, at half the width of the card. The box stays last.
-          -->
-          <TextBlock DockPanel.Dock="Bottom" Classes="needed" Margin="0,6,0,0"
-                     Text="{Binding MissingReason}"
-                     IsVisible="{Binding NeedsText}" />
-
-          <TextBox Name="ScriptBox" Text="{Binding Script}"
-                   Classes.needed="{Binding NeedsText}"
-                   AcceptsReturn="True" TextWrapping="Wrap"
-                   MinHeight="140" FontSize="15"
-                   PlaceholderText="Type or paste what you would like spoken." />
-        </DockPanel>
+        </Grid>
       </Border>
 
       <Border Grid.Row="2" Classes="card" IsVisible="{Binding !ShowingHistory}"
@@ -365,7 +239,7 @@ limitations under the License.
         <StackPanel Spacing="12" Grid.IsSharedSizeScope="True">
           <TextBlock Text="OPTIONS" Classes="eyebrow" />
 
-          <Grid>
+          <Grid Name="LanguageRow">
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="Auto" SharedSizeGroup="OptionLabel" />
               <ColumnDefinition Width="*" />
@@ -382,7 +256,7 @@ limitations under the License.
             </ComboBox>
           </Grid>
 
-          <Grid IsVisible="{Binding ShowSpeakers}">
+          <Grid Name="SpeakerRow" IsVisible="{Binding ShowSpeakers}">
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="Auto" SharedSizeGroup="OptionLabel" />
               <ColumnDefinition Width="*" />
@@ -524,5 +398,140 @@ limitations under the License.
                  IsVisible="{Binding !ModeIsAvailable}"
                  FontSize="12" Opacity="0.75" Margin="0,16,0,0" />
     </Grid>
-  </DockPanel>
+    <!--
+      Bottom bar: status, progress, and the Generate/Stop swap. Outside the
+      disabled group so Stop stays pressable.
+    -->
+    <StackPanel Grid.Row="2" Spacing="8" Margin="0,16,0,0">
+      <!--
+        A bar only where there is something to measure. A download reports a
+        fraction; loading a model and generating do not — and a bar pulsing
+        across the whole window says less than a spinner does, while implying a
+        measurement it does not have. macOS shows a spinner for exactly these
+        phases.
+      -->
+      <ProgressBar Minimum="0" Maximum="1" Value="{Binding Progress}"
+                   IsVisible="{Binding ShowProgressBar}" Height="4" />
+      <Grid ColumnDefinitions="Auto,*,Auto">
+        <Path Grid.Column="0" Classes="spinner" IsVisible="{Binding ShowSpinner}"
+              Margin="0,0,8,0" VerticalAlignment="Center" />
+        <!--
+          A live region, so a screen reader announces the status as it changes
+          rather than only when focus lands on it: "Generating… 49 frames · 3.9s
+          of speech so far" is the one thing a person waiting on a run wants to
+          hear (spec §12). Polite, not assertive — it must not talk over what
+          the user is doing.
+        -->
+        <TextBlock Grid.Column="1" Text="{Binding Status}" FontSize="12" Opacity="0.75"
+                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                   AutomationProperties.LiveSetting="Polite" />
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+          <Button Classes="icon" Name="PlayButton" Command="{Binding PlayCommand}"
+                  IsVisible="{Binding HasResult}"
+                  ToolTip.Tip="{Binding IsPlaying, Converter={x:Static vm:PlayTip.Instance}}">
+            <Panel>
+              <!--
+                Play is replaced by Stop while a clip runs, as in History and
+                on macOS. A button whose picture never changes gives no way to
+                tell a clip that is playing from one that has finished.
+
+                Both are drawn at final size with the centre of area already on
+                the button's centre; see Icons.axaml for why Stretch cannot do
+                this for a triangle.
+              -->
+              <Path Data="{DynamicResource IconPlayRound32}"
+                    Fill="{Binding $parent[Button].Foreground}" Stroke="{x:Null}"
+                    Stretch="None" Width="32" Height="32"
+                    IsVisible="{Binding !IsPlaying}" />
+              <Path Data="{DynamicResource IconStopRound32}"
+                    Fill="{Binding $parent[Button].Foreground}" Stroke="{x:Null}"
+                    Stretch="None" Width="32" Height="32"
+                    IsVisible="{Binding IsPlaying}" />
+            </Panel>
+          </Button>
+
+          <!--
+            §2's playback progress, as on macOS: a thin bar with the elapsed
+            and total time under it. Only while something is playing — a bar
+            sitting at zero next to a finished clip reads as a stalled one.
+
+            Two Borders rather than a ProgressBar. A ProgressBar animates
+            between values, which is invisible while the fraction creeps
+            forward and very visible at the end, where it drops the full width
+            at once and reads as the bar draining backwards. The macOS app
+            reached the same conclusion for the same reason.
+          -->
+          <StackPanel Name="PlaybackBar" Width="130" VerticalAlignment="Center" Spacing="3"
+                      IsVisible="{Binding IsPlaying}">
+            <Border Height="4" CornerRadius="2" Background="{DynamicResource BunyiSurface}">
+              <Border Height="4" CornerRadius="2" HorizontalAlignment="Left"
+                      Background="{DynamicResource BunyiAccent}"
+                      Width="{Binding PlayProgress, Converter={x:Static vm:BarWidth.Instance},
+                                      ConverterParameter=130}" />
+            </Border>
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <TextBlock Grid.Column="0" Text="{Binding ElapsedText}" FontSize="10" Opacity="0.7"
+                         FontFamily="{DynamicResource BunyiMono}" />
+              <TextBlock Grid.Column="2" Text="{Binding DurationText}" FontSize="10" Opacity="0.7"
+                         FontFamily="{DynamicResource BunyiMono}" />
+            </Grid>
+          </StackPanel>
+          <Button Classes="icon" Name="RevealButton" Command="{Binding RevealCommand}"
+                  IsVisible="{Binding HasResult}" ToolTip.Tip="Show the file on disk">
+            <Path Data="{DynamicResource IconFolder}" />
+          </Button>
+
+          <!--
+            §2: Generate is REPLACED by Stop, not merely disabled. A model
+            download runs for minutes, and without Stop the only way out is
+            closing the window.
+          -->
+          <!--
+            Not disabled when the form is incomplete. A disabled button cannot
+            be hovered for the tooltip that was supposed to explain it, and a
+            screen reader skips it — so it was purple, unpressable and silent.
+            It stays live and says what is missing when pressed.
+          -->
+          <Button Name="GenerateButton" Classes="primary" AutomationProperties.Name="Generate"
+                  Command="{Binding GenerateCommand}"
+                  IsVisible="{Binding ShowGenerate}"
+                  ToolTip.Tip="{Binding BlockedReason}"
+                  IsDefault="True" MinWidth="160">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <Path Data="{DynamicResource IconWaveform16}" Stretch="None"
+                    Width="16" Height="16" VerticalAlignment="Center" />
+              <TextBlock Text="Generate" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <!--
+            The same width as Generate, not merely a similar one. §2 replaces
+            one button with the other, and 110 was enough for "Stop" but not for
+            "Generate" — so the row resized on every swap, drawing the eye to
+            the layout at exactly the moment it should be on the status line.
+
+            160 rather than 130 since the glyphs arrived: "Generate" with its
+            waveform measures 152, so at 130 it sat at its natural width while
+            Stop stayed on the floor, and the row jumped again. The headroom is
+            so a word of copy does not silently bring the jump back.
+          -->
+          <Button Name="StopButton" Classes="danger" AutomationProperties.Name="Stop"
+                  Command="{Binding StopCommand}"
+                  IsVisible="{Binding IsBusy}" IsCancel="True" MinWidth="160"
+                  ToolTip.Tip="Stop the current operation">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <!-- Filled, so it reads as a stop sign rather than an empty box.
+                   Overrides the stroke the style above gives sibling glyphs.
+                   White for the same reason the style says: Foreground is set
+                   on the ContentPresenter, so binding the Button's own gave
+                   near-black. -->
+              <Path Data="{DynamicResource IconStop16}" Stretch="None"
+                    Width="16" Height="16" VerticalAlignment="Center"
+                    Fill="White" Stroke="{x:Null}" />
+              <TextBlock Text="Stop" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+        </StackPanel>
+      </Grid>
+    </StackPanel>
+  </Grid>
 </Window>
