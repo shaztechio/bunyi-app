@@ -182,7 +182,7 @@ limitations under the License.
             screen reader skips it — so it was purple, unpressable and silent.
             It stays live and says what is missing when pressed.
           -->
-          <Button Name="GenerateButton" Classes="primary"
+          <Button Name="GenerateButton" Classes="primary" AutomationProperties.Name="Generate"
                   Command="{Binding GenerateCommand}"
                   IsVisible="{Binding ShowGenerate}"
                   ToolTip.Tip="{Binding BlockedReason}"
@@ -204,7 +204,7 @@ limitations under the License.
             Stop stayed on the floor, and the row jumped again. The headroom is
             so a word of copy does not silently bring the jump back.
           -->
-          <Button Name="StopButton" Classes="danger"
+          <Button Name="StopButton" Classes="danger" AutomationProperties.Name="Stop"
                   Command="{Binding StopCommand}"
                   IsVisible="{Binding IsBusy}" IsCancel="True" MinWidth="160"
                   ToolTip.Tip="Stop the current operation">

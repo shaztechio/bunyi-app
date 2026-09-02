@@ -260,4 +260,24 @@ limitations under the License.
     </Style.Animations>
   </Style>
 
+  <!--
+    Every button's accessible name is its tooltip, unless it says otherwise.
+
+    A tooltip is NOT an accessible name in Avalonia. Measured headlessly (see
+    AccessibleNameTests): a Button carrying only ToolTip.Tip reports the tooltip
+    as help text and, for its name, the TYPE of its content — a screen reader
+    said "Avalonia dot Controls dot Shapes dot Path, button" for Settings,
+    Doctor, Logs, Help and every icon in a History row. Not anonymous; worse.
+
+    One rule here rather than a name on each of twenty-four controls, so a
+    button added later with a tooltip is named on the day it is added. A
+    control that sets AutomationProperties.Name itself wins: a local value
+    outranks a style, which is how Generate and Stop keep their labels as their
+    names. A button with no tooltip binds null and falls back to the default,
+    which for a text button is its text.
+  -->
+  <Style Selector="Button">
+    <Setter Property="AutomationProperties.Name" Value="{Binding $self.(ToolTip.Tip)}" />
+  </Style>
+
 </Styles>
