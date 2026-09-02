@@ -12,11 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using System.Windows.Input;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform.Storage;
 using Bunyi.App.ViewModels;
+using CommunityToolkit.Mvvm.Input;
 using Bunyi.Core;
 using Bunyi.Core.Diagnostics;
 using Bunyi.Core.Engine;
@@ -32,7 +35,38 @@ public partial class MainWindow : Window
     {
         AvaloniaXamlLoader.Load(this);
         DataContextChanged += (_, _) => WireHistory();
+
+        OpenSettingsCommand = new RelayCommand(OpenSettings);
+        OpenDoctorCommand = new AsyncRelayCommand(OpenDoctorAsync);
+        OpenLogsCommand = new RelayCommand(OpenLogs);
+        OpenHelpCommand = new RelayCommand(OpenHelp);
+
+        // §12: every window has a keyboard route. The chords are the platform's
+        // — macOS has ⌘, ⌘L and ⌘? — and each one runs the same method its
+        // header button does, so a chord and a click cannot drift apart. Bound
+        // on the window rather than the header so they hold with focus in the
+        // script box, and so they hold while a generation is running: Doctor,
+        // Logs and Help are wanted most while something is going wrong.
+        KeyBindings.Add(Route(Key.OemComma, KeyModifiers.Control, OpenSettingsCommand));
+        KeyBindings.Add(Route(Key.D, KeyModifiers.Control, OpenDoctorCommand));
+        KeyBindings.Add(Route(Key.L, KeyModifiers.Control, OpenLogsCommand));
+        KeyBindings.Add(Route(Key.F1, KeyModifiers.None, OpenHelpCommand));
     }
+
+    /// <summary>Opens Settings, or brings the open one forward. Ctrl+,</summary>
+    public ICommand OpenSettingsCommand { get; }
+
+    /// <summary>Runs Doctor on demand and shows the report. Ctrl+D</summary>
+    public ICommand OpenDoctorCommand { get; }
+
+    /// <summary>Opens Logs, or brings the open one forward. Ctrl+L</summary>
+    public ICommand OpenLogsCommand { get; }
+
+    /// <summary>Opens Help, or brings the open one forward. F1</summary>
+    public ICommand OpenHelpCommand { get; }
+
+    private static KeyBinding Route(Key key, KeyModifiers modifiers, ICommand command) =>
+        new() { Gesture = new KeyGesture(key, modifiers), Command = command };
 
     /// <summary>
     /// Gives History the things only a window has: a clipboard, a save picker
@@ -134,7 +168,9 @@ public partial class MainWindow : Window
     /// cannot give it. The same findings go to the log so they can be copied
     /// into a bug report.
     /// </remarks>
-    private async void OnDoctorClicked(object? sender, RoutedEventArgs e)
+    private void OnDoctorClicked(object? sender, RoutedEventArgs e) => OpenDoctorCommand.Execute(null);
+
+    private async Task OpenDoctorAsync()
     {
         if (DataContext is not MainViewModel model) return;
 
@@ -256,7 +292,9 @@ public partial class MainWindow : Window
     /// </remarks>
     private LogsWindow? _logs;
 
-    private void OnLogsClicked(object? sender, RoutedEventArgs e)
+    private void OnLogsClicked(object? sender, RoutedEventArgs e) => OpenLogs();
+
+    private void OpenLogs()
     {
         if (_logs is not null)
         {
@@ -277,7 +315,9 @@ public partial class MainWindow : Window
     /// <summary>Opens Help, or brings the open one forward (spec §10).</summary>
     private HelpWindow? _help;
 
-    private void OnHelpClicked(object? sender, RoutedEventArgs e)
+    private void OnHelpClicked(object? sender, RoutedEventArgs e) => OpenHelp();
+
+    private void OpenHelp()
     {
         if (_help is not null)
         {
@@ -293,7 +333,9 @@ public partial class MainWindow : Window
     /// <summary>Opens Settings, or brings the open one forward.</summary>
     private SettingsWindow? _settings;
 
-    private void OnSettingsClicked(object? sender, RoutedEventArgs e)
+    private void OnSettingsClicked(object? sender, RoutedEventArgs e) => OpenSettings();
+
+    private void OpenSettings()
     {
         if (_settings is not null)
         {
