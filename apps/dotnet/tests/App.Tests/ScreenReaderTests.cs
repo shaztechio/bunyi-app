@@ -262,6 +262,37 @@ public class ScreenReaderTests : HeadlessWindows
         });
     }
 
+    [AvaloniaTheory]
+    [InlineData(TtsMode.PresetVoice)]
+    [InlineData(TtsMode.VoiceDesign)]
+    [InlineData(TtsMode.VoiceClone)]
+    public void Nothing_the_keyboard_can_reach_is_anonymous(TtsMode mode)
+    {
+        // The general form of the defect that keeps recurring, in every mode
+        // rather than on the controls someone happened to look at. Anything Tab
+        // can land on has to say what it is: a focus stop that announces nothing
+        // is how Doctor read as silence, and an unnamed box is how the pickers
+        // and then the script box did.
+        //
+        // Found by walking the real UIA tree for controls with no name — the
+        // script, style and transcript boxes were all "edit" and nothing more,
+        // which for the box the whole app is built around is the plainest
+        // version of this bug.
+        //
+        // Buttons are covered by AccessibleNameTests; this is about the rest.
+        var (window, model) = Show();
+        model.Mode = mode;
+        window.UpdateLayout();
+
+        var anonymous = window.GetLogicalDescendants().OfType<Control>()
+            .Where(c => c is TextBox or ComboBox && c.IsEffectivelyVisible && c.Focusable)
+            .Where(c => string.IsNullOrWhiteSpace(PeerOf(c).GetName()))
+            .Select(c => c.Name ?? c.GetType().Name)
+            .ToList();
+
+        Assert.Empty(anonymous);
+    }
+
     [AvaloniaFact]
     public void Changing_a_dropdown_changes_what_it_reports_it_is_set_to()
     {

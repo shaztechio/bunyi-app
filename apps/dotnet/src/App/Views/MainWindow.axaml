@@ -152,7 +152,13 @@ limitations under the License.
         running job is using (§2). History is not, so it stays reachable — which
         is why the segments are individually disabled rather than the control.
       -->
+      <!--
+        Named, because a list that announces as "list" tells a reader nothing
+        about what it is choosing between. The items say what they are; the
+        container has to say what the choice is.
+      -->
       <ListBox Grid.Row="0" Name="ModePicker" ItemsSource="{Binding AllSegments}" SelectedItem="{Binding SelectedSegment}"
+               AutomationProperties.Name="Mode"
                SelectionMode="Single" Height="36" KeyDown="OnModePickerKeyDown">
         <ListBox.ItemsPanel>
           <ItemsPanelTemplate>
@@ -198,15 +204,24 @@ limitations under the License.
           are drawn under, and Tab reached them first.
         -->
         <Grid RowDefinitions="Auto,*,Auto,Auto">
-          <TextBlock Grid.Row="0" Text="SCRIPT" Classes="eyebrow" />
+          <TextBlock Grid.Row="0" Name="ScriptLabel" Text="SCRIPT" Classes="eyebrow" />
 
 
           <TextBlock Grid.Row="2" Classes="needed" Margin="0,6,0,0"
                      Text="{Binding MissingReason}"
                      IsVisible="{Binding NeedsText}" />
 
+          <!--
+            Named by the heading above it, the way the option pickers are named
+            by the label beside them. Without this the one box the whole app is
+            built around announced as an unnamed "edit": a person tabbing into
+            it was told a text field existed and nothing about what to type.
+            Found by walking the real tree for controls with no name, after the
+            same fault turned up on the dropdowns (#159, #192).
+          -->
           <TextBox Grid.Row="1" Name="ScriptBox" Text="{Binding Script}"
                    Classes.needed="{Binding NeedsText}"
+                   AutomationProperties.LabeledBy="{Binding #ScriptLabel}"
                    AcceptsReturn="True" TextWrapping="Wrap"
                    MinHeight="140" FontSize="15"
                    PlaceholderText="Type or paste what you would like spoken." />
@@ -219,7 +234,8 @@ limitations under the License.
           <StackPanel Grid.Row="3" Name="Examples" IsVisible="{Binding ShowExamples}"
                       Margin="0,8,0,0" Spacing="4">
             <TextBlock Text="{Binding ExamplePrompt}" FontSize="11" Opacity="0.7" />
-            <ItemsControl ItemsSource="{Binding Examples}">
+            <ItemsControl ItemsSource="{Binding Examples}"
+                          AutomationProperties.Name="Example prompts">
               <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
               </ItemsControl.ItemsPanel>
@@ -312,10 +328,13 @@ limitations under the License.
               <ColumnDefinition Width="Auto" SharedSizeGroup="OptionLabel" />
               <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
-            <TextBlock Grid.Column="0" Text="{Binding InstructLabel}" Classes="rowLabel" />
+            <TextBlock Grid.Column="0" Name="InstructLabelText"
+                       Text="{Binding InstructLabel}" Classes="rowLabel" />
             <StackPanel Grid.Column="1" Spacing="4">
+              <!-- Named by its row label; it changes per mode, so bind rather than repeat. -->
               <TextBox Name="InstructBox" Text="{Binding Instruct}"
                        Classes.needed="{Binding NeedsInstruction}"
+                       AutomationProperties.LabeledBy="{Binding #InstructLabelText}"
                        PlaceholderText="{Binding InstructPlaceholder}" />
               <TextBlock Classes="needed" Text="{Binding MissingReason}"
                          IsVisible="{Binding NeedsInstruction}" />
@@ -394,10 +413,11 @@ limitations under the License.
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
               </Grid.ColumnDefinitions>
-              <TextBlock Grid.Column="0" Text="It says" Classes="rowLabel" />
+              <TextBlock Grid.Column="0" Name="TranscriptLabel" Text="It says" Classes="rowLabel" />
               <StackPanel Grid.Column="1" Spacing="4">
                 <TextBox Name="TranscriptBox" Text="{Binding ReferenceTranscript}"
                          Classes.needed="{Binding NeedsTranscript}"
+                         AutomationProperties.LabeledBy="{Binding #TranscriptLabel}"
                          AcceptsReturn="False" TextWrapping="Wrap"
                          IsEnabled="{Binding CanEditTranscript}"
                          PlaceholderText="What the recording says, word for word" />
