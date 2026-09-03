@@ -18,6 +18,7 @@ limitations under the License.
         xmlns:vm="clr-namespace:Bunyi.App.ViewModels"
         xmlns:core="clr-namespace:Bunyi.Core;assembly=Bunyi.Core"
         xmlns:views="clr-namespace:Bunyi.App.Views"
+        xmlns:infra="clr-namespace:Bunyi.App.Infrastructure"
         x:Class="Bunyi.App.Views.MainWindow"
         x:DataType="vm:MainViewModel"
         Width="760" Height="680" MinWidth="620" MinHeight="580"
@@ -482,11 +483,33 @@ limitations under the License.
           only keeps on one of its two platforms.
 
           tools/UiaProbe checks the Windows half where it is consumed, on a
-          running window, because everything above is still only source.
+          running window, because everything above is still only source. It
+          does, and the event fires — and the region was still silent under
+          Narrator, for a reason nothing in the plumbing could show:
+
+            it fired 43 times in 13 seconds, one every 250ms, because §2 has
+            the engine publish progress per codec frame, and the sentence takes
+            about four seconds to speak. A reader never finished one before the
+            next arrived, so it spoke none of them.
+
+          Hence a Border rather than the TextBlock. What is shown ticks per
+          frame; what is announced is MainViewModel.Announcement, which moves at
+          a pace a person can listen to. They have to be different elements
+          because a TextBlock's peer reports its own text and ignores a name set
+          on it — measured — so the visible line goes Raw and the container
+          carries the words. Announce.Text sets the name and raises the change,
+          which is what a live region needs and what ControlAutomationPeer does
+          not do for a name on its own.
         -->
-        <TextBlock Grid.Column="1" Text="{Binding Status}" FontSize="12" Opacity="0.75"
-                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
-                   AutomationProperties.LiveSetting="Polite" />
+        <Border Grid.Column="1" VerticalAlignment="Center"
+                AutomationProperties.LiveSetting="Polite"
+                AutomationProperties.ControlTypeOverride="Text"
+                AutomationProperties.AccessibilityView="Content"
+                infra:Announce.Text="{Binding Announcement}">
+          <TextBlock Text="{Binding Status}" FontSize="12" Opacity="0.75"
+                     VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                     AutomationProperties.AccessibilityView="Raw" />
+        </Border>
         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
           <Button Classes="icon" Name="PlayButton" Command="{Binding PlayCommand}"
                   IsVisible="{Binding HasResult}"

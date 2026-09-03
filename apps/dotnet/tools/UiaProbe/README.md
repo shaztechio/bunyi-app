@@ -134,6 +134,16 @@ Recorded because a tool nobody has seen catch anything is hard to trust:
   They were also unnamed, announcing as a bare "combo box".
   **Fixed, and confirmed by ear under Narrator on 3 Sep 2026.**
 
+- **The status line fired perfectly and was silent.** `live` measured
+  **43 `LiveRegionChanged` events in 13 seconds** — one every 250ms, because the
+  engine publishes progress per codec frame — against a sentence that takes
+  about four seconds to speak. Nothing was broken; the cadence was impossible.
+  What is shown and what is announced are now separate, and one run emits six
+  events instead of forty-three.
+- **Doctor and History read as nothing, and this tool said they were fine.**
+  Twice over: they were in the control view but not the content view, and
+  nothing carrying a name could take focus. See below.
+
 ## What it cannot tell you
 
 It reads the tree and the events. It does not listen.

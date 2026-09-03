@@ -108,52 +108,29 @@ public class ScreenReaderTests : HeadlessWindows
     // ---- A running generation ----
 
     [AvaloniaFact]
-    public void The_status_lines_peer_reports_a_polite_live_setting()
+    public void The_live_region_renames_itself_when_there_is_something_to_say()
     {
-        // Off by default, which means a reader says the status only when focus
-        // lands on it — and focus never lands on it during a run. Polite: it
-        // waits for the reader to finish what it was saying.
+        // The chain a live region needs, pinned at the layer this harness can
+        // see. Avalonia's Win32 bridge turns a *Name* change on a peer whose
+        // GetLiveSetting() is not Off into LiveRegionChanged; if either half
+        // stopped, the region would go quiet while still reading Polite on
+        // inspection, which is exactly the failure #192 suspected.
         //
-        // Read off the *peer*, not off the attached property. #192's charge was
-        // that the old assertion — AutomationProperties.GetLiveSetting(status)
-        // — proved only that the value had been stored. Going through
-        // ControlAutomationPeer.GetLiveSettingCore() proves the one further step
-        // this harness can reach: that the attribute arrives at the peer whose
-        // GetLiveSetting() the Win32 bridge consults before raising
-        // LiveRegionChanged.
-        //
-        // The step after that is a UIA event on a real desktop, which is what
-        // tools/UiaProbe is for. See the class remarks.
-        var (window, model) = Show();
-        ((FakeEngine)model.Engine).Publish(
-            new EngineStatus(EngineState.Generating, Detail: "49 frames · 3.9s of speech so far", Frames: 49));
-        window.UpdateLayout();
-
-        var status = window.GetLogicalDescendants().OfType<TextBlock>()
-            .Single(t => t.Text == model.Status);
-
-        Assert.Equal(AutomationLiveSetting.Polite, PeerOf(status).GetLiveSetting());
-        Assert.Contains("3.9s of speech", PeerOf(status).GetName(), StringComparison.Ordinal);
-    }
-
-    [AvaloniaFact]
-    public void The_status_lines_peer_renames_itself_when_the_status_changes()
-    {
-        // The other half of the same chain, and the half nothing pinned before.
-        // Avalonia's Win32 bridge raises LiveRegionChanged from a *Name* change
-        // on the peer; TextBlockAutomationPeer is what turns a Text change into
-        // one. If that ever stopped happening, LiveSetting would go on reading
-        // Polite and the region would go quiet — which is exactly the failure
-        // #192 suspected. So: change the status, expect the peer to say its name
-        // changed.
+        // The name comes from Announce.Text rather than from the visible label,
+        // because ControlAutomationPeer does not watch AutomationProperties.Name
+        // — setting it silently would change what a reader finds and tell it
+        // nothing had happened.
         var (window, model) = Show();
         window.UpdateLayout();
 
-        var status = window.GetLogicalDescendants().OfType<TextBlock>()
-            .Single(t => t.Text == model.Status);
+        var region = Assert.IsType<Border>(
+            window.GetLogicalDescendants().OfType<TextBlock>()
+                .Single(t => t.Text == model.Status).Parent);
+
+        Assert.Equal(AutomationLiveSetting.Polite, PeerOf(region).GetLiveSetting());
 
         var renamed = new List<string?>();
-        PeerOf(status).PropertyChanged += (_, e) =>
+        PeerOf(region).PropertyChanged += (_, e) =>
         {
             if (e.Property == AutomationElementIdentifiers.NameProperty)
                 renamed.Add(e.NewValue as string);
@@ -164,6 +141,101 @@ public class ScreenReaderTests : HeadlessWindows
         window.UpdateLayout();
 
         Assert.Contains(renamed, name => name?.Contains("3.9s of speech", StringComparison.Ordinal) == true);
+    }
+
+    // ---- The pace of an announcement ----
+
+    /// <summary>A clock the test moves by hand.</summary>
+    private sealed class Hand : TimeProvider
+    {
+        private DateTimeOffset _now = new(2026, 9, 3, 12, 0, 0, TimeSpan.Zero);
+
+        public override DateTimeOffset GetUtcNow() => _now;
+
+        internal void Advance(TimeSpan by) => _now += by;
+    }
+
+    [AvaloniaFact]
+    public void Progress_is_announced_at_a_pace_a_reader_can_speak()
+    {
+        // Reported from using the app with Narrator: a running generation
+        // announced nothing. The live region was never broken — measured on a
+        // real window it raised LiveRegionChanged 43 times in 13 seconds, one
+        // every 250ms, because §2 has the engine publish per codec frame. The
+        // sentence takes about four seconds to say, so a reader never finished
+        // one before the next arrived and spoke none of them.
+        //
+        // Forty frames here, a quarter of a second apart: the real rate.
+        var clock = new Hand();
+        var engine = new FakeEngine();
+        var model = new MainViewModel(engine, new FakePlayer(), new RecordingLog(), clock: clock)
+        {
+            Script = "Hello there.",
+        };
+
+        var announced = new List<string>();
+        model.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MainViewModel.Announcement)) announced.Add(model.Announcement);
+        };
+
+        engine.Publish(new EngineStatus(EngineState.Generating, Detail: "0 frames", Frames: 0));
+
+        for (var frame = 1; frame <= 40; frame++)
+        {
+            clock.Advance(TimeSpan.FromMilliseconds(250));
+            engine.Publish(new EngineStatus(
+                EngineState.Generating, Detail: $"{frame} frames · {frame / 12.5:0.0}s of speech so far", Frames: frame));
+        }
+
+        // Ten seconds of frames, at one announcement per AnnouncementGap: the
+        // state change, then one tick. Not forty-one.
+        Assert.Equal(2, announced.Count);
+        Assert.StartsWith("Generating…", announced[0], StringComparison.Ordinal);
+
+        // The status itself is untouched and still counts every frame — that is
+        // #105, and the reason the two are separate properties.
+        Assert.Contains("40 frames", model.Status, StringComparison.Ordinal);
+    }
+
+    [AvaloniaFact]
+    public void A_change_of_state_is_announced_at_once_however_recently_something_was()
+    {
+        // A progress tick can wait; "it finished" cannot. Ending a run one
+        // millisecond after an announcement must still be announced.
+        var clock = new Hand();
+        var engine = new FakeEngine();
+        var model = new MainViewModel(engine, new FakePlayer(), new RecordingLog(), clock: clock);
+
+        engine.Publish(new EngineStatus(EngineState.Generating, Detail: "1 frames", Frames: 1));
+        var whileRunning = model.Announcement;
+
+        clock.Advance(TimeSpan.FromMilliseconds(1));
+        engine.Publish(new EngineStatus(EngineState.Idle));
+
+        Assert.StartsWith("Generating…", whileRunning, StringComparison.Ordinal);
+        Assert.Equal("Ready", model.Announcement);
+    }
+
+    [AvaloniaFact]
+    public void The_announcement_is_a_live_region_and_the_visible_line_is_not_read_twice()
+    {
+        // The two must be different elements: a TextBlock's peer reports its own
+        // text and ignores a name set on it, so the region cannot be the label
+        // whenever what is shown and what is spoken have to differ.
+        var (window, model) = Show();
+        window.UpdateLayout();
+
+        var visible = window.GetLogicalDescendants().OfType<TextBlock>()
+            .Single(t => t.Text == model.Status);
+        var region = Assert.IsType<Border>(visible.Parent);
+
+        Assert.Equal(AutomationLiveSetting.Polite, PeerOf(region).GetLiveSetting());
+        Assert.Equal(model.Announcement, PeerOf(region).GetName());
+
+        // And the ticking line is out of the tree, so it is neither read twice
+        // nor firing the region itself.
+        Assert.Equal(AccessibilityView.Raw, AutomationProperties.GetAccessibilityView(visible));
     }
 
     // ---- Dropdowns ----

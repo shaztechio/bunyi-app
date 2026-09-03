@@ -680,6 +680,18 @@ chords differ and only the requirement is pinned.
   a toolkit may update the control on screen and raise nothing, and the value
   being readable afterwards is not the same as it having been announced. The
   test is whether an event is emitted, not whether the property is correct.
+- **What is announced is paced for speech, and is not the same thing as what is
+  shown.** §2 has the status line count codec frames as they arrive, several
+  times a second. Announcing at that rate says nothing at all: each sentence
+  takes seconds to speak, and a reader that is interrupted before it finishes
+  never finishes. So a change of *state* is announced at once — it started, it
+  finished, it failed — and progress within a state is announced sparingly. The
+  window keeps ticking; the voice does not.
+- **Anything meant to be announced can be reached from the keyboard, and the
+  thing the keyboard lands on is the thing that carries the words.** With a
+  screen reader following focus rather than its own cursor — which is the
+  default on Windows — an element nothing can focus is never spoken, however
+  well it is labelled. A focus stop that announces nothing is worse still.
 - **Decorative imagery is not announced.** Glyphs that repeat what an adjacent
   label already says are hidden from assistive technology rather than read
   twice.
@@ -732,6 +744,13 @@ chords differ and only the requirement is pinned.
 > a UIA event. Whether SwiftUI's `Picker` announces under VoiceOver has not been
 > checked, and "probably, it usually does" is the assumption that produced this
 > bullet in the first place. #158 is where that gets measured.
+>
+> **The pacing rule is unverified on macOS too, and macOS has the same
+> ingredient.** `TTSEngine` publishes a token count per frame there as well, so
+> if VoiceOver is given that as a live announcement it will have the same
+> problem: not "too chatty" but *silent*, because nothing is ever allowed to
+> finish. Checked on Windows, where it was found; #158 is where macOS gets the
+> same look.
 >
 > Both apps' screen-reader behaviour proper — Narrator and Orca actually
 > speaking, in a real desktop session — remains a manual pass under #159 and
