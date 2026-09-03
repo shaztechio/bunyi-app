@@ -687,6 +687,13 @@ chords differ and only the requirement is pinned.
   never finishes. So a change of *state* is announced at once — it started, it
   finished, it failed — and progress within a state is announced sparingly. The
   window keeps ticking; the voice does not.
+- **A field's placeholder is read aloud, so it is written to be heard.** A
+  screen reader announces an empty field's placeholder after its name, which
+  makes that string the only guidance a person who cannot see the window gets
+  about what belongs there. "Optional — how it should be said" earns its keep
+  spoken more than written. Placeholders are therefore guidance rather than
+  decoration, and a design that replaces them with something purely visual
+  takes that away.
 - **Anything meant to be announced can be reached from the keyboard, and the
   thing the keyboard lands on is the thing that carries the words.** With a
   screen reader following focus rather than its own cursor — which is the
@@ -722,12 +729,13 @@ chords differ and only the requirement is pinned.
 > **Windows and Linux** have the rest of this, verified on the real
 > accessibility tree rather than on the toolkit's own objects
 > ([#192](https://github.com/shaztechio/bunyi-app/issues/192);
-> `apps/dotnet/tools/UiaProbe`) — and on **Windows, heard**: the pickers, the
-> Doctor findings, the History rows and the running status were each confirmed
-> aloud under Narrator on 3 Sep 2026, which is the step no tool here can take.
-> Every one of the four was silent when a person first listened, while passing
-> everything that had been automated. There is **one gap that is the toolkit's
-> and not the app's**:
+> `apps/dotnet/tools/UiaProbe`) — and on **Windows, heard**. Under Narrator on
+> 3 Sep 2026, by ear, which is the step no tool here can take: the pickers, the
+> Doctor findings, the History rows, the running status, the script and style
+> boxes, and the clone transcript. **Four of those were silent when a person
+> first listened, while passing everything that had been automated** — which is
+> the case against ever closing an accessibility item on a green run. There is
+> **one gap that is the toolkit's and not the app's**:
 >
 > > *"A running generation is announceable"* holds on **Windows only.** The
 > > status line is a live region, and Avalonia's Win32 bridge serves
