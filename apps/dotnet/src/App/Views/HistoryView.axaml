@@ -19,7 +19,6 @@ limitations under the License.
              x:Class="Bunyi.App.Views.HistoryView"
              x:DataType="vm:HistoryViewModel">
 
-
   <Panel>
     <TextBlock Text="{Binding EmptyMessage}" IsVisible="{Binding IsEmpty}"
                HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -50,17 +49,27 @@ limitations under the License.
               automation peer of its own, so a reader walking the list met the
               pill, the summary and the subtitle as three unrelated pieces of
               text before reaching the buttons. With a name, a control type and
-              a place in the control view, the row announces as "Preset voice:
+              a place in the content view, the row announces as "Preset voice:
               Hello there. Ryan · 2 Sep 2026" and the five buttons follow as its
               children; the three text blocks are taken out of the tree so they
               are not read twice (spec §12).
+
+              AccessibilityView="Content", not IsControlElementOverride.
+              Reported from using the app with Narrator: the rows read as
+              nothing at all. IsControlElementOverride puts the row in the
+              *control* view alone and Narrator reads the *content* view, so a
+              row that was named and typed exactly right was skipped whole — and
+              because the three text blocks inside it are deliberately Raw,
+              skipping the row left silence rather than the fragments it
+              replaced. It read worse than before the row had a name.
             -->
-            <Border BorderThickness="0,0,0,1" Padding="4,10"
+            <Border Focusable="True"
+                    BorderThickness="0,0,0,1" Padding="4,10"
                     BorderBrush="{DynamicResource BunyiCardBorder}"
                     ToolTip.Tip="{Binding Details}"
                     AutomationProperties.Name="{Binding AccessibleName}"
                     AutomationProperties.ControlTypeOverride="ListItem"
-                    AutomationProperties.IsControlElementOverride="True">
+                    AutomationProperties.AccessibilityView="Content">
               <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
 
                 <!--

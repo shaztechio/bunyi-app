@@ -44,8 +44,15 @@ limitations under the License.
 
     <TabItem Header="General">
       <StackPanel Margin="12" Spacing="12">
-        <TextBlock Text="APPEARANCE" Classes="eyebrow" />
+        <TextBlock Name="AppearanceLabel" Text="APPEARANCE" Classes="eyebrow" />
+        <!--
+          Named and announced the way the main window's pickers are — see the
+          comment on the Language box in MainWindow.axaml for why a ComboBox
+          needs ItemStatus to announce a change at all.
+        -->
         <ComboBox ItemsSource="{Binding Appearances}" SelectedItem="{Binding Appearance}"
+                  AutomationProperties.LabeledBy="{Binding #AppearanceLabel}"
+                  AutomationProperties.ItemStatus="{Binding Appearance}"
                   MinWidth="200" />
         <Border Classes="callout">
           <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.8"

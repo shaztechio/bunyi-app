@@ -44,6 +44,16 @@ namespace Bunyi.App.Tests;
 /// rather than an exact list, so adding a control does not fail the test
 /// unless it lands somewhere a reader would not expect it.
 /// </para>
+/// <para>
+/// <b>What layer this file pins, and in which screen-reader mode.</b> These
+/// drive Avalonia's own input pipeline, so unlike the peer tests there is no
+/// bridge in the way — a key that works here works in the app. What they cannot
+/// speak for is a screen reader that takes the keys first: Narrator's scan mode
+/// (Caps Lock + Space) captures the arrow keys, Home and End for its own
+/// cursor, so these hold with scan mode <i>off</i>. That is not a defect in the
+/// app, but a keyboard claim that does not say which mode it holds in is not a
+/// claim (#192).
+/// </para>
 /// </remarks>
 public sealed class KeyboardOperationTests : HeadlessWindows
 {

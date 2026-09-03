@@ -1,0 +1,33 @@
+// Copyright 2026 Shazron Abdullah and Bunyi contributors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// What CsWin32 generates interop for: the modern UI Automation *client*. It is
+// the only client that can read UIA_LiveSettingPropertyId (30135) or receive
+// UIA_LiveRegionChangedEventId (20024). .NET's managed System.Windows.Automation
+// client rejects the first outright — it hands back an ArgumentException object
+// reading "Unsupported Property", measured — and accepts a subscription to the
+// second while delivering nothing. Those two are #192's question, so this
+// second client is not a nicety.
+//
+// Generated from the official Win32 metadata rather than written by hand:
+// IUIAutomationElement's vtable is eighty-odd slots deep and a wrong guess
+// there is a silent misread, not a compile error.
+
+CUIAutomation
+IUIAutomation
+IUIAutomationElement
+IUIAutomationTreeWalker
+IUIAutomationEventHandler
+UIA_PROPERTY_ID
+UIA_EVENT_ID

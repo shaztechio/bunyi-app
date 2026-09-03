@@ -672,20 +672,41 @@ chords differ and only the requirement is pinned.
 - **Every control announces what it is.** An icon-only button carries a name
   for assistive technology — the tooltip's words are usually right, but a name
   is a separate property and is not inherited from a tooltip on either
-  platform.
+  platform. A control whose label sits beside it rather than inside it — a
+  picker in a labelled row — points at that label rather than repeating its
+  words, so what is read and what is shown cannot drift apart.
+- **A control that changes says what it changed to.** Moving through a picker
+  from the keyboard announces the new value, not silence. This is not automatic:
+  a toolkit may update the control on screen and raise nothing, and the value
+  being readable afterwards is not the same as it having been announced. The
+  test is whether an event is emitted, not whether the property is correct.
+- **What is announced is paced for speech, and is not the same thing as what is
+  shown.** §2 has the status line count codec frames as they arrive, several
+  times a second. Announcing at that rate says nothing at all: each sentence
+  takes seconds to speak, and a reader that is interrupted before it finishes
+  never finishes. So a change of *state* is announced at once — it started, it
+  finished, it failed — and progress within a state is announced sparingly. The
+  window keeps ticking; the voice does not.
+- **Anything meant to be announced can be reached from the keyboard, and the
+  thing the keyboard lands on is the thing that carries the words.** With a
+  screen reader following focus rather than its own cursor — which is the
+  default on Windows — an element nothing can focus is never spoken, however
+  well it is labelled. A focus stop that announces nothing is worse still.
 - **Decorative imagery is not announced.** Glyphs that repeat what an adjacent
   label already says are hidden from assistive technology rather than read
   twice.
 - **Nothing that matters is carried by colour alone.** Doctor's severities, a
   destructive action, an error state: each says what it is in words. Colour
-  reinforces; it does not inform.
+  reinforces; it does not inform. The words have to travel *with* the thing they
+  describe — a severity on a container the reader may never announce is not a
+  severity the reader hears, so a finding is one announced element carrying its
+  severity, its title and its detail together.
 - **Dialogs behave predictably.** Escape dismisses without acting, Return takes
   the safe default. §9's busy-close prompt already pins *Keep Working* as that
   default.
 
 > **Neither app satisfies all of this today, and this section is written as the
-> target rather than a description.** macOS History cannot be scrolled from the
-> keyboard at all, and the .NET app declares no accessibility names anywhere —
+> target rather than a description.**
 > [#157](https://github.com/shaztechio/bunyi-app/issues/157),
 > [#158](https://github.com/shaztechio/bunyi-app/issues/158) and
 > [#159](https://github.com/shaztechio/bunyi-app/issues/159) are the audits.
@@ -694,6 +715,50 @@ chords differ and only the requirement is pinned.
 > reached the same gap independently — a list of user content with no
 > selectable row — because nothing said they had to do otherwise. A fix in one
 > app that is not written down here becomes a divergence in the other.
+>
+> **macOS** still cannot scroll History from the keyboard at all (#157), and its
+> mode picker, Generate and toolbar cannot be reached from the keyboard (#164).
+>
+> **Windows and Linux** have the rest of this, verified on the real
+> accessibility tree rather than on the toolkit's own objects
+> ([#192](https://github.com/shaztechio/bunyi-app/issues/192);
+> `apps/dotnet/tools/UiaProbe`) — and on **Windows, heard**: the pickers, the
+> Doctor findings, the History rows and the running status were each confirmed
+> aloud under Narrator on 3 Sep 2026, which is the step no tool here can take.
+> Every one of the four was silent when a person first listened, while passing
+> everything that had been automated. There is **one gap that is the toolkit's
+> and not the app's**:
+>
+> > *"A running generation is announceable"* holds on **Windows only.** The
+> > status line is a live region, and Avalonia's Win32 bridge serves
+> > `UIA_LiveSettingPropertyId` and raises `LiveRegionChanged` when the text
+> > changes — both measured on a running window, and confirmed aloud. **On
+> > Linux it announces nothing.** `Avalonia.FreeDesktop.AtSpi` 12.1.1 emits activation, bounds,
+> > children, focus, property, selection and state signals and has no
+> > live-region concept anywhere in it, so there is no signal for Orca to hear.
+> > There is no app-side workaround: the app can only set the property the
+> > toolkit does not carry. An Orca user learns a run has finished when the
+> > result appears, not while it runs.
+>
+> **"A control that changes says what it changed to" is new here, and is
+> unverified on macOS.** It was added because Windows failed it: the pickers
+> moved through their values in silence, and nothing in the app was wrong —
+> Avalonia's ComboBox peer raises no property change for a selection. **Windows
+> now satisfies it, confirmed under Narrator by ear on 3 Sep 2026**, not only as
+> a UIA event. Whether SwiftUI's `Picker` announces under VoiceOver has not been
+> checked, and "probably, it usually does" is the assumption that produced this
+> bullet in the first place. #158 is where that gets measured.
+>
+> **The pacing rule holds on Windows, confirmed aloud on 3 Sep 2026. It is
+> unverified on macOS, which has the same ingredient.** `TTSEngine` publishes a token count per frame there as well, so
+> if VoiceOver is given that as a live announcement it will have the same
+> problem: not "too chatty" but *silent*, because nothing is ever allowed to
+> finish. Checked on Windows, where it was found; #158 is where macOS gets the
+> same look.
+>
+> Both apps' screen-reader behaviour proper — Narrator and Orca actually
+> speaking, in a real desktop session — remains a manual pass under #159 and
+> #158. Nothing automated substitutes for it.
 
 ---
 

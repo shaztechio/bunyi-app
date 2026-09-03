@@ -70,6 +70,18 @@ jobs:
       - name: Test
         run: dotnet test --no-build -c Release --verbosity normal
 
+      # tools/UiaProbe is deliberately outside Bunyi.sln: it targets
+      # net10.0-windows, so a solution build on Linux could not contain it.
+      # Built here anyway, on the Windows runner, so it cannot rot — it is the
+      # only thing that checks the accessibility work where a screen reader
+      # consumes it (#192) and a tool that stops compiling stops being run.
+      #
+      # Built, not run. It reads the UI Automation tree of a live window and
+      # needs a real desktop session, which a hosted runner does not have.
+      - name: Build the UIA probe (Windows only)
+        if: runner.os == 'Windows'
+        run: dotnet build tools/UiaProbe -c Release
+
       # src/Core is UI-framework-free by rule (see apps/dotnet/AGENTS.md).
       # Checked rather than trusted: the rule is easy to break by reflex, with
       # an editor's using-completion, and hard to notice in review.

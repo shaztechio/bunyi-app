@@ -129,17 +129,59 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// </remarks>
     [ObservableProperty] private bool _showingHistory;
 
+    /// <summary>
+    /// What a screen reader should say about the run, as opposed to what the
+    /// window shows (spec §12).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Separate from <see cref="Status"/> because speech has a speed limit
+    /// and a progress counter does not.</b> Reported from using the app with
+    /// Narrator: a running generation announced nothing at all. The live region
+    /// was working perfectly — measured on a real window, it raised
+    /// <c>LiveRegionChanged</c> <b>43 times in 13 seconds</b>, one every 250ms,
+    /// because §2 has the engine publish progress per codec frame. "Generating…
+    /// 37 frames · 3.0s of speech so far" takes about four seconds to say. A
+    /// reader never finished one before the next arrived, so it said none of
+    /// them.
+    /// </para>
+    /// <para>
+    /// So the window keeps ticking per frame — that is #105, and the whole point
+    /// of showing a count — and this says the same thing at a pace a person can
+    /// listen to: every change of state immediately, because that is the news,
+    /// and progress within a state no more often than <see cref="AnnouncementGap"/>.
+    /// </para>
+    /// </remarks>
+    [ObservableProperty] private string _announcement = "Ready";
+
+    /// <summary>
+    /// The least time between two progress announcements.
+    /// </summary>
+    /// <remarks>
+    /// Ten seconds, against a sentence that takes about four to speak. Five
+    /// would leave a reader talking most of the time it is working, which is its
+    /// own kind of unusable; a state change still interrupts immediately, so
+    /// nothing that matters waits this long.
+    /// </remarks>
+    internal static readonly TimeSpan AnnouncementGap = TimeSpan.FromSeconds(10);
+
+    private readonly TimeProvider _clock;
+    private EngineState? _announcedState;
+    private DateTimeOffset _announcedAt;
+
     public MainViewModel(
         ITtsEngine engine,
         IAudioPlayer player,
         ILogSink log,
         Func<string>? outputFolder = null,
         IBatchTimerFactory? timers = null,
-        VoiceLibrary? voices = null)
+        VoiceLibrary? voices = null,
+        TimeProvider? clock = null)
     {
         _engine = engine ?? throw new ArgumentNullException(nameof(engine));
         _player = player ?? throw new ArgumentNullException(nameof(player));
         _log = log ?? throw new ArgumentNullException(nameof(log));
+        _clock = clock ?? TimeProvider.System;
 
         _timers = timers ?? new DispatcherTimerFactory();
 
@@ -813,6 +855,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             OnPropertyChanged(nameof(ShowProgressBar));
             ProgressDetail = status.Detail;
             Status = Describe(status);
+            AnnounceIfDue(status.State);
 
             if (_engine.Speakers.Count > 0 && !_engine.Speakers.SequenceEqual(Speakers))
             {
@@ -838,6 +881,26 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
             Refresh();
         });
+
+    /// <summary>
+    /// Passes the status on to a screen reader, at a pace it can speak.
+    /// </summary>
+    /// <remarks>
+    /// A state change is the news — started, finished, failed — and goes out at
+    /// once. Progress inside a state is the same news again with a bigger
+    /// number, so it waits for <see cref="AnnouncementGap"/>. See
+    /// <see cref="Announcement"/> for what happens without this.
+    /// </remarks>
+    private void AnnounceIfDue(EngineState state)
+    {
+        var now = _clock.GetUtcNow();
+
+        if (state == _announcedState && now - _announcedAt < AnnouncementGap) return;
+
+        _announcedState = state;
+        _announcedAt = now;
+        Announcement = Status;
+    }
 
     private static string Describe(EngineStatus status) => status.State switch
     {

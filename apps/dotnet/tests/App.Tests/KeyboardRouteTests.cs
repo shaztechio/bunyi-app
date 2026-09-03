@@ -45,6 +45,14 @@ namespace Bunyi.App.Tests;
 /// script box, which is where focus usually is, and while a generation is
 /// running, which is when Doctor and Logs are wanted most.
 /// </para>
+/// <para>
+/// <b>What layer this file pins.</b> Avalonia's key bindings, headless — no
+/// bridge in the way, so a chord that fires here fires in the app; verified
+/// again on the real UIA tree, where all four chords opened their window
+/// (#192). The accelerator <i>text</i> each control advertises is a peer
+/// property and therefore a bridge away; <c>tools/UiaProbe</c> is what reads it
+/// back on the Windows side.
+/// </para>
 /// </remarks>
 public class KeyboardRouteTests : HeadlessWindows
 {

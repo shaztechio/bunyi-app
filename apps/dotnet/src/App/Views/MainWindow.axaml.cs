@@ -206,13 +206,26 @@ public partial class MainWindow : Window
             };
 
             // The glyph is for the eye; a screen reader was reading it as
-            // "multiplication sign" or nothing. It and the title leave the
-            // accessibility tree, and the row itself becomes the announced
-            // element, named "Blocker: Output folder" (spec §12: severity in
-            // words, not colour or a symbol). The row rather than the title
-            // because a TextBlock's peer reports its text and ignores a name
-            // set on it — measured — while a panel given a control type and a
-            // name is announced as exactly that.
+            // "multiplication sign" or nothing. It, the title and the detail
+            // all leave the accessibility tree, and the row itself becomes the
+            // one announced element, named "Blocker: Output folder. Cannot
+            // write there." (spec §12: severity in words, not colour or a
+            // symbol). The row rather than the title because a TextBlock's peer
+            // reports its text and ignores a name set on it — measured — while
+            // a panel given a control type and a name is announced as exactly
+            // that.
+            //
+            // The detail goes with them, and that is #192's fix. It used to
+            // stay in the tree while the severity sat on the enclosing group,
+            // and a reader is not obliged to announce a group's name before a
+            // child it lands on directly — so a user could hear "The preset
+            // voice model is downloaded and ready" and never hear "OK". One
+            // element carrying the whole sentence cannot be read half-way. It
+            // is the shape a History row already uses, for the same reason.
+            //
+            // Text rather than Group, now that there is nothing inside to
+            // group: a group with no announced children is an empty container
+            // a reader steps into and out of for nothing.
             var glyph = new TextBlock { Text = mark, Width = 14, FontWeight = Avalonia.Media.FontWeight.Bold };
             AutomationProperties.SetAccessibilityView(glyph, AccessibilityView.Raw);
 
@@ -223,32 +236,60 @@ public partial class MainWindow : Window
             };
             AutomationProperties.SetAccessibilityView(title, AccessibilityView.Raw);
 
-            var row = new StackPanel
+            // Selectable so the text can still be picked up with a pointer, and
+            // the dialog's Copy button carries the whole report for everyone
+            // else — taking it out of the automation tree costs no route to it.
+            //
+            // Focusable=false is the important half. A SelectableTextBlock takes
+            // focus by default, so Tab stopped on this — and because it is Raw,
+            // a reader announced nothing when it landed. That is a silent focus
+            // stop, which is worse than either being read or being skipped, and
+            // it is what "Doctor does not narrate at all" turned out to be.
+            var detail = new SelectableTextBlock
             {
-                Orientation = Avalonia.Layout.Orientation.Horizontal,
-                Spacing = 8,
-                Children =
+                Text = finding.Detail,
+                TextWrapping = Avalonia.Media.TextWrapping.Wrap,
+                Opacity = 0.85,
+                MaxWidth = 420,
+                Focusable = false,
+            };
+            AutomationProperties.SetAccessibilityView(detail, AccessibilityView.Raw);
+
+            // The row takes the focus the detail used to, so the thing Tab lands
+            // on is the thing that carries the whole sentence. Being in the
+            // content view is what a reader needs to *read* it; being focusable
+            // is what gets a reader there at all with scan mode off, which is
+            // how most people drive Narrator.
+            var row = new Border
+            {
+                Focusable = true,
+                CornerRadius = new Avalonia.CornerRadius(4),
+                Padding = new Avalonia.Thickness(4, 2),
+                Child = new StackPanel
                 {
-                    glyph,
-                    new StackPanel
+                    Orientation = Avalonia.Layout.Orientation.Horizontal,
+                    Spacing = 8,
+                    Children =
                     {
-                        Children =
-                        {
-                            title,
-                            new SelectableTextBlock
-                            {
-                                Text = finding.Detail,
-                                TextWrapping = Avalonia.Media.TextWrapping.Wrap,
-                                Opacity = 0.85,
-                                MaxWidth = 420,
-                            },
-                        },
+                        glyph,
+                        new StackPanel { Children = { title, detail } },
                     },
                 },
             };
-            AutomationProperties.SetName(row, $"{word}: {finding.Title}");
-            AutomationProperties.SetControlTypeOverride(row, AutomationControlType.Group);
-            AutomationProperties.SetIsControlElementOverride(row, true);
+            AutomationProperties.SetName(row, $"{word}: {finding.Title}. {finding.Detail}");
+            AutomationProperties.SetControlTypeOverride(row, AutomationControlType.Text);
+
+            // Content, not IsControlElementOverride. Reported from using the
+            // app with Narrator: the report read nothing at all except its two
+            // buttons. IsControlElementOverride puts an element in the *control*
+            // view alone, and Narrator reads the *content* view — so a finding
+            // that was correctly named and correctly typed was skipped whole,
+            // and the only things left with content were Copy and Close.
+            //
+            // AccessibilityView.Content puts it in both. That is the property to
+            // reach for whenever something must be announced; there is no
+            // IsContentElementOverride to pair with the other one.
+            AutomationProperties.SetAccessibilityView(row, AccessibilityView.Content);
 
             lines.Children.Add(row);
         }

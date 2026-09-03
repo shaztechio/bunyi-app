@@ -42,6 +42,13 @@ namespace Bunyi.App.Tests;
 /// screens, so an offset that does not move is a key that did nothing rather
 /// than a list that was already short enough.
 /// </para>
+/// <para>
+/// <b>Which screen-reader mode these hold in.</b> Scan mode off. Narrator's
+/// scan cursor (Caps Lock + Space) takes the arrow keys, Home and End for
+/// itself, so with it on none of them reach the app — which is Narrator working
+/// as designed, not History failing. Recorded because #192 found keyboard
+/// claims being made without saying so.
+/// </para>
 /// </remarks>
 public sealed class HistoryKeyboardTests : HeadlessWindows
 {
