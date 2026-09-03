@@ -30,6 +30,15 @@ cd apps/dotnet
 dotnet run --project tools/UiaProbe -- check       # the assertions, exit 1 on any failure
 dotnet run --project tools/UiaProbe -- tree        # print the whole control view
 dotnet run --project tools/UiaProbe -- live 60     # watch for LiveRegionChanged
+dotnet run --project tools/UiaProbe -- watch 60    # watch the property changes a reader acts on
+```
+
+`watch` is the one for *"I changed it and nothing was spoken"*. A value read back
+at rest cannot tell a control that announces itself from one that updates in
+silence — only the event can:
+
+```
+  ItemStatus                   -> 'Korean'   on 'Language'
 ```
 
 `--pid=<n>` picks one when several copies are running.
@@ -53,10 +62,12 @@ boundary.
 | Check | What it is about |
 |---|---|
 | Header buttons | Each has a real name, not `Avalonia.Controls.Shapes.Path`, and advertises its chord as `AcceleratorKey` (#185, #188) |
+| Dropdowns | Each is named, and serves an `ItemStatus` saying what it is set to |
 | Status line | Serves `UIA_LiveSettingPropertyId` (30135) as **Polite** |
 | History | Each row is one `ListItem` with five buttons and **no loose text** |
 | Doctor | Every announced finding starts with `Blocker:`, `Warning:` or `OK:` (#192) |
 | `live` | `UIA_LiveRegionChangedEventId` (20024) actually fires when the status changes |
+| `watch` | The property changes a reader acts on actually fire when a control moves |
 
 ## Two clients, on purpose
 
@@ -75,9 +86,17 @@ the managed one cannot. Both measured here rather than assumed:
 - `Automation.AddAutomationEventHandler(…LiveRegionChangedEvent…)` is accepted
   without complaint and then delivers **nothing**, on a window whose status text
   demonstrably changed.
+- `Automation.AddAutomationPropertyChangedEventHandler(…ItemStatusProperty…)`
+  does the same: zero events, on a control that was raising them the whole time.
+  The COM client on the identical window reports them one per keystroke.
 
 That second pair is exactly why #192's original probe came back inconclusive and
 read as evidence that Avalonia was at fault. It was not.
+
+**A silent client and a silent app look identical from the outside.** That is the
+trap this whole tool exists to get out of, and it has now caught the same
+investigator three times in one sitting. Do not diagnose a missing announcement
+with `System.Windows.Automation`.
 
 CsWin32 is a compile-time source generator referenced with `PrivateAssets="all"`.
 It adds interop declarations to this tool's build and no dependency to anything
@@ -105,3 +124,11 @@ Recorded because a tool nobody has seen catch anything is hard to trust:
 - **Rows were saying "…in just a few minutes.. Serena"** — a full stop added to a
   summary that already had one. Nothing at the peer layer would ever have shown
   that; it only reads wrong when you read the string a person hears.
+- **The dropdowns changed value in complete silence**, reported from using the
+  app with Narrator and confirmed here: every arrow press moved the selection and
+  emitted no UIA event at all. `ComboBoxAutomationPeer` raises property changes
+  for `IsDropDownOpen`, `Text` and `IsEditable` and none for `SelectedItem`, so a
+  non-editable box says nothing; and raising `Value` instead could not have
+  worked, because `ValuePatternIdentifiers.ValueProperty` is **not in the Win32
+  bridge's property map**. `ItemStatus` is the mapped property that fits.
+  They were also unnamed, announcing as a bare "combo box".

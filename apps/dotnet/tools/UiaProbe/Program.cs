@@ -81,11 +81,16 @@ internal static partial class Program
                 var seconds = int.TryParse(args.ElementAtOrDefault(1), out var s) ? s : 60;
                 return WatchLiveRegion(process.MainWindowHandle, seconds);
 
+            case "watch":
+                var watchFor = int.TryParse(args.ElementAtOrDefault(1), out var w) ? w : 60;
+                return WatchProperties(process.MainWindowHandle, watchFor);
+
             case "check":
                 return Check(windows, process.MainWindowHandle);
 
             default:
-                Console.Error.WriteLine($"Unknown command '{command}'. Use: tree | check | live [seconds]");
+                Console.Error.WriteLine(
+                    $"Unknown command '{command}'. Use: tree | check | live [seconds] | watch [seconds]");
                 return 2;
         }
     }
@@ -134,6 +139,7 @@ internal static partial class Program
         var main = windows.FirstOrDefault(w => w.Current.Name == "Bunyi") ?? windows[0];
 
         CheckHeaderButtons(main);
+        CheckDropdowns(main);
         CheckLiveRegion(mainWindow);
         CheckHistory(main);
         CheckDoctor(windows, main);
@@ -182,6 +188,46 @@ internal static partial class Program
                 Fail($"'{name}' advertises accelerator '{button.Current.AcceleratorKey}', expected '{accelerator}'");
             else
                 Pass($"{name}  (accel={accelerator})");
+        }
+    }
+
+    /// <summary>
+    /// Every dropdown says what it is, and what it is set to.
+    /// </summary>
+    /// <remarks>
+    /// Reported from using the app with Narrator: arrowing through a dropdown
+    /// changed the value and said nothing. Both halves of that are checked
+    /// here — the box was also unnamed, so it announced as a bare "combo box".
+    /// <para>
+    /// ItemStatus carrying a value is necessary but not sufficient; that it
+    /// <i>changes</i> is what a reader acts on, and that is <c>watch</c>.
+    /// </para>
+    /// </remarks>
+    private static void CheckDropdowns(AutomationElement main)
+    {
+        Console.WriteLine("\nDropdowns — named, and saying what they are set to");
+
+        var combos = Tree.Descendants(main)
+            .Where(e => e.Current.ControlType == ControlType.ComboBox)
+            .ToList();
+
+        if (combos.Count == 0)
+        {
+            Skip("no dropdown is on screen in this mode.");
+            return;
+        }
+
+        foreach (var combo in combos)
+        {
+            var name = combo.Current.Name;
+            var status = combo.GetCurrentPropertyValue(AutomationElement.ItemStatusProperty) as string;
+
+            if (string.IsNullOrWhiteSpace(name))
+                Fail($"an unnamed combo box (set to '{status}') — a reader announces it as just \"combo box\"");
+            else if (string.IsNullOrWhiteSpace(status))
+                Fail($"'{name}' serves no ItemStatus, so a selection change announces nothing");
+            else
+                Pass($"{name} — ItemStatus='{status}'");
         }
     }
 
@@ -327,6 +373,44 @@ internal static partial class Program
             "No LiveRegionChanged event arrived.\n"
             + "That is a failure only if the status actually changed while this was listening. If\n"
             + "nothing moved it, nothing had anything to announce — run it again and make it move.");
+        return 1;
+    }
+
+    // ---- Property changes ----
+
+    /// <summary>
+    /// Reports the property changes a screen reader would act on, as they happen.
+    /// </summary>
+    /// <remarks>
+    /// For "I changed it and nothing was spoken". A value read back at rest
+    /// cannot tell a control that announces itself from one that updates in
+    /// silence; only the event can, and a ComboBox whose selection moved
+    /// without one is the case this was written for.
+    /// </remarks>
+    private static int WatchProperties(nint window, int seconds)
+    {
+        Console.WriteLine(
+            $"Watching {string.Join(", ", PropertyWatch.Interesting.Select(p => p.ToString().Replace("UIA_", "", StringComparison.Ordinal)))}\n"
+            + $"for {seconds}s. Move something — arrow through a dropdown, switch mode, start a run.\n");
+
+        var heard = PropertyWatch.Watch(
+            window,
+            PropertyWatch.Interesting,
+            TimeSpan.FromSeconds(seconds),
+            line => Console.WriteLine($"  {line}"));
+
+        Console.WriteLine();
+
+        if (heard.Count > 0)
+        {
+            Console.WriteLine($"{heard.Count} property change(s) reached the UIA tree.");
+            return 0;
+        }
+
+        Console.WriteLine(
+            "Nothing changed in the UIA tree.\n"
+            + "If you did move a control, that is the bug: it updated on screen and told\n"
+            + "assistive technology nothing.");
         return 1;
     }
 

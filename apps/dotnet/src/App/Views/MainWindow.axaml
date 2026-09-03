@@ -244,9 +244,34 @@ limitations under the License.
               <ColumnDefinition Width="Auto" SharedSizeGroup="OptionLabel" />
               <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
-            <TextBlock Grid.Column="0" Text="Language" Classes="rowLabel" />
+            <TextBlock Grid.Column="0" Name="LanguageLabel" Text="Language" Classes="rowLabel" />
+            <!--
+              LabeledBy, not a repeated Name: the label already exists on
+              screen, and ControlAutomationPeer.GetNameCore falls back to it, so
+              the words a reader says and the words the eye reads cannot drift.
+              Without it this box announced as an unnamed combo box.
+
+              ItemStatus is how the *change* is announced. Reported from using
+              the app with Narrator: arrowing through the list changed the value
+              silently. Measured, and the cause is in the toolkit —
+              ComboBoxAutomationPeer raises property changes for
+              IsDropDownOpen, Text and IsEditable, and none for SelectedItem, so
+              a non-editable box like this one emits nothing at all when the
+              selection moves. Raising Value ourselves would not help either:
+              ValuePatternIdentifiers.ValueProperty is absent from the Win32
+              bridge's property map, so it could not cross.
+
+              ItemStatus is the one mapped property that fits, and it needs no
+              code: ControlAutomationPeer already watches
+              AutomationProperties.ItemStatusProperty and raises the peer change
+              itself, and AutomationNode maps it to UIA_ItemStatusPropertyId.
+              Bound through the same converter the item template uses, so what
+              is announced is the words on screen rather than the raw id.
+            -->
             <ComboBox Grid.Column="1" ItemsSource="{Binding AllLanguages}"
                       SelectedItem="{Binding Language}"
+                      AutomationProperties.LabeledBy="{Binding #LanguageLabel}"
+                      AutomationProperties.ItemStatus="{Binding Language, Converter={x:Static vm:IdentifierName.Instance}}"
                       MinWidth="180" HorizontalAlignment="Left">
               <ComboBox.ItemTemplate>
                 <DataTemplate x:DataType="x:String">
@@ -261,9 +286,12 @@ limitations under the License.
               <ColumnDefinition Width="Auto" SharedSizeGroup="OptionLabel" />
               <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
-            <TextBlock Grid.Column="0" Text="Speaker" Classes="rowLabel" />
+            <TextBlock Grid.Column="0" Name="SpeakerLabel" Text="Speaker" Classes="rowLabel" />
+            <!-- Named and announced the same way as Language, above. -->
             <ComboBox Grid.Column="1" ItemsSource="{Binding Speakers}"
                       SelectedItem="{Binding Speaker}"
+                      AutomationProperties.LabeledBy="{Binding #SpeakerLabel}"
+                      AutomationProperties.ItemStatus="{Binding Speaker, Converter={x:Static vm:IdentifierName.Instance}}"
                       MinWidth="180" HorizontalAlignment="Left">
               <ComboBox.ItemTemplate>
                 <DataTemplate x:DataType="x:String">
@@ -300,9 +328,12 @@ limitations under the License.
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
               </Grid.ColumnDefinitions>
-              <TextBlock Grid.Column="0" Text="Saved voice" Classes="rowLabel" />
+              <TextBlock Grid.Column="0" Name="SavedVoiceLabel" Text="Saved voice" Classes="rowLabel" />
+              <!-- Named and announced the same way as Language, above. -->
               <ComboBox Grid.Column="1" ItemsSource="{Binding SavedVoices}"
                         SelectedItem="{Binding SelectedVoice}"
+                        AutomationProperties.LabeledBy="{Binding #SavedVoiceLabel}"
+                        AutomationProperties.ItemStatus="{Binding SelectedVoice.Name}"
                         HorizontalAlignment="Stretch"
                         PlaceholderText="Choose a voice you saved earlier">
                 <ComboBox.ItemTemplate>

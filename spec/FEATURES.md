@@ -672,7 +672,14 @@ chords differ and only the requirement is pinned.
 - **Every control announces what it is.** An icon-only button carries a name
   for assistive technology — the tooltip's words are usually right, but a name
   is a separate property and is not inherited from a tooltip on either
-  platform.
+  platform. A control whose label sits beside it rather than inside it — a
+  picker in a labelled row — points at that label rather than repeating its
+  words, so what is read and what is shown cannot drift apart.
+- **A control that changes says what it changed to.** Moving through a picker
+  from the keyboard announces the new value, not silence. This is not automatic:
+  a toolkit may update the control on screen and raise nothing, and the value
+  being readable afterwards is not the same as it having been announced. The
+  test is whether an event is emitted, not whether the property is correct.
 - **Decorative imagery is not announced.** Glyphs that repeat what an adjacent
   label already says are hidden from assistive technology rather than read
   twice.
@@ -716,6 +723,14 @@ chords differ and only the requirement is pinned.
 > > There is no app-side workaround: the app can only set the property the
 > > toolkit does not carry. An Orca user learns a run has finished when the
 > > result appears, not while it runs.
+>
+> **"A control that changes says what it changed to" is new here, and is
+> unverified on macOS.** It was added because Windows failed it: the pickers
+> moved through their values in silence, and nothing in the app was wrong —
+> Avalonia's ComboBox peer raises no property change for a selection. Whether
+> SwiftUI's `Picker` announces under VoiceOver has not been checked, and
+> "probably, it usually does" is the assumption that produced this bullet in the
+> first place. #158 is where that gets measured.
 >
 > Both apps' screen-reader behaviour proper — Narrator and Orca actually
 > speaking, in a real desktop session — remains a manual pass under #159 and

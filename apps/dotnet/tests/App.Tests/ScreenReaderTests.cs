@@ -166,6 +166,68 @@ public class ScreenReaderTests : HeadlessWindows
         Assert.Contains(renamed, name => name?.Contains("3.9s of speech", StringComparison.Ordinal) == true);
     }
 
+    // ---- Dropdowns ----
+
+    [AvaloniaFact]
+    public void Every_dropdown_is_named_by_the_label_beside_it()
+    {
+        // Reported from using the app with Narrator, and true: the pickers
+        // announced as a bare "combo box". LabeledBy rather than a repeated
+        // Name, so the words a reader says are the words on screen and cannot
+        // drift from them.
+        var (window, _) = Show();
+
+        var combos = window.GetLogicalDescendants().OfType<ComboBox>()
+            .Where(c => c.IsEffectivelyVisible)
+            .ToList();
+
+        Assert.NotEmpty(combos);
+        Assert.All(combos, combo =>
+        {
+            var name = PeerOf(combo).GetName();
+            Assert.False(string.IsNullOrWhiteSpace(name),
+                "a dropdown announces as an unnamed combo box");
+        });
+    }
+
+    [AvaloniaFact]
+    public void Changing_a_dropdown_changes_what_it_reports_it_is_set_to()
+    {
+        // The user-visible bug: arrowing through the list moved the value and
+        // announced nothing. Avalonia's ComboBoxAutomationPeer raises property
+        // changes for IsDropDownOpen, Text and IsEditable and none for
+        // SelectedItem, so a non-editable box emits nothing when the selection
+        // moves — and raising Value ourselves could not help, because
+        // ValuePatternIdentifiers.ValueProperty is not in the Win32 bridge's
+        // property map at all.
+        //
+        // ItemStatus is the mapped property that fits, and ControlAutomationPeer
+        // raises the peer change for it without being asked.
+        //
+        // Layer note, per this file's remarks: this pins that the property
+        // tracks the selection and that the peer says so. That the event then
+        // reaches a reader is `tools/UiaProbe watch`, which shows
+        // "ItemStatus -> 'Korean' on 'Language'" for each arrow press.
+        var (window, model) = Show();
+        var language = window.GetLogicalDescendants().OfType<ComboBox>()
+            .First(c => AutomationProperties.GetLabeledBy(c) is TextBlock { Text: "Language" });
+
+        var announced = new List<object?>();
+        PeerOf(language).PropertyChanged += (_, e) =>
+        {
+            if (e.Property == AutomationElementIdentifiers.ItemStatusProperty)
+                announced.Add(e.NewValue);
+        };
+
+        var next = model.AllLanguages.First(l => l != model.Language);
+        model.Language = next;
+        window.UpdateLayout();
+
+        // The words on screen, not the raw identifier the model carries.
+        Assert.Equal(DisplayName.For(next), AutomationProperties.GetItemStatus(language));
+        Assert.Contains(DisplayName.For(next), announced.Select(a => a as string));
+    }
+
     // ---- Doctor ----
 
     [AvaloniaTheory]
