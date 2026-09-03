@@ -158,4 +158,12 @@ So a green run means *the signal is there for a reader to use*, and nothing
 more. The reader still has to be asked — which is #159, and which is why the
 confirmations here carry a date and the words "by ear".
 
-All four were confirmed aloud under Narrator on **3 Sep 2026**.
+Confirmed aloud under Narrator on **3 Sep 2026**: the pickers, the Doctor
+findings, the History rows, the running status, the script and style boxes, and
+the clone transcript. The first four had each been silent to a person while
+passing everything automated.
+
+One thing only the ear turned up, and it was good news: an empty field's
+**placeholder is announced after its name**, so those strings are the guidance a
+person who cannot see the window gets about what belongs in the box. That is now
+a rule in `spec/FEATURES.md` §12 rather than an accident.
