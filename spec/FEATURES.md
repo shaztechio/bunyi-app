@@ -678,14 +678,16 @@ chords differ and only the requirement is pinned.
   twice.
 - **Nothing that matters is carried by colour alone.** Doctor's severities, a
   destructive action, an error state: each says what it is in words. Colour
-  reinforces; it does not inform.
+  reinforces; it does not inform. The words have to travel *with* the thing they
+  describe — a severity on a container the reader may never announce is not a
+  severity the reader hears, so a finding is one announced element carrying its
+  severity, its title and its detail together.
 - **Dialogs behave predictably.** Escape dismisses without acting, Return takes
   the safe default. §9's busy-close prompt already pins *Keep Working* as that
   default.
 
 > **Neither app satisfies all of this today, and this section is written as the
-> target rather than a description.** macOS History cannot be scrolled from the
-> keyboard at all, and the .NET app declares no accessibility names anywhere —
+> target rather than a description.**
 > [#157](https://github.com/shaztechio/bunyi-app/issues/157),
 > [#158](https://github.com/shaztechio/bunyi-app/issues/158) and
 > [#159](https://github.com/shaztechio/bunyi-app/issues/159) are the audits.
@@ -694,6 +696,30 @@ chords differ and only the requirement is pinned.
 > reached the same gap independently — a list of user content with no
 > selectable row — because nothing said they had to do otherwise. A fix in one
 > app that is not written down here becomes a divergence in the other.
+>
+> **macOS** still cannot scroll History from the keyboard at all (#157), and its
+> mode picker, Generate and toolbar cannot be reached from the keyboard (#164).
+>
+> **Windows and Linux** have the rest of this, verified on the real
+> accessibility tree rather than on the toolkit's own objects
+> ([#192](https://github.com/shaztechio/bunyi-app/issues/192);
+> `apps/dotnet/tools/UiaProbe`), with **one gap that is the toolkit's and not
+> the app's**:
+>
+> > *"A running generation is announceable"* holds on **Windows only.** The
+> > status line is a live region, and Avalonia's Win32 bridge serves
+> > `UIA_LiveSettingPropertyId` and raises `LiveRegionChanged` when the text
+> > changes — both measured on a running window. **On Linux it announces
+> > nothing.** `Avalonia.FreeDesktop.AtSpi` 12.1.1 emits activation, bounds,
+> > children, focus, property, selection and state signals and has no
+> > live-region concept anywhere in it, so there is no signal for Orca to hear.
+> > There is no app-side workaround: the app can only set the property the
+> > toolkit does not carry. An Orca user learns a run has finished when the
+> > result appears, not while it runs.
+>
+> Both apps' screen-reader behaviour proper — Narrator and Orca actually
+> speaking, in a real desktop session — remains a manual pass under #159 and
+> #158. Nothing automated substitutes for it.
 
 ---
 

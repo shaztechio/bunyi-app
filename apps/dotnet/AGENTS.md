@@ -123,6 +123,8 @@ apps/dotnet/
   src/App/     Avalonia UI (views + viewmodels) referencing Core.
   tests/Core.Tests/   xUnit tests for src/Core.
   tests/App.Tests/    headless Avalonia tests for the window.
+  tools/UiaProbe/     reads the live Windows UI Automation tree (see below).
+                      Windows-only, and NOT in Bunyi.sln.
 ```
 
 **Package versions are managed centrally.** A `PackageReference` here carries no
@@ -253,6 +255,22 @@ outside the unpacked folder plus the app-data directories in
   dead while work runs, and Help and the log do not. That last one was claimed
   to hold "by construction", which stays true only until someone moves a panel.
   It runs with no `DISPLAY`, so CI exercises it too.
+- **An accessibility test proves the layer it runs at, and says so.**
+  `tests/App.Tests` asserts Avalonia's `AutomationPeer` objects. Narrator reads
+  the Windows UI Automation tree and Orca reads AT-SPI, each a bridge further
+  out — so a green peer test shows the tree is *built* right and says nothing
+  about what a reader speaks. #192 was filed because the two were treated as one
+  thing. Every accessibility test file now carries a paragraph naming its layer;
+  keep that up in new ones, and do not describe a peer assertion as a
+  screen-reader result.
+
+  `tools/UiaProbe` checks the far side on Windows: run it against a running app
+  (`dotnet run --project tools/UiaProbe -- check`) and it walks the real UIA
+  tree, reads back `LiveSetting`, and can watch `LiveRegionChanged` fire. It is
+  Windows-only, outside `Bunyi.sln`, built by CI on the Windows runner and never
+  run there — it needs a real desktop session. `tools/UiaProbe/README.md` has
+  the details, including which questions the *managed* UIA client silently
+  cannot answer. Orca has no equivalent and stays a manual pass (#159).
 - **Two xunit majors, on purpose.** `Core.Tests` is on xunit v2;
   `App.Tests` is on **v3**, because `Avalonia.Headless.XUnit` requires it. They
   are separate projects and `dotnet test` runs both. Worth unifying on v3 when

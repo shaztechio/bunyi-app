@@ -206,13 +206,26 @@ public partial class MainWindow : Window
             };
 
             // The glyph is for the eye; a screen reader was reading it as
-            // "multiplication sign" or nothing. It and the title leave the
-            // accessibility tree, and the row itself becomes the announced
-            // element, named "Blocker: Output folder" (spec §12: severity in
-            // words, not colour or a symbol). The row rather than the title
-            // because a TextBlock's peer reports its text and ignores a name
-            // set on it — measured — while a panel given a control type and a
-            // name is announced as exactly that.
+            // "multiplication sign" or nothing. It, the title and the detail
+            // all leave the accessibility tree, and the row itself becomes the
+            // one announced element, named "Blocker: Output folder. Cannot
+            // write there." (spec §12: severity in words, not colour or a
+            // symbol). The row rather than the title because a TextBlock's peer
+            // reports its text and ignores a name set on it — measured — while
+            // a panel given a control type and a name is announced as exactly
+            // that.
+            //
+            // The detail goes with them, and that is #192's fix. It used to
+            // stay in the tree while the severity sat on the enclosing group,
+            // and a reader is not obliged to announce a group's name before a
+            // child it lands on directly — so a user could hear "The preset
+            // voice model is downloaded and ready" and never hear "OK". One
+            // element carrying the whole sentence cannot be read half-way. It
+            // is the shape a History row already uses, for the same reason.
+            //
+            // Text rather than Group, now that there is nothing inside to
+            // group: a group with no announced children is an empty container
+            // a reader steps into and out of for nothing.
             var glyph = new TextBlock { Text = mark, Width = 14, FontWeight = Avalonia.Media.FontWeight.Bold };
             AutomationProperties.SetAccessibilityView(glyph, AccessibilityView.Raw);
 
@@ -223,6 +236,18 @@ public partial class MainWindow : Window
             };
             AutomationProperties.SetAccessibilityView(title, AccessibilityView.Raw);
 
+            // Selectable so the text can still be picked up with a pointer, and
+            // the dialog's Copy button carries the whole report for everyone
+            // else — taking it out of the automation tree costs no route to it.
+            var detail = new SelectableTextBlock
+            {
+                Text = finding.Detail,
+                TextWrapping = Avalonia.Media.TextWrapping.Wrap,
+                Opacity = 0.85,
+                MaxWidth = 420,
+            };
+            AutomationProperties.SetAccessibilityView(detail, AccessibilityView.Raw);
+
             var row = new StackPanel
             {
                 Orientation = Avalonia.Layout.Orientation.Horizontal,
@@ -230,24 +255,11 @@ public partial class MainWindow : Window
                 Children =
                 {
                     glyph,
-                    new StackPanel
-                    {
-                        Children =
-                        {
-                            title,
-                            new SelectableTextBlock
-                            {
-                                Text = finding.Detail,
-                                TextWrapping = Avalonia.Media.TextWrapping.Wrap,
-                                Opacity = 0.85,
-                                MaxWidth = 420,
-                            },
-                        },
-                    },
+                    new StackPanel { Children = { title, detail } },
                 },
             };
-            AutomationProperties.SetName(row, $"{word}: {finding.Title}");
-            AutomationProperties.SetControlTypeOverride(row, AutomationControlType.Group);
+            AutomationProperties.SetName(row, $"{word}: {finding.Title}. {finding.Detail}");
+            AutomationProperties.SetControlTypeOverride(row, AutomationControlType.Text);
             AutomationProperties.SetIsControlElementOverride(row, true);
 
             lines.Children.Add(row);

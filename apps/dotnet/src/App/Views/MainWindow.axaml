@@ -421,6 +421,32 @@ limitations under the License.
           of speech so far" is the one thing a person waiting on a run wants to
           hear (spec §12). Polite, not assertive — it must not talk over what
           the user is doing.
+
+          #192 asked whether this property is anything more than a stored value,
+          because a headless test can only prove it was stored. Read out of
+          Avalonia 12.1.1's own source, the chain is whole on Windows and there
+          is no chain at all on Linux:
+
+            ControlAutomationPeer.GetLiveSettingCore() returns
+            AutomationProperties.GetLiveSetting(Owner) — so this attribute
+            reaches the peer;
+            TextBlockAutomationPeer subscribes to TextBlock.TextProperty and
+            raises a NameProperty change when the text changes;
+            Avalonia.Win32.Automation's AutomationNode.OnPeerPropertyChanged
+            then calls RaiseLiveRegionChanged() — UiaRaiseAutomationEvent with
+            UIA_LiveRegionChangedEventId — for a Name change on any peer whose
+            GetLiveSetting() is not Off, and serves UIA_LiveSettingPropertyId
+            from GetPropertyValue. Avalonia.Win32.Automation.dll ships inside
+            the Avalonia.Win32 package and is in our published artifacts.
+
+          Avalonia.FreeDesktop.AtSpi 12.1.1 emits activation, bounds, children,
+          focus, property, selection and state signals and has no live-region
+          symbol anywhere in it, so Orca is told nothing here. That gap is
+          recorded in spec/FEATURES.md §12 rather than left as a claim this app
+          only keeps on one of its two platforms.
+
+          tools/UiaProbe checks the Windows half where it is consumed, on a
+          running window, because everything above is still only source.
         -->
         <TextBlock Grid.Column="1" Text="{Binding Status}" FontSize="12" Opacity="0.75"
                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis"

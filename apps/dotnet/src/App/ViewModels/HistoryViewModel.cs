@@ -42,11 +42,24 @@ public sealed partial class HistoryRow(GeneratedOutput output) : ObservableObjec
     /// The row as one sentence, for a screen reader.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Mode first, because it is the category; then what was said; then who,
     /// when and how big. The same three things the eye reads left to right and
     /// top to bottom, in that order, as one announced item (spec §12).
+    /// </para>
+    /// <para>
+    /// The full stop after the summary is only added when the summary has not
+    /// already ended the sentence itself. Reading the real tree with
+    /// <c>tools/UiaProbe</c> is what turned this up: rows were announcing
+    /// "…in just a few minutes.. Serena" and "…by the sea…. Ryan", because the
+    /// separator was unconditional and most scripts end in punctuation.
+    /// </para>
     /// </remarks>
-    public string AccessibleName => $"{Mode}: {Summary}. {Subtitle}";
+    public string AccessibleName =>
+        $"{Mode}: {Summary}{(EndsASentence(Summary) ? "" : ".")} {Subtitle}";
+
+    private static bool EndsASentence(string text) =>
+        text.Length > 0 && ".!?…:;".Contains(text[^1], StringComparison.Ordinal);
 
     /// <summary>The single line beneath the summary: voice, date and size.</summary>
     public string Subtitle

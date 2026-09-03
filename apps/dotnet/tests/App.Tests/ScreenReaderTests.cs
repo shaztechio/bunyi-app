@@ -35,14 +35,24 @@ namespace Bunyi.App.Tests;
 /// <para>
 /// Measured on the automation peers of the real windows, the way
 /// <see cref="AccessibleNameTests"/> does for names. Four things: decorative
-/// glyphs are not announced, a running generation is announced, Doctor's
+/// glyphs are not announced, a running generation is announceable, Doctor's
 /// severities are words rather than a symbol, and a History row is one item
 /// rather than three loose pieces of text before five buttons.
 /// </para>
 /// <para>
-/// A peer is what UI Automation sees; whether Narrator or Orca then say the
-/// right thing is a question for a real desktop session, which a headless test
-/// cannot answer. These pin the tree those readers will walk.
+/// <b>What layer this file pins, and what it does not.</b> Every assertion
+/// here reads an Avalonia <see cref="AutomationPeer"/> in a headless harness.
+/// Narrator reads the Windows UI Automation tree and Orca reads AT-SPI, each a
+/// bridge away from a peer. So a green run is evidence that <i>the tree a
+/// reader walks is built correctly</i>, and it is not evidence about what
+/// either reader says out loud — #192 was filed because these tests were cited
+/// as the second thing when they only ever showed the first.
+/// </para>
+/// <para>
+/// The far side is checked elsewhere. <c>tools/UiaProbe</c> walks the real UIA
+/// tree of a running window on Windows and reads what a peer test cannot see
+/// across the bridge; <see href="https://github.com/shaztechio/bunyi-app/issues/159">#159</see>
+/// keeps the manual Narrator and Orca passes that neither can replace.
 /// </para>
 /// </remarks>
 public class ScreenReaderTests : HeadlessWindows
@@ -98,11 +108,22 @@ public class ScreenReaderTests : HeadlessWindows
     // ---- A running generation ----
 
     [AvaloniaFact]
-    public void The_status_line_is_a_live_region()
+    public void The_status_lines_peer_reports_a_polite_live_setting()
     {
         // Off by default, which means a reader says the status only when focus
         // lands on it — and focus never lands on it during a run. Polite: it
         // waits for the reader to finish what it was saying.
+        //
+        // Read off the *peer*, not off the attached property. #192's charge was
+        // that the old assertion — AutomationProperties.GetLiveSetting(status)
+        // — proved only that the value had been stored. Going through
+        // ControlAutomationPeer.GetLiveSettingCore() proves the one further step
+        // this harness can reach: that the attribute arrives at the peer whose
+        // GetLiveSetting() the Win32 bridge consults before raising
+        // LiveRegionChanged.
+        //
+        // The step after that is a UIA event on a real desktop, which is what
+        // tools/UiaProbe is for. See the class remarks.
         var (window, model) = Show();
         ((FakeEngine)model.Engine).Publish(
             new EngineStatus(EngineState.Generating, Detail: "49 frames · 3.9s of speech so far", Frames: 49));
@@ -111,8 +132,38 @@ public class ScreenReaderTests : HeadlessWindows
         var status = window.GetLogicalDescendants().OfType<TextBlock>()
             .Single(t => t.Text == model.Status);
 
-        Assert.Equal(AutomationLiveSetting.Polite, AutomationProperties.GetLiveSetting(status));
+        Assert.Equal(AutomationLiveSetting.Polite, PeerOf(status).GetLiveSetting());
         Assert.Contains("3.9s of speech", PeerOf(status).GetName(), StringComparison.Ordinal);
+    }
+
+    [AvaloniaFact]
+    public void The_status_lines_peer_renames_itself_when_the_status_changes()
+    {
+        // The other half of the same chain, and the half nothing pinned before.
+        // Avalonia's Win32 bridge raises LiveRegionChanged from a *Name* change
+        // on the peer; TextBlockAutomationPeer is what turns a Text change into
+        // one. If that ever stopped happening, LiveSetting would go on reading
+        // Polite and the region would go quiet — which is exactly the failure
+        // #192 suspected. So: change the status, expect the peer to say its name
+        // changed.
+        var (window, model) = Show();
+        window.UpdateLayout();
+
+        var status = window.GetLogicalDescendants().OfType<TextBlock>()
+            .Single(t => t.Text == model.Status);
+
+        var renamed = new List<string?>();
+        PeerOf(status).PropertyChanged += (_, e) =>
+        {
+            if (e.Property == AutomationElementIdentifiers.NameProperty)
+                renamed.Add(e.NewValue as string);
+        };
+
+        ((FakeEngine)model.Engine).Publish(
+            new EngineStatus(EngineState.Generating, Detail: "49 frames · 3.9s of speech so far", Frames: 49));
+        window.UpdateLayout();
+
+        Assert.Contains(renamed, name => name?.Contains("3.9s of speech", StringComparison.Ordinal) == true);
     }
 
     // ---- Doctor ----
@@ -125,7 +176,13 @@ public class ScreenReaderTests : HeadlessWindows
     {
         // The glyph beside a finding — ✕, !, ✓ — reached a reader as the symbol
         // or as nothing. §12: severity in words. The word goes into the
-        // title's accessible name, and the glyph leaves the tree.
+        // finding's accessible name, and the glyph leaves the tree.
+        //
+        // One announced element, not two. #192: with the detail left in the
+        // tree and the severity on the group around it, a reader that lands on
+        // the detail announces "Cannot write there." and is under no obligation
+        // to have said "Blocker" on the way in. A name cannot be read half-way,
+        // so the whole finding is the name and everything inside it is Raw.
         var panel = MainWindow.BuildFindings(new DoctorReport(TtsMode.PresetVoice, [
             new DoctorFinding("Output folder", "Cannot write there.", severity),
         ]));
@@ -135,10 +192,43 @@ public class ScreenReaderTests : HeadlessWindows
 
         var announced = Descendants(PeerOf(panel))
             .Where(p => p.IsControlElement() || p.IsContentElement())
-            .Select(p => p.GetName())
             .ToList();
 
-        Assert.Equal([$"{word}: Output folder", "Cannot write there."], announced);
+        var finding = Assert.Single(announced);
+        Assert.Equal($"{word}: Output folder. Cannot write there.", finding.GetName());
+
+        // Text, not Group: there is nothing left inside to group, and an empty
+        // group is a container a reader steps into and out of for nothing.
+        Assert.Equal(AutomationControlType.Text, finding.GetAutomationControlType());
+    }
+
+    [AvaloniaFact]
+    public void A_findings_severity_cannot_be_missed_by_landing_on_its_detail()
+    {
+        // The failure #192 described, stated as a test: nothing announced
+        // anywhere under a report carries a detail without its severity.
+        var panel = MainWindow.BuildFindings(new DoctorReport(TtsMode.PresetVoice, [
+            new DoctorFinding("Model", "The preset voice model is downloaded and ready.", DoctorSeverity.Ok),
+            new DoctorFinding("Output folder", "Cannot write there.", DoctorSeverity.Blocker),
+        ]));
+        var (window, _) = Show();
+        window.Content = panel;
+        window.UpdateLayout();
+
+        var announced = Descendants(PeerOf(panel))
+            .Where(p => p.IsControlElement() || p.IsContentElement())
+            .Select(p => p.GetName() ?? string.Empty)
+            .ToList();
+
+        Assert.All(announced, name => Assert.Matches("^(Blocker|Warning|OK): ", name));
+
+        // Blockers first, and each finding whole.
+        Assert.Equal(
+            [
+                "Blocker: Output folder. Cannot write there.",
+                "OK: Model. The preset voice model is downloaded and ready.",
+            ],
+            announced);
     }
 
     // ---- History rows ----
@@ -171,6 +261,12 @@ public class ScreenReaderTests : HeadlessWindows
         // met "Preset voice", "Hello there" and "Ryan · date · size" as three
         // unrelated pieces of text, then five buttons. After: one list item,
         // named with all three, and the five buttons inside it.
+        //
+        // #192 asked whether a reader announces that name rather than the child
+        // text. It has no choice: the three text blocks are AccessibilityView
+        // Raw, so the row's name is the only text under the row there is. That
+        // is what the count below pins — five buttons and nothing else — and it
+        // is the shape Doctor's findings were changed to for the same reason.
         var outputs = Populate();
         try
         {
@@ -217,5 +313,35 @@ public class ScreenReaderTests : HeadlessWindows
             }));
 
         Assert.StartsWith("Voice design: Hello there.", row.AccessibleName, StringComparison.Ordinal);
+    }
+
+    [AvaloniaTheory]
+    [InlineData("Hello there", "Voice design: Hello there. ")]
+    [InlineData("Hello there.", "Voice design: Hello there. ")]
+    [InlineData("Hello! We'll begin in just a few minutes.", "Voice design: Hello! We'll begin in just a few minutes. ")]
+    [InlineData("Once upon a time, in a village by the sea…", "Voice design: Once upon a time, in a village by the sea… ")]
+    [InlineData("Are you ready?", "Voice design: Are you ready? ")]
+    public void The_rows_sentence_does_not_double_its_full_stop(string text, string expected)
+    {
+        // Found by tools/UiaProbe on the real tree, not here: rows were reading
+        // "…in just a few minutes.. Serena", because the separator was added
+        // whether or not the script had already ended the sentence. Most
+        // scripts have, including two of the three built-in examples.
+        var row = new HistoryRow(new GeneratedOutput(
+            @"C:\out\Voice-design-20260101T000001.wav",
+            new DateTimeOffset(2026, 1, 1, 9, 30, 0, TimeSpan.Zero),
+            5_000,
+            new OutputMetadata
+            {
+                Mode = "Voice design",
+                Text = text,
+                Language = "english",
+                ModelRepo = "wavekat/Qwen3-TTS-1.7B-VoiceDesign-ONNX",
+                AppVersion = "0.1.0",
+                Created = new DateTimeOffset(2026, 1, 1, 9, 30, 0, TimeSpan.Zero),
+            }));
+
+        Assert.StartsWith(expected, row.AccessibleName, StringComparison.Ordinal);
+        Assert.DoesNotContain("..", row.AccessibleName, StringComparison.Ordinal);
     }
 }
