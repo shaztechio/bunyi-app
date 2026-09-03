@@ -32,6 +32,26 @@ internal static class Tree
 {
     private static readonly TreeWalker Walker = TreeWalker.ControlViewWalker;
 
+    /// <summary>
+    /// Whether a reader will actually read this, rather than merely reach it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The control view is not the view that gets spoken.</b> This tool
+    /// walked the control view and passed a Doctor report and a History list
+    /// that Narrator read as complete silence, because
+    /// <c>IsControlElementOverride</c> puts an element in the control view
+    /// <i>alone</i> and Narrator reads the <b>content</b> view. Named correctly,
+    /// typed correctly, in the tree, and skipped.
+    /// </para>
+    /// <para>
+    /// So the checks ask for both. Anything that must be announced is checked
+    /// with this, not merely with a walk that found it.
+    /// </para>
+    /// </remarks>
+    internal static bool WillBeRead(AutomationElement element) =>
+        element.Current.IsContentElement && element.Current.IsControlElement;
+
     /// <summary>Every top-level window belonging to <paramref name="processId"/>.</summary>
     internal static List<AutomationElement> WindowsOf(int processId)
     {
@@ -72,6 +92,11 @@ internal static class Tree
 
         if (!string.IsNullOrEmpty(info.AcceleratorKey)) line += $" (accel={info.AcceleratorKey})";
         if (!string.IsNullOrEmpty(info.HelpText)) line += $" (help='{Shorten(info.HelpText)}')";
+
+        // Marked, not hidden: an element in the control view but out of the
+        // content view is the shape that reads as silence, and it is invisible
+        // in a plain tree dump. See WillBeRead.
+        if (!info.IsContentElement) line += "  [control view only — not spoken]";
 
         return line;
     }

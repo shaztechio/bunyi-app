@@ -727,10 +727,11 @@ chords differ and only the requirement is pinned.
 > **"A control that changes says what it changed to" is new here, and is
 > unverified on macOS.** It was added because Windows failed it: the pickers
 > moved through their values in silence, and nothing in the app was wrong —
-> Avalonia's ComboBox peer raises no property change for a selection. Whether
-> SwiftUI's `Picker` announces under VoiceOver has not been checked, and
-> "probably, it usually does" is the assumption that produced this bullet in the
-> first place. #158 is where that gets measured.
+> Avalonia's ComboBox peer raises no property change for a selection. **Windows
+> now satisfies it, confirmed under Narrator by ear on 3 Sep 2026**, not only as
+> a UIA event. Whether SwiftUI's `Picker` announces under VoiceOver has not been
+> checked, and "probably, it usually does" is the assumption that produced this
+> bullet in the first place. #158 is where that gets measured.
 >
 > Both apps' screen-reader behaviour proper — Narrator and Orca actually
 > speaking, in a real desktop session — remains a manual pass under #159 and

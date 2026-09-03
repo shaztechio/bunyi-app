@@ -239,28 +239,57 @@ public partial class MainWindow : Window
             // Selectable so the text can still be picked up with a pointer, and
             // the dialog's Copy button carries the whole report for everyone
             // else — taking it out of the automation tree costs no route to it.
+            //
+            // Focusable=false is the important half. A SelectableTextBlock takes
+            // focus by default, so Tab stopped on this — and because it is Raw,
+            // a reader announced nothing when it landed. That is a silent focus
+            // stop, which is worse than either being read or being skipped, and
+            // it is what "Doctor does not narrate at all" turned out to be.
             var detail = new SelectableTextBlock
             {
                 Text = finding.Detail,
                 TextWrapping = Avalonia.Media.TextWrapping.Wrap,
                 Opacity = 0.85,
                 MaxWidth = 420,
+                Focusable = false,
             };
             AutomationProperties.SetAccessibilityView(detail, AccessibilityView.Raw);
 
-            var row = new StackPanel
+            // The row takes the focus the detail used to, so the thing Tab lands
+            // on is the thing that carries the whole sentence. Being in the
+            // content view is what a reader needs to *read* it; being focusable
+            // is what gets a reader there at all with scan mode off, which is
+            // how most people drive Narrator.
+            var row = new Border
             {
-                Orientation = Avalonia.Layout.Orientation.Horizontal,
-                Spacing = 8,
-                Children =
+                Focusable = true,
+                CornerRadius = new Avalonia.CornerRadius(4),
+                Padding = new Avalonia.Thickness(4, 2),
+                Child = new StackPanel
                 {
-                    glyph,
-                    new StackPanel { Children = { title, detail } },
+                    Orientation = Avalonia.Layout.Orientation.Horizontal,
+                    Spacing = 8,
+                    Children =
+                    {
+                        glyph,
+                        new StackPanel { Children = { title, detail } },
+                    },
                 },
             };
             AutomationProperties.SetName(row, $"{word}: {finding.Title}. {finding.Detail}");
             AutomationProperties.SetControlTypeOverride(row, AutomationControlType.Text);
-            AutomationProperties.SetIsControlElementOverride(row, true);
+
+            // Content, not IsControlElementOverride. Reported from using the
+            // app with Narrator: the report read nothing at all except its two
+            // buttons. IsControlElementOverride puts an element in the *control*
+            // view alone, and Narrator reads the *content* view — so a finding
+            // that was correctly named and correctly typed was skipped whole,
+            // and the only things left with content were Copy and Close.
+            //
+            // AccessibilityView.Content puts it in both. That is the property to
+            // reach for whenever something must be announced; there is no
+            // IsContentElementOverride to pair with the other one.
+            AutomationProperties.SetAccessibilityView(row, AccessibilityView.Content);
 
             lines.Children.Add(row);
         }

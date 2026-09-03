@@ -132,3 +132,14 @@ Recorded because a tool nobody has seen catch anything is hard to trust:
   worked, because `ValuePatternIdentifiers.ValueProperty` is **not in the Win32
   bridge's property map**. `ItemStatus` is the mapped property that fits.
   They were also unnamed, announcing as a bare "combo box".
+  **Fixed, and confirmed by ear under Narrator on 3 Sep 2026.**
+
+## What it cannot tell you
+
+It reads the tree and the events. It does not listen.
+
+Every check here can pass on a control no screen reader ends up speaking, and
+the dropdown bug is the proof: the value was correct and readable over UIA the
+whole time it was silent. So a green run means *the signal is there for a reader
+to use*, and nothing more. The reader still has to be asked — which is #159, and
+which is why the confirmations above carry a date and the words "by ear".

@@ -288,7 +288,10 @@ internal static partial class Program
             var text = children.Where(c => c.Current.ControlType == ControlType.Text).ToList();
             var buttons = children.Where(c => c.Current.ControlType == ControlType.Button).ToList();
 
-            if (text.Count > 0)
+            if (!Tree.WillBeRead(row))
+                Fail($"row '{row.Current.Name}' is in the control view only — a reader skips it, "
+                    + "and its text blocks are Raw, so the row reads as silence");
+            else if (text.Count > 0)
                 Fail($"row '{row.Current.Name}' still announces {text.Count} loose text element(s): "
                     + string.Join(", ", text.Select(t => $"'{t.Current.Name}'")));
             else if (buttons.Count != 5)
@@ -320,11 +323,18 @@ internal static partial class Program
             return;
         }
 
-        var findings = Tree.Descendants(report)
+        var texts = Tree.Descendants(report)
             .Where(e => e.Current.ControlType == ControlType.Text)
-            .Select(e => e.Current.Name)
-            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Where(e => !string.IsNullOrWhiteSpace(e.Current.Name))
             .ToList();
+
+        // Reachable is not the same as read. A finding in the control view
+        // alone is skipped by Narrator, which is how a report that passed every
+        // other check here announced nothing at all but its two buttons.
+        foreach (var silent in texts.Where(t => !Tree.WillBeRead(t)))
+            Fail($"'{silent.Current.Name}' is in the control view only — not spoken");
+
+        var findings = texts.Where(Tree.WillBeRead).Select(t => t.Current.Name).ToList();
 
         if (findings.Count == 0)
         {

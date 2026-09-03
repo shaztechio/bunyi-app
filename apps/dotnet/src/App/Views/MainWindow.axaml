@@ -267,6 +267,11 @@ limitations under the License.
               itself, and AutomationNode maps it to UIA_ItemStatusPropertyId.
               Bound through the same converter the item template uses, so what
               is announced is the words on screen rather than the raw id.
+
+              Confirmed by ear, under Narrator, 3 Sep 2026 — not only as a UIA
+              event. Worth saying because the whole of #192 was about the gap
+              between a property being set and a person hearing it, and this is
+              the one step no tool in this repository can take.
             -->
             <ComboBox Grid.Column="1" ItemsSource="{Binding AllLanguages}"
                       SelectedItem="{Binding Language}"

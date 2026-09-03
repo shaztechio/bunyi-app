@@ -207,7 +207,9 @@ public class ScreenReaderTests : HeadlessWindows
         // Layer note, per this file's remarks: this pins that the property
         // tracks the selection and that the peer says so. That the event then
         // reaches a reader is `tools/UiaProbe watch`, which shows
-        // "ItemStatus -> 'Korean' on 'Language'" for each arrow press.
+        // "ItemStatus -> 'Korean' on 'Language'" for each arrow press — and
+        // that Narrator then speaks it was confirmed by ear on 3 Sep 2026,
+        // which is the one step neither this test nor that tool can take.
         var (window, model) = Show();
         var language = window.GetLogicalDescendants().OfType<ComboBox>()
             .First(c => AutomationProperties.GetLabeledBy(c) is TextBlock { Text: "Language" });
@@ -262,6 +264,65 @@ public class ScreenReaderTests : HeadlessWindows
         // Text, not Group: there is nothing left inside to group, and an empty
         // group is a container a reader steps into and out of for nothing.
         Assert.Equal(AutomationControlType.Text, finding.GetAutomationControlType());
+    }
+
+    [AvaloniaFact]
+    public void The_thing_the_keyboard_lands_on_is_the_thing_that_carries_the_words()
+    {
+        // Reported from using the app with Narrator: Doctor narrated nothing at
+        // all except its two buttons. Two causes, and this is the second.
+        //
+        // With scan mode off — how most people drive Narrator — a reader follows
+        // the *keyboard*. A SelectableTextBlock takes focus by default, so Tab
+        // stopped on the detail; the detail is Raw, so the reader announced
+        // nothing when it arrived. A silent focus stop is worse than either
+        // being read or being skipped.
+        //
+        // So the focus stop and the accessible name have to be the same element.
+        var panel = MainWindow.BuildFindings(new DoctorReport(TtsMode.PresetVoice, [
+            new DoctorFinding("Output folder", "Cannot write there.", DoctorSeverity.Blocker),
+        ]));
+        var (window, _) = Show();
+        window.Content = panel;
+        window.UpdateLayout();
+
+        var focusable = panel.GetLogicalDescendants().OfType<Control>()
+            .Where(c => c.Focusable)
+            .ToList();
+
+        var stop = Assert.Single(focusable);
+        Assert.Equal("Blocker: Output folder. Cannot write there.", AutomationProperties.GetName(stop));
+
+        // And the text inside it stays out of the way rather than taking focus.
+        Assert.All(
+            panel.GetLogicalDescendants().OfType<SelectableTextBlock>(),
+            text => Assert.False(text.Focusable, "a Raw text block still takes focus, and says nothing when it does"));
+    }
+
+    [AvaloniaFact]
+    public void A_history_row_is_somewhere_the_keyboard_can_land()
+    {
+        // The same defect, in the other screen, and worse: the row's own text
+        // blocks are Raw, so a reader that could only reach the five buttons
+        // heard "play, save, copy, reveal, trash" with nothing saying which clip
+        // any of them belonged to.
+        var outputs = Populate();
+        try
+        {
+            var (window, model) = Show(() => outputs);
+            model.ShowingHistory = true;
+            window.UpdateLayout();
+
+            var list = window.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "List");
+            var row = list.GetVisualDescendants().OfType<Border>().First(b => ToolTip.GetTip(b) is string);
+
+            Assert.True(row.Focusable, "a History row cannot be reached from the keyboard, so it is never announced");
+            Assert.StartsWith("Preset voice: Hello there.", AutomationProperties.GetName(row), StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(outputs, recursive: true);
+        }
     }
 
     [AvaloniaFact]
