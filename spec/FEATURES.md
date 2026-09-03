@@ -722,14 +722,18 @@ chords differ and only the requirement is pinned.
 > **Windows and Linux** have the rest of this, verified on the real
 > accessibility tree rather than on the toolkit's own objects
 > ([#192](https://github.com/shaztechio/bunyi-app/issues/192);
-> `apps/dotnet/tools/UiaProbe`), with **one gap that is the toolkit's and not
-> the app's**:
+> `apps/dotnet/tools/UiaProbe`) — and on **Windows, heard**: the pickers, the
+> Doctor findings, the History rows and the running status were each confirmed
+> aloud under Narrator on 3 Sep 2026, which is the step no tool here can take.
+> Every one of the four was silent when a person first listened, while passing
+> everything that had been automated. There is **one gap that is the toolkit's
+> and not the app's**:
 >
 > > *"A running generation is announceable"* holds on **Windows only.** The
 > > status line is a live region, and Avalonia's Win32 bridge serves
 > > `UIA_LiveSettingPropertyId` and raises `LiveRegionChanged` when the text
-> > changes — both measured on a running window. **On Linux it announces
-> > nothing.** `Avalonia.FreeDesktop.AtSpi` 12.1.1 emits activation, bounds,
+> > changes — both measured on a running window, and confirmed aloud. **On
+> > Linux it announces nothing.** `Avalonia.FreeDesktop.AtSpi` 12.1.1 emits activation, bounds,
 > > children, focus, property, selection and state signals and has no
 > > live-region concept anywhere in it, so there is no signal for Orca to hear.
 > > There is no app-side workaround: the app can only set the property the
@@ -745,8 +749,8 @@ chords differ and only the requirement is pinned.
 > checked, and "probably, it usually does" is the assumption that produced this
 > bullet in the first place. #158 is where that gets measured.
 >
-> **The pacing rule is unverified on macOS too, and macOS has the same
-> ingredient.** `TTSEngine` publishes a token count per frame there as well, so
+> **The pacing rule holds on Windows, confirmed aloud on 3 Sep 2026. It is
+> unverified on macOS, which has the same ingredient.** `TTSEngine` publishes a token count per frame there as well, so
 > if VoiceOver is given that as a live announcement it will have the same
 > problem: not "too chatty" but *silent*, because nothing is ever allowed to
 > finish. Checked on Windows, where it was found; #158 is where macOS gets the

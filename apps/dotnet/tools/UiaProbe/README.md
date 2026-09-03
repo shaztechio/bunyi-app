@@ -148,8 +148,14 @@ Recorded because a tool nobody has seen catch anything is hard to trust:
 
 It reads the tree and the events. It does not listen.
 
-Every check here can pass on a control no screen reader ends up speaking, and
-the dropdown bug is the proof: the value was correct and readable over UIA the
-whole time it was silent. So a green run means *the signal is there for a reader
-to use*, and nothing more. The reader still has to be asked — which is #159, and
-which is why the confirmations above carry a date and the words "by ear".
+**Four separate defects in this app passed everything automated and were silent
+to a person.** The dropdowns, the Doctor findings, the History rows and the
+running status: each correct on inspection, each saying nothing aloud, each
+found only when someone put Narrator on and used the app. Two of them this tool
+actively vouched for.
+
+So a green run means *the signal is there for a reader to use*, and nothing
+more. The reader still has to be asked — which is #159, and which is why the
+confirmations here carry a date and the words "by ear".
+
+All four were confirmed aloud under Narrator on **3 Sep 2026**.
