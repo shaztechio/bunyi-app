@@ -261,6 +261,22 @@ A platform ships this only if its mirror publishes `manifest.sha256`
 (`DATA-FORMATS.md`). Offering a source the app itself endorses is a higher bar
 than documenting one a user picked, and unverified bytes do not clear it.
 
+**Both platforms ship it now**, at the prefixes below. The two weight sets live
+on one host and never share a path — the runtime family is in the URL, because
+Windows and Linux fetch byte-identical ONNX files and an OS-named layout would
+need `/linux` aliased to `/windows` on day one:
+
+| Runtime family | Preset voice | Voice design | Voice clone |
+|---|---|---|---|
+| MLX (macOS) | `models.bunyi.app/customvoice` | `/voicedesign` | `/voiceclone` |
+| ONNX (Windows, Linux) | `models.bunyi.app/onnx/customvoice` | `/onnx/voicedesign` | `/onnx/voiceclone` |
+
+The MLX prefixes keep their original unnested names permanently. A self-hosted
+model's folder on disk is derived from the URL it came from, so renaming one
+would re-download the whole weight set for every existing mirror user — and
+those are precisely the people who chose a mirror because the Hub does not work
+for them. Shipped binaries also carry the old paths and cannot be changed.
+
 > Model **weights** differ per runtime: macOS uses MLX `.safetensors`
 > conversions (mlx-community); the .NET app uses **ONNX** exports of the
 > same Qwen3-TTS models. The *defaults differ per platform* but the

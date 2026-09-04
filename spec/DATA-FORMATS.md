@@ -220,6 +220,24 @@ stripped. Digests are compared case-insensitively.
 The **path rules** above apply here unchanged — a digest does not make a
 path safe, and an entry is rejected before its digest is ever considered.
 
+### Required of a mirror an app endorses
+
+Optional for a mirror someone sets up for themselves; **mandatory** for one an
+app offers as a built-in configuration. `FEATURES.md` §3a gates the built-in on
+it: a source the app itself suggests is a higher bar than one a user picked,
+and unverified bytes do not clear it.
+
+The manifest is also **the file list**, not a checksum appended to one. A file
+the manifest omits is a file the client never asks for, so an incomplete
+manifest produces an install that looks finished and fails at load — which is
+the failure the completeness rule exists to prevent. Deriving it from the
+client's own view of what each mode needs, rather than from a directory
+listing, is what `apps/dotnet/tools/MirrorManifest` does and why.
+
+One manifest per model, at that model's own prefix. Nothing is shared between
+modes, and nothing about a manifest identifies which runtime family it belongs
+to — the prefix does that.
+
 **Two files rather than digests inside `manifest.txt`.** Every released
 client parses each line of `manifest.txt` as a path; a `<digest>  <path>`
 line would be requested verbatim, 404, and fail the download outright for a

@@ -189,7 +189,10 @@ public sealed partial class SettingsViewModel : ObservableObject
 
         _configs.Load();
         Configs.Clear();
-        foreach (var config in _configs.Configs) Configs.Add(config);
+        // Listed, not Configs: the built-in mirror is shown but never saved,
+        // and a configuration of the user's own under the same name hides it
+        // (spec §3a). See ModelConfigLibrary.Listed.
+        foreach (var config in _configs.Listed) Configs.Add(config);
 
         RefreshStorage();
 

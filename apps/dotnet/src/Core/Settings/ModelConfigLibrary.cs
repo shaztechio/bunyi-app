@@ -46,6 +46,18 @@ public sealed record ModelConfig
     [JsonPropertyName("savedAt")]
     public DateTimeOffset SavedAt { get; init; } = DateTimeOffset.UtcNow;
 
+    /// <summary>
+    /// Whether the app ships this entry rather than the user having saved it.
+    /// </summary>
+    /// <remarks>
+    /// <c>JsonIgnore</c> because it is derived from the id, not stored: without
+    /// it every saved configuration would gain an <c>"isBuiltIn": false</c> in
+    /// <c>configs.json</c>, which is a fact about the row rather than about the
+    /// sources, and one a future reader could contradict by editing.
+    /// </remarks>
+    [JsonIgnore]
+    public bool IsBuiltIn => Id == ModelConfigLibrary.BunyiMirror.Id;
+
     /// <summary>The source this configuration gives a mode.</summary>
     public string For(TtsMode mode) => mode switch
     {
@@ -67,14 +79,18 @@ public sealed record ModelConfig
 /// mode or the app loads a model that runs and produces nonsense.
 /// </para>
 /// <para>
-/// <b>There is no built-in mirror entry here, deliberately.</b> §3a permits one
-/// — and macOS ships it — but gates it: "A platform ships this only if its
-/// mirror publishes <c>manifest.sha256</c>". The project mirror serves the MLX
-/// weight set; it has no ONNX files, so there is nothing for this app to point
-/// at and nothing whose bytes it could verify. Offering a source the app itself
-/// endorses is a higher bar than documenting one a user picked, and an entry
-/// that 404s on every file would not clear it. Add it here when the mirror
-/// serves checksummed ONNX exports, and not before.
+/// <b>There is a built-in mirror entry, and there did not use to be.</b> §3a
+/// permits one but gates it: "A platform ships this only if its mirror
+/// publishes <c>manifest.sha256</c>". For a long time the project mirror served
+/// only the MLX weight set, so this app had nothing to point at and nothing
+/// whose bytes it could verify — and an entry the app itself endorses that 404s
+/// on every file is worse than no entry.
+/// </para>
+/// <para>
+/// The ONNX exports are now mirrored at <c>models.bunyi.app/onnx/*</c>, each
+/// prefix publishing its own <c>manifest.sha256</c>, and all three modes have
+/// been downloaded and generated from them. The gate is met by measurement
+/// rather than intention, which is the standard §3a set (#100).
 /// </para>
 /// <para>
 /// Stored with the app's own data rather than in the models folder: it
@@ -105,6 +121,81 @@ public sealed class ModelConfigLibrary
 
     /// <summary>Where the file lives.</summary>
     public string Path => _path;
+
+    /// <summary>
+    /// The project's own mirror of the ONNX exports (spec §3a, #100).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Hugging Face is unreachable on some networks and blocked outright in
+    /// mainland China. For a Qwen model whose second language is Chinese and
+    /// whose default speakers include Uncle_Fu and Ono_Anna, that is not a
+    /// footnote — it is the difference between the app working and not. macOS
+    /// has shipped this entry since it had a mirror to point at; this is the
+    /// same thing for the ONNX family.
+    /// </para>
+    /// <para>
+    /// <b>Not the default, deliberately.</b> Hugging Face is where the weights
+    /// actually come from, and a default pointing at project-run infrastructure
+    /// would make that infrastructure a single point of failure for every
+    /// install. Each output records the source that produced it, so it has to
+    /// be one the user chose. It is not an automatic fallback when the Hub is
+    /// slow either, for the same reason.
+    /// </para>
+    /// <para>
+    /// The <c>Guid</c> is fixed rather than generated. The row has to keep its
+    /// identity across launches without being written to disk, and a fresh one
+    /// each time would make the list treat it as a different row on every read.
+    /// It matches macOS's UUID for the same entry, which costs nothing and
+    /// means the two apps describe one thing rather than two.
+    /// </para>
+    /// </remarks>
+    public static ModelConfig BunyiMirror { get; } = new()
+    {
+        Id = new Guid("B0000000-0000-4000-A000-000000000001"),
+        Name = "Bunyi mirror",
+        PresetVoice = "https://models.bunyi.app/onnx/customvoice",
+        VoiceDesign = "https://models.bunyi.app/onnx/voicedesign",
+        VoiceClone = "https://models.bunyi.app/onnx/voiceclone",
+        SavedAt = DateTimeOffset.MinValue,
+    };
+
+    /// <summary>Whether a configuration is one the app ships rather than one saved here.</summary>
+    /// <remarks>
+    /// A built-in has no Delete button: there is nothing on disk to remove, and
+    /// offering the action would promise something the library cannot do.
+    /// </remarks>
+    public static bool IsBuiltIn(ModelConfig config) =>
+        config is not null && config.Id == BunyiMirror.Id;
+
+    /// <summary>
+    /// What Settings lists: the built-in mirror, then everything saved here.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The mirror is never persisted, so it cannot be edited or deleted.
+    /// <b>Saving a configuration of your own under the same name is how you
+    /// override it</b> — yours then stands in for the built-in entirely,
+    /// because a real entry the user chose to write beats one the app shipped.
+    /// Delete yours and the built-in returns; it was never gone, only hidden.
+    /// </para>
+    /// <para>
+    /// An override keeps its ordinary alphabetical place rather than being
+    /// pinned to the top. Once it is a saved configuration it behaves like
+    /// every other one, which is the whole point of letting a name shadow.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<ModelConfig> Listed
+    {
+        get
+        {
+            var saved = Configs;
+            var overridden = saved.Any(
+                c => string.Equals(c.Name, BunyiMirror.Name, StringComparison.OrdinalIgnoreCase));
+
+            return overridden ? saved : [BunyiMirror, .. saved];
+        }
+    }
 
     /// <summary>
     /// What Settings lists: saved configurations, alphabetically.
@@ -168,9 +259,21 @@ public sealed class ModelConfigLibrary
     }
 
     /// <summary>Removes a configuration.</summary>
+    /// <remarks>
+    /// The built-in is refused rather than quietly ignored. It is never in
+    /// <c>_configs</c>, so removing it would be a no-op that wrote the file
+    /// again and logged a deletion that did not happen — and the UI hides its
+    /// Delete button, so reaching here with one is a bug worth hearing about.
+    /// </remarks>
     public void Delete(ModelConfig config)
     {
         ArgumentNullException.ThrowIfNull(config);
+
+        if (IsBuiltIn(config))
+        {
+            _log.Log($"“{config.Name}” is built in and has nothing on disk to delete.");
+            return;
+        }
 
         lock (_gate)
         {
