@@ -93,6 +93,30 @@ public sealed class SettingsTests : HeadlessWindows
     }
 
     [AvaloniaFact]
+    public void An_empty_source_box_names_the_default_it_will_use()
+    {
+        // Clearing a box means "use the built-in default", so the one moment a
+        // person needs to know what that default *is*, is exactly when the box
+        // is empty and the placeholder is showing. It used to read "Built-in
+        // default" — true, and no help to anyone comparing a mirror against the
+        // original, or typing a variant of one.
+        //
+        // macOS has shown the repo since it shipped (prompt: Text(mode.repoID)
+        // in SettingsView.swift), so this is parity rather than invention.
+        var window = Open(new SettingsWindow { DataContext = NewModel() });
+
+        var placeholders = window.GetLogicalDescendants().OfType<TextBox>()
+            .Select(b => b.PlaceholderText)
+            .Where(p => !string.IsNullOrEmpty(p))
+            .ToList();
+
+        Assert.Contains(DefaultFor(TtsMode.PresetVoice), placeholders);
+        Assert.Contains(DefaultFor(TtsMode.VoiceDesign), placeholders);
+        Assert.Contains(DefaultFor(TtsMode.VoiceClone), placeholders);
+        Assert.DoesNotContain("Built-in default", placeholders);
+    }
+
+    [AvaloniaFact]
     public void The_about_tab_titles_the_window()
     {
         var window = Open(new SettingsWindow { DataContext = NewModel() });
