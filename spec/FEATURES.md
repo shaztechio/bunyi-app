@@ -447,8 +447,22 @@ macOS source: `BackupManager.swift`.
 
 ## 7. Settings
 
-Tabbed window (macOS: ⌘,). Tabs — the window title reflects the selected
-tab (platform convention). macOS source: `SettingsView.swift`.
+Tabbed window (macOS: ⌘,). Tabs — the window title reflects the selected tab,
+**and names the window before it** where the platform's own convention is to
+name the window: the .NET app titles it **"Settings — General"**, macOS titles
+it "General" alone. macOS source: `SettingsView.swift`.
+
+> The parenthetical here used to read "(platform convention)" and both apps
+> titled the pane alone, which is macOS's convention applied everywhere. Windows
+> does the opposite — Windows Settings and tabbed options dialogs across the
+> platform name the dialog, with the section shown in the content.
+>
+> It surfaced as an accessibility defect rather than a cosmetic one. A window's
+> title *is* its accessible name — Avalonia's `WindowAutomationPeer` is
+> `GetNameCore() => Owner.Title`, overriding the usual lookup and ignoring
+> `AutomationProperties.Name` — so pressing the chord with a screen reader on
+> announced "General", which is no confirmation that a settings window opened at
+> all, and there was nowhere else to put the word. See #196.
 - **General**: appearance — **System / Light / Dark**. System follows the OS;
   Light and Dark pin the app regardless of it. Applies immediately, to
   **every** window the app owns, not only the one in front (macOS: the main

@@ -41,14 +41,29 @@ public partial class SettingsWindow : Window
     }
 
     /// <summary>
-    /// The window title reflects the selected tab, which is the platform
-    /// convention §7 asks for.
+    /// The window title names the window and then the selected tab (spec §7).
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// "Settings — General", not "General". The tab alone is the macOS
+    /// convention and this window used to copy it, which cost a screen-reader
+    /// user the one thing that confirms the chord worked: pressing Ctrl+, with
+    /// Narrator on announced "General", a word appearing nowhere in what they
+    /// asked for (#196).
+    /// </para>
+    /// <para>
+    /// It has to be the title rather than an accessible name set beside it.
+    /// Avalonia's <c>WindowAutomationPeer.GetNameCore()</c> is
+    /// <c>=> Owner.Title</c> — it overrides the usual lookup and ignores
+    /// <c>AutomationProperties.Name</c> entirely, so for a window the title
+    /// <i>is</i> the announcement and there is nowhere else to put this.
+    /// </para>
+    /// </remarks>
     private void OnTabChanged(object? sender, SelectionChangedEventArgs e)
     {
         if (sender is TabControl { SelectedItem: TabItem { Header: string header } })
         {
-            Title = header;
+            Title = $"Settings — {header}";
         }
     }
 
