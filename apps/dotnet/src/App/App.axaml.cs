@@ -64,11 +64,24 @@ public partial class App : Application
 
             ApplyAppearance(settings.Appearance);
 
+            // Read again for anything that runs later, rather than closing over
+            // the value above. AppSettings is an immutable record and Settings
+            // saves a change by persisting a NEW one, so a captured instance is
+            // a snapshot of the moment the app launched — and every source or
+            // folder the user changed afterwards was ignored until the next
+            // launch. Pressing Generate went on downloading from wherever the
+            // app started up pointing at, silently, which is the worst shape
+            // this could take: nothing failed, it just did the old thing.
+            //
+            // Loading is a small JSON read behind a lock, and it happens when a
+            // run starts or Doctor is asked — not in any loop.
+            AppSettings Current() => settingsStore.Load();
+
             var probe = new SystemProbe();
             var downloader = new ModelDownloader(Http, log);
 
             ModelSource SourceFor(TtsMode mode) =>
-                ModelSource.Parse(settings.SourceFor(mode), DefaultSourceFor(mode));
+                ModelSource.Parse(Current().SourceFor(mode), DefaultSourceFor(mode));
 
             // Doctor needs the same view of sources and folders the engine has,
             // so it is built from the same functions rather than a second copy.
@@ -94,7 +107,7 @@ public partial class App : Application
                     mode,
                     SourceFor(mode),
                     layout,
-                    settingsStore.ResolveModelsFolder(settings),
+                    settingsStore.ResolveModelsFolder(Current()),
                     Bunyi.Core.Infrastructure.AppPaths.Outputs,
                     probe,
                     Reachable,
@@ -122,7 +135,7 @@ public partial class App : Application
                 log,
                 SourceFor,
                 ModelLayout.For,
-                () => settingsStore.ResolveModelsFolder(settings),
+                () => settingsStore.ResolveModelsFolder(Current()),
                 () => Bunyi.Core.Infrastructure.AppPaths.Outputs,
                 typeof(App).Assembly.GetName().Version?.ToString(3) ?? "0.1.0",
                 time: null,
@@ -165,7 +178,7 @@ public partial class App : Application
                         // seen or deleted — and it put a second models/ tree
                         // inside a backup, where the restore looks for exactly
                         // one.
-                        settingsStore.ResolveModelsFolder(settings),
+                        settingsStore.ResolveModelsFolder(Current()),
                         null,
                         ct);
 
