@@ -126,9 +126,14 @@ public sealed class SettingsTests : HeadlessWindows
         // the logical tree, and how many times is Avalonia's business rather
         // than this test's. The claim is that the row offers Use and not
         // Delete, and that is what is asserted.
+        // Worded, not a tick: "Restore" is §3a's own word and macOS's, and a
+        // bare icon said neither what it did nor to what.
         Assert.Contains(
             window.GetLogicalDescendants().OfType<Button>().Where(b => b.IsEffectivelyVisible),
-            b => ToolTip.GetTip(b) as string == "Use these sources for all three modes");
+            b => b.Content as string == "Restore");
+
+        // And the row says where it points, so a name is not the only clue.
+        Assert.Contains("models.bunyi.app", rows);
     }
 
     [AvaloniaFact]
@@ -140,7 +145,7 @@ public sealed class SettingsTests : HeadlessWindows
         var model = NewModel();
         var window = Open(new SettingsWindow { DataContext = model });
 
-        model.UseConfigCommand.Execute(ModelConfigLibrary.BunyiMirror);
+        model.RestoreConfigCommand.Execute(ModelConfigLibrary.BunyiMirror);
         window.UpdateLayout();
 
         Assert.Equal("https://models.bunyi.app/onnx/customvoice", model.PresetVoiceSource);
@@ -442,7 +447,7 @@ public sealed class SettingsTests : HeadlessWindows
         model.ResetSourcesCommand.Execute(null);
         Assert.Equal(string.Empty, model.PresetVoiceSource);
 
-        model.UseConfigCommand.Execute(model.Configs.Single(c => !c.IsBuiltIn));
+        model.RestoreConfigCommand.Execute(model.Configs.Single(c => !c.IsBuiltIn));
 
         Assert.Equal("org/preset", model.PresetVoiceSource);
         Assert.Equal("org/design", model.VoiceDesignSource);

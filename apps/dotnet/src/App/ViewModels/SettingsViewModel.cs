@@ -412,9 +412,14 @@ public sealed partial class SettingsViewModel : ObservableObject
         Reload();
     }
 
-    /// <summary>Applies a saved configuration to all three modes at once.</summary>
+    /// <summary>Restores a configuration to all three modes at once (spec §3a).</summary>
+    /// <remarks>
+    /// "Restore" is the spec's own word — the three sources are "saved and
+    /// restored as a set" — and macOS's. This used to be called Use, shown as
+    /// a bare tick, which said neither what it did nor to what.
+    /// </remarks>
     [RelayCommand]
-    private void UseConfig(ModelConfig? config)
+    private void RestoreConfig(ModelConfig? config)
     {
         if (config is null) return;
 
