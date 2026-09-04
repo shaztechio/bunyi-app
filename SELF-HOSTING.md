@@ -297,6 +297,30 @@ worse — list it in the manifest, so every one of your users downloads it too.
 
 ### 6. Download them
 
+> **Hosting the ONNX set from a machine that already runs Bunyi? Skip 6 and 7.**
+>
+> Bunyi has already downloaded these models — generating once in a mode fetches
+> them — and `apps/dotnet/tools/MirrorManifest` turns what is on disk into a
+> mirror without downloading anything twice:
+>
+> ```sh
+> cd apps/dotnet
+> dotnet run --project tools/MirrorManifest -- --out ~/bunyi-mirror
+> ```
+>
+> It reads the models folder, checks every file each mode **requires** is
+> present, writes `manifest.sha256` and an `rclone --files-from` list per
+> prefix, and prints the upload commands with your paths already in them.
+>
+> It is not just a shortcut. The manifest comes from `ModelLayout` — the app's
+> own statement of what it fetches — rather than from a `find` over a folder, so
+> the two failures this step warns about below cannot happen: a missing required
+> file stops the run by name, and a file no mode asks for is reported and left
+> out instead of being published to every user. On a machine that had generated
+> in all three modes it left out six such files without being told to.
+>
+> Then continue at step 8.
+
 ```sh
 uv tool install huggingface_hub      # once; puts `hf` in ~/.local/bin
 

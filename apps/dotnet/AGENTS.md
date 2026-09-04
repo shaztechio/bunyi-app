@@ -125,6 +125,10 @@ apps/dotnet/
   tests/App.Tests/    headless Avalonia tests for the window.
   tools/UiaProbe/     reads the live Windows UI Automation tree (see below).
                       Windows-only, and NOT in Bunyi.sln.
+  tools/MirrorManifest/  turns the models already on disk into a mirror:
+                      manifest.sha256 + an rclone list per prefix, built from
+                      ModelLayout rather than from a directory listing (#100).
+                      Cross-platform; also NOT in Bunyi.sln.
 ```
 
 **Package versions are managed centrally.** A `PackageReference` here carries no
