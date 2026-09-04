@@ -224,4 +224,35 @@ public class ManifestParserTests
     [InlineData("   \n  \n")]
     public void Nothing_in_gives_nothing_out(string? text) =>
         Assert.Empty(ManifestParser.Parse(text).Files);
+
+    [Fact]
+    public void What_tools_MirrorManifest_writes_is_what_this_reads()
+    {
+        // The two ends of a mirror, pinned against each other. tools/
+        // MirrorManifest generates manifest.sha256 for a bucket (#100) and this
+        // parser is what every client reads it with — so the format is a
+        // contract between a tool nobody runs in CI and code everybody depends
+        // on, and nothing else would notice the two drifting apart.
+        //
+        // Verbatim output from a real run over the preset-voice export.
+        var written = string.Join('\n', [
+            "4e741d1e16ba61ca446b060b16d2da9519b11d18aae5d7bbbfcd273745a38225  code_predictor.onnx",
+            "40623c05e03cf97cb5dc8d2ba84aeb0c8f5649600c91bb56d65b416a804f2f56  embeddings/config.json",
+            "9b1bd89a06be7fc6eb07e6b03d6d3fdc4762b5d0e0db124d74c608c0638082e3  embeddings/cp_codec_embedding_0.npy",
+        ]);
+
+        var result = ManifestParser.Parse(written);
+
+        Assert.Empty(result.Rejected);
+        Assert.Equal(3, result.Files.Count);
+
+        // The digest has to survive, not just the path: a manifest read as three
+        // bare paths would download the same bytes and verify none of them,
+        // silently, which is the failure the digest column exists to prevent.
+        Assert.All(result.Files, f => Assert.NotNull(f.Sha256));
+        Assert.Equal("code_predictor.onnx", result.Files[0].RelativePath);
+        Assert.Equal(
+            "4e741d1e16ba61ca446b060b16d2da9519b11d18aae5d7bbbfcd273745a38225",
+            result.Files[0].Sha256);
+    }
 }

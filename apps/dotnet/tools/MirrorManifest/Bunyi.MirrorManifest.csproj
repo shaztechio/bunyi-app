@@ -1,0 +1,44 @@
+<!--
+Copyright 2026 Shazron Abdullah and Bunyi contributors
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Prepares a mirror from models already on disk (#100).
+
+    Not in Bunyi.sln, for the same reason tools/UiaProbe is not: it is an
+    operator's tool rather than part of the app, and nothing the app ships
+    references it. Unlike UiaProbe it is cross-platform, so `dotnet.yml` builds
+    it on both runners.
+
+    It references Bunyi.Core on purpose. The whole point is that the manifest
+    comes from ModelLayout — the app's own statement of which files it fetches —
+    rather than from whatever a `find` turns up in a folder. A second list would
+    be a second source of truth, and the one thing a mirror cannot afford is a
+    manifest that disagrees with the client reading it.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>Bunyi.MirrorManifest</AssemblyName>
+    <RootNamespace>Bunyi.MirrorManifest</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Core\Bunyi.Core.csproj" />
+  </ItemGroup>
+
+</Project>

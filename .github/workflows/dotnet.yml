@@ -82,6 +82,12 @@ jobs:
         if: runner.os == 'Windows'
         run: dotnet build tools/UiaProbe -c Release
 
+      # Also outside Bunyi.sln, and for the same reason: an operator's tool, not
+      # part of the app. Cross-platform, so both runners build it. Built and not
+      # run — it wants a models folder with 14 GB in it.
+      - name: Build the mirror manifest tool
+        run: dotnet build tools/MirrorManifest -c Release
+
       # src/Core is UI-framework-free by rule (see apps/dotnet/AGENTS.md).
       # Checked rather than trusted: the rule is easy to break by reflex, with
       # an editor's using-completion, and hard to notice in review.
