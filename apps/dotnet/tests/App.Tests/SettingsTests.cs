@@ -100,7 +100,7 @@ public sealed class SettingsTests : HeadlessWindows
         var tabs = window.GetLogicalDescendants().OfType<TabControl>().First();
         tabs.SelectedIndex = 4;
 
-        Assert.Equal("About", window.Title);
+        Assert.Equal("Settings — About", window.Title);
     }
 
     [Fact]
@@ -265,13 +265,20 @@ public sealed class SettingsTests : HeadlessWindows
     [AvaloniaFact]
     public void The_window_title_follows_the_selected_tab()
     {
-        // §7: "the window title reflects the selected tab (platform convention)".
+        // §7: the title names the window and then the tab. The tab alone was
+        // the macOS convention, and on Windows it left a screen-reader user
+        // pressing Ctrl+, and hearing "General" — no confirmation that Settings
+        // had opened at all (#196). A window's title IS its accessible name in
+        // Avalonia, so this is the only place the word can go.
         var window = Open(new SettingsWindow { DataContext = NewModel() });
 
         var tabControl = window.GetLogicalDescendants().OfType<TabControl>().First();
-        tabControl.SelectedIndex = 2;
 
-        Assert.Equal("Storage", window.Title);
+        foreach (var (index, tab) in new[] { "General", "Models", "Storage", "Backup", "About" }.Index())
+        {
+            tabControl.SelectedIndex = index;
+            Assert.Equal($"Settings — {tab}", window.Title);
+        }
     }
 
     [AvaloniaFact]
