@@ -28,6 +28,14 @@ R2's free tier covers roughly 769,000 model downloads a month, and egress is
 free — but 11 of those 13 files are small, cacheable, and currently fetched
 from the origin every single time for no reason.
 
+> **Status, 4 September 2026: none of this is in effect.** The rules below are
+> configured correctly and Cloudflare is ignoring them on `models.bunyi.app`,
+> which appears to be a known limitation of R2 custom domains rather than
+> anything here. Nothing is broken by it and nothing needs doing about it —
+> [the measurements are further down](#none-of-this-currently-works-and-it-is-not-the-configuration).
+> Read that before following the steps, so you are not debugging a rule that
+> was never the problem.
+
 ## Read this before you turn caching on
 
 **A stale cached file is no longer a silent problem.** Bunyi verifies every
@@ -176,6 +184,99 @@ Measured after the rules were applied: the small files return
 `cf-cache-status: HIT`, and **both large files return `BYPASS`** — they are
 over the 512 MB ceiling, so 6 of the 39 objects always reach R2. That is the
 dominant term in the operation count and no amount of tuning changes it.
+
+> **That measurement no longer reproduces.** Nothing on `models.bunyi.app`
+> caches at all today. See "None of this currently works" below before
+> spending an evening on the rules — they are not the problem.
+
+## None of this currently works, and it is not the configuration
+
+Measured 4 September 2026, while putting the ONNX set up for
+[#100](https://github.com/shaztechio/bunyi-app/issues/100). **Every object on
+`models.bunyi.app` returns `cf-cache-status: DYNAMIC`** — MLX and ONNX, small
+files and large, manifests and weights, first request and fiftieth.
+
+The rules are not at fault, and neither is the zone:
+
+| Request | `Cache-Control` returned | `cf-cache-status` |
+|---|---|---|
+| `bunyi.app/` | `max-age=600` | `EXPIRED` |
+| `bunyi.app/assets/og-card.png` | `max-age=31536000` | `MISS` |
+| `models.bunyi.app/onnx/voiceclone/config.json` | *none* | `DYNAMIC` |
+| `models.bunyi.app/customvoice/config.json` | *none* | `DYNAMIC` |
+
+Cache Rules demonstrably work on this zone — the two site rules stamp headers
+and cache. Both Models rules exist, are enabled, are set to **Eligible for
+cache**, and carry the expressions above verbatim. And yet **no rule stamps
+anything on `models.bunyi.app`** — not even the broad `Cache HTML at edge`
+rule, which would leave `max-age=600` behind if it matched. This is not a rule
+matching and declining to cache. Nothing matches.
+
+### Two things that look like causes and are not
+
+**It is not missing `Cache-Control` on the objects**, which is the usual
+first answer and is wrong here. `customvoice/manifest.sha256` carries
+`cache-control: public, max-age=300` as R2 object metadata, Cloudflare returns
+that header to clients intact — and the response is still `DYNAMIC`. An object
+with correct headers, passed through correctly, is not cached. Re-uploading
+14.5 GB with headers would achieve nothing; that was checked before it was
+suggested to anyone.
+
+**That same header is also how this gets misdiagnosed.** Fetch
+`customvoice/manifest.sha256`, see `max-age=300`, and it looks exactly like
+Rule A working. It is the object's own metadata, set when the MLX set was
+uploaded. `onnx/*/manifest.sha256` was uploaded without it and returns no
+`Cache-Control` at all — same rule, same host, different object. Check
+`cf-cache-status`, not `Cache-Control`, before concluding a rule is live.
+
+### What it appears to be
+
+A known Cloudflare behaviour with **R2 custom domains**, widely reported and
+not something this repository can fix:
+
+- [Cache Rules not applied to R2 custom domain — every response stays cf-cache-status: DYNAMIC](https://community.cloudflare.com/t/cache-rules-not-applied-to-r2-custom-domain-every-response-stays-cf-cache-status/943292)
+- [R2 Bucket with Custom Domain always resolving cf-cache-status DYNAMIC](https://community.cloudflare.com/t/r2-bucket-with-custom-domain-always-resolving-cf-cache-status-dynamic/833941)
+- [R2 Custom Domain not caching!](https://community.cloudflare.com/t/r2-custom-domain-not-caching/848225)
+
+There is no caching control in **R2 → bucket → Settings → Custom Domains** to
+find; that was looked for. If this is ever worth pursuing it is a support
+ticket, not a configuration change.
+
+### Why it has not mattered
+
+Worth stating plainly so nobody treats this as urgent:
+
+- **Egress from R2 is free.** Caching buys latency, not money.
+- **The free tier is 10 million Class B operations a month**, and this mirror
+  is nowhere near it. Uncached, a full three-mode ONNX install is ~106
+  requests; the tier covers that roughly 94,000 times over.
+- **It cannot help the files that actually take the time.** The ONNX set's
+  largest are `text_embedding.npy` at 1,187 MB and `int4/vocoder.onnx.data`
+  at 870 MB. Both are over the 512 MB ceiling and would `BYPASS` even with
+  everything working.
+- **Correctness is unaffected.** Every file is verified against
+  `manifest.sha256` on arrival, so a cache that never fills cannot serve
+  anything wrong. All three modes were downloaded from this mirror and
+  generated successfully on the day this was measured.
+
+What is lost is a nearby edge for the ~30 small files per model. Real, and
+worth having if Cloudflare ever fixes it — not worth an evening now.
+
+### One thing that is genuinely slower
+
+Download throughput varies by which Cloudflare colo serves the request, and
+with nothing cached every request goes to the origin. Measured minutes apart
+from the same machine in Asia:
+
+| Object | Colo (`CF-RAY` suffix) | Throughput |
+|---|---|---|
+| `int4/vocoder.onnx.data` | `SIN` — Singapore | 23.6 MB/s |
+| `embeddings/text_embedding.npy` | `MRS` — Marseille | 1.5 MB/s |
+
+Same bucket, same prefix, same client. A sixteenfold spread, decided by
+routing. For comparison, the same 100 MB from Hugging Face at the same moment
+came down at 9.9 MB/s, so the mirror is still the faster of the two on
+average — it is just far less predictable than a cached edge would be.
 
 # Cost controls
 
