@@ -95,6 +95,33 @@ public sealed class ModelConfigLibraryTests : IDisposable
             ModelConfigLibrary.BunyiMirror.Id);
     }
 
+    [Theory]
+    // A mirror: one host, nothing left on a default.
+    [InlineData("https://models.bunyi.app/onnx/customvoice", "https://models.bunyi.app/onnx/voicedesign",
+                "https://models.bunyi.app/onnx/voiceclone", "models.bunyi.app")]
+    // Repo ids fall back to the org, since they have no host.
+    [InlineData("elbruno/a", "wavekat/b", "wavekat/c", "elbruno, wavekat")]
+    // Partly configured: say how many modes are still on their defaults.
+    [InlineData("https://models.bunyi.app/onnx/customvoice", "", "", "models.bunyi.app, 2 on the defaults")]
+    [InlineData("https://models.bunyi.app/onnx/customvoice", "wavekat/b", "", "models.bunyi.app, wavekat, 1 on the default")]
+    // Nothing set at all.
+    [InlineData("", "", "", "All three on the defaults")]
+    public void A_configuration_says_where_it_points(string preset, string design, string clone, string expected)
+    {
+        // A name alone does not say what a configuration contains, and the
+        // three values are long URLs that will not fit beside it. Ported from
+        // macOS, which has shown this since it shipped.
+        var config = new ModelConfig
+        {
+            Name = "Whatever",
+            PresetVoice = preset,
+            VoiceDesign = design,
+            VoiceClone = clone,
+        };
+
+        Assert.Equal(expected, config.Summary);
+    }
+
     [Fact]
     public void A_configuration_of_your_own_with_the_same_name_hides_the_built_in()
     {

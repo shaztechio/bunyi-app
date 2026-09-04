@@ -47,6 +47,47 @@ public sealed record ModelConfig
     public DateTimeOffset SavedAt { get; init; } = DateTimeOffset.UtcNow;
 
     /// <summary>
+    /// Where this configuration points, in a few words (spec §3a).
+    /// </summary>
+    /// <remarks>
+    /// A name alone does not say what a configuration contains, and the three
+    /// values are long URLs that would not fit beside it. The host is the part
+    /// that answers "which of my sets is this" — <c>models.bunyi.app</c>,
+    /// <c>huggingface.co</c>, or the org of a repo id — so that is what is
+    /// shown, with a count of however many modes are still on their defaults.
+    /// Ported from macOS's <c>summary</c>, which has always shown this.
+    /// </remarks>
+    [JsonIgnore]
+    public string Summary
+    {
+        get
+        {
+            string[] values = [PresetVoice, VoiceDesign, VoiceClone];
+            if (values.All(string.IsNullOrWhiteSpace)) return "All three on the defaults";
+
+            var hosts = values
+                .Where(v => !string.IsNullOrWhiteSpace(v))
+                .Select(Host)
+                .Where(h => h.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(h => h, StringComparer.CurrentCultureIgnoreCase);
+
+            var where = string.Join(", ", hosts);
+            var blanks = values.Count(string.IsNullOrWhiteSpace);
+
+            if (blanks == 0) return where;
+
+            return $"{where}, {blanks} on the default{(blanks == 1 ? "" : "s")}";
+        }
+    }
+
+    /// <summary>A URL's host, or a repo id's org.</summary>
+    private static string Host(string value) =>
+        Uri.TryCreate(value, UriKind.Absolute, out var url) && !string.IsNullOrEmpty(url.Host)
+            ? url.Host
+            : value.Split('/', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty;
+
+    /// <summary>
     /// Whether the app ships this entry rather than the user having saved it.
     /// </summary>
     /// <remarks>

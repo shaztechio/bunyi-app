@@ -123,14 +123,33 @@ limitations under the License.
           <ItemsControl ItemsSource="{Binding Configs}">
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="core:ModelConfig">
-                <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,3">
-                  <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
-                  <Button Grid.Column="1" Classes="icon" Margin="0,0,4,0"
-                          Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).UseConfigCommand}"
+                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Margin="0,4">
+                  <!--
+                    Name and where it points, the way macOS lists these. A name
+                    on its own does not say what a configuration contains, and
+                    the three values are long URLs that will not fit beside it —
+                    the host is the part that answers "which of my sets is
+                    this".
+                  -->
+                  <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="1">
+                    <TextBlock Text="{Binding Name}" />
+                    <TextBlock Text="{Binding Summary}" FontSize="11" Opacity="0.7"
+                               TextTrimming="CharacterEllipsis" />
+                  </StackPanel>
+                  <!--
+                    A worded button, not an icon. "Restore" is the spec's own
+                    word — §3a has the three sources "saved and restored as a
+                    set" — and macOS's. This was a bare tick, which said neither
+                    what it did nor to what, and put the safe action and the
+                    destructive one at the same weight. Now the safe one is
+                    worded and the destructive one is a quiet icon, which is the
+                    asymmetry macOS chose deliberately.
+                  -->
+                  <Button Grid.Column="1" VerticalAlignment="Center"
+                          Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).RestoreConfigCommand}"
                           CommandParameter="{Binding}"
-                          ToolTip.Tip="Use these sources for all three modes">
-                    <Path Data="{DynamicResource IconTick}" />
-                  </Button>
+                          Content="Restore"
+                          ToolTip.Tip="Set all three modes to these sources" />
                   <!--
                     No Delete on the built-in: there is nothing on disk to
                     remove, and an action that cannot do what it says is worse
