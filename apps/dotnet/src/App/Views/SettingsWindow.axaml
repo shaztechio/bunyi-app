@@ -81,15 +81,15 @@ limitations under the License.
 
           <StackPanel Spacing="4">
             <TextBlock Text="Preset voice" FontSize="12" Opacity="0.75" />
-            <TextBox Text="{Binding PresetVoiceSource}" PlaceholderText="Built-in default" />
+            <TextBox Text="{Binding PresetVoiceSource}" PlaceholderText="{Binding PresetVoiceDefault}" />
           </StackPanel>
           <StackPanel Spacing="4">
             <TextBlock Text="Voice design" FontSize="12" Opacity="0.75" />
-            <TextBox Text="{Binding VoiceDesignSource}" PlaceholderText="Built-in default" />
+            <TextBox Text="{Binding VoiceDesignSource}" PlaceholderText="{Binding VoiceDesignDefault}" />
           </StackPanel>
           <StackPanel Spacing="4">
             <TextBlock Text="Voice clone" FontSize="12" Opacity="0.75" />
-            <TextBox Text="{Binding VoiceCloneSource}" PlaceholderText="Built-in default" />
+            <TextBox Text="{Binding VoiceCloneSource}" PlaceholderText="{Binding VoiceCloneDefault}" />
           </StackPanel>
 
           <Button Content="Reset all three to their defaults" Command="{Binding ResetSourcesCommand}" />

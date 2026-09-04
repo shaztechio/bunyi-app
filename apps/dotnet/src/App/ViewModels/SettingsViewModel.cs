@@ -53,6 +53,28 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private string _voiceDesignSource = string.Empty;
     [ObservableProperty] private string _voiceCloneSource = string.Empty;
     [ObservableProperty] private string _newConfigName = string.Empty;
+
+    /// <summary>
+    /// What each box falls back to when it is empty — shown as its placeholder.
+    /// </summary>
+    /// <remarks>
+    /// The repo itself, not the words "Built-in default", which is what these
+    /// said before. Clearing a box means "use the default", so the one moment a
+    /// person needs to know what that default *is* is exactly when the box is
+    /// empty and the placeholder is showing. Naming it also makes the box
+    /// self-documenting for anyone comparing a mirror against the original, or
+    /// typing a variant of it.
+    ///
+    /// macOS has done this since it shipped — <c>prompt: Text(mode.repoID)</c>
+    /// in <c>SettingsView.swift</c> — so this is parity, not invention.
+    /// </remarks>
+    public string PresetVoiceDefault => _defaultSourceFor(TtsMode.PresetVoice);
+
+    /// <inheritdoc cref="PresetVoiceDefault"/>
+    public string VoiceDesignDefault => _defaultSourceFor(TtsMode.VoiceDesign);
+
+    /// <inheritdoc cref="PresetVoiceDefault"/>
+    public string VoiceCloneDefault => _defaultSourceFor(TtsMode.VoiceClone);
     [ObservableProperty] private string _modelsFolder = string.Empty;
     [ObservableProperty] private string _storageSummary = string.Empty;
 
