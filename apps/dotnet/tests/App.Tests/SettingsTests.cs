@@ -93,6 +93,62 @@ public sealed class SettingsTests : HeadlessWindows
     }
 
     [AvaloniaFact]
+    public void The_built_in_mirror_is_listed_and_has_no_delete_button()
+    {
+        // §3a, #100. The mirror is shown without having been saved, and offers
+        // no Delete: there is nothing on disk to remove, and an action that
+        // cannot do what it says is worse than an absent one. Overriding it is
+        // a Save under the same name.
+        var model = NewModel();
+        var window = Open(new SettingsWindow { DataContext = model });
+
+        var tabs = window.GetLogicalDescendants().OfType<TabControl>().First();
+        tabs.SelectedIndex = 1;
+        window.UpdateLayout();
+
+        // Exactly the built-in, nothing saved.
+        Assert.Single(model.Configs, c => c.IsBuiltIn);
+
+        var rows = window.GetLogicalDescendants().OfType<TextBlock>()
+            .Select(t => t.Text ?? string.Empty)
+            .ToList();
+        Assert.Contains("Bunyi mirror", rows);
+
+        // Its row offers Use but not Delete. Found by the tooltip, because that
+        // is what the icon buttons are distinguished by.
+        var deletes = window.GetLogicalDescendants().OfType<Button>()
+            .Where(b => ToolTip.GetTip(b) as string == "Delete this configuration")
+            .Where(b => b.IsEffectivelyVisible)
+            .ToList();
+        Assert.Empty(deletes);
+
+        // Not a count: an ItemsControl's containers surface more than once in
+        // the logical tree, and how many times is Avalonia's business rather
+        // than this test's. The claim is that the row offers Use and not
+        // Delete, and that is what is asserted.
+        Assert.Contains(
+            window.GetLogicalDescendants().OfType<Button>().Where(b => b.IsEffectivelyVisible),
+            b => ToolTip.GetTip(b) as string == "Use these sources for all three modes");
+    }
+
+    [AvaloniaFact]
+    public void Using_the_built_in_mirror_fills_all_three_boxes()
+    {
+        // The point of the entry: one click instead of three long URLs typed by
+        // hand, which is the mistake the whole configurations feature exists to
+        // prevent.
+        var model = NewModel();
+        var window = Open(new SettingsWindow { DataContext = model });
+
+        model.UseConfigCommand.Execute(ModelConfigLibrary.BunyiMirror);
+        window.UpdateLayout();
+
+        Assert.Equal("https://models.bunyi.app/onnx/customvoice", model.PresetVoiceSource);
+        Assert.Equal("https://models.bunyi.app/onnx/voicedesign", model.VoiceDesignSource);
+        Assert.Equal("https://models.bunyi.app/onnx/voiceclone", model.VoiceCloneSource);
+    }
+
+    [AvaloniaFact]
     public void An_empty_source_box_names_the_default_it_will_use()
     {
         // Clearing a box means "use the built-in default", so the one moment a
@@ -386,7 +442,7 @@ public sealed class SettingsTests : HeadlessWindows
         model.ResetSourcesCommand.Execute(null);
         Assert.Equal(string.Empty, model.PresetVoiceSource);
 
-        model.UseConfigCommand.Execute(model.Configs.Single());
+        model.UseConfigCommand.Execute(model.Configs.Single(c => !c.IsBuiltIn));
 
         Assert.Equal("org/preset", model.PresetVoiceSource);
         Assert.Equal("org/design", model.VoiceDesignSource);
@@ -394,12 +450,14 @@ public sealed class SettingsTests : HeadlessWindows
     }
 
     [AvaloniaFact]
-    public void There_is_no_built_in_mirror_configuration()
+    public void The_built_in_mirror_is_the_only_entry_before_anything_is_saved()
     {
         // §3a gates it: "A platform ships this only if its mirror publishes
-        // manifest.sha256". The project mirror serves the MLX weight set and
-        // has no ONNX files, so an entry here would 404 on every file.
-        Assert.Empty(NewModel().Configs);
+        // manifest.sha256". It does now, for all three ONNX prefixes, so the
+        // entry is here — and it is the ONLY thing here before anything is
+        // saved. See ModelConfigLibraryTests for the override rules.
+        var listed = Assert.Single(NewModel().Configs);
+        Assert.True(listed.IsBuiltIn);
     }
 
     [AvaloniaFact]
@@ -411,7 +469,8 @@ public sealed class SettingsTests : HeadlessWindows
         model.NewConfigName = "mine";
         model.SaveConfigCommand.Execute(null);
 
-        Assert.Single(model.Configs);
+        // One saved, plus the built-in mirror the list always shows.
+        Assert.Single(model.Configs, c => !c.IsBuiltIn);
     }
 
     [AvaloniaFact]
@@ -421,9 +480,11 @@ public sealed class SettingsTests : HeadlessWindows
         model.NewConfigName = "Mine";
         model.SaveConfigCommand.Execute(null);
 
-        model.DeleteConfigCommand.Execute(model.Configs.Single());
+        model.DeleteConfigCommand.Execute(model.Configs.Single(c => !c.IsBuiltIn));
 
-        Assert.Empty(model.Configs);
+        // Gone — and the built-in is still listed, because it never was saved.
+        Assert.DoesNotContain(model.Configs, c => !c.IsBuiltIn);
+        Assert.Single(model.Configs);
     }
 
     [AvaloniaFact]

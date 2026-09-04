@@ -107,6 +107,19 @@ limitations under the License.
             <Button Content="Save" Command="{Binding SaveConfigCommand}" />
           </StackPanel>
 
+          <!--
+            The same words macOS shows, because it is the same claim and a user
+            comparing the two apps should not have to work out whether they mean
+            the same thing. It answers what a person actually wants to know
+            before trusting a source the app itself suggests: whose models these
+            are, that the bytes are checked, and that the Hub is still where
+            they come from.
+          -->
+          <Border Classes="callout">
+            <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.8"
+                       Text="The Bunyi mirror serves the same Hugging Face models (Apache-2.0) from models.bunyi.app, with checksums the app verifies as it downloads. Useful where Hugging Face is slow or unreachable. Hugging Face stays the default — it is where the models come from." />
+          </Border>
+
           <ItemsControl ItemsSource="{Binding Configs}">
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="core:ModelConfig">
@@ -118,7 +131,18 @@ limitations under the License.
                           ToolTip.Tip="Use these sources for all three modes">
                     <Path Data="{DynamicResource IconTick}" />
                   </Button>
+                  <!--
+                    No Delete on the built-in: there is nothing on disk to
+                    remove, and an action that cannot do what it says is worse
+                    than an absent one. Overriding it is a Save under the same
+                    name, which the callout above explains.
+
+                    Collapsed rather than disabled — a disabled bin beside one
+                    row of a short list reads as something broken, and §12 has
+                    already been round this once for Generate.
+                  -->
                   <Button Grid.Column="2" Classes="icon"
+                          IsVisible="{Binding !IsBuiltIn}"
                           Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).DeleteConfigCommand}"
                           CommandParameter="{Binding}"
                           ToolTip.Tip="Delete this configuration">

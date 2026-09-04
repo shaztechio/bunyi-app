@@ -44,14 +44,123 @@ public sealed class ModelConfigLibraryTests : IDisposable
     }
 
     [Fact]
-    public void There_is_no_built_in_mirror_entry()
+    public void The_built_in_mirror_is_listed_but_never_saved()
     {
-        // §3a permits one and macOS ships it, but gates it: "A platform ships
-        // this only if its mirror publishes manifest.sha256". The project
-        // mirror serves the MLX weight set and has no ONNX files, so an entry
-        // here would 404 on every file — and offering a source the app itself
-        // endorses is a higher bar than documenting one a user picked.
-        Assert.Empty(New().Configs);
+        // §3a permits a built-in entry and gates it: "A platform ships this
+        // only if its mirror publishes manifest.sha256". It does now, for all
+        // three ONNX prefixes, and all three modes have been downloaded and
+        // generated from them (#100) — so the entry is here.
+        //
+        // Listed shows it; Configs does not, because Configs is what is on
+        // disk. A built-in written to configs.json would become a saved
+        // configuration the next time it loaded, editable and deletable and no
+        // longer tracking whatever the app ships.
+        var library = New();
+
+        Assert.Empty(library.Configs);
+        var listed = Assert.Single(library.Listed);
+        Assert.Equal("Bunyi mirror", listed.Name);
+        Assert.True(listed.IsBuiltIn);
+        Assert.False(File.Exists(ConfigPath));
+    }
+
+    [Fact]
+    public void The_built_in_points_at_the_onnx_prefixes()
+    {
+        // Named here so a typo cannot ship silently: an endorsed source that
+        // 404s is worse than no entry at all, and nothing else in the app
+        // would notice these strings being wrong until a user pressed
+        // Generate.
+        var mirror = ModelConfigLibrary.BunyiMirror;
+
+        Assert.Equal("https://models.bunyi.app/onnx/customvoice", mirror.For(TtsMode.PresetVoice));
+        Assert.Equal("https://models.bunyi.app/onnx/voicedesign", mirror.For(TtsMode.VoiceDesign));
+        Assert.Equal("https://models.bunyi.app/onnx/voiceclone", mirror.For(TtsMode.VoiceClone));
+
+        // The MLX prefixes are a different weight set at the same host, and
+        // pointing this app at them would 404 on every file.
+        Assert.All(
+            new[] { TtsMode.PresetVoice, TtsMode.VoiceDesign, TtsMode.VoiceClone },
+            mode => Assert.Contains("/onnx/", mirror.For(mode), StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void The_built_ins_identity_is_fixed_rather_than_generated()
+    {
+        // The row has to keep its identity across launches without being
+        // written to disk. A fresh Guid each time would make the list treat it
+        // as a different row on every read.
+        Assert.Equal(
+            new Guid("B0000000-0000-4000-A000-000000000001"),
+            ModelConfigLibrary.BunyiMirror.Id);
+    }
+
+    [Fact]
+    public void A_configuration_of_your_own_with_the_same_name_hides_the_built_in()
+    {
+        // Overriding is a Save under the same name: a real entry the user chose
+        // to write beats one the app shipped.
+        var library = New();
+        library.Save("Bunyi mirror", "a/b", "c/d", "e/f");
+
+        var listed = Assert.Single(library.Listed);
+        Assert.False(listed.IsBuiltIn);
+        Assert.Equal("a/b", listed.For(TtsMode.PresetVoice));
+    }
+
+    [Fact]
+    public void Deleting_your_override_brings_the_built_in_back()
+    {
+        // It was hidden, not gone. The other direction of the rule above, and
+        // the half that would rot silently: nothing else would notice a
+        // built-in that stayed hidden after its override was removed.
+        var library = New();
+        library.Save("Bunyi mirror", "a/b", "c/d", "e/f");
+        library.Delete(Assert.Single(library.Configs));
+
+        var listed = Assert.Single(library.Listed);
+        Assert.True(listed.IsBuiltIn);
+        Assert.Equal("https://models.bunyi.app/onnx/customvoice", listed.For(TtsMode.PresetVoice));
+    }
+
+    [Fact]
+    public void The_name_match_ignores_case_the_way_saving_does()
+    {
+        // Save already treats names as unique case-insensitively, so the
+        // override has to as well or "bunyi mirror" would list twice.
+        var library = New();
+        library.Save("BUNYI MIRROR", "a/b", "c/d", "e/f");
+
+        Assert.Single(library.Listed);
+    }
+
+    [Fact]
+    public void Deleting_the_built_in_does_nothing_and_says_so()
+    {
+        // The UI hides its Delete button, so reaching here is a bug — but a
+        // silent no-op that rewrote the file and logged a deletion which did
+        // not happen would be worse than refusing out loud.
+        var library = New();
+        library.Delete(ModelConfigLibrary.BunyiMirror);
+
+        Assert.Single(library.Listed);
+        Assert.True(Assert.Single(library.Listed).IsBuiltIn);
+        Assert.Contains(_log.Lines, l => l.Contains("built in", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void The_built_in_never_reaches_configs_json()
+    {
+        // Saving something else must not persist it as a side effect.
+        var library = New();
+        library.Save("Mine", "a/b", "c/d", "e/f");
+
+        var json = File.ReadAllText(ConfigPath);
+        Assert.DoesNotContain("Bunyi mirror", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("models.bunyi.app", json, StringComparison.Ordinal);
+
+        // And nothing derived leaks into the file either.
+        Assert.DoesNotContain("uiltIn", json, StringComparison.Ordinal);
     }
 
     [Fact]
