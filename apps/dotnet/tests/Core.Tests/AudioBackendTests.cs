@@ -19,62 +19,55 @@ using Xunit;
 
 namespace Bunyi.Core.Tests;
 
-/// <summary>
-/// The line that says which audio backend is in use (spec §8).
-/// </summary>
+/// <summary>Checks the shipped native ABI without requiring an audio device.</summary>
 /// <remarks>
-/// It reported <c>Null</c> on every machine from the day it was added, on runs
-/// whose audio was audible. The word is both the enum's zero value and the name
-/// of miniaudio's do-nothing backend, so the diagnostic read as the opposite of
-/// the truth — and did, to the point of being reported as a silent-playback bug.
+/// These tests call miniaudio's native exports, unlike the old enum-formatting
+/// tests which repeated SoundFlow's incorrect names. The null context below
+/// deliberately produces no sound; audible ALSA verification is recorded in
+/// RESEARCH-ONNX.md, not claimed by these tests.
 /// </remarks>
 public class AudioBackendTests
 {
-    [Fact]
-    public void It_names_the_backend_that_was_chosen()
-    {
-        var line = SoundFlowAudioPlayer.Describe(
-            MiniAudioBackend.Wasapi,
-            [MiniAudioBackend.Wasapi, MiniAudioBackend.DirectSound]);
+    [Theory]
+    [InlineData(0, "WASAPI")]
+    [InlineData(7, "PulseAudio")]
+    [InlineData(8, "ALSA")]
+    [InlineData(9, "JACK")]
+    [InlineData(14, "Null")]
+    public void Names_come_from_the_shipped_native_library(int id, string expected) =>
+        Assert.Equal(expected, NativeAudioBackends.Name(id));
 
-        Assert.Contains("Audio backend: Wasapi", line, StringComparison.Ordinal);
+    [Fact]
+    public void Native_zero_is_WASAPI_not_an_unreported_backend()
+    {
+        var line = NativeAudioBackends.Describe(0);
+        Assert.StartsWith("Audio backend: WASAPI (enabled: ", line, StringComparison.Ordinal);
+        Assert.DoesNotContain("not reported", line, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void It_does_not_print_the_word_Null()
+    public void Enabled_backends_are_read_from_the_native_build()
     {
-        // The whole bug in one assertion. "Null" names the do-nothing backend,
-        // so printing it for "the engine did not say" is indistinguishable from
-        // reporting that audio is going nowhere.
-        var line = SoundFlowAudioPlayer.Describe(MiniAudioBackend.Null, [MiniAudioBackend.Wasapi]);
-
-        Assert.DoesNotContain("Null", line, StringComparison.Ordinal);
-        Assert.Contains("not reported", line, StringComparison.Ordinal);
+        var names = NativeAudioBackends.EnabledNames();
+        Assert.NotEmpty(names);
+        Assert.DoesNotContain("Unknown", names);
+        Assert.Equal(names.Count, names.Distinct(StringComparer.Ordinal).Count());
+        Assert.Contains(OperatingSystem.IsWindows() ? "WASAPI" : "ALSA", names);
     }
 
     [Fact]
-    public void It_lists_what_was_available()
+    public void Native_ALSA_is_not_mislabelled_PulseAudio()
     {
-        // A backend missing from the list was never a candidate, which is a
-        // different problem from one that was chosen and did not work.
-        var line = SoundFlowAudioPlayer.Describe(
-            MiniAudioBackend.Alsa,
-            [MiniAudioBackend.Alsa, MiniAudioBackend.PulseAudio]);
-
-        Assert.Contains("available: Alsa, PulseAudio", line, StringComparison.Ordinal);
+        Assert.StartsWith("Audio backend: ALSA (enabled: ",
+            NativeAudioBackends.Describe(8), StringComparison.Ordinal);
     }
 
     [Fact]
-    public void The_engine_is_offered_the_backends_this_machine_has()
+    public void An_initialized_null_context_is_reported_as_null()
     {
-        // The fix itself: ActiveBackend reports what the engine was *asked* for,
-        // so an engine asked for nothing reports nothing, forever. Handing it
-        // the available list — miniaudio's own order, so the same choice — is
-        // what makes the report real.
-        //
-        // Asserted as "there is a list to hand it" rather than by constructing
-        // an engine, because CI has no audio device and this must not depend on
-        // one.
-        Assert.NotNull(MiniAudioEngine.AvailableBackends);
+        // Native Null is 14; the managed enum incorrectly calls that Custom.
+        using var engine = new MiniAudioEngine(new[] { (MiniAudioBackend)14 });
+        Assert.StartsWith("Audio backend: Null (enabled: ",
+            NativeAudioBackends.Describe((int)engine.ActiveBackend), StringComparison.Ordinal);
     }
 }

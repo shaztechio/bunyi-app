@@ -528,6 +528,14 @@ macOS source: `LogStore.swift`, `LogsView.swift`.
   self-host downloads, tokenizer step, transcription result, generation
   token milestones, saved output path + timing, backup/restore steps, and
   full error text.
+- **Windows/Linux playback reports its native audio backend on first use.**
+  Let miniaudio select its normal backend automatically. Name the selected
+  backend using the native library, and label the list compiled into that
+  library as `enabled`, not as proof of usable devices. A PipeWire desktop may
+  be reached through either PulseAudio compatibility or an ALSA PCM plugin;
+  the desktop's sound server does not identify the backend. Failure to read
+  this diagnostic must not prevent playback. This is specific to the .NET
+  audio runtime; macOS continues to use AVAudioPlayer.
 - **How long the app took to start, as one line, once the window is up.** "It
   is slow to launch" is otherwise a report with no number in it, and which
   phase was slow is the whole question — the runtime coming up, the UI
