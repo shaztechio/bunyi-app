@@ -19,6 +19,7 @@ from gi.repository import Atspi, GLib
 parser=argparse.ArgumentParser(description='Check real Bunyi AT-SPI focus events without pre-reading controls.')
 parser.add_argument('app', type=pathlib.Path)
 parser.add_argument('--log', type=pathlib.Path, default=pathlib.Path('atspi-app.log'))
+parser.add_argument('--expect-announcements', action='store_true')
 args=parser.parse_args()
 app=args.app.resolve(strict=True)
 phase='startup'
@@ -26,20 +27,34 @@ events=[]
 selections=[]
 focused=None
 checked_pickers=set()
+checked_placeholders=set()
+announcements=[]
 def on_event(e, *args):
     global focused
     if 'focused' in e.type:
         focused=e.source
         events.append((phase,e.type,e.detail1,e.source.get_name()))
         print('EVENT',events[-1],flush=True)
+        if e.source.get_name() in ('SCRIPT','Style'):
+            attrs=e.source.get_attributes(); placeholder=attrs.get('placeholder-text')
+            assert placeholder, 'Missing placeholder attribute'
+            assert e.source.get_description() != placeholder, 'Placeholder duplicated as description'
+            assert e.source.get_child_count()==0, 'Text-box template is exposed as duplicate content'
+            checked_placeholders.add(e.source.get_name())
     elif e.type == 'object:selection-changed' and e.source.get_role_name() == 'combo box':
         child=e.source.get_selection_iface().get_selected_child(0)
         value=child.get_name() if child else None
         selections.append((e.source.get_name(),value))
         print('SELECTION',selections[-1],flush=True)
+    elif e.type == 'object:announcement':
+        assert e.detail1==1, 'Announcement must be polite'
+        assert not e.source.get_state_set().contains(Atspi.StateType.FOCUSED), 'Announcement moved focus'
+        announcements.append(e.any_data)
+        print('ANNOUNCEMENT',repr(e.any_data),flush=True)
 listener=Atspi.EventListener.new(on_event)
 listener.register('object:state-changed:focused')
 listener.register('object:selection-changed')
+listener.register('object:announcement')
 def pump(seconds):
     end=time.monotonic()+seconds
     while time.monotonic()<end:
@@ -135,7 +150,11 @@ with tempfile.TemporaryDirectory(prefix='bunyi-atspi-') as state, args.log.open(
             if 'Avalonia' in candidate.get_name(): walk(candidate)
         phase='after-tree-walk'; tabs()
         assert checked_pickers == {'Language','Speaker'}, 'Picker checks did not run'
-        print('PASS: focus, quiet layout names and picker selection events; Orca speech not tested.',flush=True)
+        assert checked_placeholders == {'SCRIPT','Style'}, 'Placeholder checks did not run'
+        if args.expect_announcements:
+            expected=['Generating','Generating… 24 frames · 2.0s of speech so far','Ready']
+            assert announcements==expected, 'Announcements missing, duplicated or out of order: '+repr(announcements)
+        print('PASS: focus, layout, pickers, placeholders and requested announcements; Orca speech not tested.',flush=True)
     finally:
         proc.terminate()
         try: proc.wait(timeout=5)

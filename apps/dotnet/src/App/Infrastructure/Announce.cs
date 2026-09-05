@@ -74,6 +74,12 @@ public static class Announce
 
         AutomationProperties.SetName(control, spoken);
 
+        if (OperatingSystem.IsLinux())
+        {
+            LinuxAccessibilityFocus.Announce(control, spoken);
+            return;
+        }
+
         // CreatePeerForElement is get-or-create, so this is the same peer the
         // bridge is holding. Before a reader has walked here there is no node
         // listening and the call is a no-op, which is the correct outcome.

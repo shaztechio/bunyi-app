@@ -219,7 +219,7 @@ limitations under the License.
             Found by walking the real tree for controls with no name, after the
             same fault turned up on the dropdowns (#159, #192).
           -->
-          <TextBox Grid.Row="1" Name="ScriptBox" Text="{Binding Script}"
+          <infra:AccessibleTextBox Grid.Row="1" Name="ScriptBox" Text="{Binding Script}"
                    Classes.needed="{Binding NeedsText}"
                    AutomationProperties.LabeledBy="{Binding #ScriptLabel}"
                    AcceptsReturn="True" TextWrapping="Wrap"
@@ -332,7 +332,7 @@ limitations under the License.
                        Text="{Binding InstructLabel}" Classes="rowLabel" />
             <StackPanel Grid.Column="1" Spacing="4">
               <!-- Named by its row label; it changes per mode, so bind rather than repeat. -->
-              <TextBox Name="InstructBox" Text="{Binding Instruct}"
+              <infra:AccessibleTextBox Name="InstructBox" Text="{Binding Instruct}"
                        Classes.needed="{Binding NeedsInstruction}"
                        AutomationProperties.LabeledBy="{Binding #InstructLabelText}"
                        PlaceholderText="{Binding InstructPlaceholder}" />
@@ -496,11 +496,10 @@ limitations under the License.
             from GetPropertyValue. Avalonia.Win32.Automation.dll ships inside
             the Avalonia.Win32 package and is in our published artifacts.
 
-          Avalonia.FreeDesktop.AtSpi 12.1.1 emits activation, bounds, children,
-          focus, property, selection and state signals and has no live-region
-          symbol anywhere in it, so Orca is told nothing here. That gap is
-          recorded in spec/FEATURES.md §12 rather than left as a claim this app
-          only keeps on one of its two platforms.
+          Avalonia.FreeDesktop.AtSpi 12.1.1 has no live-region implementation.
+          Announce sends the standard polite AT-SPI Object Announcement signal
+          on Linux instead of also emitting a Name change. Both platforms use
+          the same paced Announcement value, without moving keyboard focus.
 
           tools/UiaProbe checks the Windows half where it is consumed, on a
           running window, because everything above is still only source. It

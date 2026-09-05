@@ -40,3 +40,30 @@ its selection event until the display-name binding has updated. Windows keeps
 the standard peer and expanded Linux pickers keep the framework selection path.
 The picker probe also opens each dropdown with Alt+Down, checks a focused
 item event after Down, and closes it with Escape.
+
+Script and Style must expose their placeholder only through `placeholder-text`,
+with no duplicate description or template children. Their editable text and
+separate help/validation remain on the field peer.
+
+To verify live announcements without model inference, publish the diagnostic
+host from `apps/dotnet`, then use the same Python probe:
+
+```sh
+dotnet publish tools/AtSpiProbe/Host -c Release -r linux-x64 --self-contained -o artifacts/atspi-host
+python3 tools/AtSpiProbe/check.py artifacts/atspi-host/AtSpiProbe.Host --expect-announcements
+```
+
+The host opens the real app and sets its Status/Announcement bindings to three
+known messages, twelve seconds apart. It does not generate audio or download
+models. The probe checks one polite AT-SPI Object Announcement for each message,
+in order, without focusing the status element. Generation pacing is covered by
+`ScreenReaderTests`: state changes immediately, frame updates no more often
+than every ten seconds. Actual Orca speech still requires a manual check.
+
+The signal follows GNOME's `at-spi2-core/xml/Event.xml`: a string detail,
+politeness 1, unused integer 0, a variant containing the spoken string, and an
+empty properties dictionary. Linux does not also send a Name change for this
+message; Windows retains its UIA LiveRegionChanged route.
+
+The Fedora user confirmed candidate 2's focus, layout and picker speech.
+Candidate 3's placeholder and progress speech still needs their verification.

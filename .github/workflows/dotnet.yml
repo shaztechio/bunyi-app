@@ -82,6 +82,12 @@ jobs:
         if: runner.os == 'Windows'
         run: dotnet build tools/UiaProbe -c Release
 
+      # The AT-SPI host drives real status bindings without inference. Running
+      # its Python probe needs a Linux desktop, so CI checks compilation only.
+      - name: Build the AT-SPI diagnostic host (Linux only)
+        if: runner.os == 'Linux'
+        run: dotnet build tools/AtSpiProbe/Host -c Release
+
       # Also outside Bunyi.sln, and for the same reason: an operator's tool, not
       # part of the app. Cross-platform, so both runners build it. Built and not
       # run — it wants a models folder with 14 GB in it.

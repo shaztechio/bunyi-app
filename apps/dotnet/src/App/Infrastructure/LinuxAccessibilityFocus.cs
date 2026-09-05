@@ -24,20 +24,23 @@ using Bunyi.Core.Diagnostics;
 namespace Bunyi.App.Infrastructure;
 
 /// <summary>
-/// Work around Avalonia 12.1.1 dropping Linux focus events for unqueried descendants.
-/// Remove when RootAtSpiNode.OnRootFocusChanged attaches the entire focused path.
+/// Bridge missing Linux focus paths and live announcements in Avalonia 12.1.1.
+/// Remove each workaround when the framework supplies its corresponding event.
 /// See #159. This bridges AT-SPI nodes, not just Avalonia automation peers.
 /// </summary>
 internal static class LinuxAccessibilityFocus
 {
     private static IDisposable? _subscription;
+    private static Bridge? _bridge;
+    private static ILogSink? _log;
 
     public static void Install(ILogSink log)
     {
         if (!OperatingSystem.IsLinux() || _subscription is not null) return;
         try
         {
-            var bridge = new Bridge();
+            var bridge = _bridge = new Bridge();
+            _log = log;
             var reported = false;
             var failed = false;
             _subscription = InputElement.GotFocusEvent.AddClassHandler<TopLevel>((_, args) =>
@@ -71,6 +74,15 @@ internal static class LinuxAccessibilityFocus
         }
     }
 
+    internal static void Announce(Control control, string message)
+    {
+        try { _bridge?.Announce(control, message); }
+        catch (Exception e)
+        {
+            _log?.Log($"Linux accessibility announcement failed: {e.GetBaseException().Message}");
+        }
+    }
+
     // Avalonia exposes no public API for attaching AT-SPI nodes. Keep the
     // version-dependent access in one place; fail visibly without crashing the app.
     internal sealed class Bridge
@@ -82,6 +94,10 @@ internal static class LinuxAccessibilityFocus
         private readonly MethodInfo _find;
         private readonly MethodInfo _children;
         private readonly MethodInfo _emit;
+        private readonly PropertyInfo _eventHandler;
+        private readonly MethodInfo _signal;
+        private readonly Type _variant;
+        private readonly Type _properties;
 
         internal Bridge()
         {
@@ -98,19 +114,47 @@ internal static class LinuxAccessibilityFocus
                 ?? throw new MissingMethodException(_find.ReturnType.FullName, "EnsureChildren");
             _emit = serverType.GetMethod("EmitFocusChange", Members)
                 ?? throw new MissingMethodException(serverType.FullName, "EmitFocusChange");
+            _eventHandler = _find.ReturnType.GetProperty("EventObjectHandler", Members)
+                ?? throw new MissingMemberException("AtSpiNode.EventObjectHandler");
+            _signal = _eventHandler.PropertyType.GetMethod("EmitSignal", Members)
+                ?? throw new MissingMethodException("AtSpiEventObjectHandler.EmitSignal");
+            _variant = serverType.Assembly.GetType("Avalonia.DBus.DBusVariant", throwOnError: true)!;
+            _properties = typeof(Dictionary<,>).MakeGenericType(typeof(string), _variant);
         }
 
         internal bool Repair(Control control)
         {
+            var node = EnsureNode(control, onlyMissing: true, out var server);
+            if (node is null) return false;
+            _emit.Invoke(server, [node]);
+            return true;
+        }
+
+        internal bool Announce(Control control, string message)
+        {
+            var node = EnsureNode(control, onlyMissing: false, out _);
+            if (node is null || _eventHandler.GetValue(node) is not { } handler) return false;
+            // AT-SPI Event.xml: detail, politeness (1=polite), unused integer,
+            // variant containing the announcement string, and empty properties.
+            var text = Activator.CreateInstance(_variant, new object[] { message });
+            var properties = Activator.CreateInstance(_properties);
+            _signal.Invoke(handler, new object?[] { "Announcement", new object?[] { "", 1, 0, text, properties } });
+            return true;
+        }
+
+        private object? EnsureNode(Control control, bool onlyMissing, out object? server)
+        {
+            server = null;
             var peer = ControlAutomationPeer.CreatePeerForElement(control);
-            if (TopLevel.GetTopLevel(control) is not { } topLevel) return false;
+            if (TopLevel.GetTopLevel(control) is not { } topLevel) return null;
             var root = ControlAutomationPeer.CreatePeerForElement(topLevel);
-            if (root.GetProvider<IRootProvider>() is not { } provider) return false;
+            if (root.GetProvider<IRootProvider>() is not { } provider) return null;
             var impl = _implementation.GetValue(provider);
-            if (impl is null || !_platform.DeclaringType!.IsInstanceOfType(impl)) return false;
+            if (impl is null || !_platform.DeclaringType!.IsInstanceOfType(impl)) return null;
             var platform = _platform.GetValue(impl);
-            var server = _server.GetValue(platform);
-            if (server is null || _find.Invoke(server, [peer]) is not null) return false;
+            server = _server.GetValue(platform);
+            if (server is null) return null;
+            if (_find.Invoke(server, [peer]) is { } existing) return onlyMissing ? null : existing;
 
             // GetParent connects managed peers to their ancestors. Ask the native
             // bridge to attach each level along that path, without scanning siblings'
@@ -130,9 +174,7 @@ internal static class LinuxAccessibilityFocus
                 if (_find.Invoke(server, [current]) is { } attached) node = attached;
             }
             node = _find.Invoke(server, [peer]);
-            if (node is null) return false;
-            _emit.Invoke(server, [node]);
-            return true;
+            return node;
         }
     }
 }
