@@ -290,7 +290,7 @@ limitations under the License.
               between a property being set and a person hearing it, and this is
               the one step no tool in this repository can take.
             -->
-            <ComboBox Grid.Column="1" ItemsSource="{Binding AllLanguages}"
+            <infra:AccessibleComboBox Grid.Column="1" ItemsSource="{Binding AllLanguages}"
                       SelectedItem="{Binding Language}"
                       AutomationProperties.LabeledBy="{Binding #LanguageLabel}"
                       AutomationProperties.ItemStatus="{Binding Language, Converter={x:Static vm:IdentifierName.Instance}}"
@@ -300,7 +300,7 @@ limitations under the License.
                   <TextBlock Text="{Binding Converter={x:Static vm:IdentifierName.Instance}}" />
                 </DataTemplate>
               </ComboBox.ItemTemplate>
-            </ComboBox>
+            </infra:AccessibleComboBox>
           </Grid>
 
           <Grid Name="SpeakerRow" IsVisible="{Binding ShowSpeakers}">
@@ -310,7 +310,7 @@ limitations under the License.
             </Grid.ColumnDefinitions>
             <TextBlock Grid.Column="0" Name="SpeakerLabel" Text="Speaker" Classes="rowLabel" />
             <!-- Named and announced the same way as Language, above. -->
-            <ComboBox Grid.Column="1" ItemsSource="{Binding Speakers}"
+            <infra:AccessibleComboBox Grid.Column="1" ItemsSource="{Binding Speakers}"
                       SelectedItem="{Binding Speaker}"
                       AutomationProperties.LabeledBy="{Binding #SpeakerLabel}"
                       AutomationProperties.ItemStatus="{Binding Speaker, Converter={x:Static vm:IdentifierName.Instance}}"
@@ -320,7 +320,7 @@ limitations under the License.
                   <TextBlock Text="{Binding Converter={x:Static vm:IdentifierName.Instance}}" />
                 </DataTemplate>
               </ComboBox.ItemTemplate>
-            </ComboBox>
+            </infra:AccessibleComboBox>
           </Grid>
 
           <Grid IsVisible="{Binding ShowInstruct}">
@@ -355,7 +355,7 @@ limitations under the License.
               </Grid.ColumnDefinitions>
               <TextBlock Grid.Column="0" Name="SavedVoiceLabel" Text="Saved voice" Classes="rowLabel" />
               <!-- Named and announced the same way as Language, above. -->
-              <ComboBox Grid.Column="1" ItemsSource="{Binding SavedVoices}"
+              <infra:AccessibleComboBox Grid.Column="1" ItemsSource="{Binding SavedVoices}"
                         SelectedItem="{Binding SelectedVoice}"
                         AutomationProperties.LabeledBy="{Binding #SavedVoiceLabel}"
                         AutomationProperties.ItemStatus="{Binding SelectedVoice.Name}"
@@ -366,7 +366,7 @@ limitations under the License.
                     <TextBlock Text="{Binding Name}" />
                   </DataTemplate>
                 </ComboBox.ItemTemplate>
-              </ComboBox>
+              </infra:AccessibleComboBox>
               <Button Grid.Column="2" Content="Delete"
                       Command="{Binding DeleteVoiceCommand}"
                       ToolTip.Tip="Remove this voice and the recording it kept" />

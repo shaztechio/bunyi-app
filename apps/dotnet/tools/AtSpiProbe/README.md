@@ -29,3 +29,14 @@ remove the workaround when upgrading Avalonia.
 Reproduced on WSL Linux with AT-SPI 2.52.0: the original build emitted no
 focus events before tree enumeration; the candidate emits named events before
 it. Fedora Orca by-ear verification and the remaining #159 audit stay open.
+
+The picker checks also require a non-null, named selected child while closed,
+then send Down/Up and inspect selection events and the updated names. Tree
+inspection rejects leaked layout class names (Panel, StackPanel,
+ContentPresenter, etc.). Quiet Linux layout styles clear only the class-name
+fallback; explicit accessible names and descendant controls remain available.
+The Linux ComboBox peer exposes the collapsed selection as a child and delays
+its selection event until the display-name binding has updated. Windows keeps
+the standard peer and expanded Linux pickers keep the framework selection path.
+The picker probe also opens each dropdown with Alt+Down, checks a focused
+item event after Down, and closes it with Escape.

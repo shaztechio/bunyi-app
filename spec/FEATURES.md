@@ -772,7 +772,10 @@ chords differ and only the requirement is pinned.
 > descendant gains focus. The .NET app repairs that focused descendant's path
 > and emits the missing focus event, without repeating events for attached
 > controls. This Linux-specific bridge workaround does not change the shared
-> keyboard behavior. Verification must test fresh-tree Tab events through
+> keyboard behavior. Decorative layout containers must not acquire spoken
+> names from toolkit class names. A collapsed picker must expose its selected
+> item and emit a selection event when arrow keys change it, so Orca can read
+> the displayed value. Verification must test fresh-tree Tab events through
 > AT-SPI; a passing peer test or pre-walked tree is insufficient. Orca speech
 > and the remaining Linux audit still require the real-desktop check.
 >

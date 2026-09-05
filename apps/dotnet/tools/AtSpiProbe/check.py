@@ -23,12 +23,23 @@ args=parser.parse_args()
 app=args.app.resolve(strict=True)
 phase='startup'
 events=[]
+selections=[]
+focused=None
+checked_pickers=set()
 def on_event(e, *args):
+    global focused
     if 'focused' in e.type:
+        focused=e.source
         events.append((phase,e.type,e.detail1,e.source.get_name()))
         print('EVENT',events[-1],flush=True)
+    elif e.type == 'object:selection-changed' and e.source.get_role_name() == 'combo box':
+        child=e.source.get_selection_iface().get_selected_child(0)
+        value=child.get_name() if child else None
+        selections.append((e.source.get_name(),value))
+        print('SELECTION',selections[-1],flush=True)
 listener=Atspi.EventListener.new(on_event)
 listener.register('object:state-changed:focused')
+listener.register('object:selection-changed')
 def pump(seconds):
     end=time.monotonic()+seconds
     while time.monotonic()<end:
@@ -77,9 +88,29 @@ def tabs():
         print('TAB',keypress+1,phase,flush=True)
         xt.XTestFakeKeyEvent(d,code,1,0); xt.XTestFakeKeyEvent(d,code,0,0); x.XFlush(d); pump(.6)
         assert len(events)-events_before <= 1, 'Duplicate focus events for one Tab'
+        if focused and focused.get_name() in ('Language','Speaker') and focused.get_name() not in checked_pickers:
+            picker=focused; picker_name=picker.get_name(); checked_pickers.add(picker_name)
+            child=picker.get_selection_iface().get_selected_child(0)
+            assert child and child.get_name(), 'Collapsed selection is missing'
+            initial=child.get_name(); selection_count=len(selections)
+            for symbol in (0xff54,0xff52):
+                code_arrow=x.XKeysymToKeycode(d,symbol)
+                xt.XTestFakeKeyEvent(d,code_arrow,1,0); xt.XTestFakeKeyEvent(d,code_arrow,0,0); x.XFlush(d); pump(.6)
+            changes=selections[selection_count:]
+            assert changes and any(value != initial for _,value in changes), 'Arrow keys did not announce a new selection'
+            assert len(changes)<=2 and all(value for _,value in changes), 'Invalid or duplicate selection events'
+            before_open=len(events)
+            alt=x.XKeysymToKeycode(d,0xffe9); down=x.XKeysymToKeycode(d,0xff54)
+            xt.XTestFakeKeyEvent(d,alt,1,0); xt.XTestFakeKeyEvent(d,down,1,0); xt.XTestFakeKeyEvent(d,down,0,0); xt.XTestFakeKeyEvent(d,alt,0,0); x.XFlush(d); pump(.6)
+            xt.XTestFakeKeyEvent(d,down,1,0); xt.XTestFakeKeyEvent(d,down,0,0); x.XFlush(d); pump(.6)
+            assert any(e[3] and e[3] != picker_name for e in events[before_open:]), 'Opened picker lacks focused item event'
+            esc=x.XKeysymToKeycode(d,0xff1b)
+            xt.XTestFakeKeyEvent(d,esc,1,0); xt.XTestFakeKeyEvent(d,esc,0,0); x.XFlush(d); pump(.6)
+            print('OPEN PICKER PASS',picker_name,flush=True)
 def walk(node,depth=0):
     if depth>25: return
     name=node.get_name(); role=node.get_role_name()
+    assert name not in ('Panel','StackPanel','Grid','Border','ContentPresenter','ScrollContentPresenter','VisualLayerManager','DockPanel','WrapPanel'), 'Decorative class name leaked: '+name
     if role in ('push button','text','combo box','radio button'):
         print('CONTROL',repr(name),role,flush=True)
     for i in range(node.get_child_count()):
@@ -103,7 +134,8 @@ with tempfile.TemporaryDirectory(prefix='bunyi-atspi-') as state, args.log.open(
             candidate=desktop.get_child_at_index(i)
             if 'Avalonia' in candidate.get_name(): walk(candidate)
         phase='after-tree-walk'; tabs()
-        print('PASS: fresh-tree names and no duplicate focus events; Orca speech not tested.',flush=True)
+        assert checked_pickers == {'Language','Speaker'}, 'Picker checks did not run'
+        print('PASS: focus, quiet layout names and picker selection events; Orca speech not tested.',flush=True)
     finally:
         proc.terminate()
         try: proc.wait(timeout=5)
