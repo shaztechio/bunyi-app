@@ -16,7 +16,6 @@ using Bunyi.Core.Diagnostics;
 using SoundFlow.Abstracts;
 using SoundFlow.Abstracts.Devices;
 using SoundFlow.Backends.MiniAudio;
-using SoundFlow.Backends.MiniAudio.Enums;
 using SoundFlow.Components;
 using SoundFlow.Enums;
 using SoundFlow.Providers;
@@ -110,95 +109,23 @@ public sealed class SoundFlowAudioPlayer : IAudioPlayer
     /// <inheritdoc />
     public event EventHandler? Finished;
 
-    /// <summary>
-    /// The engine, told which backends to consider so that it can report which
-    /// one it chose.
-    /// </summary>
+    /// <summary>Use miniaudio's native default probing order.</summary>
     /// <remarks>
-    /// <para>
-    /// <c>MiniAudioEngine</c> takes a backend priority, and its
-    /// <c>ActiveBackend</c> reports <b>what was asked for</b> rather than what
-    /// it selected. Asked for nothing, it stays at the enum's zero value —
-    /// <c>Null</c> — for the life of the engine: measured before and after
-    /// <c>InitializePlaybackDevice</c> and after <c>Start</c>, on a machine
-    /// playing audible speech at the time.
-    /// </para>
-    /// <para>
-    /// So it is handed <see cref="MiniAudioEngine.AvailableBackends"/>, which is
-    /// miniaudio's own order — the same order it would have applied itself, so
-    /// this changes which backend is chosen not at all, and changes the report
-    /// from a constant to the truth. A list whose first entry cannot start falls
-    /// through to the next and reports the one that worked: verified by putting
-    /// WinMm, which throws on its own here, at the front of the list.
-    /// </para>
-    /// <para>
-    /// Empty list, no priority: an engine given an empty one has nothing to try,
-    /// and the diagnostic is never worth losing playback for.
-    /// </para>
+    /// SoundFlow 1.4.1's enum does not match its native library. Supplying its
+    /// AvailableBackends list requests the wrong backends. ActiveBackend is
+    /// read from the native context even when no priority list is supplied;
+    /// native zero means WASAPI, not the managed enum's Null. See #121.
     /// </remarks>
-    private static MiniAudioEngine CreateEngine()
-    {
-        var available = MiniAudioEngine.AvailableBackends;
-
-        return available.Count > 0 ? new MiniAudioEngine(available) : new MiniAudioEngine();
-    }
-
-    /// <summary>
-    /// Records which audio backend miniaudio chose, once per engine.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// miniaudio picks a backend from what the machine offers, and on Linux
-    /// that is one of ALSA, PulseAudio or PipeWire. Which one it landed on
-    /// decided whether playback worked, and nothing anywhere said which it was
-    /// — leaving "does playback work on Linux?" answerable only as "it
-    /// worked on mine", with no way to tell whether the other two had ever been
-    /// exercised.
-    /// </para>
-    /// <para>
-    /// It cannot be inferred from the desktop either: PipeWire normally
-    /// presents a PulseAudio-compatible server, so a PipeWire machine can be
-    /// driven through the PulseAudio backend and look like neither from
-    /// outside. Asking the engine is the only answer that is not a guess.
-    /// </para>
-    /// <para>
-    /// The available list goes in the same line. A backend that is missing from
-    /// it was never a candidate, which is a different problem from one that was
-    /// chosen and did not work.
-    /// </para>
-    /// <para>
-    /// <b>This only works because the engine is told what to consider</b> — see
-    /// <see cref="CreateEngine"/>. Constructed with no priority it reported
-    /// <c>Null</c> forever, which is both the enum's zero value and the name of
-    /// miniaudio's do-nothing backend, so the line read as "audio is going
-    /// nowhere" on machines whose audio was audible.
-    /// </para>
-    /// </remarks>
-    /// <summary>The backend line, given what the engine reported.</summary>
-    /// <remarks>
-    /// Separated from the logging so the wording can be tested without an audio
-    /// device, which is what CI has. <c>Null</c> is rendered as "not reported"
-    /// rather than printed: it is the name of miniaudio's do-nothing backend as
-    /// well as the enum's zero value, and a reader cannot tell which is meant —
-    /// which is exactly how this was first read as silent playback on a machine
-    /// that was audibly working.
-    /// </remarks>
-    internal static string Describe(
-        MiniAudioBackend active,
-        IReadOnlyList<MiniAudioBackend> available)
-    {
-        var chosen = active == MiniAudioBackend.Null ? "not reported" : active.ToString();
-
-        return $"Audio backend: {chosen} (available: {string.Join(", ", available)}).";
-    }
+    private static MiniAudioEngine CreateEngine() => new();
 
     private void LogTheBackend(MiniAudioEngine engine)
     {
         try
         {
-            _log.Log(Describe(engine.ActiveBackend, MiniAudioEngine.AvailableBackends));
+            _log.Log(NativeAudioBackends.Describe((int)engine.ActiveBackend));
         }
-        catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException)
+        catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException
+            or DllNotFoundException or EntryPointNotFoundException or BadImageFormatException)
         {
             // A diagnostic line is never worth failing playback for.
             _log.Log($"Audio backend could not be read: {ex.Message}");

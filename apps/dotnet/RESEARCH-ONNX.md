@@ -1049,25 +1049,52 @@ nothing surfaces them, which is how question 2 went on naming a blocker that
 had already shipped, and how question 1 went on asking about an audio backend
 that does not exist.
 
-1. **Bare-metal Linux**, and **SoundFlow's `linux-x64` natives**. Mostly
-   answered: the app builds, ships and runs on Ubuntu 24.04, the runtime
-   library set was measured there from `/proc/<pid>/maps` rather than guessed,
-   and playback is confirmed by ear in all three modes.
+1. **Linux audio backends** — ALSA playback is now verified by ear on
+   Fedora, 2026-09-05 ([#121](https://github.com/shaztechio/bunyi-app/issues/121)).
+   The user replayed `Voice-clone-20260820T173825.wav` through the corrected
+   `1.1.0-issue121-alsa2` test build and confirmed "audio is fine now".
+   The 21:54:10 log reports:
 
-   This question used to say "the three audio backends miniaudio may pick
-   (ALSA, PulseAudio, PipeWire)", and **there is no PipeWire backend** —
-   `MiniAudioBackend` is `Null, Wasapi, DirectSound, WinMm, CoreAudio, Sndio,
-   Audio4, Oss, PulseAudio, Alsa, Jack, AAudio, OpenSl, WebAudio, Custom`. A
-   PipeWire desktop is reached through `pipewire-pulse` and selected as
-   **PulseAudio**, so it can never be the thing that is picked and the Linux
-   candidates are two, not three.
+   ```text
+   Audio backend: ALSA (native id: 8; SoundFlow label: PulseAudio; ALSA verification build 2).
+   ```
 
-   What is still open is whether the *other* one works. The app now logs
-   `Audio backend: <chosen> (available: …)` the first time it plays
-   anything, so the answer is a line in the log rather than an inference from
-   the desktop — which was the reason this went unanswered: the two are not
-   the same, and nothing recorded the one that mattered.
-   Tracked as [#121](https://github.com/shaztechio/bunyi-app/issues/121).
+   `aplay -l` lists an Ensoniq AudioPCI ES1371 with DAC2/ADC and DAC1 devices.
+   `aplay -L` identifies `default` as "Default ALSA Output (currently PipeWire
+   Media Server)". This verifies miniaudio's **ALSA backend through Fedora's
+   PipeWire-backed default PCM**. It does not establish a bare-hardware ALSA
+   path with PipeWire stopped, every output device, or a new all-three-mode
+   playback pass. The Fedora release number was not supplied.
+
+   The first test build selected `MiniAudioBackend.Alsa` and logged Alsa, but
+   device initialization failed with `InvalidArgs`. It was actually selecting
+   **JACK**. SoundFlow 1.4.1's enum inserts Null at zero while its bundled
+   miniaudio puts Null last: native 0 is WASAPI, 7 PulseAudio, 8 ALSA, 9 JACK,
+   and 14 Null. The managed labels for those integers are Null, Oss,
+   PulseAudio, Alsa, and Custom respectively. This was checked by calling
+   `ma_get_backend_name` in the shipped Linux binary, not inferred from the
+   desktop. The corrected test build found ALSA by its native name.
+
+   **This supersedes #176's interpretation of the diagnostic.** In the pinned
+   SoundFlow source, `ActiveBackend` is populated by `sf_context_get_backend`
+   even when no priority list is supplied. A default-engine result displayed
+   as Null on Windows was native zero (WASAPI), not missing information.
+   Passing `AvailableBackends` changes which native backends are requested;
+   it is a managed OS-specific list, not miniaudio's native enumeration.
+   Historical enum-only backend logs cannot establish which backend played.
+
+   The shipping fix restores native default probing and uses native names for
+   the selected backend and `ma_get_enabled_backends` for the list labelled
+   `enabled`. Enabled means compiled into the native library, not proof that
+   a usable device or running server exists. There is no direct PipeWire
+   backend in this pinned library: its server can be reached through either
+   PulseAudio compatibility or an ALSA PCM plugin.
+
+   Source evidence: SoundFlow 1.4.1 records commit
+   `16aa7783cf512cb2c89b11f0b774407104b4361a` in its NuGet metadata;
+   `Src/Backends/MiniAudio/MiniAudioEngine.cs` reads the native context and
+   `Native/miniaudio-backend/miniaudio` pins miniaudio
+   `80cf7b2deb1c9930fdf0726b3a20ab5e47095067`.
 2. ~~**1.7B `int4` speed**~~ — measured, and the assumption behind the
    question was wrong. It is **faster** than the 0.6B preset export, RTF 2.48
    against 4.62 on long text, at 4.37 GB peak against 13.20 GB. See "The 1.7B
