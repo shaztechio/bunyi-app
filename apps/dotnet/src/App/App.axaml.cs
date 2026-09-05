@@ -59,6 +59,7 @@ public partial class App : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             var log = LogStore.Shared;
+            Infrastructure.LinuxAccessibilityFocus.Install(log);
             var settingsStore = new SettingsStore(log);
             var settings = settingsStore.Load();
 
