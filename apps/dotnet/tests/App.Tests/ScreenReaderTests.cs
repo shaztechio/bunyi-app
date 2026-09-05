@@ -140,7 +140,11 @@ public class ScreenReaderTests : HeadlessWindows
             new EngineStatus(EngineState.Generating, Detail: "49 frames · 3.9s of speech so far", Frames: 49));
         window.UpdateLayout();
 
-        Assert.Contains(renamed, name => name?.Contains("3.9s of speech", StringComparison.Ordinal) == true);
+        Assert.Contains("3.9s of speech", PeerOf(region).GetName());
+        if (OperatingSystem.IsLinux())
+            Assert.Empty(renamed); // Linux uses Announcement, avoiding a duplicate name-change route.
+        else
+            Assert.Contains(renamed, name => name?.Contains("3.9s of speech", StringComparison.Ordinal) == true);
     }
 
     // ---- The pace of an announcement ----

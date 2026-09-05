@@ -219,7 +219,7 @@ limitations under the License.
             Found by walking the real tree for controls with no name, after the
             same fault turned up on the dropdowns (#159, #192).
           -->
-          <TextBox Grid.Row="1" Name="ScriptBox" Text="{Binding Script}"
+          <infra:AccessibleTextBox Grid.Row="1" Name="ScriptBox" Text="{Binding Script}"
                    Classes.needed="{Binding NeedsText}"
                    AutomationProperties.LabeledBy="{Binding #ScriptLabel}"
                    AcceptsReturn="True" TextWrapping="Wrap"
@@ -290,7 +290,7 @@ limitations under the License.
               between a property being set and a person hearing it, and this is
               the one step no tool in this repository can take.
             -->
-            <ComboBox Grid.Column="1" ItemsSource="{Binding AllLanguages}"
+            <infra:AccessibleComboBox Grid.Column="1" ItemsSource="{Binding AllLanguages}"
                       SelectedItem="{Binding Language}"
                       AutomationProperties.LabeledBy="{Binding #LanguageLabel}"
                       AutomationProperties.ItemStatus="{Binding Language, Converter={x:Static vm:IdentifierName.Instance}}"
@@ -300,7 +300,7 @@ limitations under the License.
                   <TextBlock Text="{Binding Converter={x:Static vm:IdentifierName.Instance}}" />
                 </DataTemplate>
               </ComboBox.ItemTemplate>
-            </ComboBox>
+            </infra:AccessibleComboBox>
           </Grid>
 
           <Grid Name="SpeakerRow" IsVisible="{Binding ShowSpeakers}">
@@ -310,7 +310,7 @@ limitations under the License.
             </Grid.ColumnDefinitions>
             <TextBlock Grid.Column="0" Name="SpeakerLabel" Text="Speaker" Classes="rowLabel" />
             <!-- Named and announced the same way as Language, above. -->
-            <ComboBox Grid.Column="1" ItemsSource="{Binding Speakers}"
+            <infra:AccessibleComboBox Grid.Column="1" ItemsSource="{Binding Speakers}"
                       SelectedItem="{Binding Speaker}"
                       AutomationProperties.LabeledBy="{Binding #SpeakerLabel}"
                       AutomationProperties.ItemStatus="{Binding Speaker, Converter={x:Static vm:IdentifierName.Instance}}"
@@ -320,7 +320,7 @@ limitations under the License.
                   <TextBlock Text="{Binding Converter={x:Static vm:IdentifierName.Instance}}" />
                 </DataTemplate>
               </ComboBox.ItemTemplate>
-            </ComboBox>
+            </infra:AccessibleComboBox>
           </Grid>
 
           <Grid IsVisible="{Binding ShowInstruct}">
@@ -332,7 +332,7 @@ limitations under the License.
                        Text="{Binding InstructLabel}" Classes="rowLabel" />
             <StackPanel Grid.Column="1" Spacing="4">
               <!-- Named by its row label; it changes per mode, so bind rather than repeat. -->
-              <TextBox Name="InstructBox" Text="{Binding Instruct}"
+              <infra:AccessibleTextBox Name="InstructBox" Text="{Binding Instruct}"
                        Classes.needed="{Binding NeedsInstruction}"
                        AutomationProperties.LabeledBy="{Binding #InstructLabelText}"
                        PlaceholderText="{Binding InstructPlaceholder}" />
@@ -355,7 +355,7 @@ limitations under the License.
               </Grid.ColumnDefinitions>
               <TextBlock Grid.Column="0" Name="SavedVoiceLabel" Text="Saved voice" Classes="rowLabel" />
               <!-- Named and announced the same way as Language, above. -->
-              <ComboBox Grid.Column="1" ItemsSource="{Binding SavedVoices}"
+              <infra:AccessibleComboBox Grid.Column="1" ItemsSource="{Binding SavedVoices}"
                         SelectedItem="{Binding SelectedVoice}"
                         AutomationProperties.LabeledBy="{Binding #SavedVoiceLabel}"
                         AutomationProperties.ItemStatus="{Binding SelectedVoice.Name}"
@@ -366,7 +366,7 @@ limitations under the License.
                     <TextBlock Text="{Binding Name}" />
                   </DataTemplate>
                 </ComboBox.ItemTemplate>
-              </ComboBox>
+              </infra:AccessibleComboBox>
               <Button Grid.Column="2" Content="Delete"
                       Command="{Binding DeleteVoiceCommand}"
                       ToolTip.Tip="Remove this voice and the recording it kept" />
@@ -496,11 +496,10 @@ limitations under the License.
             from GetPropertyValue. Avalonia.Win32.Automation.dll ships inside
             the Avalonia.Win32 package and is in our published artifacts.
 
-          Avalonia.FreeDesktop.AtSpi 12.1.1 emits activation, bounds, children,
-          focus, property, selection and state signals and has no live-region
-          symbol anywhere in it, so Orca is told nothing here. That gap is
-          recorded in spec/FEATURES.md §12 rather than left as a claim this app
-          only keeps on one of its two platforms.
+          Avalonia.FreeDesktop.AtSpi 12.1.1 has no live-region implementation.
+          Announce sends the standard polite AT-SPI Object Announcement signal
+          on Linux instead of also emitting a Name change. Both platforms use
+          the same paced Announcement value, without moving keyboard focus.
 
           tools/UiaProbe checks the Windows half where it is consumed, on a
           running window, because everything above is still only source. It

@@ -764,7 +764,22 @@ chords differ and only the requirement is pinned.
 > **macOS** still cannot scroll History from the keyboard at all (#157), and its
 > mode picker, Generate and toolbar cannot be reached from the keyboard (#164).
 >
-> **Windows and Linux** have the rest of this, verified on the real
+> **Linux focus events must work before a reader has explored the tree.**
+> In the 5 Sep 2026 Fedora Orca check (#159), Tab moved focus but Orca spoke
+> only the key name; Fedora Settings announced its controls correctly. A local
+> AT-SPI probe reproduced missing focus events until the control tree was read.
+> Avalonia 12.1.1 only attaches the root's immediate children when an unqueried
+> descendant gains focus. The .NET app repairs that focused descendant's path
+> and emits the missing focus event, without repeating events for attached
+> controls. This Linux-specific bridge workaround does not change the shared
+> keyboard behavior. Decorative layout containers must not acquire spoken
+> names from toolkit class names. A collapsed picker must expose its selected
+> item and emit a selection event when arrow keys change it, so Orca can read
+> the displayed value. Verification must test fresh-tree Tab events through
+> AT-SPI; a passing peer test or pre-walked tree is insufficient. Orca speech
+> and the remaining Linux audit still require the real-desktop check.
+>
+> **Windows** has the rest of this, verified on the real
 > accessibility tree rather than on the toolkit's own objects
 > ([#192](https://github.com/shaztechio/bunyi-app/issues/192);
 > `apps/dotnet/tools/UiaProbe`) — and on **Windows, heard**. Under Narrator on
@@ -772,24 +787,24 @@ chords differ and only the requirement is pinned.
 > Doctor findings, the History rows, the running status, the script and style
 > boxes, and the clone transcript. **Four of those were silent when a person
 > first listened, while passing everything that had been automated** — which is
-> the case against ever closing an accessibility item on a green run. There is
-> **one gap that is the toolkit's and not the app's**:
+> the case against ever closing an accessibility item on a green run.
+> **Linux uses the same paced announcements.** Avalonia 12.1.1 does not emit
+> live-region signals itself, so the app sends the standard AT-SPI Object
+> Announcement signal with polite priority. State changes are immediate;
+> within generation, frame-count updates are announced at most once every ten
+> seconds, using the same `MainViewModel.Announcement` as Windows. Announcements
+> must not move keyboard focus or also repeat through a name-change event.
 >
-> > *"A running generation is announceable"* holds on **Windows only.** The
-> > status line is a live region, and Avalonia's Win32 bridge serves
-> > `UIA_LiveSettingPropertyId` and raises `LiveRegionChanged` when the text
-> > changes — both measured on a running window, and confirmed aloud. **On
-> > Linux it announces nothing.** `Avalonia.FreeDesktop.AtSpi` 12.1.1 emits activation, bounds,
-> > children, focus, property, selection and state signals and has no
-> > live-region concept anywhere in it, so there is no signal for Orca to hear.
-> > There is no app-side workaround: the app can only set the property the
-> > toolkit does not carry. An Orca user learns a run has finished when the
-> > result appears, not while it runs.
+> **Text-box placeholders are announced once.** On Linux the placeholder is
+> exposed through `placeholder-text`, not duplicated in the description or in
+> template descendants. The field's label, editable text and distinct help or
+> validation messages remain available. Windows retains its usual peer, which
+> uses HelpText for placeholders. Check actual Orca speech as well as AT-SPI.
 >
 > **"A control that changes says what it changed to" is new here, and is
 > unverified on macOS.** It was added because Windows failed it: the pickers
 > moved through their values in silence, and nothing in the app was wrong —
-> Avalonia's ComboBox peer raises no property change for a selection. **Windows
+> The toolkit did not deliver a usable selection change to the reader. **Windows
 > now satisfies it, confirmed under Narrator by ear on 3 Sep 2026**, not only as
 > a UIA event. Whether SwiftUI's `Picker` announces under VoiceOver has not been
 > checked, and "probably, it usually does" is the assumption that produced this
