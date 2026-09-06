@@ -20,11 +20,6 @@ on:
     paths: ['docs/**', 'tools/build_site.py', 'tools/test_build_site.py', '.github/workflows/pages.yml']
   pull_request:
     paths: ['docs/**', 'tools/build_site.py', 'tools/test_build_site.py', '.github/workflows/pages.yml']
-  # Releases created with GITHUB_TOKEN do not raise another release event.
-  # workflow_run catches both shipping workflows after their assets upload.
-  workflow_run:
-    workflows: ['Signed release', 'Windows + Linux release']
-    types: [completed]
   release:
     types: [published]
   workflow_dispatch:
@@ -55,7 +50,7 @@ jobs:
 
   build:
     name: Build website
-    if: github.event_name != 'release' && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
+    if: github.event_name != 'release'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
