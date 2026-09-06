@@ -190,7 +190,20 @@ change, update `tools/build_site.py` and its tests to match.
 
 The feature section shows its first six items and keeps the remaining items in
 native `<details>`, accessible by pointer or keyboard with scripting disabled.
-Download and code-signing sections share CSS for their OS pickers but have
-separate radio names and IDs, so changing one does not change the other. Both
-start on the detected OS; without JavaScript they start on macOS. Use
+Screenshot, download, and code-signing sections share CSS for their OS pickers
+but have separate radio names and IDs, so changing one does not change the others.
+All start on the detected OS; without JavaScript they start on macOS. Use
 `?os=mac`, `?os=win`, `?os=linux`, or `?os=none` to check the initial states.
+
+## Screenshots
+
+The screenshot picker has real captures for macOS, Windows, and Linux, with
+platform-specific alternative text and captions. Only the selected image is
+shown, and the narrower 1x Windows/Linux captures are not enlarged. Native radio
+controls support keyboard navigation and work with JavaScript disabled.
+
+`assets/screenshot-linux.png` was captured from the published CPU Linux 1.2.0
+app under WSLg on 2026-09-06, using a temporary clean profile and light appearance.
+It shows the app's client area at its native 760 x 680 size, without adding a
+simulated desktop frame. Screenshot assets are updated when the UI changes;
+release-version rendering does not modify screenshots.
