@@ -19,8 +19,10 @@ from pathlib import Path
 import re
 import tempfile
 import unittest
+from urllib.parse import urlparse, parse_qs
+import xml.etree.ElementTree as ET
 
-from build_site import build, render, select_versions
+from build_site import build, render, select_versions, release_badge
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -112,9 +114,58 @@ class SiteBuildTests(unittest.TestCase):
             self.assertEqual((output / "CNAME").read_bytes(), (source / "CNAME").read_bytes())
             self.assertTrue((output / ".nojekyll").is_file())
             self.assertEqual((output / "assets/icon-64.png").read_bytes(), (source / "assets/icon-64.png").read_bytes())
-            self.assertEqual({p.name for p in output.iterdir()}, {"assets", "index.html", "CNAME", ".nojekyll"})
+            self.assertEqual({p.name for p in output.iterdir()}, {"assets", "index.html", "CNAME", ".nojekyll", "releases"})
         with self.assertRaisesRegex(ValueError, "outside"):
             build(source, source, [])
+
+    def test_readme_badges_follow_site_versions_without_source_changes(self):
+        readme = ROOT / "README.md"
+        before = readme.read_bytes()
+        releases = [release("macos", "1.8.0"), release("dotnet", "2.10.0")]
+        incomplete = release("dotnet", "3.0.0")
+        incomplete["assets"].pop()
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp) / "site"
+            versions = build(ROOT / "docs", output, releases + [incomplete])
+            self.assertEqual(versions, {"macos": "1.8.0", "dotnet": "2.10.0"})
+            ns = {"svg": "http://www.w3.org/2000/svg"}
+            expected = {"macos": ("macOS", "1.8.0"),
+                        "windows": ("Windows", "2.10.0"), "linux": ("Linux", "2.10.0")}
+            for name, (label, version) in expected.items():
+                badge = ET.parse(output / "releases" / f"{name}.svg").getroot()
+                self.assertEqual(badge.attrib["aria-label"], f"{label}: {version}")
+                self.assertEqual([node.text for node in badge.findall(".//svg:text", ns)],
+                                 [label, version])
+                self.assertEqual(badge.findall(".//svg:script", ns), [])
+            first = {p.name: p.read_bytes() for p in (output / "releases").iterdir()}
+            build(ROOT / "docs", output, releases)
+            self.assertEqual({p.name: p.read_bytes() for p in (output / "releases").iterdir()}, first)
+            build(ROOT / "docs", output, releases + [release("dotnet", "2.11.0")])
+            self.assertEqual((output / "releases/macos.svg").read_bytes(), first["macos.svg"])
+            for name in ("windows", "linux"):
+                self.assertIn("2.11.0", (output / f"releases/{name}.svg").read_text())
+            self.assertEqual(readme.read_bytes(), before)
+
+    def test_readme_links_match_generated_badges_and_download_sections(self):
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        links = re.findall(r'\[!\[[^\]]+\]\((https://bunyi.app/[^)]+)\)\]\((https://bunyi.app/[^)]+)\)', readme)
+        self.assertEqual(len(links), 3)
+        template = (ROOT / "docs/index.html").read_text(encoding="utf-8")
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp)
+            build(ROOT / "docs", output, [release("macos", "1.8.0"), release("dotnet", "2.10.0")])
+            for (image, target), os_name in zip(links, ("mac", "win", "linux")):
+                self.assertTrue((output / urlparse(image).path.lstrip("/")).is_file())
+                self.assertEqual(parse_qs(urlparse(target).query), {"os": [os_name]})
+                self.assertEqual(urlparse(target).fragment, "get")
+                self.assertIn('id="get"', template)
+                self.assertIn(f'id="download-{os_name}"', template)
+
+    def test_badge_escapes_xml_and_sizes_long_versions(self):
+        badge = ET.fromstring(release_badge('Mac & "friends"', "123.456.789"))
+        self.assertEqual(badge.attrib["aria-label"], 'Mac & "friends": 123.456.789')
+        self.assertGreater(int(badge.attrib["width"]),
+                           int(ET.fromstring(release_badge("macOS", "1.2.0")).attrib["width"]))
 
 
 if __name__ == "__main__":

@@ -10,7 +10,7 @@ before deployment. No browser-side GitHub API calls are needed.
 **Settings -> Pages -> Build and deployment -> Source: GitHub Actions.**
 `.github/workflows/pages.yml` builds and deploys the site from `main`:
 
-- Site, renderer, or workflow changes on `main` rebuild the page.
+- README, site, renderer, or workflow changes on `main` rebuild the page.
 - Successful **Signed release** and **Windows + Linux release** workflow runs
   explicitly dispatch it after the release assets have uploaded. Their
   **Refresh website** jobs record that handoff. `workflow_dispatch` works with
@@ -32,6 +32,17 @@ published versions.
 Only the deployment job has Pages write permissions. Release-triggered builds
 read the current `main` website, not the release tag's older website or artifacts
 from the triggering workflow. Version updates create no repository commits.
+
+The build also generates `releases/macos.svg`, `releases/windows.svg`, and
+`releases/linux.svg` from the same selected versions. The root README embeds
+these badges and links to the website's platform-specific download sections.
+Each release refresh therefore updates the README's displayed versions along
+with Pages, without editing the Markdown or opening a PR. No PR creation or
+approval permission, extra token, or organization setting is required.
+
+GitHub caches external README images, so a badge can briefly show an older
+version after deployment. The permanent download links lead to the current
+website regardless of that cache. See [GitHub's image caching documentation](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/about-anonymized-urls).
 
 ## Local preview
 

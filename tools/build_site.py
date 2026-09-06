@@ -13,9 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Render the static site using complete, published stable GitHub releases."""
+"""Render the site and README badges from complete, published stable releases."""
 
 import argparse
+from html import escape
 import json
 from pathlib import Path
 import re
@@ -23,6 +24,8 @@ import shutil
 
 TAG = re.compile(r"(?P<prefix>dotnet-v|v)(?P<version>[0-9]+\.[0-9]+\.[0-9]+)")
 TOKENS = {"macos": "{{MACOS_VERSION}}", "dotnet": "{{DOTNET_VERSION}}"}
+BADGES = {"macos": ("macOS", "macos"), "windows": ("Windows", "dotnet"),
+          "linux": ("Linux", "dotnet")}
 
 
 def complete_assets(release, family, version):
@@ -82,6 +85,25 @@ def render(template, versions):
     return template
 
 
+def release_badge(label, version):
+    # Static SVGs served by Pages: no third-party badge service or browser API.
+    # Size each panel for its text, including future multi-digit versions.
+    left = len(label) * 8 + 20
+    right = len(version) * 8 + 20
+    width = left + right
+    label, version = escape(label, quote=True), escape(version, quote=True)
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="24" role="img" aria-label="{label}: {version}">
+  <title>{label}: {version}</title>
+  <rect width="{width}" height="24" rx="4" fill="#24292f"/>
+  <path d="M {left} 0 H {width - 4} Q {width} 0 {width} 4 V 20 Q {width} 24 {width - 4} 24 H {left} Z" fill="#176b45"/>
+  <g fill="#fff" text-anchor="middle" font-family="Verdana,DejaVu Sans,sans-serif" font-size="12">
+    <text x="{left / 2}" y="16">{label}</text>
+    <text x="{left + right / 2}" y="16">{version}</text>
+  </g>
+</svg>
+'''
+
+
 def build(source, output, releases):
     source, output = Path(source).resolve(), Path(output).resolve()
     if output == source or source in output.parents:
@@ -95,6 +117,11 @@ def build(source, output, releases):
     for name in ("CNAME", ".nojekyll"):
         shutil.copyfile(source / name, output / name)
     (output / "index.html").write_text(html, encoding="utf-8", newline="\n")
+    badges = output / "releases"
+    badges.mkdir(exist_ok=True)
+    for name, (label, family) in BADGES.items():
+        (badges / f"{name}.svg").write_text(
+            release_badge(label, versions[family]), encoding="utf-8", newline="\n")
     return versions
 
 

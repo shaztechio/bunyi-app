@@ -17,9 +17,9 @@ name: Website
 on:
   push:
     branches: [main]
-    paths: ['docs/**', 'tools/build_site.py', 'tools/test_build_site.py', '.github/workflows/pages.yml']
+    paths: ['README.md', 'docs/**', 'tools/build_site.py', 'tools/test_build_site.py', '.github/workflows/pages.yml']
   pull_request:
-    paths: ['docs/**', 'tools/build_site.py', 'tools/test_build_site.py', '.github/workflows/pages.yml']
+    paths: ['README.md', 'docs/**', 'tools/build_site.py', 'tools/test_build_site.py', '.github/workflows/pages.yml']
   release:
     types: [published]
   workflow_dispatch:
@@ -67,7 +67,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_REPOSITORY: ${{ github.repository }}
         run: gh api --paginate --slurp "repos/$RELEASE_REPOSITORY/releases?per_page=100" > "$RUNNER_TEMP/site-releases.json"
-      - name: Render release references
+      - name: Render website release references and README badges
         run: python3 tools/build_site.py --releases-json "$RUNNER_TEMP/site-releases.json" --output _site
       - uses: actions/upload-pages-artifact@v5
         with:
