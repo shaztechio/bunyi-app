@@ -142,3 +142,16 @@ here (the "Features", "Platforms", and "Get it running" sections).
 This used to say "or the .NET app stops being a scaffold". It did, and nothing
 here was updated — which is the argument for the sentence above rather than
 against it.
+
+## Release links and page controls
+
+When the Windows/Linux app releases, update its hero links and version notes,
+platform-table release link, standard and CUDA release links, and Linux archive
+filename in `index.html`. macOS uses its own release tag and version.
+
+The feature section shows its first six items and keeps the remaining items in
+native `<details>`, accessible by pointer or keyboard with scripting disabled.
+Download and code-signing sections share CSS for their OS pickers but have
+separate radio names and IDs, so changing one does not change the other. Both
+start on the detected OS; without JavaScript they start on macOS. Use
+`?os=mac`, `?os=win`, `?os=linux`, or `?os=none` to check the initial states.
