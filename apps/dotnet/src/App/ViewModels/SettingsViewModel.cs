@@ -29,6 +29,13 @@ public sealed record DownloadedModelRow(DownloadedModel Model)
     public string Name => Model.Name;
     public string SizeText => Model.SizeText();
     public string OriginText => Model.OriginText();
+    public string AccessibleName => $"Move {Name} to the Trash. {SizeText}. {OriginText}.";
+}
+
+/// <summary>A copyable download command with the mode it belongs to.</summary>
+public sealed record PreDownloadCommandRow(string Mode, string Command)
+{
+    public string AccessibleName => $"Download {Mode} in advance";
 }
 
 /// <summary>
@@ -145,7 +152,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     public ObservableCollection<DownloadedModelRow> Models { get; } = [];
 
     /// <summary>Copyable pre-download commands, one per mode that has one.</summary>
-    public ObservableCollection<string> PreDownloadCommands { get; } = [];
+    public ObservableCollection<PreDownloadCommandRow> PreDownloadCommands { get; } = [];
 
     /// <summary>Whether the models folder is somewhere the user chose.</summary>
     public bool IsCustomModelsFolder => !string.IsNullOrWhiteSpace(_settings.ModelsFolder);
@@ -219,7 +226,8 @@ public sealed partial class SettingsViewModel : ObservableObject
 
             // A mode on the user's own server is named as such rather than
             // given a command with a URL where a repo id belongs.
-            PreDownloadCommands.Add(command ?? $"{mode.DisplayName()}: served from your own server.");
+            PreDownloadCommands.Add(new(mode.DisplayName(),
+                command ?? $"{mode.DisplayName()}: served from your own server."));
         }
 
         OnPropertyChanged(nameof(IsCustomModelsFolder));

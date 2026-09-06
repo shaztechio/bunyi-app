@@ -112,10 +112,10 @@ public class AccessibleNameTests : HeadlessWindows
     }
 
     [AvaloniaTheory]
-    [InlineData("SettingsButton", "Settings — models, storage and appearance")]
-    [InlineData("DoctorButton", "Doctor — can this machine generate right now?")]
-    [InlineData("LogsButton", "Logs — what Bunyi has been doing")]
-    [InlineData("HelpButton", "Help — how to use Bunyi")]
+    [InlineData("SettingsButton", "Settings")]
+    [InlineData("DoctorButton", "Doctor")]
+    [InlineData("LogsButton", "Logs")]
+    [InlineData("HelpButton", "Help")]
     [InlineData("RevealButton", "Show the file on disk")]
     public void The_icon_buttons_announce_what_they_do(string buttonName, string expected)
     {
@@ -127,6 +127,13 @@ public class AccessibleNameTests : HeadlessWindows
         var button = window.GetLogicalDescendants().OfType<Button>().First(b => b.Name == buttonName);
 
         Assert.Equal(expected, NameOf(button));
+        if (buttonName != "RevealButton")
+        {
+            var peer = ControlAutomationPeer.CreatePeerForElement(button);
+            Assert.True(string.IsNullOrEmpty(peer.GetHelpText()));
+            Assert.NotEmpty(peer.GetAcceleratorKey()!);
+            Assert.Contains(" — ", (string)ToolTip.GetTip(button)!);
+        }
     }
 
     [AvaloniaFact]

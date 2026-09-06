@@ -26,6 +26,11 @@ limitations under the License.
         Icon="/Assets/bunyi.png">
 
   <Window.Styles>
+    <!-- Tooltips often repeat the action name. Context is supplied explicitly
+         below, instead of having Orca read the same action as help as well. -->
+    <Style Selector="Button">
+      <Setter Property="AutomationProperties.HelpText" Value="" />
+    </Style>
     <Style Selector="TextBlock.eyebrow">
       <Setter Property="FontSize" Value="10" />
       <Setter Property="FontWeight" Value="Bold" />
@@ -40,7 +45,7 @@ limitations under the License.
     </Style>
   </Window.Styles>
 
-  <TabControl Margin="12" SelectionChanged="OnTabChanged">
+  <TabControl Name="SettingsTabs" Margin="12" SelectionChanged="OnTabChanged">
 
     <TabItem Header="General">
       <StackPanel Margin="12" Spacing="12">
@@ -50,21 +55,23 @@ limitations under the License.
           comment on the Language box in MainWindow.axaml for why a ComboBox
           needs ItemStatus to announce a change at all.
         -->
-        <ComboBox ItemsSource="{Binding Appearances}" SelectedItem="{Binding Appearance}"
+        <inf:AccessibleComboBox ItemsSource="{Binding Appearances}" SelectedItem="{Binding Appearance}"
                   AutomationProperties.LabeledBy="{Binding #AppearanceLabel}"
                   AutomationProperties.ItemStatus="{Binding Appearance}"
+                  AutomationProperties.HelpText="{Binding #AppearanceHelp.Text}"
                   MinWidth="200" />
         <Border Classes="callout">
-          <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.8"
+          <TextBlock Name="AppearanceHelp" TextWrapping="Wrap" FontSize="12" Opacity="0.8"
                      Text="System follows your computer. Light and Dark keep Bunyi that way whatever your computer does. The change applies straight away, to every Bunyi window." />
         </Border>
 
         <!-- §3e. On by default; the callout says what turning it off costs. -->
         <TextBlock Text="MEMORY" Classes="eyebrow" Margin="0,8,0,0" />
         <CheckBox IsChecked="{Binding UnloadOnModeSwitch}"
-                  Content="Free memory when switching modes" />
+                  Content="Free memory when switching modes"
+                  AutomationProperties.HelpText="{Binding #MemoryHelp.Text}" />
         <Border Classes="callout">
-          <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.8"
+          <TextBlock Name="MemoryHelp" TextWrapping="Wrap" FontSize="12" Opacity="0.8"
                      Text="Each mode uses its own model, and a model can be several gigabytes. Leave this on and Bunyi lets go of a mode&apos;s model as soon as you leave it. Turn it off to keep it loaded, so coming back to that mode starts straight away — at the cost of the memory it holds meanwhile." />
         </Border>
       </StackPanel>
@@ -75,36 +82,46 @@ limitations under the License.
         <StackPanel Margin="12" Spacing="12">
           <TextBlock Text="WHERE EACH MODE GETS ITS MODEL" Classes="eyebrow" />
           <Border Classes="callout">
-            <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.8"
+            <TextBlock Name="SourceHelp" TextWrapping="Wrap" FontSize="12" Opacity="0.8"
                        Text="Either a Hugging Face repository name, or a web address starting with https:// if you host the files yourself. Bunyi decides which you meant from what you type. Clear a box to go back to the built-in default for that mode." />
           </Border>
 
           <StackPanel Spacing="4">
-            <TextBlock Text="Preset voice" FontSize="12" Opacity="0.75" />
-            <TextBox Text="{Binding PresetVoiceSource}" PlaceholderText="{Binding PresetVoiceDefault}" />
+            <TextBlock Name="PresetVoiceSourceLabel" Text="Preset voice" FontSize="12" Opacity="0.75" />
+            <inf:AccessibleTextBox Text="{Binding PresetVoiceSource}" PlaceholderText="{Binding PresetVoiceDefault}"
+                     AutomationProperties.LabeledBy="{Binding #PresetVoiceSourceLabel}"
+                     AutomationProperties.HelpText="{Binding #SourceHelp.Text}" />
           </StackPanel>
           <StackPanel Spacing="4">
-            <TextBlock Text="Voice design" FontSize="12" Opacity="0.75" />
-            <TextBox Text="{Binding VoiceDesignSource}" PlaceholderText="{Binding VoiceDesignDefault}" />
+            <TextBlock Name="VoiceDesignSourceLabel" Text="Voice design" FontSize="12" Opacity="0.75" />
+            <inf:AccessibleTextBox Text="{Binding VoiceDesignSource}" PlaceholderText="{Binding VoiceDesignDefault}"
+                     AutomationProperties.LabeledBy="{Binding #VoiceDesignSourceLabel}"
+                     AutomationProperties.HelpText="{Binding #SourceHelp.Text}" />
           </StackPanel>
           <StackPanel Spacing="4">
-            <TextBlock Text="Voice clone" FontSize="12" Opacity="0.75" />
-            <TextBox Text="{Binding VoiceCloneSource}" PlaceholderText="{Binding VoiceCloneDefault}" />
+            <TextBlock Name="VoiceCloneSourceLabel" Text="Voice clone" FontSize="12" Opacity="0.75" />
+            <inf:AccessibleTextBox Text="{Binding VoiceCloneSource}" PlaceholderText="{Binding VoiceCloneDefault}"
+                     AutomationProperties.LabeledBy="{Binding #VoiceCloneSourceLabel}"
+                     AutomationProperties.HelpText="{Binding #SourceHelp.Text}" />
           </StackPanel>
 
-          <Button Content="Reset all three to their defaults" Command="{Binding ResetSourcesCommand}" />
+          <inf:AccessibleButton AutomationProperties.Name="Reset all three model sources to their defaults" Content="Reset all three to their defaults" Command="{Binding ResetSourcesCommand}" />
 
           <Separator />
 
           <TextBlock Text="SAVED CONFIGURATIONS" Classes="eyebrow" />
           <Border Classes="callout">
-            <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.8"
+            <TextBlock Name="ConfigHelp" TextWrapping="Wrap" FontSize="12" Opacity="0.8"
                        Text="The three go together: switching between Hugging Face and your own server means changing all of them. Save the set under a name and switch between them in one click." />
           </Border>
 
           <StackPanel Orientation="Horizontal" Spacing="8">
-            <TextBox Text="{Binding NewConfigName}" PlaceholderText="Name this set" MinWidth="220" />
-            <Button Content="Save" Command="{Binding SaveConfigCommand}" />
+            <inf:AccessibleTextBox Text="{Binding NewConfigName}" PlaceholderText="Name this set" MinWidth="220"
+                     AutomationProperties.Name="Configuration name"
+                     AutomationProperties.HelpText="{Binding #ConfigHelp.Text}" />
+            <inf:AccessibleButton Content="Save" Command="{Binding SaveConfigCommand}"
+                    AutomationProperties.Name="{Binding NewConfigName, StringFormat='Save configuration {0}'}"
+                    AutomationProperties.HelpText="Save the three model sources together under this name." />
           </StackPanel>
 
           <!--
@@ -120,7 +137,7 @@ limitations under the License.
                        Text="The Bunyi mirror serves the same Hugging Face models (Apache-2.0) from models.bunyi.app, with checksums the app verifies as it downloads. Useful where Hugging Face is slow or unreachable. Hugging Face stays the default — it is where the models come from." />
           </Border>
 
-          <ItemsControl ItemsSource="{Binding Configs}">
+          <ItemsControl ItemsSource="{Binding Configs}" AutomationProperties.Name="Saved configurations">
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="core:ModelConfig">
                 <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Margin="0,4">
@@ -145,10 +162,12 @@ limitations under the License.
                     worded and the destructive one is a quiet icon, which is the
                     asymmetry macOS chose deliberately.
                   -->
-                  <Button Grid.Column="1" VerticalAlignment="Center"
+                  <inf:AccessibleButton Grid.Column="1" VerticalAlignment="Center"
                           Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).RestoreConfigCommand}"
                           CommandParameter="{Binding}"
                           Content="Restore"
+                          AutomationProperties.Name="{Binding Name, StringFormat='Restore configuration {0}'}"
+                          AutomationProperties.HelpText="{Binding Summary}"
                           ToolTip.Tip="Set all three modes to these sources" />
                   <!--
                     No Delete on the built-in: there is nothing on disk to
@@ -160,13 +179,15 @@ limitations under the License.
                     row of a short list reads as something broken, and §12 has
                     already been round this once for Generate.
                   -->
-                  <Button Grid.Column="2" Classes="icon"
+                  <inf:AccessibleButton Grid.Column="2" Classes="icon"
                           IsVisible="{Binding !IsBuiltIn}"
                           Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).DeleteConfigCommand}"
                           CommandParameter="{Binding}"
-                          ToolTip.Tip="Delete this configuration">
+                          ToolTip.Tip="Delete this configuration"
+                          AutomationProperties.Name="{Binding Name, StringFormat='Delete configuration {0}'}"
+                          AutomationProperties.HelpText="{Binding Summary}">
                     <Path Data="{DynamicResource IconTrash}" />
-                  </Button>
+                  </inf:AccessibleButton>
                 </Grid>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
@@ -179,20 +200,25 @@ limitations under the License.
       <ScrollViewer>
         <StackPanel Margin="12" Spacing="12">
           <TextBlock Text="WHERE MODELS ARE KEPT" Classes="eyebrow" />
-          <SelectableTextBlock Text="{Binding ModelsFolder}" FontSize="12" TextWrapping="Wrap" />
+          <inf:ContextualSelectableTextBlock Text="{Binding ModelsFolder}" FontSize="12" TextWrapping="Wrap"
+                               AutomationProperties.Name="Models folder"
+                               AutomationProperties.HelpText="{Binding #StorageHelp.Text}" />
           <!--
             Words, not icons. These are three different one-off actions rather
             than a repeated row action, and an icon for each would be a guess
             the user has to hover to check.
           -->
           <StackPanel Orientation="Horizontal" Spacing="8">
-            <Button Content="Choose a folder" Command="{Binding ChooseFolderCommand}" />
-            <Button Content="Show in the file manager" Command="{Binding ShowFolderCommand}" />
-            <Button Content="Use the default" Command="{Binding ResetFolderCommand}"
+            <inf:AccessibleButton AutomationProperties.Name="Choose models folder"
+                    AutomationProperties.HelpText="{Binding ModelsFolder}" Content="Choose a folder" Command="{Binding ChooseFolderCommand}" />
+            <inf:AccessibleButton AutomationProperties.Name="Show models folder in the file manager"
+                    AutomationProperties.HelpText="{Binding ModelsFolder}" Content="Show in the file manager" Command="{Binding ShowFolderCommand}" />
+            <inf:AccessibleButton AutomationProperties.Name="Use default models folder"
+                    AutomationProperties.HelpText="{Binding ModelsFolder}" Content="Use the default" Command="{Binding ResetFolderCommand}"
                     IsEnabled="{Binding IsCustomModelsFolder}" />
           </StackPanel>
           <Border Classes="callout">
-            <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.8"
+            <TextBlock Name="StorageHelp" TextWrapping="Wrap" FontSize="12" Opacity="0.8"
                        Text="Models are large, so you can keep them anywhere — an external drive, for instance. A slow drive makes generating slower too, not just downloading, because the model is read while it runs." />
           </Border>
 
@@ -200,10 +226,11 @@ limitations under the License.
 
           <TextBlock Text="DOWNLOADED MODELS" Classes="eyebrow" />
           <TextBlock Text="{Binding StorageSummary}" FontSize="12" Opacity="0.75" />
-          <ItemsControl ItemsSource="{Binding Models}">
+          <ItemsControl ItemsSource="{Binding Models}" AutomationProperties.Name="Downloaded models"
+                        AutomationProperties.HelpText="{Binding StorageSummary}">
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="vm:DownloadedModelRow">
-                <Grid ColumnDefinitions="*,Auto" Margin="0,3">
+                <inf:DownloadedModelPanel ColumnDefinitions="*,Auto" Margin="0,3">
                   <StackPanel>
                     <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
                     <TextBlock FontSize="11" Opacity="0.7">
@@ -216,13 +243,15 @@ limitations under the License.
                     repeated, not information; the icon says it once and the
                     tooltip says which.
                   -->
-                  <Button Grid.Column="1" Classes="icon"
+                  <inf:AccessibleButton Grid.Column="1" Classes="icon"
                           Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).DeleteModelCommand}"
                           CommandParameter="{Binding}"
-                          ToolTip.Tip="Move this model to the Trash">
+                          ToolTip.Tip="Move this model to the Trash"
+                          AutomationProperties.Name="{Binding AccessibleName}"
+                          AutomationProperties.HelpText="">
                     <Path Data="{DynamicResource IconTrash}" />
-                  </Button>
-                </Grid>
+                  </inf:AccessibleButton>
+                </inf:DownloadedModelPanel>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
@@ -231,13 +260,15 @@ limitations under the License.
 
           <TextBlock Text="DOWNLOAD IN ADVANCE" Classes="eyebrow" />
           <Border Classes="callout">
-            <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.8"
+            <TextBlock Name="DownloadHelp" TextWrapping="Wrap" FontSize="12" Opacity="0.8"
                        Text="If you would rather fetch a model before you need it, copy one of these and run it." />
           </Border>
-          <ItemsControl ItemsSource="{Binding PreDownloadCommands}">
+          <ItemsControl ItemsSource="{Binding PreDownloadCommands}" AutomationProperties.Name="Download in advance">
             <ItemsControl.ItemTemplate>
-              <DataTemplate>
-                <SelectableTextBlock Text="{Binding}" FontFamily="Consolas,Menlo,monospace"
+              <DataTemplate x:DataType="vm:PreDownloadCommandRow">
+                <inf:ContextualSelectableTextBlock Text="{Binding Command}" FontFamily="Consolas,Menlo,monospace"
+                                     AutomationProperties.Name="{Binding AccessibleName}"
+                                     AutomationProperties.HelpText="Copy this command and run it to download this model before you need it."
                                      FontSize="11" TextWrapping="Wrap" Margin="0,3" />
               </DataTemplate>
             </ItemsControl.ItemTemplate>
@@ -250,18 +281,24 @@ limitations under the License.
       <StackPanel Margin="12" Spacing="12">
         <TextBlock Text="BACK UP AND RESTORE" Classes="eyebrow" />
 
-        <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.8"
+        <TextBlock Name="BackupHelp" TextWrapping="Wrap" FontSize="12" Opacity="0.8"
                    Text="Collects your models folder into a single .zip, so you do not have to download several gigabytes again on another machine." />
 
         <StackPanel Orientation="Horizontal" Spacing="10">
-          <Button Content="Back up…" Command="{Binding BackUpCommand}" />
-          <Button Content="Restore…" Command="{Binding RestoreCommand}" />
-          <Button Content="Stop" Classes="danger"
+          <inf:AccessibleButton Content="Back up…" Command="{Binding BackUpCommand}"
+                  AutomationProperties.Name="Back up models"
+                  AutomationProperties.HelpText="{Binding #BackupHelp.Text}" />
+          <inf:AccessibleButton Content="Restore…" Command="{Binding RestoreCommand}"
+                  AutomationProperties.Name="Restore models from backup"
+                  AutomationProperties.HelpText="{Binding #RestoreHelp.Text}" />
+          <inf:AccessibleButton Content="Stop" Classes="danger"
                   Command="{Binding StopBackupCommand}"
+                  AutomationProperties.Name="Stop backup or restore"
+                  AutomationProperties.HelpText="{Binding BackupDetail}"
                   IsVisible="{Binding BackupRunning}" />
         </StackPanel>
 
-        <ProgressBar Minimum="0" Maximum="1" Value="{Binding BackupProgress}"
+        <ProgressBar AutomationProperties.Name="Backup progress" Minimum="0" Maximum="1" Value="{Binding BackupProgress}"
                      IsVisible="{Binding BackupRunning}" Height="4" />
 
         <TextBlock Text="{Binding BackupDetail}" FontSize="12" Opacity="0.8"
@@ -271,7 +308,7 @@ limitations under the License.
                    TextWrapping="Wrap" IsVisible="{Binding BackupIsIdle}" />
 
         <Border Classes="callout">
-          <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.8"
+          <TextBlock Name="RestoreHelp" TextWrapping="Wrap" FontSize="12" Opacity="0.8"
                      Text="Restoring never replaces a model you already have — anything already here is kept and the backup's copy is skipped." />
         </Border>
       </StackPanel>
@@ -298,26 +335,31 @@ limitations under the License.
             -->
             <StackPanel Orientation="Horizontal" Spacing="8">
               <SelectableTextBlock Text="{x:Static inf:AboutInfo.VersionLine}"
-                                   VerticalAlignment="Center" />
-              <Button Classes="icon" Name="CopyVersionButton"
+                                   VerticalAlignment="Center"
+                                   AutomationProperties.HelpText="{Binding #VersionHelp.Text}" />
+              <inf:AccessibleButton Classes="icon" Name="CopyVersionButton"
                       Click="CopyVersion"
-                      ToolTip.Tip="Copy the version and platform">
+                      ToolTip.Tip="Copy the version and platform"
+                      AutomationProperties.Name="Copy Bunyi version and platform"
+                      AutomationProperties.HelpText="{x:Static inf:AboutInfo.VersionLine}">
                 <Path Data="{DynamicResource IconCopy}" />
-              </Button>
+              </inf:AccessibleButton>
             </StackPanel>
 
             <SelectableTextBlock Text="{x:Static inf:AboutInfo.Licence}" Opacity="0.75" FontSize="12" />
             <SelectableTextBlock Text="{x:Static inf:AboutInfo.Copyright}" Opacity="0.75" FontSize="12"
                                  TextWrapping="Wrap" />
-            <Button Classes="link" Content="{x:Static inf:AboutInfo.Home}"
+            <inf:AccessibleButton Classes="link" Content="{x:Static inf:AboutInfo.Home}"
                     FontSize="12" HorizontalAlignment="Left"
                     ToolTip.Tip="Open in your browser"
+                    AutomationProperties.Name="Open Bunyi website"
+                    AutomationProperties.HelpText="{x:Static inf:AboutInfo.Tagline}"
                     Command="{Binding OpenLinkCommand}"
                     CommandParameter="{x:Static inf:AboutInfo.Home}" />
           </StackPanel>
 
           <Border Classes="callout">
-            <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.8"
+            <TextBlock Name="VersionHelp" TextWrapping="Wrap" FontSize="12" Opacity="0.8"
                        Text="Quote the version and platform above when reporting a problem — the Windows and Linux apps are the same program and look alike." />
           </Border>
 
@@ -325,7 +367,7 @@ limitations under the License.
           <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.8"
                      Text="Bunyi is free software standing on other people's free software." />
 
-          <ItemsControl ItemsSource="{x:Static inf:AboutInfo.Credits}">
+          <ItemsControl ItemsSource="{x:Static inf:AboutInfo.Credits}" AutomationProperties.Name="Built with">
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="inf:Credit">
                 <StackPanel Margin="0,0,0,10" Spacing="1">
@@ -339,11 +381,19 @@ limitations under the License.
                   <WrapPanel>
                     <TextBlock Text="{Binding Licence}" FontSize="11" Opacity="0.6"
                                VerticalAlignment="Center" Margin="0,0,6,0" />
-                    <Button Classes="link" Content="{Binding Home}"
+                    <inf:AccessibleButton Classes="link" Content="{Binding Home}"
                             VerticalAlignment="Center"
                             ToolTip.Tip="Open in your browser"
+                            AutomationProperties.Name="{Binding Name, StringFormat='Open {0} website'}"
                             Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).OpenLinkCommand}"
-                            CommandParameter="{Binding Home}" />
+                            CommandParameter="{Binding Home}">
+                      <AutomationProperties.HelpText>
+                        <MultiBinding StringFormat="{}{0} License: {1}.">
+                          <Binding Path="Does" />
+                          <Binding Path="Licence" />
+                        </MultiBinding>
+                      </AutomationProperties.HelpText>
+                    </inf:AccessibleButton>
                   </WrapPanel>
                 </StackPanel>
               </DataTemplate>
@@ -354,7 +404,7 @@ limitations under the License.
           <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.8"
                      Text="The models are downloaded rather than shipped, and they are the part that actually speaks." />
 
-          <ItemsControl ItemsSource="{x:Static inf:AboutInfo.ModelCredits}">
+          <ItemsControl ItemsSource="{x:Static inf:AboutInfo.ModelCredits}" AutomationProperties.Name="Voice models">
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="inf:Credit">
                 <StackPanel Margin="0,0,0,10" Spacing="1">
@@ -368,11 +418,19 @@ limitations under the License.
                   <WrapPanel>
                     <TextBlock Text="{Binding Licence}" FontSize="11" Opacity="0.6"
                                VerticalAlignment="Center" Margin="0,0,6,0" />
-                    <Button Classes="link" Content="{Binding Home}"
+                    <inf:AccessibleButton Classes="link" Content="{Binding Home}"
                             VerticalAlignment="Center"
                             ToolTip.Tip="Open in your browser"
+                            AutomationProperties.Name="{Binding Name, StringFormat='Open {0} website'}"
                             Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).OpenLinkCommand}"
-                            CommandParameter="{Binding Home}" />
+                            CommandParameter="{Binding Home}">
+                      <AutomationProperties.HelpText>
+                        <MultiBinding StringFormat="{}{0} License: {1}.">
+                          <Binding Path="Does" />
+                          <Binding Path="Licence" />
+                        </MultiBinding>
+                      </AutomationProperties.HelpText>
+                    </inf:AccessibleButton>
                   </WrapPanel>
                 </StackPanel>
               </DataTemplate>

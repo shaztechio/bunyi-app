@@ -88,36 +88,38 @@ limitations under the License.
           Doctor and Logs would be the one arrangement §11 rules out.
         -->
         <!--
-          Each tooltip ends with its chord. The accessible name is set apart
-          without it — a screen reader has its own property for the key, and a
-          name that reads "Logs, what Bunyi has been doing, open bracket control
-          L close bracket" is the kind of thing #159 exists to prevent. The
-          local name outranks the tooltip-derived one in Controls.axaml.
+          Short destination names are enough when tabbing through the toolbar.
+          Keep the longer hover tips, suppress their fallback descriptions, and
+          expose each shortcut through its own accessibility property.
         -->
-        <Button Classes="icon" Click="OnSettingsClicked" Name="SettingsButton"
+        <infra:AccessibleButton Classes="icon" Click="OnSettingsClicked" Name="SettingsButton"
                 ToolTip.Tip="Settings — models, storage and appearance (Ctrl+,)"
-                AutomationProperties.Name="Settings — models, storage and appearance"
+                AutomationProperties.Name="Settings"
+                AutomationProperties.HelpText=""
                 AutomationProperties.AcceleratorKey="Ctrl+,">
           <Path Data="{DynamicResource IconSettings}" />
-        </Button>
-        <Button Classes="icon" Click="OnDoctorClicked" Name="DoctorButton"
+        </infra:AccessibleButton>
+        <infra:AccessibleButton Classes="icon" Click="OnDoctorClicked" Name="DoctorButton"
                 ToolTip.Tip="Doctor — can this machine generate right now? (Ctrl+D)"
-                AutomationProperties.Name="Doctor — can this machine generate right now?"
+                AutomationProperties.Name="Doctor"
+                AutomationProperties.HelpText=""
                 AutomationProperties.AcceleratorKey="Ctrl+D">
           <Path Data="{DynamicResource IconDoctor}" />
-        </Button>
-        <Button Classes="icon" Click="OnLogsClicked" Name="LogsButton"
+        </infra:AccessibleButton>
+        <infra:AccessibleButton Classes="icon" Click="OnLogsClicked" Name="LogsButton"
                 ToolTip.Tip="Logs — what Bunyi has been doing (Ctrl+L)"
-                AutomationProperties.Name="Logs — what Bunyi has been doing"
+                AutomationProperties.Name="Logs"
+                AutomationProperties.HelpText=""
                 AutomationProperties.AcceleratorKey="Ctrl+L">
           <Path Data="{DynamicResource IconLogs}" />
-        </Button>
-        <Button Classes="icon" Click="OnHelpClicked" Name="HelpButton"
+        </infra:AccessibleButton>
+        <infra:AccessibleButton Classes="icon" Click="OnHelpClicked" Name="HelpButton"
                 ToolTip.Tip="Help — how to use Bunyi (F1)"
-                AutomationProperties.Name="Help — how to use Bunyi"
+                AutomationProperties.Name="Help"
+                AutomationProperties.HelpText=""
                 AutomationProperties.AcceleratorKey="F1">
           <Path Data="{DynamicResource IconHelp}" />
-        </Button>
+        </infra:AccessibleButton>
       </StackPanel>
     </Grid>
 
@@ -219,7 +221,7 @@ limitations under the License.
             Found by walking the real tree for controls with no name, after the
             same fault turned up on the dropdowns (#159, #192).
           -->
-          <TextBox Grid.Row="1" Name="ScriptBox" Text="{Binding Script}"
+          <infra:AccessibleTextBox Grid.Row="1" Name="ScriptBox" Text="{Binding Script}"
                    Classes.needed="{Binding NeedsText}"
                    AutomationProperties.LabeledBy="{Binding #ScriptLabel}"
                    AcceptsReturn="True" TextWrapping="Wrap"
@@ -290,7 +292,7 @@ limitations under the License.
               between a property being set and a person hearing it, and this is
               the one step no tool in this repository can take.
             -->
-            <ComboBox Grid.Column="1" ItemsSource="{Binding AllLanguages}"
+            <infra:AccessibleComboBox Grid.Column="1" ItemsSource="{Binding AllLanguages}"
                       SelectedItem="{Binding Language}"
                       AutomationProperties.LabeledBy="{Binding #LanguageLabel}"
                       AutomationProperties.ItemStatus="{Binding Language, Converter={x:Static vm:IdentifierName.Instance}}"
@@ -300,7 +302,7 @@ limitations under the License.
                   <TextBlock Text="{Binding Converter={x:Static vm:IdentifierName.Instance}}" />
                 </DataTemplate>
               </ComboBox.ItemTemplate>
-            </ComboBox>
+            </infra:AccessibleComboBox>
           </Grid>
 
           <Grid Name="SpeakerRow" IsVisible="{Binding ShowSpeakers}">
@@ -310,7 +312,7 @@ limitations under the License.
             </Grid.ColumnDefinitions>
             <TextBlock Grid.Column="0" Name="SpeakerLabel" Text="Speaker" Classes="rowLabel" />
             <!-- Named and announced the same way as Language, above. -->
-            <ComboBox Grid.Column="1" ItemsSource="{Binding Speakers}"
+            <infra:AccessibleComboBox Grid.Column="1" ItemsSource="{Binding Speakers}"
                       SelectedItem="{Binding Speaker}"
                       AutomationProperties.LabeledBy="{Binding #SpeakerLabel}"
                       AutomationProperties.ItemStatus="{Binding Speaker, Converter={x:Static vm:IdentifierName.Instance}}"
@@ -320,7 +322,7 @@ limitations under the License.
                   <TextBlock Text="{Binding Converter={x:Static vm:IdentifierName.Instance}}" />
                 </DataTemplate>
               </ComboBox.ItemTemplate>
-            </ComboBox>
+            </infra:AccessibleComboBox>
           </Grid>
 
           <Grid IsVisible="{Binding ShowInstruct}">
@@ -332,7 +334,7 @@ limitations under the License.
                        Text="{Binding InstructLabel}" Classes="rowLabel" />
             <StackPanel Grid.Column="1" Spacing="4">
               <!-- Named by its row label; it changes per mode, so bind rather than repeat. -->
-              <TextBox Name="InstructBox" Text="{Binding Instruct}"
+              <infra:AccessibleTextBox Name="InstructBox" Text="{Binding Instruct}"
                        Classes.needed="{Binding NeedsInstruction}"
                        AutomationProperties.LabeledBy="{Binding #InstructLabelText}"
                        PlaceholderText="{Binding InstructPlaceholder}" />
@@ -355,7 +357,7 @@ limitations under the License.
               </Grid.ColumnDefinitions>
               <TextBlock Grid.Column="0" Name="SavedVoiceLabel" Text="Saved voice" Classes="rowLabel" />
               <!-- Named and announced the same way as Language, above. -->
-              <ComboBox Grid.Column="1" ItemsSource="{Binding SavedVoices}"
+              <infra:AccessibleComboBox Grid.Column="1" ItemsSource="{Binding SavedVoices}"
                         SelectedItem="{Binding SelectedVoice}"
                         AutomationProperties.LabeledBy="{Binding #SavedVoiceLabel}"
                         AutomationProperties.ItemStatus="{Binding SelectedVoice.Name}"
@@ -366,7 +368,7 @@ limitations under the License.
                     <TextBlock Text="{Binding Name}" />
                   </DataTemplate>
                 </ComboBox.ItemTemplate>
-              </ComboBox>
+              </infra:AccessibleComboBox>
               <Button Grid.Column="2" Content="Delete"
                       Command="{Binding DeleteVoiceCommand}"
                       ToolTip.Tip="Remove this voice and the recording it kept" />
@@ -496,11 +498,10 @@ limitations under the License.
             from GetPropertyValue. Avalonia.Win32.Automation.dll ships inside
             the Avalonia.Win32 package and is in our published artifacts.
 
-          Avalonia.FreeDesktop.AtSpi 12.1.1 emits activation, bounds, children,
-          focus, property, selection and state signals and has no live-region
-          symbol anywhere in it, so Orca is told nothing here. That gap is
-          recorded in spec/FEATURES.md §12 rather than left as a claim this app
-          only keeps on one of its two platforms.
+          Avalonia.FreeDesktop.AtSpi 12.1.1 has no live-region implementation.
+          Announce sends the standard polite AT-SPI Object Announcement signal
+          on Linux instead of also emitting a Name change. Both platforms use
+          the same paced Announcement value, without moving keyboard focus.
 
           tools/UiaProbe checks the Windows half where it is consumed, on a
           running window, because everything above is still only source. It
