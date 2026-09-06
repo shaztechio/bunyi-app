@@ -28,6 +28,22 @@ public partial class SettingsWindow : Window
     {
         AvaloniaXamlLoader.Load(this);
         DataContextChanged += (_, _) => Wire();
+
+        var tabs = this.FindControl<TabControl>("SettingsTabs")!;
+        tabs.PropertyChanged += (_, e) =>
+        {
+            // Avalonia 12.1 records page controls as TabOnceActiveElement on
+            // the TabControl and forwards that target to the header panel.
+            // Returning to the bar then returns to the page instead. Keep
+            // its target on the selected header; normal Tab ordering handles
+            // the page controls, disabled controls and both directions.
+            if (e.Property == KeyboardNavigation.TabOnceActiveElementProperty
+                && tabs.ContainerFromIndex(tabs.SelectedIndex) is TabItem header
+                && !ReferenceEquals(e.NewValue, header))
+            {
+                KeyboardNavigation.SetTabOnceActiveElement(tabs, header);
+            }
+        };
     }
 
     private void Wire()

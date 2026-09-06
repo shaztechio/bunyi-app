@@ -40,7 +40,7 @@ limitations under the License.
     </Style>
   </Window.Styles>
 
-  <TabControl Margin="12" SelectionChanged="OnTabChanged">
+  <TabControl Name="SettingsTabs" Margin="12" SelectionChanged="OnTabChanged">
 
     <TabItem Header="General">
       <StackPanel Margin="12" Spacing="12">

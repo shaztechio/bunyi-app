@@ -479,6 +479,14 @@ it "General" alone. macOS source: `SettingsView.swift`.
 > `AutomationProperties.Name` — so pressing the chord with a screen reader on
 > announced "General", which is no confirmation that a settings window opened at
 > all, and there was nowhere else to put the word. See #196.
+
+On Windows and Linux, Tab enters the selected Settings page; Shift+Tab from its
+first control returns to the selected tab header. Tab from the last control also
+returns to the header. Left/Right on the tab bar selects another page. Appearance
+changes made with Up/Down announce the newly selected System, Light or Dark option
+once, including when the theme changes immediately. This corrects .NET keyboard
+navigation and AT-SPI exposure; macOS retains its native Settings navigation.
+
 - **General**: appearance — **System / Light / Dark**. System follows the OS;
   Light and Dark pin the app regardless of it. Applies immediately, to
   **every** window the app owns, not only the one in front (macOS: the main

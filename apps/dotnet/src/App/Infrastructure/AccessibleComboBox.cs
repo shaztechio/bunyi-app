@@ -47,7 +47,9 @@ internal sealed class LinuxComboBoxAutomationPeer(ComboBox owner) : ComboBoxAuto
         if (Owner.IsDropDownOpen) return base.GetSelectionCore();
         if (Owner.SelectedItem is not { } item) return null;
         var name = AutomationProperties.GetItemStatus(Owner) ?? item.ToString() ?? string.Empty;
-        if (!ReferenceEquals(item, _selectedItem) || name != _selectedName || _collapsedSelection is null)
+        // Enum items such as Appearance are boxed again on each read. Value equality
+        // keeps GetChildren and GetSelection pointing at the same attached peer.
+        if (!Equals(item, _selectedItem) || name != _selectedName || _collapsedSelection is null)
         {
             _selectedItem = item;
             _selectedName = name;

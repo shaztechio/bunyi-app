@@ -294,6 +294,76 @@ public sealed class KeyboardOperationTests : HeadlessWindows
             $"tab {tab} ({header.Header}): {missed.Count} of {interactive.Count} controls never got focus: {string.Join(", ", missed)}");
     }
 
+    [AvaloniaTheory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    public void Settings_content_returns_to_the_selected_header_with_Shift_Tab(int tab)
+    {
+        var window = OpenSettings();
+        var tabs = window.GetVisualDescendants().OfType<TabControl>().Single();
+        tabs.SelectedIndex = tab;
+        window.UpdateLayout();
+        var header = (TabItem)tabs.ContainerFromIndex(tab)!;
+        Assert.True(header.Focus());
+        Press(window, PhysicalKey.Tab);
+        Assert.IsNotType<TabItem>(Focused(window));
+        Press(window, PhysicalKey.Tab, RawInputModifiers.Shift);
+        Assert.Same(header, Focused(window));
+        Press(window, tab == 4 ? PhysicalKey.ArrowLeft : PhysicalKey.ArrowRight);
+        Assert.NotEqual(tab, tabs.SelectedIndex);
+    }
+
+    [AvaloniaTheory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    public void Settings_Tab_wraps_through_the_page_and_back_to_its_header(int tab)
+    {
+        var window = OpenSettings();
+        var tabs = window.GetVisualDescendants().OfType<TabControl>().Single();
+        tabs.SelectedIndex = tab;
+        window.UpdateLayout();
+        var header = (TabItem)tabs.ContainerFromIndex(tab)!;
+        Assert.True(header.Focus());
+        Press(window, PhysicalKey.Tab);
+        Assert.IsNotType<TabItem>(Focused(window));
+        var visited = new HashSet<IInputElement>();
+        while (!ReferenceEquals(header, Focused(window)))
+        {
+            Assert.True(visited.Count < 60 && visited.Add(Focused(window)!), "Tab became trapped in the page");
+            Press(window, PhysicalKey.Tab);
+        }
+        // Reverse at the header reaches the last page control, then forward
+        // returns to the same selected header instead of a different tab.
+        Press(window, PhysicalKey.Tab, RawInputModifiers.Shift);
+        Assert.Contains(Focused(window)!, visited);
+        Press(window, PhysicalKey.Tab);
+        Assert.Same(header, Focused(window));
+    }
+
+    [AvaloniaFact]
+    public void Settings_header_return_survives_switching_pages_with_arrow_keys()
+    {
+        var window = OpenSettings();
+        var tabs = window.GetVisualDescendants().OfType<TabControl>().Single();
+        Assert.True(((TabItem)tabs.ContainerFromIndex(0)!).Focus());
+        for (var tab = 0; tab < 5; tab++)
+        {
+            var header = (TabItem)tabs.ContainerFromIndex(tab)!;
+            Assert.Same(header, Focused(window));
+            Press(window, PhysicalKey.Tab);
+            Assert.IsNotType<TabItem>(Focused(window));
+            Press(window, PhysicalKey.Tab, RawInputModifiers.Shift);
+            Assert.Same(header, Focused(window));
+            if (tab < 4) Press(window, PhysicalKey.ArrowRight);
+        }
+    }
+
     // ---- Logs ----
 
     private (LogsWindow Window, LogStore Store) OpenLogs()

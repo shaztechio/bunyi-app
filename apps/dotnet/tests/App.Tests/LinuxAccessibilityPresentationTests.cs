@@ -49,6 +49,30 @@ public class LinuxAccessibilityPresentationTests : HeadlessWindows
     }
 
     [AvaloniaFact]
+    public async Task EnumSelectionsRemainTheSameAccessibleChildAcrossRepeatedReads()
+    {
+        var combo = new ComboBox
+        {
+            ItemsSource = new[] { Bunyi.Core.Settings.Appearance.System, Bunyi.Core.Settings.Appearance.Light },
+            SelectedIndex = 0,
+        };
+        Open(new Window { Content = combo });
+        var peer = new LinuxComboBoxAutomationPeer(combo);
+        var child = Assert.Single(peer.GetChildren());
+        var selection = peer.GetProvider<ISelectionProvider>()!;
+        Assert.Same(child, Assert.Single(selection.GetSelection()));
+        Assert.Same(child, Assert.Single(selection.GetSelection()));
+        Assert.Equal("System", child.GetName());
+
+        combo.SelectedIndex = 1;
+        await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
+        var changed = Assert.Single(peer.GetChildren());
+        Assert.NotSame(child, changed);
+        Assert.Same(changed, Assert.Single(selection.GetSelection()));
+        Assert.Equal("Light", changed.GetName());
+    }
+
+    [AvaloniaFact]
     public void CollapsedSelectionIsTheSameNamedPeerExposedAsAChild()
     {
         var combo = new ComboBox { ItemsSource = new[] { "raw-id" }, SelectedIndex = 0 };

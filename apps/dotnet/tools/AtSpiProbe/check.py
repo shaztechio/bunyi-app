@@ -20,6 +20,7 @@ parser=argparse.ArgumentParser(description='Check real Bunyi AT-SPI focus events
 parser.add_argument('app', type=pathlib.Path)
 parser.add_argument('--log', type=pathlib.Path, default=pathlib.Path('atspi-app.log'))
 parser.add_argument('--expect-announcements', action='store_true')
+parser.add_argument('--settings', action='store_true', help='Check Settings navigation and Appearance instead of the main window')
 args=parser.parse_args()
 app=args.app.resolve(strict=True)
 phase='startup'
@@ -61,7 +62,7 @@ def pump(seconds):
         while GLib.MainContext.default().pending():
             GLib.MainContext.default().iteration(False)
         time.sleep(.01)
-x=C.CDLL('libX11.so.6'); xt=C.CDLL('libXtst.so.6')
+x=C.CDLL('libX11.so.6')
 x.XOpenDisplay.restype=C.c_void_p; d=x.XOpenDisplay(None)
 x.XDefaultRootWindow.argtypes=[C.c_void_p]; x.XDefaultRootWindow.restype=C.c_ulong
 x.XQueryTree.argtypes=[C.c_void_p,C.c_ulong,C.POINTER(C.c_ulong),C.POINTER(C.c_ulong),C.POINTER(C.POINTER(C.c_ulong)),C.POINTER(C.c_uint)]
@@ -80,8 +81,7 @@ def belongs_to_process(window):
 x.XSetInputFocus.argtypes=[C.c_void_p,C.c_ulong,C.c_int,C.c_ulong]
 x.XFlush.argtypes=[C.c_void_p]
 x.XKeysymToKeycode.argtypes=[C.c_void_p,C.c_ulong]; x.XKeysymToKeycode.restype=C.c_uint
-xt.XTestFakeKeyEvent.argtypes=[C.c_void_p,C.c_uint,C.c_int,C.c_ulong]
-def find_window(parent,depth=0):
+def find_window(parent,depth=0,title_prefix='Bunyi'):
     rt=C.c_ulong(); par=C.c_ulong(); children=C.POINTER(C.c_ulong)(); count=C.c_uint()
     x.XQueryTree(d,parent,C.byref(rt),C.byref(par),C.byref(children),C.byref(count))
     found=None
@@ -89,19 +89,81 @@ def find_window(parent,depth=0):
         name=C.c_char_p(); child=children[i]
         if x.XFetchName(d,child,C.byref(name)) and name.value:
             title=name.value.decode(errors='replace'); x.XFree(name)
-            if title=='Bunyi' and belongs_to_process(child): found=child; break
+            if title.startswith(title_prefix) and belongs_to_process(child): found=child; break
     if found is None and depth < 5:
         for i in range(count.value):
-            found=find_window(children[i],depth+1)
+            found=find_window(children[i],depth+1,title_prefix)
             if found: break
     x.XFree(children)
     return found
+class XKeyEvent(C.Structure):
+    _fields_=[('type',C.c_int),('serial',C.c_ulong),('send_event',C.c_int),
+              ('display',C.c_void_p),('window',C.c_ulong),('root',C.c_ulong),
+              ('subwindow',C.c_ulong),('time',C.c_ulong),('x',C.c_int),('y',C.c_int),
+              ('x_root',C.c_int),('y_root',C.c_int),('state',C.c_uint),
+              ('keycode',C.c_uint),('same_screen',C.c_int)]
+class XEvent(C.Union):
+    _fields_=[('key',XKeyEvent),('pad',C.c_long*24)]
+x.XSendEvent.argtypes=[C.c_void_p,C.c_ulong,C.c_int,C.c_long,C.POINTER(XEvent)]
+
+def key(symbol, modifiers=()):
+    # Direct X11 events keep WSLg's compositor from dropping synthetic keys.
+    # They still enter Avalonia's native input path, only on our own PID.
+    target=find_window(x.XDefaultRootWindow(d),title_prefix='Settings') or find_window(x.XDefaultRootWindow(d))
+    assert target, 'Test window disappeared'
+    x.XSetInputFocus(d,target,1,0); x.XFlush(d); pump(.1)
+    event=XEvent()
+    event.key.display=d; event.key.window=target
+    event.key.root=x.XDefaultRootWindow(d); event.key.same_screen=1
+    event.key.keycode=x.XKeysymToKeycode(d,symbol)
+    event.key.state=sum({0xffe1:1,0xffe3:4,0xffe9:8}[modifier] for modifier in modifiers)
+    for event_type, mask in ((2,1),(3,2)):
+        event.key.type=event_type
+        assert x.XSendEvent(d,target,0,mask,C.byref(event)), 'X11 rejected test key'
+    x.XFlush(d); pump(.5)
+
+def settings_check():
+    key(0xff09); key(0xff09); key(0x2c,(0xffe3,)); pump(1)
+    window=find_window(x.XDefaultRootWindow(d),title_prefix='Settings')
+    assert window, 'Settings window missing'
+    x.XSetInputFocus(d,window,1,0); x.XFlush(d); pump(.5)
+    for _ in range(10):
+        if focused and focused.get_name()=='APPEARANCE': break
+        key(0xff09)
+    assert focused and focused.get_name()=='APPEARANCE', 'Appearance unreachable'
+    for symbol, expected in ((0xff54,'Light'),(0xff54,'Dark'),(0xff52,'Light'),(0xff52,'System')):
+        before=len(selections)
+        key(symbol)
+        assert selections[before:]==[('APPEARANCE',expected)], 'Missing or duplicate Appearance selection: '+repr(selections[before:])
+        assert focused.get_name()=='APPEARANCE', 'Theme change lost keyboard focus'
+    key(0xff09,(0xffe1,))
+    assert focused.get_name()=='General', 'Shift+Tab did not return to General'
+    headers=('General','Models','Storage','Backup','About')
+    for index, header in enumerate(headers):
+        assert focused.get_name()==header and focused.get_role_name()=='page tab', 'Wrong tab header focus'
+        before=len(events)
+        key(0xff09)
+        assert len(events)>before and focused.get_role_name()!='page tab', 'Tab failed to enter '+header
+        key(0xff09,(0xffe1,))
+        assert focused.get_name()==header, 'Shift+Tab failed to return to '+header
+        key(0xff09)
+        for _ in range(60):
+            if focused.get_role_name()=='page tab': break
+            before=len(events)
+            key(0xff09)
+            assert len(events)>before, 'Tab trapped in '+header
+        assert focused.get_name()==header, 'Tab failed to wrap to '+header
+        print('SETTINGS TAB PASS',header,flush=True)
+        if index < len(headers)-1: key(0xff53)
+    key(0xff51)
+    assert focused.get_name()=='Backup', 'Left did not select the previous tab'
+    print('PASS: Settings tab return in both directions and single named Appearance events; Orca speech not tested.',flush=True)
+
 def tabs():
-    code=x.XKeysymToKeycode(d,0xff09)
     for keypress in range(20):
         events_before=len(events)
         print('TAB',keypress+1,phase,flush=True)
-        xt.XTestFakeKeyEvent(d,code,1,0); xt.XTestFakeKeyEvent(d,code,0,0); x.XFlush(d); pump(.6)
+        key(0xff09)
         assert len(events)-events_before <= 1, 'Duplicate focus events for one Tab'
         if focused and focused.get_name() in ('Language','Speaker') and focused.get_name() not in checked_pickers:
             picker=focused; picker_name=picker.get_name(); checked_pickers.add(picker_name)
@@ -109,18 +171,15 @@ def tabs():
             assert child and child.get_name(), 'Collapsed selection is missing'
             initial=child.get_name(); selection_count=len(selections)
             for symbol in (0xff54,0xff52):
-                code_arrow=x.XKeysymToKeycode(d,symbol)
-                xt.XTestFakeKeyEvent(d,code_arrow,1,0); xt.XTestFakeKeyEvent(d,code_arrow,0,0); x.XFlush(d); pump(.6)
+                key(symbol)
             changes=selections[selection_count:]
             assert changes and any(value != initial for _,value in changes), 'Arrow keys did not announce a new selection'
             assert len(changes)<=2 and all(value for _,value in changes), 'Invalid or duplicate selection events'
             before_open=len(events)
-            alt=x.XKeysymToKeycode(d,0xffe9); down=x.XKeysymToKeycode(d,0xff54)
-            xt.XTestFakeKeyEvent(d,alt,1,0); xt.XTestFakeKeyEvent(d,down,1,0); xt.XTestFakeKeyEvent(d,down,0,0); xt.XTestFakeKeyEvent(d,alt,0,0); x.XFlush(d); pump(.6)
-            xt.XTestFakeKeyEvent(d,down,1,0); xt.XTestFakeKeyEvent(d,down,0,0); x.XFlush(d); pump(.6)
+            key(0xff54,(0xffe9,))
+            key(0xff54)
             assert any(e[3] and e[3] != picker_name for e in events[before_open:]), 'Opened picker lacks focused item event'
-            esc=x.XKeysymToKeycode(d,0xff1b)
-            xt.XTestFakeKeyEvent(d,esc,1,0); xt.XTestFakeKeyEvent(d,esc,0,0); x.XFlush(d); pump(.6)
+            key(0xff1b)
             print('OPEN PICKER PASS',picker_name,flush=True)
 def walk(node,depth=0):
     if depth>25: return
@@ -138,23 +197,26 @@ with tempfile.TemporaryDirectory(prefix='bunyi-atspi-') as state, args.log.open(
         window=find_window(x.XDefaultRootWindow(d)); print('Window',window,flush=True)
         if not window: raise RuntimeError('App window missing')
         x.XSetInputFocus(d,window,1,0); x.XFlush(d); pump(.5)
-        phase='before-tree-walk'; tabs()
-        assert any('Preset voice' == e[3] for e in events), 'No mode focus event'
-        print('Fresh-tree test finished',flush=True)
-        assert any('SCRIPT' == e[3] for e in events), 'No script focus event'
-        assert any('Language' == e[3] for e in events), 'No language focus event'
-        assert any('Speaker' == e[3] for e in events), 'No speaker focus event'
-        desktop=Atspi.get_desktop(0)
-        for i in range(desktop.get_child_count()):
-            candidate=desktop.get_child_at_index(i)
-            if 'Avalonia' in candidate.get_name(): walk(candidate)
-        phase='after-tree-walk'; tabs()
-        assert checked_pickers == {'Language','Speaker'}, 'Picker checks did not run'
-        assert checked_placeholders == {'SCRIPT','Style'}, 'Placeholder checks did not run'
-        if args.expect_announcements:
-            expected=['Generating','Generating… 24 frames · 2.0s of speech so far','Ready']
-            assert announcements==expected, 'Announcements missing, duplicated or out of order: '+repr(announcements)
-        print('PASS: focus, layout, pickers, placeholders and requested announcements; Orca speech not tested.',flush=True)
+        if args.settings:
+            settings_check()
+        else:
+            phase='before-tree-walk'; tabs()
+            assert any('Preset voice' == e[3] for e in events), 'No mode focus event'
+            print('Fresh-tree test finished',flush=True)
+            assert any('SCRIPT' == e[3] for e in events), 'No script focus event'
+            assert any('Language' == e[3] for e in events), 'No language focus event'
+            assert any('Speaker' == e[3] for e in events), 'No speaker focus event'
+            desktop=Atspi.get_desktop(0)
+            for i in range(desktop.get_child_count()):
+                candidate=desktop.get_child_at_index(i)
+                if 'Avalonia' in candidate.get_name(): walk(candidate)
+            phase='after-tree-walk'; tabs()
+            assert checked_pickers == {'Language','Speaker'}, 'Picker checks did not run'
+            assert checked_placeholders == {'SCRIPT','Style'}, 'Placeholder checks did not run'
+            if args.expect_announcements:
+                expected=['Generating','Generating… 24 frames · 2.0s of speech so far','Ready']
+                assert announcements==expected, 'Announcements missing, duplicated or out of order: '+repr(announcements)
+            print('PASS: focus, layout, pickers, placeholders and requested announcements; Orca speech not tested.',flush=True)
     finally:
         proc.terminate()
         try: proc.wait(timeout=5)

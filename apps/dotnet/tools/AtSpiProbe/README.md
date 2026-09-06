@@ -2,7 +2,7 @@
 
 This checks real AT-SPI focus events from a fresh Bunyi process. It does not
 run Orca or prove spoken output. Use a Linux desktop/X11 or XWayland session
-with AT-SPI2, Python 3, PyGObject's Atspi 2.0 bindings, libX11 and libXtst.
+with AT-SPI2, Python 3, PyGObject's Atspi 2.0 bindings, libX11.
 
 ```sh
 python3 apps/dotnet/tools/AtSpiProbe/check.py /absolute/path/to/Bunyi.App
@@ -66,4 +66,20 @@ empty properties dictionary. Linux does not also send a Name change for this
 message; Windows retains its UIA LiveRegionChanged route.
 
 The Fedora user confirmed candidate 2's focus, layout and picker speech.
-Candidate 3's placeholder and progress speech still needs their verification.
+Candidate 3's single placeholders and generation progress are also confirmed.
+
+To check Settings, run the probe with `--settings`. It opens the dialog with
+Ctrl+comma, changes Appearance through Light/Dark/Light/System, and requires
+exactly one selection event with each new name. It then checks Tab into every
+page, Shift+Tab back to the selected header, forward wrapping through the page,
+and Left/Right between headers. Native X11 key events are sent directly to the
+probe's own window because WSLg can drop XTest keystrokes. It uses temporary
+settings, so theme changes do
+not alter the user's preferences.
+
+Appearance is an enum: the collapsed peer must compare selected values by
+value, because each read can box it again. Comparing object references made
+GetChildren and GetSelection return different peers, so AT-SPI exposed no
+selected child. Settings also keeps the tab group's remembered target on its
+selected header; Avalonia 12.1 otherwise replaces it with a page control and
+forwards that control to the header panel, trapping keyboard navigation.
