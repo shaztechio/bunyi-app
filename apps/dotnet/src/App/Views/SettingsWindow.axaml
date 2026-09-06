@@ -247,8 +247,8 @@ limitations under the License.
                           Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).DeleteModelCommand}"
                           CommandParameter="{Binding}"
                           ToolTip.Tip="Move this model to the Trash"
-                          AutomationProperties.Name="{Binding Name, StringFormat='Move {0} to the Trash'}"
-                          AutomationProperties.HelpText="{Binding AccessibleDetails}">
+                          AutomationProperties.Name="{Binding AccessibleName}"
+                          AutomationProperties.HelpText="">
                     <Path Data="{DynamicResource IconTrash}" />
                   </inf:AccessibleButton>
                 </inf:DownloadedModelPanel>

@@ -29,7 +29,7 @@ public sealed record DownloadedModelRow(DownloadedModel Model)
     public string Name => Model.Name;
     public string SizeText => Model.SizeText();
     public string OriginText => Model.OriginText();
-    public string AccessibleDetails => $"{SizeText}. {OriginText}.";
+    public string AccessibleName => $"Move {Name} to the Trash. {SizeText}. {OriginText}.";
 }
 
 /// <summary>A copyable download command with the mode it belongs to.</summary>

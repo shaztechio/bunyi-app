@@ -104,3 +104,21 @@ only the action, which already carries the model name, size and origin. Merely
 marking text Raw does not remove it from Avalonia's AT-SPI children. The context
 probe now requires exactly that one child on each model row, with no spoken row
 class name. The visible labels remain unchanged.
+Candidate 6 did not fix the spoken repetition. Orca 49.0's actual speech generator
+reproduced two copies even with one accessible child: Avalonia's
+`AtSpiAccessibleHandler` returns the peer's HelpText for BOTH AT-SPI Description
+and HelpText. Orca speaks description and, with tutorial messages enabled, help.
+The earlier tree-only assertion did not cover that second field.
+
+Candidate 7 puts the action, model, size and origin in one accessible name and
+leaves Description and HelpText empty. The native context check reads both fields.
+With Orca 49 or later installed, `--orca-speech` implies `--context` and additionally
+runs Orca's real speech generator on each focused model button, requiring one size
+and one origin with tutorial messages both off and on. It changes settings only
+inside the probe process and never writes an Orca profile or starts audio output.
+The GTK/X11 initialization and import order follow Orca's entry point.
+
+The local regression used unmodified Orca 49.0 speech-generation source (tag
+`49.0`, commit `2247c29`), isolated from the installed Orca 46.1. Its generated
+speech contains the candidate 6 subtitle twice with tutorials enabled. This is
+speech-generation verification, not a claim of hearing the synthesizer's audio.

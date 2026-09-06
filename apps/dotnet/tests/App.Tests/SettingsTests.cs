@@ -90,10 +90,8 @@ public sealed class SettingsTests : HeadlessWindows
         {
             var row = (DownloadedModelRow)button.CommandParameter!;
             var peer = ControlAutomationPeer.CreatePeerForElement(button);
-            Assert.Equal($"Move {row.Name} to the Trash", peer.GetName());
-            Assert.Contains(row.SizeText, peer.GetHelpText());
-            Assert.Contains(row.OriginText, peer.GetHelpText());
-            Assert.DoesNotContain("Trash", peer.GetHelpText());
+            Assert.Equal($"Move {row.Name} to the Trash. {row.SizeText}. {row.OriginText}.", peer.GetName());
+            Assert.True(string.IsNullOrEmpty(peer.GetHelpText()));
             Assert.Equal("Move this model to the Trash", ToolTip.GetTip(button));
             var rowPeer = ControlAutomationPeer.CreatePeerForElement((Control)button.GetVisualParent()!);
             Assert.Same(peer, Assert.Single(rowPeer.GetChildren()));

@@ -496,7 +496,9 @@ callouts are associated help for the relevant control. An action is not repeated
 as its own description, and layout type names are not spoken. This implements
 §12's existing control-label and context requirements for the .NET Settings UI.
 A downloaded-model row exposes its metadata once through the Trash button: the
-name identifies the model and the description gives size and origin. The visible
+accessible name includes the action, model, size and origin. Its description and
+AT-SPI help text are empty: Avalonia maps HelpText to both fields, and Orca can
+speak both description and tutorial help. The visible
 name/subtitle are omitted from that row's accessibility children to avoid a
 second reading of the same information.
 

@@ -21,8 +21,10 @@ parser.add_argument('app', type=pathlib.Path)
 parser.add_argument('--log', type=pathlib.Path, default=pathlib.Path('atspi-app.log'))
 parser.add_argument('--expect-announcements', action='store_true')
 parser.add_argument('--context', action='store_true', help='Check Settings and toolbar context with temporary model/configuration fixtures')
+parser.add_argument('--orca-speech', action='store_true', help='Also require one model subtitle in Orca 49+ generated speech (implies --context)')
 parser.add_argument('--settings', action='store_true', help='Check Settings navigation and Appearance instead of the main window')
 args=parser.parse_args()
+if args.orca_speech: args.context=True
 app=args.app.resolve(strict=True)
 phase='startup'
 events=[]
@@ -123,6 +125,24 @@ def key(symbol, modifiers=()):
         assert x.XSendEvent(d,target,0,mask,C.byref(event)), 'X11 rejected test key'
     x.XFlush(d); pump(.5)
 
+def speech_strings(value):
+    if isinstance(value,str):
+        yield value
+    elif isinstance(value,(list,tuple)):
+        for child in value: yield from speech_strings(child)
+
+def check_orca_speech(control):
+    # Only change settings in this probe process, never the user's Orca profile.
+    from orca import script_manager, settings, orca_platform
+    assert hasattr(script_manager,'get_manager'), 'This check requires Orca 49 or later'
+    script=script_manager.get_manager().get_script(control.get_application(),control)
+    settings.speakDescription=True
+    for tutorials in (False,True):
+        settings.enableTutorialMessages=tutorials
+        words=' '.join(speech_strings(script.speech_generator.generate_speech(control)))
+        print('ORCA SPEECH',orca_platform.version,'tutorials='+str(tutorials),repr(words),flush=True)
+        assert words.count('21 bytes')==1 and words.count('Hugging Face')==1, 'Orca generated missing or duplicate subtitle speech'
+
 def settings_check():
     if args.context:
         for expected in ('Settings','Doctor','Logs','Help'):
@@ -164,7 +184,9 @@ def settings_check():
                 contexts[name]=description
                 print('CONTEXT',repr(name),repr(description),flush=True)
                 assert not description or name != description, 'Action repeated as its description'
-                if name.startswith('Move probe/') and name.endswith(' to the Trash'):
+                if name.startswith('Move probe/') and ' to the Trash.' in name:
+                    assert not description and not focused.get_help_text(), 'Subtitle duplicated in AT-SPI Description/HelpText'
+                    if args.orca_speech: check_orca_speech(focused)
                     row=focused.get_parent()
                     assert not row.get_name(), 'Model row acquired a spoken layout name'
                     assert row.get_child_count()==1 and row.get_child_at_index(0)==focused, 'Model metadata exposed beside its action as duplicate context'
@@ -203,8 +225,10 @@ def settings_check():
         for name, fragment in required.items():
             assert any((key==name or key.startswith(name+': ')) and fragment in value for key,value in contexts.items()), 'Missing context for '+name
         for model in ('voice-one','voice-two','voice-three'):
-            name='Move probe/'+model+' to the Trash'
-            assert name in contexts and 'Hugging Face' in contexts[name] and 'Trash' not in contexts[name], 'Missing or duplicate model context'
+            matches=[name for name in contexts if name.startswith('Move probe/'+model+' to the Trash. ')]
+            assert len(matches)==1, 'Model action missing'
+            name=matches[0]
+            assert name.count('Hugging Face')==1 and name.count('21 bytes')==1 and not contexts[name], 'Missing or duplicate model context'
         links={name:description for name,description in contexts.items() if name.startswith('Open ') and name!='Open Bunyi website'}
         assert len(links)>5 and all('License:' in description for description in links.values()), 'Missing credit context'
         downloads=[name for name in contexts if name.startswith('Download ') and ' in advance: ' in name]
@@ -212,7 +236,8 @@ def settings_check():
         print('PASS: Settings row, field, action and credit context; short toolbar names; no duplicate descriptions or layout names.',flush=True)
     key(0xff51)
     assert focused.get_name()=='Backup' , 'Left did not select the previous tab'
-    print('PASS: Settings tab return in both directions and single named Appearance events; Orca speech not tested.',flush=True)
+    speech_result='Orca generated subtitle speech verified.' if args.orca_speech else 'Orca speech not tested.'
+    print('PASS: Settings tab return in both directions and single named Appearance events; '+speech_result,flush=True)
 
 def tabs():
     for keypress in range(20):
@@ -244,6 +269,15 @@ def walk(node,depth=0):
         print('CONTROL',repr(name),role,flush=True)
     for i in range(node.get_child_count()):
         walk(node.get_child_at_index(i),depth+1)
+if args.orca_speech:
+    os.environ.setdefault('GDK_BACKEND','x11')
+    gi.require_version('Gtk','3.0')
+    from gi.repository import Gtk
+    Gtk.init([])
+    # Match Orca's entry-point import order; importing script_manager first
+    # can trigger circular imports in Orca 49.
+    from orca import debug, debugging_tools_manager, messages
+
 with tempfile.TemporaryDirectory(prefix='bunyi-atspi-') as state, args.log.open('w') as log:
     env=dict(os.environ, XDG_CONFIG_HOME=state+'/config', XDG_DATA_HOME=state+'/data')
     if args.context:

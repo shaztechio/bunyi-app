@@ -24,9 +24,9 @@ public sealed class DownloadedModelPanel : Grid
 
     private sealed class ModelRowPeer(DownloadedModelPanel owner) : ControlAutomationPeer(owner)
     {
-        // The button already names the model and describes its size/origin.
-        // Exposing the adjacent labels too lets Orca infer the same subtitle
-        // as context and then read it again as the button's description.
+        // The button name already carries the action, model and size/origin.
+        // Keep the adjacent visual labels out of the accessibility tree so
+        // all of this information has a single accessible representation.
         // AT-SPI includes Raw peers, so marking those labels Raw is not enough.
         protected override IReadOnlyList<AutomationPeer> GetChildrenCore() =>
             owner.Children.OfType<Button>().Select(CreatePeerForElement).ToArray();
