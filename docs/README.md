@@ -1,16 +1,53 @@
 # docs/ — the bunyi.app website
 
-The GitHub Pages site for Bunyi. Plain static HTML: one page, inline CSS,
-no build step, no Jekyll (`.nojekyll`). Open `index.html` in a browser to
-preview it exactly as it will publish.
+The GitHub Pages site for Bunyi. The published page is static HTML with inline
+CSS; visitors do not need JavaScript to use its download or disclosure controls.
+`index.html` is a template: Python fills its two release-version placeholders
+before deployment. No browser-side GitHub API calls are needed.
 
 ## Publishing
 
-GitHub serves this folder directly — no workflow needed:
+**Settings -> Pages -> Build and deployment -> Source: GitHub Actions.**
+`.github/workflows/pages.yml` builds and deploys the site from `main`:
 
-**Settings → Pages → Build and deployment → Source: _Deploy from a branch_,
-Branch: `main`, folder: `/docs`.** Every push to `main` that touches
-`docs/` redeploys.
+- Site, renderer, or workflow changes on `main` rebuild the page.
+- Successful **Signed release** and **Windows + Linux release** workflow runs
+  refresh it after the release assets have uploaded. `workflow_run` is deliberate:
+  releases created with `GITHUB_TOKEN` do not trigger another `release` event.
+- A stable release published manually queues the same workflow on `main`,
+  preserving the Pages environment's main-only deployment policy.
+- **Actions -> Website -> Run workflow**, on `main`, refreshes it on demand.
+- Pull requests test and build a preview artifact; they never deploy it.
+
+The build reads published GitHub releases and picks the highest complete stable
+version independently in `v*` (macOS) and `dotnet-v*` (Windows/Linux). It ignores
+drafts, prereleases, and incomplete asset uploads. macOS needs a matching DMG,
+ZIP, and checksum file; Windows/Linux need both standard and CUDA archives with
+their checksums. An older maintenance release cannot replace a newer version.
+If either family has no complete release, the build fails and the deployed site
+stays in place. A successful build-only release run simply redeploys the current
+published versions.
+
+Only the deployment job has Pages write permissions. Release-triggered builds
+read the current `main` website, not the release tag's older website or artifacts
+from the triggering workflow. Version updates create no repository commits.
+
+## Local preview
+
+From the repository root, with Python 3 and the GitHub CLI:
+
+```sh
+mkdir -p artifacts/site-preview
+gh api --paginate --slurp 'repos/shaztechio/bunyi-app/releases?per_page=100' > artifacts/site-preview/releases.json
+python3 tools/build_site.py --releases-json artifacts/site-preview/releases.json --output artifacts/site-preview/public
+```
+
+Open `artifacts/site-preview/public/index.html` in a browser. The API response
+can be reused offline. Run the selection/rendering regression tests with:
+
+```sh
+python3 -m unittest discover -s tools -p 'test_build_site.py' -v
+```
 
 `CNAME` claims the **bunyi.app** custom domain. It only takes effect once
 DNS points at GitHub Pages — apex `A` records to `185.199.108.153`,
@@ -125,7 +162,7 @@ The hero renders at 240 CSS px and the wordmark at 26, so 512 and 64 cover a
 2× display with a little room and no more; serving the 1024px icon into a
 240px box cost 166 KB to show 170 KB of nothing. Every one is a plain copy
 of a file the icon generator already produces — resampling here would be a
-build step, and this folder deliberately has none.
+image-processing build step. These assets stay pre-generated; the site build only fills release references.
 
 Each `<img>` also carries `width`/`height` attributes. They do not size
 anything (CSS does), they give the browser the aspect ratio up front so the
@@ -145,9 +182,10 @@ against it.
 
 ## Release links and page controls
 
-When the Windows/Linux app releases, update its hero links and version notes,
-platform-table release link, standard and CUDA release links, and Linux archive
-filename in `index.html`. macOS uses its own release tag and version.
+Use `{{DOTNET_VERSION}}` for Windows/Linux versions, release links, and archive
+filenames, and `{{MACOS_VERSION}}` for macOS. The renderer fills every occurrence;
+no manual version edit is needed when cutting a release. If release asset names
+change, update `tools/build_site.py` and its tests to match.
 
 The feature section shows its first six items and keeps the remaining items in
 native `<details>`, accessible by pointer or keyboard with scripting disabled.
