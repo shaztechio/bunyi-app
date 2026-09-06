@@ -95,6 +95,8 @@ public sealed class SettingsTests : HeadlessWindows
             Assert.Contains(row.OriginText, peer.GetHelpText());
             Assert.DoesNotContain("Trash", peer.GetHelpText());
             Assert.Equal("Move this model to the Trash", ToolTip.GetTip(button));
+            var rowPeer = ControlAutomationPeer.CreatePeerForElement((Control)button.GetVisualParent()!);
+            Assert.Same(peer, Assert.Single(rowPeer.GetChildren()));
         }
     }
 

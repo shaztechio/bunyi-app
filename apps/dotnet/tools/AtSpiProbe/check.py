@@ -164,6 +164,11 @@ def settings_check():
                 contexts[name]=description
                 print('CONTEXT',repr(name),repr(description),flush=True)
                 assert not description or name != description, 'Action repeated as its description'
+                if name.startswith('Move probe/') and name.endswith(' to the Trash'):
+                    row=focused.get_parent()
+                    assert not row.get_name(), 'Model row acquired a spoken layout name'
+                    assert row.get_child_count()==1 and row.get_child_at_index(0)==focused, 'Model metadata exposed beside its action as duplicate context'
+
                 parent=focused.get_parent()
                 while parent and parent.get_role_name() not in ('frame','application'):
                     assert parent.get_name() not in ('ItemsPresenter','ItemsControl','ScrollViewer','Panel','StackPanel','ContentPresenter'), 'Layout name leaked into context'

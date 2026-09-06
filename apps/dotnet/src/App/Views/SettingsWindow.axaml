@@ -230,7 +230,7 @@ limitations under the License.
                         AutomationProperties.HelpText="{Binding StorageSummary}">
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="vm:DownloadedModelRow">
-                <Grid ColumnDefinitions="*,Auto" Margin="0,3">
+                <inf:DownloadedModelPanel ColumnDefinitions="*,Auto" Margin="0,3">
                   <StackPanel>
                     <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
                     <TextBlock FontSize="11" Opacity="0.7">
@@ -251,7 +251,7 @@ limitations under the License.
                           AutomationProperties.HelpText="{Binding AccessibleDetails}">
                     <Path Data="{DynamicResource IconTrash}" />
                   </inf:AccessibleButton>
-                </Grid>
+                </inf:DownloadedModelPanel>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>

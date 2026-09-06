@@ -97,3 +97,10 @@ names/roles/licenses on About links. It rejects repeated action descriptions and
 layout class names along each focus path. The longer toolbar hover tips remain;
 an explicit-help button peer prevents Avalonia from using them as a fallback for
 an intentionally empty description. Actual Orca speech remains a manual check.
+The Fedora user confirmed candidate 5's Settings context and short toolbar names,
+but the downloaded-model subtitle was spoken twice: its adjacent TextBlock was
+still exposed beside the button description. Candidate 6's model-row peer exposes
+only the action, which already carries the model name, size and origin. Merely
+marking text Raw does not remove it from Avalonia's AT-SPI children. The context
+probe now requires exactly that one child on each model row, with no spoken row
+class name. The visible labels remain unchanged.
