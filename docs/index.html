@@ -173,12 +173,6 @@
      around a frame. */
   .shot figure { margin: 0; }
 
-  /* A caption belongs to the image above it, and that has to be legible at a
-     glance: close to its own image, far from the next one. With 1rem here and
-     2.5rem between figures the two gaps were near enough alike that each
-     caption looked like it floated between the two screenshots. */
-  .shot figure + figure { margin-top: 4rem; }
-
   /* margin-inline, not text-align. These are block elements, so centring the
      text inside the figure does nothing for the image itself — which is why
      the Windows screenshot, capped below the column width, sat against the
@@ -188,10 +182,10 @@
     color: var(--muted); font-size: .9rem; text-align: center; margin-top: .9rem;
   }
 
-  /* The Windows shot is a 1x capture narrower than the column. width:auto so it
+  /* The Windows and Linux shots are 1x captures. width:auto so each
      is drawn at its own size rather than stretched — upscaling a screenshot
      only blurs the interface text it exists to show. */
-  .shot-second img { width: auto; max-width: min(100%, 762px); }
+  .shot-native img { width: auto; max-width: 100%; }
 
   .cta { display: flex; flex-wrap: wrap; gap: .7rem; margin-top: 1.6rem; }
   .btn {
@@ -422,25 +416,47 @@
 
 <section id="screenshot" class="shot">
   <div class="wrap">
-    <figure>
-      <!-- 2120px is 2x the 1060px content column, so it stays sharp on a
-           Retina display without shipping the 2024px PNG the README uses:
-           WebP at q85 is a quarter of the bytes and the UI text stays crisp.
-           width/height reserve the box before the file lands, so nothing
-           below it jumps. -->
-      <img src="assets/screenshot-macos.webp" width="2120" height="1592"
-           alt="The Bunyi window in Preset voice mode. A mode switcher across the top — Preset voice, Voice design, Voice clone, History — above an empty script field offering three example prompts to click. Below it, rows for Language, Speaker and Style, and a Generate button reading &quot;Ready — press Command Return to generate&quot;. Doctor, Logs and Help sit in the window toolbar.">
-      <figcaption>Preset voice mode on macOS. Type or pick a prompt, choose a speaker, press&nbsp;⌘↩.</figcaption>
-    </figure>
+    <div class="os-tabs" role="group" aria-label="Screenshot operating system">
+      <input type="radio" name="screenshot-os" id="screenshot-mac" class="os-choice-mac" aria-controls="screenshot-panel-mac" checked>
+      <input type="radio" name="screenshot-os" id="screenshot-win" class="os-choice-win" aria-controls="screenshot-panel-win">
+      <input type="radio" name="screenshot-os" id="screenshot-linux" class="os-choice-linux" aria-controls="screenshot-panel-linux">
 
-    <figure class="shot-second">
-      <!-- Shown at its own 762px rather than stretched to the column. It is a
-           1x capture, and upscaling a screenshot only blurs the interface text
-           the screenshot exists to show. -->
-      <img src="assets/screenshot-windows.webp" width="762" height="712" loading="lazy"
-           alt="The same Bunyi window on Windows 11. The mode switcher — Preset voice, Voice design, Voice clone, History — sits above an empty script field offering three example prompts. Below it, rows for Language, Speaker and Style, and a Generate button, with Settings, Doctor, Logs and Help as icons in the header.">
-      <figcaption>The same app on Windows. One spec, two codebases &mdash; and a Linux build from the same source.</figcaption>
-    </figure>
+      <div class="os-picker">
+        <label for="screenshot-mac" data-os="mac"><svg class="os-glyph" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M17.05 12.53c-.02-2.2 1.8-3.26 1.88-3.31-1.02-1.5-2.61-1.7-3.18-1.72-1.35-.14-2.64.8-3.33.8-.69 0-1.75-.78-2.87-.76-1.48.02-2.84.86-3.6 2.18-1.53 2.66-.39 6.6 1.1 8.76.73 1.06 1.6 2.25 2.74 2.21 1.1-.04 1.52-.71 2.85-.71 1.33 0 1.7.71 2.87.69 1.19-.02 1.94-1.08 2.66-2.14.84-1.23 1.19-2.42 1.21-2.48-.03-.01-2.32-.89-2.34-3.52M14.9 5.6c.6-.73 1.01-1.75.9-2.76-.87.04-1.92.58-2.55 1.31-.56.64-1.05 1.68-.92 2.67.97.08 1.96-.49 2.57-1.22"/></svg>macOS</label>
+        <label for="screenshot-win" data-os="win"><svg class="os-glyph" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 4h8v8H3zM13 4h8v8h-8zM3 14h8v8H3zM13 14h8v8h-8z"/></svg>Windows</label>
+        <label for="screenshot-linux" data-os="linux"><svg class="os-glyph" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M12 1.6c2.2 0 3.9 1.8 3.9 4v1.7c0 .9.4 1.5 1.1 2.4 1.3 1.7 2 3.6 2 5.6 0 2.3-.9 4.2-2.4 5.4l1.4 1.5c.3.3.1.8-.3.8H6.3c-.4 0-.6-.5-.3-.8l1.4-1.5C5.9 19.5 5 17.6 5 15.3c0-2 .7-3.9 2-5.6.7-.9 1.1-1.5 1.1-2.4V5.6c0-2.2 1.7-4 3.9-4Zm-1.6 3.7a.85.85 0 1 0 0 1.7.85.85 0 0 0 0-1.7Zm3.2 0a.85.85 0 1 0 0 1.7.85.85 0 0 0 0-1.7ZM12 7.8l-1.6 1.1c-.3.2-.3.6 0 .8l1.6 1.1 1.6-1.1c.3-.2.3-.6 0-.8L12 7.8Z"/></svg>Linux</label>
+      </div>
+
+      <div class="os-panel os-mac" id="screenshot-panel-mac">
+        <figure>
+          <!-- 2120px is 2x the 1060px content column, so it stays sharp on a
+               Retina display without shipping the 2024px PNG the README uses:
+               WebP at q85 is a quarter of the bytes and the UI text stays crisp.
+               width/height reserve the box before the file lands, so nothing
+               below it jumps. -->
+          <img src="assets/screenshot-macos.webp" width="2120" height="1592" loading="lazy"
+               alt="The Bunyi window in Preset voice mode. A mode switcher across the top — Preset voice, Voice design, Voice clone, History — above an empty script field offering three example prompts to click. Below it, rows for Language, Speaker and Style, and a Generate button reading &quot;Ready — press Command Return to generate&quot;. Doctor, Logs and Help sit in the window toolbar.">
+          <figcaption>Preset voice mode on macOS. Type or pick a prompt, choose a speaker, press&nbsp;⌘↩.</figcaption>
+        </figure>
+      </div>
+      <div class="os-panel os-win" id="screenshot-panel-win">
+        <figure class="shot-native">
+          <!-- Shown at its own 762px rather than stretched to the column. It is a
+               1x capture, and upscaling a screenshot only blurs the interface text
+               the screenshot exists to show. -->
+          <img src="assets/screenshot-windows.webp" width="762" height="712" loading="lazy"
+               alt="The Bunyi window on Windows 11. The mode switcher — Preset voice, Voice design, Voice clone, History — sits above an empty script field offering three example prompts. Below it, rows for Language, Speaker and Style, and a Generate button, with Settings, Doctor, Logs and Help as icons in the header.">
+          <figcaption>Preset voice mode on Windows. Choose a speaker and generate speech locally.</figcaption>
+        </figure>
+      </div>
+      <div class="os-panel os-linux" id="screenshot-panel-linux">
+        <figure class="shot-native">
+          <img src="assets/screenshot-linux.png" width="760" height="680" loading="lazy"
+               alt="The Bunyi window on Linux in Preset voice mode, with script and style fields, Language and Speaker choices, example prompts, and Generate. Settings, Doctor, Logs and Help are in the toolbar.">
+          <figcaption>Preset voice mode on Linux. The same controls, running natively on a Linux desktop.</figcaption>
+        </figure>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -754,8 +770,8 @@ chmod +x Bunyi.App
 </section>
 
 <script>
-  // Both OS pickers start on the reader's system, then remain independent.
-  // Native radios and CSS keep both usable with scripting off (macOS first).
+  // OS pickers start on the reader's system, then remain independent.
+  // Native radios and CSS work with scripting off (macOS first).
   (function () {
     var c = document.documentElement.className;
     var os = c.indexOf('is-win') > -1 ? 'win' : c.indexOf('is-linux') > -1 ? 'linux' : 'mac';
