@@ -12,8 +12,9 @@ before deployment. No browser-side GitHub API calls are needed.
 
 - Site, renderer, or workflow changes on `main` rebuild the page.
 - Successful **Signed release** and **Windows + Linux release** workflow runs
-  refresh it after the release assets have uploaded. `workflow_run` is deliberate:
-  releases created with `GITHUB_TOKEN` do not trigger another `release` event.
+  explicitly dispatch it after the release assets have uploaded. Their
+  **Refresh website** jobs record that handoff. `workflow_dispatch` works with
+  `GITHUB_TOKEN`, so no extra access token or release-event delivery is needed.
 - A stable release published manually queues the same workflow on `main`,
   preserving the Pages environment's main-only deployment policy.
 - **Actions -> Website -> Run workflow**, on `main`, refreshes it on demand.
