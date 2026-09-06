@@ -202,6 +202,12 @@ platform-specific alternative text and captions. Only the selected image is
 shown, and the narrower 1x Windows/Linux captures are not enlarged. Native radio
 controls support keyboard navigation and work with JavaScript disabled.
 
+`assets/screenshot-windows.png` was captured from the published CPU Windows
+1.2.0 app on 2026-09-06, showing Preset voice in light appearance. The 762 x 712
+capture includes the real Windows title bar and uses the visible window bounds,
+excluding the invisible resize border. Its PNG URL replaces the older WebP
+capture so cached copies of that image do not hide the update.
+
 `assets/screenshot-linux.png` was captured from the published CPU Linux 1.2.0
 app under WSLg on 2026-09-06, using a temporary clean profile and light appearance.
 It shows the app's client area at its native 760 x 680 size, without adding a
