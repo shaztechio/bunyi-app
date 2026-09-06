@@ -10,7 +10,7 @@ before deployment. No browser-side GitHub API calls are needed.
 **Settings -> Pages -> Build and deployment -> Source: GitHub Actions.**
 `.github/workflows/pages.yml` builds and deploys the site from `main`:
 
-- Site, renderer, or workflow changes on `main` rebuild the page.
+- README, site, renderer, or workflow changes on `main` rebuild the page.
 - Successful **Signed release** and **Windows + Linux release** workflow runs
   explicitly dispatch it after the release assets have uploaded. Their
   **Refresh website** jobs record that handoff. `workflow_dispatch` works with
@@ -31,7 +31,19 @@ published versions.
 
 Only the deployment job has Pages write permissions. Release-triggered builds
 read the current `main` website, not the release tag's older website or artifacts
-from the triggering workflow. Version updates create no repository commits.
+from the triggering workflow.
+
+The same release snapshot also updates the root README's marked download block.
+A separate job with contents and pull-request write permissions opens or updates
+`codex/sync-readme-downloads`, committing only `README.md`. Unchanged versions
+create no PR. Merge the refresh PR after its checks pass; Pages deploys
+independently, so waiting for README review does not delay the website.
+
+Enable **Settings -> Actions -> General -> Workflow permissions -> Allow GitHub
+Actions to create and approve pull requests** for the built-in token to open
+these PRs. The workflow does not approve or merge them. GitHub may require a
+maintainer to select **Approve workflows to run** on a bot-created PR before
+its checks run; see [GitHub's workflow triggering rules](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow).
 
 ## Local preview
 
@@ -41,6 +53,8 @@ From the repository root, with Python 3 and the GitHub CLI:
 mkdir -p artifacts/site-preview
 gh api --paginate --slurp 'repos/shaztechio/bunyi-app/releases?per_page=100' > artifacts/site-preview/releases.json
 python3 tools/build_site.py --releases-json artifacts/site-preview/releases.json --output artifacts/site-preview/public
+# Also refresh the README in place (or use --readme alone without --output):
+python3 tools/build_site.py --releases-json artifacts/site-preview/releases.json --readme README.md
 ```
 
 Open `artifacts/site-preview/public/index.html` in a browser. The API response

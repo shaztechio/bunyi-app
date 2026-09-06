@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Render the static site using complete, published stable GitHub releases."""
+"""Sync the site and README using complete, published stable GitHub releases."""
 
 import argparse
 import json
@@ -23,6 +23,14 @@ import shutil
 
 TAG = re.compile(r"(?P<prefix>dotnet-v|v)(?P<version>[0-9]+\.[0-9]+\.[0-9]+)")
 TOKENS = {"macos": "{{MACOS_VERSION}}", "dotnet": "{{DOTNET_VERSION}}"}
+README_START = "<!-- release-downloads:start -->"
+README_END = "<!-- release-downloads:end -->"
+README_DOWNLOADS = """**Download:**
+
+- **macOS:** [Bunyi {{MACOS_VERSION}}](https://github.com/shaztechio/bunyi-app/releases/tag/v{{MACOS_VERSION}}) — Apple Silicon, macOS 15 or later.
+- **Windows:** [Bunyi {{DOTNET_VERSION}}](https://github.com/shaztechio/bunyi-app/releases/tag/dotnet-v{{DOTNET_VERSION}}) — x64, standard and NVIDIA CUDA builds.
+- **Linux:** [Bunyi {{DOTNET_VERSION}}](https://github.com/shaztechio/bunyi-app/releases/tag/dotnet-v{{DOTNET_VERSION}}) — x64, standard and NVIDIA CUDA builds.
+"""
 
 
 def complete_assets(release, family, version):
@@ -98,18 +106,39 @@ def build(source, output, releases):
     return versions
 
 
+def update_readme(path, versions):
+    path = Path(path)
+    before = path.read_text(encoding="utf-8")
+    if before.count(README_START) != 1 or before.count(README_END) != 1:
+        raise ValueError("README must contain exactly one release-downloads block")
+    start = before.index(README_START) + len(README_START)
+    end = before.index(README_END)
+    if end < start:
+        raise ValueError("README release-downloads markers are out of order")
+    after = before[:start] + "\n" + render(README_DOWNLOADS, versions) + before[end:]
+    if after != before:
+        path.write_text(after, encoding="utf-8", newline="\n")
+    return after != before
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--releases-json", type=Path, required=True)
     parser.add_argument("--source", type=Path, default=Path("docs"))
-    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--readme", type=Path, help="Update the marked downloads block in place")
     args = parser.parse_args()
+    if not args.output and not args.readme:
+        parser.error("at least one of --output or --readme is required")
     try:
         releases = json.loads(args.releases_json.read_text(encoding="utf-8-sig"))
-        versions = build(args.source, args.output, releases)
+        versions = (build(args.source, args.output, releases) if args.output
+                    else select_versions(releases))
+        if args.readme:
+            update_readme(args.readme, versions)
     except (ValueError, OSError) as error:
         parser.exit(1, f"Site build failed: {error}\n")
-    print(f"Site built: macOS {versions['macos']}; Windows/Linux {versions['dotnet']}")
+    print(f"Release references: macOS {versions['macos']}; Windows/Linux {versions['dotnet']}")
 
 
 if __name__ == "__main__":

@@ -21,9 +21,18 @@ toolbar.](docs/assets/screenshot-macos.png)
 
 Home: [bunyi.app](https://bunyi.app)
 
-**Download:** [Bunyi 1.2.0](https://github.com/shaztechio/bunyi-app/releases/latest)
-— a signed and notarized `.dmg` for Apple Silicon Macs on macOS 15 or later.
-Drag it to Applications and launch; no Gatekeeper warnings, no terminal.
+<!-- release-downloads:start -->
+**Download:**
+
+- **macOS:** [Bunyi 1.2.0](https://github.com/shaztechio/bunyi-app/releases/tag/v1.2.0) — Apple Silicon, macOS 15 or later.
+- **Windows:** [Bunyi 1.2.0](https://github.com/shaztechio/bunyi-app/releases/tag/dotnet-v1.2.0) — x64, standard and NVIDIA CUDA builds.
+- **Linux:** [Bunyi 1.2.0](https://github.com/shaztechio/bunyi-app/releases/tag/dotnet-v1.2.0) — x64, standard and NVIDIA CUDA builds.
+<!-- release-downloads:end -->
+
+On macOS, drag the signed and notarized app from the `.dmg` to Applications
+and launch. On Windows and Linux, extract the portable archive and run Bunyi;
+no runtime installation is needed. Windows builds are unsigned; see the
+code signing policy below for first-launch instructions.
 
 ## How it's structured
 
@@ -34,7 +43,7 @@ a shared spec**, not shared code.
 | Path | Target | Stack | Status |
 |------|--------|-------|--------|
 | [`apps/macos/`](apps/macos/) | macOS (Apple Silicon) | Swift + MLX + SwiftUI | **working** |
-| [`apps/dotnet/`](apps/dotnet/) | Windows **and** Linux | C# .NET + Avalonia + ONNX Runtime | **working** — preset voice and voice design |
+| [`apps/dotnet/`](apps/dotnet/) | Windows **and** Linux | C# .NET + Avalonia + ONNX Runtime | **working** — all three modes |
 | [`spec/`](spec/) | all | — | source of truth |
 
 Three operating systems, two codebases, one spec.

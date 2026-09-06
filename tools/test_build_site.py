@@ -16,11 +16,14 @@
 """Exercise release selection and the actual website template without networking."""
 
 from pathlib import Path
+import json
 import re
+import subprocess
+import sys
 import tempfile
 import unittest
 
-from build_site import build, render, select_versions
+from build_site import README_START, README_END, build, render, select_versions, update_readme
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -115,6 +118,74 @@ class SiteBuildTests(unittest.TestCase):
             self.assertEqual({p.name for p in output.iterdir()}, {"assets", "index.html", "CNAME", ".nojekyll"})
         with self.assertRaisesRegex(ValueError, "outside"):
             build(source, source, [])
+
+    def test_readme_preserves_prose_and_is_idempotent(self):
+        original = (ROOT / "README.md").read_text(encoding="utf-8")
+        prefix = original.split(README_START)[0]
+        suffix = original.split(README_END)[1]
+        with tempfile.TemporaryDirectory() as temp:
+            readme = Path(temp) / "README.md"
+            readme.write_text(original, encoding="utf-8")
+            versions = {"macos": "7.8.0", "dotnet": "9.10.0"}
+            self.assertTrue(update_readme(readme, versions))
+            result = readme.read_text(encoding="utf-8")
+            self.assertEqual(result.split(README_START)[0], prefix)
+            self.assertEqual(result.split(README_END)[1], suffix)
+            block = result.split(README_START)[1].split(README_END)[0]
+            self.assertIn("[Bunyi 7.8.0]", block)
+            self.assertIn("/tag/v7.8.0)", block)
+            self.assertEqual(block.count("[Bunyi 9.10.0]"), 2)
+            self.assertEqual(block.count("/tag/dotnet-v9.10.0)"), 2)
+            self.assertNotIn("/latest", block)
+            before = readme.read_bytes()
+            self.assertFalse(update_readme(readme, versions))
+            self.assertEqual(readme.read_bytes(), before)
+            update_readme(readme, {**versions, "dotnet": "9.11.0"})
+            self.assertIn("/tag/v7.8.0)", readme.read_text(encoding="utf-8"))
+
+    def test_bad_readme_markers_fail_without_overwriting(self):
+        with tempfile.TemporaryDirectory() as temp:
+            readme = Path(temp) / "README.md"
+            for original in ("No markers", README_START, README_END,
+                             README_END + README_START,
+                             README_START * 2 + README_END,
+                             README_START + README_END * 2):
+                with self.subTest(original=original):
+                    readme.write_text(original, encoding="utf-8")
+                    before = readme.read_bytes()
+                    with self.assertRaises(ValueError):
+                        update_readme(readme, {"macos": "1.0.0", "dotnet": "2.0.0"})
+                    self.assertEqual(readme.read_bytes(), before)
+
+    def test_cli_syncs_site_and_readme_from_same_snapshot(self):
+        with tempfile.TemporaryDirectory() as temp:
+            temp = Path(temp)
+            readme = temp / "README.md"
+            readme.write_text(README_START + "\nold\n" + README_END, encoding="utf-8")
+            snapshot = temp / "releases.json"
+            releases = [release("macos", "7.8.0"), release("dotnet", "9.10.0")]
+            incomplete = release("dotnet", "10.0.0")
+            incomplete["assets"].pop()
+            snapshot.write_text(json.dumps([releases, [incomplete]]), encoding="utf-8")
+            command = [sys.executable, str(ROOT / "tools/build_site.py"),
+                       "--releases-json", str(snapshot), "--readme", str(readme)]
+            result = subprocess.run(command + ["--source", str(ROOT / "docs"),
+                                               "--output", str(temp / "site")],
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            for output in (readme, temp / "site/index.html"):
+                text = output.read_text(encoding="utf-8")
+                for tag in ("v7.8.0", "dotnet-v9.10.0"):
+                    self.assertIn("/tag/" + tag, text)
+                self.assertNotIn("10.0.0", text)
+            before = readme.read_bytes()
+            result = subprocess.run(command, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(readme.read_bytes(), before)
+            snapshot.write_text("[]", encoding="utf-8")
+            result = subprocess.run(command, capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(readme.read_bytes(), before)
 
 
 if __name__ == "__main__":
