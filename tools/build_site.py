@@ -13,9 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Sync the site and README using complete, published stable GitHub releases."""
+"""Render the site and README badges from complete, published stable releases."""
 
 import argparse
+from html import escape
 import json
 from pathlib import Path
 import re
@@ -23,14 +24,8 @@ import shutil
 
 TAG = re.compile(r"(?P<prefix>dotnet-v|v)(?P<version>[0-9]+\.[0-9]+\.[0-9]+)")
 TOKENS = {"macos": "{{MACOS_VERSION}}", "dotnet": "{{DOTNET_VERSION}}"}
-README_START = "<!-- release-downloads:start -->"
-README_END = "<!-- release-downloads:end -->"
-README_DOWNLOADS = """**Download:**
-
-- **macOS:** [Bunyi {{MACOS_VERSION}}](https://github.com/shaztechio/bunyi-app/releases/tag/v{{MACOS_VERSION}}) — Apple Silicon, macOS 15 or later.
-- **Windows:** [Bunyi {{DOTNET_VERSION}}](https://github.com/shaztechio/bunyi-app/releases/tag/dotnet-v{{DOTNET_VERSION}}) — x64, standard and NVIDIA CUDA builds.
-- **Linux:** [Bunyi {{DOTNET_VERSION}}](https://github.com/shaztechio/bunyi-app/releases/tag/dotnet-v{{DOTNET_VERSION}}) — x64, standard and NVIDIA CUDA builds.
-"""
+BADGES = {"macos": ("macOS", "macos"), "windows": ("Windows", "dotnet"),
+          "linux": ("Linux", "dotnet")}
 
 
 def complete_assets(release, family, version):
@@ -90,6 +85,25 @@ def render(template, versions):
     return template
 
 
+def release_badge(label, version):
+    # Static SVGs served by Pages: no third-party badge service or browser API.
+    # Size each panel for its text, including future multi-digit versions.
+    left = len(label) * 8 + 20
+    right = len(version) * 8 + 20
+    width = left + right
+    label, version = escape(label, quote=True), escape(version, quote=True)
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="24" role="img" aria-label="{label}: {version}">
+  <title>{label}: {version}</title>
+  <rect width="{width}" height="24" rx="4" fill="#24292f"/>
+  <path d="M {left} 0 H {width - 4} Q {width} 0 {width} 4 V 20 Q {width} 24 {width - 4} 24 H {left} Z" fill="#176b45"/>
+  <g fill="#fff" text-anchor="middle" font-family="Verdana,DejaVu Sans,sans-serif" font-size="12">
+    <text x="{left / 2}" y="16">{label}</text>
+    <text x="{left + right / 2}" y="16">{version}</text>
+  </g>
+</svg>
+'''
+
+
 def build(source, output, releases):
     source, output = Path(source).resolve(), Path(output).resolve()
     if output == source or source in output.parents:
@@ -103,42 +117,26 @@ def build(source, output, releases):
     for name in ("CNAME", ".nojekyll"):
         shutil.copyfile(source / name, output / name)
     (output / "index.html").write_text(html, encoding="utf-8", newline="\n")
+    badges = output / "releases"
+    badges.mkdir(exist_ok=True)
+    for name, (label, family) in BADGES.items():
+        (badges / f"{name}.svg").write_text(
+            release_badge(label, versions[family]), encoding="utf-8", newline="\n")
     return versions
-
-
-def update_readme(path, versions):
-    path = Path(path)
-    before = path.read_text(encoding="utf-8")
-    if before.count(README_START) != 1 or before.count(README_END) != 1:
-        raise ValueError("README must contain exactly one release-downloads block")
-    start = before.index(README_START) + len(README_START)
-    end = before.index(README_END)
-    if end < start:
-        raise ValueError("README release-downloads markers are out of order")
-    after = before[:start] + "\n" + render(README_DOWNLOADS, versions) + before[end:]
-    if after != before:
-        path.write_text(after, encoding="utf-8", newline="\n")
-    return after != before
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--releases-json", type=Path, required=True)
     parser.add_argument("--source", type=Path, default=Path("docs"))
-    parser.add_argument("--output", type=Path)
-    parser.add_argument("--readme", type=Path, help="Update the marked downloads block in place")
+    parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
-    if not args.output and not args.readme:
-        parser.error("at least one of --output or --readme is required")
     try:
         releases = json.loads(args.releases_json.read_text(encoding="utf-8-sig"))
-        versions = (build(args.source, args.output, releases) if args.output
-                    else select_versions(releases))
-        if args.readme:
-            update_readme(args.readme, versions)
+        versions = build(args.source, args.output, releases)
     except (ValueError, OSError) as error:
         parser.exit(1, f"Site build failed: {error}\n")
-    print(f"Release references: macOS {versions['macos']}; Windows/Linux {versions['dotnet']}")
+    print(f"Site built: macOS {versions['macos']}; Windows/Linux {versions['dotnet']}")
 
 
 if __name__ == "__main__":

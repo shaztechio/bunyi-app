@@ -21,13 +21,13 @@ toolbar.](docs/assets/screenshot-macos.png)
 
 Home: [bunyi.app](https://bunyi.app)
 
-<!-- release-downloads:start -->
 **Download:**
 
-- **macOS:** [Bunyi 1.2.0](https://github.com/shaztechio/bunyi-app/releases/tag/v1.2.0) — Apple Silicon, macOS 15 or later.
-- **Windows:** [Bunyi 1.2.0](https://github.com/shaztechio/bunyi-app/releases/tag/dotnet-v1.2.0) — x64, standard and NVIDIA CUDA builds.
-- **Linux:** [Bunyi 1.2.0](https://github.com/shaztechio/bunyi-app/releases/tag/dotnet-v1.2.0) — x64, standard and NVIDIA CUDA builds.
-<!-- release-downloads:end -->
+| Platform | Current release | Requirements |
+|----------|-----------------|--------------|
+| [macOS](https://bunyi.app/?os=mac#get) | [![Current macOS release](https://bunyi.app/releases/macos.svg)](https://bunyi.app/?os=mac#get) | Apple Silicon, macOS 15 or later |
+| [Windows](https://bunyi.app/?os=win#get) | [![Current Windows release](https://bunyi.app/releases/windows.svg)](https://bunyi.app/?os=win#get) | x64, standard and NVIDIA CUDA builds |
+| [Linux](https://bunyi.app/?os=linux#get) | [![Current Linux release](https://bunyi.app/releases/linux.svg)](https://bunyi.app/?os=linux#get) | x64, standard and NVIDIA CUDA builds |
 
 On macOS, drag the signed and notarized app from the `.dmg` to Applications
 and launch. On Windows and Linux, extract the portable archive and run Bunyi;

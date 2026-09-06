@@ -31,19 +31,18 @@ published versions.
 
 Only the deployment job has Pages write permissions. Release-triggered builds
 read the current `main` website, not the release tag's older website or artifacts
-from the triggering workflow.
+from the triggering workflow. Version updates create no repository commits.
 
-The same release snapshot also updates the root README's marked download block.
-A separate job with contents and pull-request write permissions opens or updates
-`codex/sync-readme-downloads`, committing only `README.md`. Unchanged versions
-create no PR. Merge the refresh PR after its checks pass; Pages deploys
-independently, so waiting for README review does not delay the website.
+The build also generates `releases/macos.svg`, `releases/windows.svg`, and
+`releases/linux.svg` from the same selected versions. The root README embeds
+these badges and links to the website's platform-specific download sections.
+Each release refresh therefore updates the README's displayed versions along
+with Pages, without editing the Markdown or opening a PR. No PR creation or
+approval permission, extra token, or organization setting is required.
 
-Enable **Settings -> Actions -> General -> Workflow permissions -> Allow GitHub
-Actions to create and approve pull requests** for the built-in token to open
-these PRs. The workflow does not approve or merge them. GitHub may require a
-maintainer to select **Approve workflows to run** on a bot-created PR before
-its checks run; see [GitHub's workflow triggering rules](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow).
+GitHub caches external README images, so a badge can briefly show an older
+version after deployment. The permanent download links lead to the current
+website regardless of that cache. See [GitHub's image caching documentation](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/about-anonymized-urls).
 
 ## Local preview
 
@@ -53,8 +52,6 @@ From the repository root, with Python 3 and the GitHub CLI:
 mkdir -p artifacts/site-preview
 gh api --paginate --slurp 'repos/shaztechio/bunyi-app/releases?per_page=100' > artifacts/site-preview/releases.json
 python3 tools/build_site.py --releases-json artifacts/site-preview/releases.json --output artifacts/site-preview/public
-# Also refresh the README in place (or use --readme alone without --output):
-python3 tools/build_site.py --releases-json artifacts/site-preview/releases.json --readme README.md
 ```
 
 Open `artifacts/site-preview/public/index.html` in a browser. The API response

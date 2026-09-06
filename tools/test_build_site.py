@@ -16,14 +16,13 @@
 """Exercise release selection and the actual website template without networking."""
 
 from pathlib import Path
-import json
 import re
-import subprocess
-import sys
 import tempfile
 import unittest
+from urllib.parse import urlparse, parse_qs
+import xml.etree.ElementTree as ET
 
-from build_site import README_START, README_END, build, render, select_versions, update_readme
+from build_site import build, render, select_versions, release_badge
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -115,77 +114,58 @@ class SiteBuildTests(unittest.TestCase):
             self.assertEqual((output / "CNAME").read_bytes(), (source / "CNAME").read_bytes())
             self.assertTrue((output / ".nojekyll").is_file())
             self.assertEqual((output / "assets/icon-64.png").read_bytes(), (source / "assets/icon-64.png").read_bytes())
-            self.assertEqual({p.name for p in output.iterdir()}, {"assets", "index.html", "CNAME", ".nojekyll"})
+            self.assertEqual({p.name for p in output.iterdir()}, {"assets", "index.html", "CNAME", ".nojekyll", "releases"})
         with self.assertRaisesRegex(ValueError, "outside"):
             build(source, source, [])
 
-    def test_readme_preserves_prose_and_is_idempotent(self):
-        original = (ROOT / "README.md").read_text(encoding="utf-8")
-        prefix = original.split(README_START)[0]
-        suffix = original.split(README_END)[1]
+    def test_readme_badges_follow_site_versions_without_source_changes(self):
+        readme = ROOT / "README.md"
+        before = readme.read_bytes()
+        releases = [release("macos", "1.8.0"), release("dotnet", "2.10.0")]
+        incomplete = release("dotnet", "3.0.0")
+        incomplete["assets"].pop()
         with tempfile.TemporaryDirectory() as temp:
-            readme = Path(temp) / "README.md"
-            readme.write_text(original, encoding="utf-8")
-            versions = {"macos": "7.8.0", "dotnet": "9.10.0"}
-            self.assertTrue(update_readme(readme, versions))
-            result = readme.read_text(encoding="utf-8")
-            self.assertEqual(result.split(README_START)[0], prefix)
-            self.assertEqual(result.split(README_END)[1], suffix)
-            block = result.split(README_START)[1].split(README_END)[0]
-            self.assertIn("[Bunyi 7.8.0]", block)
-            self.assertIn("/tag/v7.8.0)", block)
-            self.assertEqual(block.count("[Bunyi 9.10.0]"), 2)
-            self.assertEqual(block.count("/tag/dotnet-v9.10.0)"), 2)
-            self.assertNotIn("/latest", block)
-            before = readme.read_bytes()
-            self.assertFalse(update_readme(readme, versions))
+            output = Path(temp) / "site"
+            versions = build(ROOT / "docs", output, releases + [incomplete])
+            self.assertEqual(versions, {"macos": "1.8.0", "dotnet": "2.10.0"})
+            ns = {"svg": "http://www.w3.org/2000/svg"}
+            expected = {"macos": ("macOS", "1.8.0"),
+                        "windows": ("Windows", "2.10.0"), "linux": ("Linux", "2.10.0")}
+            for name, (label, version) in expected.items():
+                badge = ET.parse(output / "releases" / f"{name}.svg").getroot()
+                self.assertEqual(badge.attrib["aria-label"], f"{label}: {version}")
+                self.assertEqual([node.text for node in badge.findall(".//svg:text", ns)],
+                                 [label, version])
+                self.assertEqual(badge.findall(".//svg:script", ns), [])
+            first = {p.name: p.read_bytes() for p in (output / "releases").iterdir()}
+            build(ROOT / "docs", output, releases)
+            self.assertEqual({p.name: p.read_bytes() for p in (output / "releases").iterdir()}, first)
+            build(ROOT / "docs", output, releases + [release("dotnet", "2.11.0")])
+            self.assertEqual((output / "releases/macos.svg").read_bytes(), first["macos.svg"])
+            for name in ("windows", "linux"):
+                self.assertIn("2.11.0", (output / f"releases/{name}.svg").read_text())
             self.assertEqual(readme.read_bytes(), before)
-            update_readme(readme, {**versions, "dotnet": "9.11.0"})
-            self.assertIn("/tag/v7.8.0)", readme.read_text(encoding="utf-8"))
 
-    def test_bad_readme_markers_fail_without_overwriting(self):
+    def test_readme_links_match_generated_badges_and_download_sections(self):
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        links = re.findall(r'\[!\[[^\]]+\]\((https://bunyi.app/[^)]+)\)\]\((https://bunyi.app/[^)]+)\)', readme)
+        self.assertEqual(len(links), 3)
+        template = (ROOT / "docs/index.html").read_text(encoding="utf-8")
         with tempfile.TemporaryDirectory() as temp:
-            readme = Path(temp) / "README.md"
-            for original in ("No markers", README_START, README_END,
-                             README_END + README_START,
-                             README_START * 2 + README_END,
-                             README_START + README_END * 2):
-                with self.subTest(original=original):
-                    readme.write_text(original, encoding="utf-8")
-                    before = readme.read_bytes()
-                    with self.assertRaises(ValueError):
-                        update_readme(readme, {"macos": "1.0.0", "dotnet": "2.0.0"})
-                    self.assertEqual(readme.read_bytes(), before)
+            output = Path(temp)
+            build(ROOT / "docs", output, [release("macos", "1.8.0"), release("dotnet", "2.10.0")])
+            for (image, target), os_name in zip(links, ("mac", "win", "linux")):
+                self.assertTrue((output / urlparse(image).path.lstrip("/")).is_file())
+                self.assertEqual(parse_qs(urlparse(target).query), {"os": [os_name]})
+                self.assertEqual(urlparse(target).fragment, "get")
+                self.assertIn('id="get"', template)
+                self.assertIn(f'id="download-{os_name}"', template)
 
-    def test_cli_syncs_site_and_readme_from_same_snapshot(self):
-        with tempfile.TemporaryDirectory() as temp:
-            temp = Path(temp)
-            readme = temp / "README.md"
-            readme.write_text(README_START + "\nold\n" + README_END, encoding="utf-8")
-            snapshot = temp / "releases.json"
-            releases = [release("macos", "7.8.0"), release("dotnet", "9.10.0")]
-            incomplete = release("dotnet", "10.0.0")
-            incomplete["assets"].pop()
-            snapshot.write_text(json.dumps([releases, [incomplete]]), encoding="utf-8")
-            command = [sys.executable, str(ROOT / "tools/build_site.py"),
-                       "--releases-json", str(snapshot), "--readme", str(readme)]
-            result = subprocess.run(command + ["--source", str(ROOT / "docs"),
-                                               "--output", str(temp / "site")],
-                                    capture_output=True, text=True)
-            self.assertEqual(result.returncode, 0, result.stderr)
-            for output in (readme, temp / "site/index.html"):
-                text = output.read_text(encoding="utf-8")
-                for tag in ("v7.8.0", "dotnet-v9.10.0"):
-                    self.assertIn("/tag/" + tag, text)
-                self.assertNotIn("10.0.0", text)
-            before = readme.read_bytes()
-            result = subprocess.run(command, capture_output=True, text=True)
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(readme.read_bytes(), before)
-            snapshot.write_text("[]", encoding="utf-8")
-            result = subprocess.run(command, capture_output=True, text=True)
-            self.assertNotEqual(result.returncode, 0)
-            self.assertEqual(readme.read_bytes(), before)
+    def test_badge_escapes_xml_and_sizes_long_versions(self):
+        badge = ET.fromstring(release_badge('Mac & "friends"', "123.456.789"))
+        self.assertEqual(badge.attrib["aria-label"], 'Mac & "friends": 123.456.789')
+        self.assertGreater(int(badge.attrib["width"]),
+                           int(ET.fromstring(release_badge("macOS", "1.2.0")).attrib["width"]))
 
 
 if __name__ == "__main__":

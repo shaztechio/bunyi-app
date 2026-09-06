@@ -67,61 +67,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_REPOSITORY: ${{ github.repository }}
         run: gh api --paginate --slurp "repos/$RELEASE_REPOSITORY/releases?per_page=100" > "$RUNNER_TEMP/site-releases.json"
-      - name: Render release references
-        run: python3 tools/build_site.py --releases-json "$RUNNER_TEMP/site-releases.json" --output _site --readme README.md
-      - name: Save the release snapshot for README sync
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-        uses: actions/upload-artifact@v7
-        with:
-          name: release-snapshot
-          path: ${{ runner.temp }}/site-releases.json
-          retention-days: 1
+      - name: Render website release references and README badges
+        run: python3 tools/build_site.py --releases-json "$RUNNER_TEMP/site-releases.json" --output _site
       - uses: actions/upload-pages-artifact@v5
         with:
           path: _site
-
-  readme:
-    name: Sync README release downloads
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-    needs: build
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: write
-      pull-requests: write
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: main
-          persist-credentials: false
-      - uses: actions/download-artifact@v8
-        with:
-          name: release-snapshot
-          path: ${{ runner.temp }}/release-snapshot
-      # Use the site's exact release snapshot, but preserve current main prose.
-      - name: Update README downloads
-        run: python3 tools/build_site.py --releases-json "$RUNNER_TEMP/release-snapshot/site-releases.json" --readme README.md
-      # All repository changes go through a PR. Reuse one branch while a
-      # previous refresh is awaiting review; unchanged versions are a no-op.
-      - name: Open or update the README sync pull request
-        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
-        with:
-          branch: codex/sync-readme-downloads
-          base: main
-          add-paths: README.md
-          sign-commits: true
-          commit-message: 'docs: sync README downloads with published releases'
-          title: 'docs: sync README downloads with published releases'
-          body: |
-            Update the README download versions and links from the same complete
-            stable release snapshot used to build GitHub Pages.
-
-            Only the marked downloads block changes. macOS and Windows/Linux
-            versions are selected independently; incomplete uploads and
-            prereleases are excluded.
-
-            Approve the pull request's workflow runs if GitHub requests it,
-            then merge after the checks pass.
 
   deploy:
     name: Deploy website
