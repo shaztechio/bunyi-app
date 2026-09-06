@@ -1,0 +1,95 @@
+# Copyright 2026 Shazron Abdullah and Bunyi contributors
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: Website
+
+on:
+  push:
+    branches: [main]
+    paths: ['docs/**', 'tools/build_site.py', 'tools/test_build_site.py', '.github/workflows/pages.yml']
+  pull_request:
+    paths: ['docs/**', 'tools/build_site.py', 'tools/test_build_site.py', '.github/workflows/pages.yml']
+  # Releases created with GITHUB_TOKEN do not raise another release event.
+  # workflow_run catches both shipping workflows after their assets upload.
+  workflow_run:
+    workflows: ['Signed release', 'Windows + Linux release']
+    types: [completed]
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'production' }}
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    name: Queue release refresh on main
+    if: github.event_name == 'release' && !github.event.release.prerelease
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      # A release event uses its tag ref; the Pages environment allows main.
+      # Dispatch on main instead of widening that deployment restriction.
+      - name: Refresh the website
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_REPOSITORY: ${{ github.repository }}
+        run: gh workflow run pages.yml --ref main --repo "$RELEASE_REPOSITORY"
+
+  build:
+    name: Build website
+    if: github.event_name != 'release' && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # A release tag can predate later site work. Always publish the main
+          # website, never source or artifacts supplied by the triggering run.
+          ref: ${{ github.event_name == 'pull_request' && github.ref || 'main' }}
+          persist-credentials: false
+      - name: Test release selection and rendering
+        run: python3 -m unittest discover -s tools -p 'test_build_site.py' -v
+      - name: Read published releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_REPOSITORY: ${{ github.repository }}
+        run: gh api --paginate --slurp "repos/$RELEASE_REPOSITORY/releases?per_page=100" > "$RUNNER_TEMP/site-releases.json"
+      - name: Render release references
+        run: python3 tools/build_site.py --releases-json "$RUNNER_TEMP/site-releases.json" --output _site
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+  deploy:
+    name: Deploy website
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/deploy-pages@v5
+        id: deployment
