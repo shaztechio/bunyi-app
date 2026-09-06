@@ -487,6 +487,15 @@ changes made with Up/Down announce the newly selected System, Light or Dark opti
 once, including when the theme changes immediately. This corrects .NET keyboard
 navigation and AT-SPI exposure; macOS retains its native Settings navigation.
 
+On .NET, Settings controls expose their adjacent context on keyboard focus:
+source fields name their mode, saved-configuration actions name the configuration
+and describe its sources, downloaded-model actions name the model and describe its
+size and origin, and About links name the credited project and describe its role
+and license. Folder and backup actions identify what they affect. Explanatory
+callouts are associated help for the relevant control. An action is not repeated
+as its own description, and layout type names are not spoken. This implements
+§12's existing control-label and context requirements for the .NET Settings UI.
+
 - **General**: appearance — **System / Light / Dark**. System follows the OS;
   Light and Dark pin the app regardless of it. Applies immediately, to
   **every** window the app owns, not only the one in front (macOS: the main
@@ -721,6 +730,9 @@ chords differ and only the requirement is pinned.
   platform. A control whose label sits beside it rather than inside it — a
   picker in a labelled row — points at that label rather than repeating its
   words, so what is read and what is shown cannot drift apart.
+  The .NET main toolbar uses the short spoken names **Settings, Doctor, Logs,
+  Help**; the longer descriptions remain hover tooltips, while keyboard shortcuts
+  remain available through the separate accelerator property.
 - **A control that changes says what it changed to.** Moving through a picker
   from the keyboard announces the new value, not silence. This is not automatic:
   a toolkit may update the control on screen and raise nothing, and the value

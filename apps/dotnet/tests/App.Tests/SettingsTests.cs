@@ -13,6 +13,10 @@
 // limitations under the License.
 
 using Avalonia.Controls;
+using Avalonia.Automation;
+using Avalonia.Automation.Peers;
+using Avalonia.VisualTree;
+using Bunyi.Core.Models;
 using Avalonia.Headless.XUnit;
 using Avalonia.LogicalTree;
 using Avalonia.Styling;
@@ -67,6 +71,115 @@ public sealed class SettingsTests : HeadlessWindows
         Assert.Equal(
             ["General", "Models", "Storage", "Backup", "About"],
             tabs.Select(t => t.Header as string));
+    }
+
+    [AvaloniaFact]
+    public void Downloaded_model_actions_identify_each_model_once_with_size_and_origin()
+    {
+        var model = NewModel();
+        model.Models.Clear();
+        model.Models.Add(new(new("probe/voice-one", ModelOrigin.Hub, "unused-one", 1024)));
+        model.Models.Add(new(new("voice-two", ModelOrigin.SelfHosted, "unused-two", 2048)));
+        var window = Open(new SettingsWindow { DataContext = model });
+        window.FindControl<TabControl>("SettingsTabs")!.SelectedIndex = 2;
+        window.UpdateLayout();
+        var buttons = window.GetVisualDescendants().OfType<Button>()
+            .Where(b => b.CommandParameter is DownloadedModelRow).ToArray();
+        Assert.Equal(2, buttons.Length);
+        foreach (var button in buttons)
+        {
+            var row = (DownloadedModelRow)button.CommandParameter!;
+            var peer = ControlAutomationPeer.CreatePeerForElement(button);
+            Assert.Equal($"Move {row.Name} to the Trash", peer.GetName());
+            Assert.Contains(row.SizeText, peer.GetHelpText());
+            Assert.Contains(row.OriginText, peer.GetHelpText());
+            Assert.DoesNotContain("Trash", peer.GetHelpText());
+            Assert.Equal("Move this model to the Trash", ToolTip.GetTip(button));
+        }
+    }
+
+    [AvaloniaFact]
+    public void Source_fields_and_saved_configuration_actions_expose_their_context()
+    {
+        var model = NewModel();
+        var config = new ModelConfig { Name = "My server", PresetVoice = "https://example.com/preset" };
+        model.Configs.Add(config);
+        var window = Open(new SettingsWindow { DataContext = model });
+        window.FindControl<TabControl>("SettingsTabs")!.SelectedIndex = 1;
+        window.UpdateLayout();
+        var controls = window.GetVisualDescendants().OfType<Control>().ToArray();
+        foreach (var mode in new[] { "Preset voice", "Voice design", "Voice clone" })
+        {
+            var field = controls.OfType<TextBox>().Single(c => ControlAutomationPeer.CreatePeerForElement(c).GetName() == mode);
+            Assert.Contains("Hugging Face repository", ControlAutomationPeer.CreatePeerForElement(field).GetHelpText());
+        }
+        foreach (var button in controls.OfType<Button>().Where(b => ReferenceEquals(b.CommandParameter, config)))
+        {
+            var peer = ControlAutomationPeer.CreatePeerForElement(button);
+            Assert.Contains(config.Name, peer.GetName());
+            Assert.Equal(config.Summary, peer.GetHelpText());
+        }
+        var restore = controls.OfType<Button>().Single(b => ReferenceEquals(b.CommandParameter, config) && ReferenceEquals(b.Command, model.RestoreConfigCommand));
+        Assert.Equal("Restore configuration My server", ControlAutomationPeer.CreatePeerForElement(restore).GetName());
+        model.NewConfigName = "Another server";
+        window.UpdateLayout();
+        var save = controls.OfType<Button>().Single(b => ReferenceEquals(b.Command, model.SaveConfigCommand));
+        Assert.Equal("Save configuration Another server", ControlAutomationPeer.CreatePeerForElement(save).GetName());
+    }
+
+    [AvaloniaFact]
+    public void General_and_backup_controls_expose_their_visible_explanations()
+    {
+        var window = Open(new SettingsWindow { DataContext = NewModel() });
+        var tabs = window.FindControl<TabControl>("SettingsTabs")!;
+        var appearance = window.GetVisualDescendants().OfType<ComboBox>().Single();
+        Assert.StartsWith("System follows your computer.", ControlAutomationPeer.CreatePeerForElement(appearance).GetHelpText());
+        var memory = window.GetVisualDescendants().OfType<CheckBox>().Single();
+        Assert.StartsWith("Each mode uses its own model", ControlAutomationPeer.CreatePeerForElement(memory).GetHelpText());
+        tabs.SelectedIndex = 3;
+        window.UpdateLayout();
+        var buttons = window.GetVisualDescendants().OfType<Button>()
+            .Select(ControlAutomationPeer.CreatePeerForElement).ToArray();
+        Assert.Contains(buttons, p => p.GetName() == "Back up models" && p.GetHelpText()!.StartsWith("Collects your models folder"));
+        Assert.Contains(buttons, p => p.GetName() == "Restore models from backup" && p.GetHelpText()!.StartsWith("Restoring never replaces"));
+    }
+
+    [AvaloniaFact]
+    public void About_links_identify_the_credited_project_and_its_role_and_license()
+    {
+        var window = Open(new SettingsWindow { DataContext = NewModel() });
+        window.FindControl<TabControl>("SettingsTabs")!.SelectedIndex = 4;
+        window.UpdateLayout();
+        var links = window.GetVisualDescendants().OfType<Button>().Where(b => b.DataContext is Credit).ToArray();
+        Assert.NotEmpty(links);
+        foreach (var link in links)
+        {
+            var credit = (Credit)link.DataContext!;
+            var peer = ControlAutomationPeer.CreatePeerForElement(link);
+            Assert.Equal($"Open {credit.Name} website", peer.GetName());
+            Assert.Contains(credit.Does, peer.GetHelpText());
+            Assert.Contains(credit.Licence, peer.GetHelpText());
+            Assert.DoesNotContain("Open in your browser", peer.GetHelpText());
+        }
+    }
+
+    [AvaloniaFact]
+    public void Folder_and_download_text_keep_their_context_and_exact_copyable_value()
+    {
+        var model = NewModel();
+        var window = Open(new SettingsWindow { DataContext = model });
+        window.FindControl<TabControl>("SettingsTabs")!.SelectedIndex = 2;
+        window.UpdateLayout();
+        var fields = window.GetVisualDescendants().OfType<ContextualSelectableTextBlock>().ToArray();
+        Assert.Equal(4, fields.Length);
+        foreach (var field in fields)
+        {
+            var name = ControlAutomationPeer.CreatePeerForElement(field).GetName();
+            var label = field.DataContext is PreDownloadCommandRow row ? row.AccessibleName : "Models folder";
+            Assert.Equal($"{label}: {field.Text}", name);
+            field.SelectAll();
+            Assert.Equal(field.Text, field.SelectedText);
+        }
     }
 
     // ---- About (spec §9a) ----
@@ -596,7 +709,7 @@ public sealed class SettingsTests : HeadlessWindows
         model.ChooseFolderCommand.Execute(null);
 
         Assert.Equal(3, model.PreDownloadCommands.Count);
-        Assert.Contains(model.PreDownloadCommands, c => c.Contains("hf download") && c.Contains(_folder));
+        Assert.Contains(model.PreDownloadCommands, c => c.Command.Contains("hf download") && c.Command.Contains(_folder));
     }
 
     [AvaloniaFact]
@@ -607,7 +720,7 @@ public sealed class SettingsTests : HeadlessWindows
         var model = NewModel();
         model.PresetVoiceSource = "https://models.example.com/customvoice";
 
-        Assert.Contains(model.PreDownloadCommands, c => c.Contains("your own server"));
-        Assert.DoesNotContain(model.PreDownloadCommands, c => c.Contains("hf download https://"));
+        Assert.Contains(model.PreDownloadCommands, c => c.Command.Contains("your own server"));
+        Assert.DoesNotContain(model.PreDownloadCommands, c => c.Command.Contains("hf download https://"));
     }
 }

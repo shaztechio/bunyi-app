@@ -31,6 +31,8 @@ internal static class LinuxAccessibilityPresentation
         QuietLayout(s => s.Is<Panel>()),
         QuietLayout(s => s.Is<Decorator>()),
         QuietLayout(s => s.Is<ContentPresenter>()),
+        QuietLayout(s => s.Is<ItemsPresenter>()),
+        QuietLayout(s => s.Is<ScrollViewer>()),
     ];
 
     private static Style QuietLayout(Func<Selector?, Selector> selector) => new(selector)

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import argparse, ctypes as C, os, pathlib, subprocess, tempfile, time
+import argparse, ctypes as C, json, os, pathlib, subprocess, tempfile, time
 import gi
 gi.require_version('Atspi','2.0')
 from gi.repository import Atspi, GLib
@@ -20,6 +20,7 @@ parser=argparse.ArgumentParser(description='Check real Bunyi AT-SPI focus events
 parser.add_argument('app', type=pathlib.Path)
 parser.add_argument('--log', type=pathlib.Path, default=pathlib.Path('atspi-app.log'))
 parser.add_argument('--expect-announcements', action='store_true')
+parser.add_argument('--context', action='store_true', help='Check Settings and toolbar context with temporary model/configuration fixtures')
 parser.add_argument('--settings', action='store_true', help='Check Settings navigation and Appearance instead of the main window')
 args=parser.parse_args()
 app=args.app.resolve(strict=True)
@@ -123,7 +124,15 @@ def key(symbol, modifiers=()):
     x.XFlush(d); pump(.5)
 
 def settings_check():
-    key(0xff09); key(0xff09); key(0x2c,(0xffe3,)); pump(1)
+    if args.context:
+        for expected in ('Settings','Doctor','Logs','Help'):
+            key(0xff09)
+            assert focused and focused.get_name()==expected, 'Toolbar name is not concise'
+            assert not focused.get_description(), 'Toolbar tooltip leaked into its description'
+        print('TOOLBAR CONTEXT PASS',flush=True)
+    else:
+        key(0xff09); key(0xff09)
+    key(0x2c,(0xffe3,)); pump(1)
     window=find_window(x.XDefaultRootWindow(d),title_prefix='Settings')
     assert window, 'Settings window missing'
     x.XSetInputFocus(d,window,1,0); x.XFlush(d); pump(.5)
@@ -138,6 +147,7 @@ def settings_check():
         assert focused.get_name()=='APPEARANCE', 'Theme change lost keyboard focus'
     key(0xff09,(0xffe1,))
     assert focused.get_name()=='General', 'Shift+Tab did not return to General'
+    contexts={}
     headers=('General','Models','Storage','Backup','About')
     for index, header in enumerate(headers):
         assert focused.get_name()==header and focused.get_role_name()=='page tab', 'Wrong tab header focus'
@@ -149,14 +159,54 @@ def settings_check():
         key(0xff09)
         for _ in range(60):
             if focused.get_role_name()=='page tab': break
+            if args.context:
+                name=focused.get_name(); description=focused.get_description()
+                contexts[name]=description
+                print('CONTEXT',repr(name),repr(description),flush=True)
+                assert not description or name != description, 'Action repeated as its description'
+                parent=focused.get_parent()
+                while parent and parent.get_role_name() not in ('frame','application'):
+                    assert parent.get_name() not in ('ItemsPresenter','ItemsControl','ScrollViewer','Panel','StackPanel','ContentPresenter'), 'Layout name leaked into context'
+                    parent=parent.get_parent()
+                if name=='Configuration name':
+                    for char in 'probe': key(ord(char))
             before=len(events)
             key(0xff09)
             assert len(events)>before, 'Tab trapped in '+header
         assert focused.get_name()==header, 'Tab failed to wrap to '+header
         print('SETTINGS TAB PASS',header,flush=True)
         if index < len(headers)-1: key(0xff53)
+    if args.context:
+        required={
+            'APPEARANCE':'System follows your computer.',
+            'Free memory when switching modes':'Each mode uses its own model',
+            'Preset voice':'Hugging Face repository',
+            'Voice design':'Hugging Face repository',
+            'Voice clone':'Hugging Face repository',
+            'Configuration name':'The three go together',
+            'Save configuration probe':'three model sources',
+            'Restore configuration Probe server':'example.com',
+            'Delete configuration Probe server':'example.com',
+            'Models folder':'Models are large',
+            'Choose models folder':'/Bunyi/Models',
+            'Show models folder in the file manager':'/Bunyi/Models',
+            'Use default models folder':'/Bunyi/Models',
+            'Back up models':'Collects your models folder',
+            'Restore models from backup':'Restoring never replaces',
+            'Copy Bunyi version and platform':'Version ',
+        }
+        for name, fragment in required.items():
+            assert any((key==name or key.startswith(name+': ')) and fragment in value for key,value in contexts.items()), 'Missing context for '+name
+        for model in ('voice-one','voice-two','voice-three'):
+            name='Move probe/'+model+' to the Trash'
+            assert name in contexts and 'Hugging Face' in contexts[name] and 'Trash' not in contexts[name], 'Missing or duplicate model context'
+        links={name:description for name,description in contexts.items() if name.startswith('Open ') and name!='Open Bunyi website'}
+        assert len(links)>5 and all('License:' in description for description in links.values()), 'Missing credit context'
+        downloads=[name for name in contexts if name.startswith('Download ') and ' in advance: ' in name]
+        assert len(downloads)==3, 'Download commands lack mode context'
+        print('PASS: Settings row, field, action and credit context; short toolbar names; no duplicate descriptions or layout names.',flush=True)
     key(0xff51)
-    assert focused.get_name()=='Backup', 'Left did not select the previous tab'
+    assert focused.get_name()=='Backup' , 'Left did not select the previous tab'
     print('PASS: Settings tab return in both directions and single named Appearance events; Orca speech not tested.',flush=True)
 
 def tabs():
@@ -191,13 +241,25 @@ def walk(node,depth=0):
         walk(node.get_child_at_index(i),depth+1)
 with tempfile.TemporaryDirectory(prefix='bunyi-atspi-') as state, args.log.open('w') as log:
     env=dict(os.environ, XDG_CONFIG_HOME=state+'/config', XDG_DATA_HOME=state+'/data')
+    if args.context:
+        models=pathlib.Path(state)/'data/Bunyi/Models'
+        for name in ('voice-one','voice-two','voice-three'):
+            folder=models/'models/probe'/name
+            folder.mkdir(parents=True)
+            (folder/'fixture.txt').write_text('model listing fixture')
+        configs=pathlib.Path(state)/'data/Bunyi/ModelConfigs'
+        configs.mkdir(parents=True)
+        (configs/'configs.json').write_text(json.dumps([{'id':'01234567-89ab-cdef-0123-456789abcdef','name':'Probe server','presetVoice':'https://example.com/preset'}]))
+        settings=pathlib.Path(state)/'config/Bunyi'
+        settings.mkdir(parents=True)
+        (settings/'settings.json').write_text(json.dumps({'modelsFolder':str(models)}))
     proc=subprocess.Popen([str(app)],cwd=app.parent,stdout=log,stderr=log,env=env)
     try:
         pump(4)
         window=find_window(x.XDefaultRootWindow(d)); print('Window',window,flush=True)
         if not window: raise RuntimeError('App window missing')
         x.XSetInputFocus(d,window,1,0); x.XFlush(d); pump(.5)
-        if args.settings:
+        if args.settings or args.context:
             settings_check()
         else:
             phase='before-tree-walk'; tabs()

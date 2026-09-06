@@ -83,3 +83,17 @@ GetChildren and GetSelection return different peers, so AT-SPI exposed no
 selected child. Settings also keeps the tab group's remembered target on its
 selected header; Avalonia 12.1 otherwise replaces it with a page control and
 forwards that control to the header panel, trapping keyboard navigation.
+Candidate 4's Settings tab return and Appearance speech were confirmed by the
+Fedora user. For the remaining Settings context checks, run with `--context`.
+This includes the Settings navigation/Appearance checks and creates three tiny
+model-listing fixtures plus one saved configuration under the probe's temporary
+XDG directories. It never downloads, restores or deletes a model. A temporary
+custom-folder setting also makes the default-folder action reachable.
+
+The context pass checks short toolbar names with empty descriptions, source-field
+labels and explanations, configuration names and summaries on Restore/Delete,
+model names and size/origin on Trash, folder and backup action context, and credit
+names/roles/licenses on About links. It rejects repeated action descriptions and
+layout class names along each focus path. The longer toolbar hover tips remain;
+an explicit-help button peer prevents Avalonia from using them as a fallback for
+an intentionally empty description. Actual Orca speech remains a manual check.
