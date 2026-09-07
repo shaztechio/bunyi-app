@@ -849,6 +849,28 @@ chords differ and only the requirement is pinned.
 
 ---
 
+## 13. Windows MSIX packaging (submission preparation)
+
+Windows can additionally be packaged as a self-contained x64 MSIX using the
+standard CPU build, with the same Bunyi artwork and generation features as the
+portable app. Models remain downloads, not package payload. macOS and Linux
+keep their existing distribution formats; this is Windows packaging only.
+
+Local-test packages use a separate identity and the display name **Bunyi
+(Local Test)**. Store packages require the exact identity and publisher supplied
+by Partner Center. Packaging must not silently present test identity values as
+Store credentials. Package versions follow the .NET version with a fourth
+component of zero; packaging does not bump the application version.
+
+This prepares artifacts, not a published or certified Store release. Installed
+package testing, storage virtualization/coexistence, upgrades, uninstall, and
+Store certification remain tracked in
+[#215](https://github.com/shaztechio/bunyi-app/issues/215). The existing data-format
+spec remains the application contract; migration or storage behavior changes
+require a separate spec update before Store publication.
+
+---
+
 ## Feature → macOS source map (parity checklist)
 
 - Modes / generation / playback → `ContentView.swift`, `TTSEngine.generate`
