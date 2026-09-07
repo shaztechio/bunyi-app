@@ -116,6 +116,21 @@ jobs:
           rid=$([ "$RUNNER_OS" = "Windows" ] && echo win-x64 || echo linux-x64)
           dotnet publish src/App -c Release -r "$rid" --self-contained -o "artifacts/$rid"
 
+      - name: Package Windows MSIX
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./packaging/windows/build-msix.ps1 -PublishDirectory artifacts/win-x64
+
+      - name: Upload unsigned Store package
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-store-msix
+          path: |
+            apps/dotnet/artifacts/msix/*.msix
+            apps/dotnet/artifacts/msix/*.sha256
+          if-no-files-found: error
+
       # Whisper.net.Runtime offers its natives for every platform at once, and
       # a publish will happily copy all of them — about 15 MB nobody can load.
       # Directory.Build.targets drops the ones that do not match the RID; this
