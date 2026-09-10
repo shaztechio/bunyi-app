@@ -118,6 +118,48 @@ public sealed class ModelDownloaderTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Aggregate_path_preserves_live_receipts_through_cancellation_and_resume()
+    {
+        // The shared runtime uses this path for CLI downloads and desktop Whisper setup.
+        // Its aggregate wrapper must not lose the UI's exact per-file receipt snapshot.
+        _server.PauseAfterFirstByteOf = "model.onnx.data";
+        using var cancellation = new CancellationTokenSource();
+        var firstByte = new TaskCompletionSource<AggregateDownloadProgress>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var assets = new[] { new DownloadAsset("whisper", Source, Layout) };
+        var run = NewDownloader().DownloadAssetsAsync(assets, _root,
+            new InlineAggregate(p =>
+            {
+                if (p.Download is { CurrentFile: "model.onnx.data", CurrentFileBytes: 1 })
+                    firstByte.TrySetResult(p);
+            }), cancellation.Token);
+        try
+        {
+            var sample = await firstByte.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.NotNull(sample.Download!.LastReceivedAt);
+            Assert.Equal(512_000, sample.Download.CurrentFileTotal);
+            Assert.Equal(sample.Download.BytesReceived + sample.Download.BytesReused, sample.ItemBytesCompleted);
+            Assert.Equal("whisper", sample.ItemId);
+            Assert.False(run.IsCompleted);
+            cancellation.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => run.WaitAsync(TimeSpan.FromSeconds(10)));
+        }
+        finally
+        {
+            cancellation.Cancel();
+            _server.ReleaseBody.TrySetResult();
+            try { await run; } catch (OperationCanceledException) { }
+        }
+
+        _server.PauseAfterFirstByteOf = null;
+        var reports = new List<AggregateDownloadProgress>();
+        await NewDownloader().DownloadAssetsAsync(assets, _root, new InlineAggregate(reports.Add), default);
+        Assert.Equal(reports[^1].BytesTotal, reports[^1].BytesCompleted);
+        Assert.True(reports.Zip(reports.Skip(1), (a, b) => a.BytesCompleted <= b.BytesCompleted).All(v => v));
+        Assert.Equal(_server.Sha256Of("model.onnx.data"),
+            await HttpFileDownloader.Sha256OfFileAsync(Path.Combine(ModelFolder, "model.onnx.data"), default));
+    }
+
+    [Fact]
     public async Task Unknown_sizes_still_use_the_layout_estimate_for_disk_preflight()
     {
         _server.HideContentLengthOnHead = true;
@@ -155,6 +197,61 @@ public sealed class ModelDownloaderTests : IAsyncLifetime
         Assert.True(File.Exists(Path.Combine(folder, "model.onnx.data")));
         Assert.True(File.Exists(Path.Combine(folder, "embeddings", "config.json")));
         Assert.True(ModelDownloader.Inspect(folder, Layout).IsComplete);
+    }
+
+    private sealed class DirectProgress(Action<DownloadProgress> report) : IProgress<DownloadProgress>
+    {
+        public void Report(DownloadProgress value) => report(value);
+    }
+
+    [Fact]
+    public async Task One_network_byte_is_reported_before_the_file_finishes()
+    {
+        _server.PauseAfterFirstByteOf = "model.onnx.data";
+        var firstByte = new TaskCompletionSource<DownloadProgress>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var run = NewDownloader().EnsureModelAsync(Source, Layout, _root,
+            new DirectProgress(p =>
+            {
+                if (p.CurrentFile == "model.onnx.data" && p.CurrentFileBytes == 1)
+                    firstByte.TrySetResult(p);
+            }), default);
+        try
+        {
+            var sample = await firstByte.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.NotNull(sample.LastReceivedAt);
+            Assert.Equal(512_000, sample.CurrentFileTotal);
+            Assert.False(run.IsCompleted);
+        }
+        finally { _server.ReleaseBody.TrySetResult(); }
+        await run;
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Resuming_counts_only_the_offset_the_server_accepts(bool ignoreRange)
+    {
+        _server.IgnoreRangeRequests = ignoreRange;
+        Directory.CreateDirectory(ModelFolder);
+        await File.WriteAllBytesAsync(Path.Combine(ModelFolder, "model.onnx.data.incomplete"), new byte[100_000]);
+        var seen = new List<DownloadProgress>();
+        await NewDownloader().EnsureModelAsync(Source, Layout, _root, new DirectProgress(seen.Add), default);
+        var finalFile = seen.Last(p => p.CurrentFile == "model.onnx.data");
+        Assert.Equal(512_000, finalFile.CurrentFileBytes);
+        Assert.Equal(ignoreRange ? 0 : 100_000, finalFile.BytesReused);
+        Assert.Equal(finalFile.BytesReceived + finalFile.BytesReused,
+            finalFile.CurrentFileBytes + new FileInfo(Path.Combine(ModelFolder, "model.onnx")).Length
+                + new FileInfo(Path.Combine(ModelFolder, "embeddings/config.json")).Length);
+    }
+
+    [Fact]
+    public async Task Unknown_head_sizes_do_not_produce_a_false_overall_percentage()
+    {
+        _server.HideContentLengthOnHead = true;
+        var seen = new List<DownloadProgress>();
+        await NewDownloader().EnsureModelAsync(Source, Layout, _root, new DirectProgress(seen.Add), default);
+        Assert.Contains(seen, p => p.CurrentFileTotal > 0 && p.BytesTotal == 0);
+        Assert.Contains(seen, p => p.BytesTotal > 0);
     }
 
     [Fact]

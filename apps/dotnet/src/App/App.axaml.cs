@@ -86,12 +86,17 @@ public partial class App : Application
                 engine, new SoundFlowAudioPlayer(log), log,
                 voices: new VoiceLibrary(log))
             {
+                ModelComplete = mode => ModelDownloader.Inspect(
+                    ModelDownloader.FolderFor(runtime.SourceFor(mode), runtime.ModelsRoot),
+                    ModelLayout.For(mode)).IsComplete,
                 Settings = settingsViewModel,
                 Doctor = RunDoctor,
                 Logs = new LogsViewModel(log),
             };
 
-            viewModel.Transcribe = (path, ct) => runtime.TranscribeAsync(path, viewModel.Language, null, ct);
+            viewModel.Transcribe = (path, ct) => runtime.TranscribeAsync(path, viewModel.Language,
+                new InlineProgress<Bunyi.Core.Runtime.AggregateDownloadProgress>(p =>
+                    viewModel.ReportTranscriptionDownload(p.Download ?? new DownloadProgress(p.Phase))), ct);
             settingsViewModel.AcquireOperation = runtime.AcquireOperation;
 
             // §3d: a model being deleted is evicted from memory first,

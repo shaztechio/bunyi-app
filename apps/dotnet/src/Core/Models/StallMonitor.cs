@@ -60,6 +60,19 @@ public sealed class StallMonitor : IDisposable
     private long _bytesAtLastTick;
     private int _quietTicks;
     private bool _warned;
+    private bool _active = true;
+
+    public void SetActive(bool active)
+    {
+        lock (_gate)
+        {
+            if (_active == active) return;
+            _active = active;
+            _quietTicks = 0;
+            _warned = false;
+            _bytesAtLastTick = _bytes;
+        }
+    }
 
     public StallMonitor(ILogSink log, TimeProvider? time = null)
     {
@@ -90,6 +103,7 @@ public sealed class StallMonitor : IDisposable
 
         lock (_gate)
         {
+            if (!_active) return;
             if (_bytes != _bytesAtLastTick)
             {
                 _bytesAtLastTick = _bytes;

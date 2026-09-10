@@ -144,6 +144,25 @@ public sealed class CommandTests
         Assert.DoesNotContain("abc123", redacted);
     }
 
+    [Fact]
+    public void Checking_and_finalizing_are_immediate_nonterminal_jsonl_events()
+    {
+        var request = CommandParser.Parse(["generate", "preset", "--text", "Hello"]);
+        var stdout = new StringWriter();
+        var output = new CliOutput(stdout, new StringWriter(), false, true);
+        var emitter = new ProgressEmitter(output.Event, new FrozenTime());
+        foreach (var phase in new[] { "checking", "loading", "generating", "finalizing" })
+            emitter.Report(CliProtocol.Event(request, phase));
+        output.Finish(CliProtocol.Result(request));
+        var types = stdout.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(line =>
+            {
+                using var json = JsonDocument.Parse(line);
+                return json.RootElement.GetProperty("type").GetString();
+            });
+        Assert.Equal(new[] { "checking", "loading", "generating", "finalizing", "result" }, types);
+    }
+
     [Theory]
     [InlineData("voices list")]
     [InlineData("history list")]

@@ -153,6 +153,30 @@ public sealed class EngineTests : IAsyncLifetime
     private static GenerateRequest Request(string text = "Hello there.") =>
         new(TtsMode.PresetVoice, text, "english", "ryan");
 
+    [Fact]
+    public async Task Preload_retains_download_receipts_and_generation_has_explicit_phase_boundaries()
+    {
+        var synth = new FakeSynthesizer();
+        await using var engine = NewEngine(synth);
+        var snapshots = new List<EngineStatus>();
+        engine.StatusChanged += (_, status) => snapshots.Add(status);
+        await engine.PreloadAsync(TtsMode.PresetVoice, null, default);
+        Assert.Contains(snapshots, s => s.Download is { BytesReceived: > 0, LastReceivedAt: not null });
+        Assert.Contains(snapshots, s => s.State == EngineState.Checking);
+        Assert.DoesNotContain(snapshots, s => s.State == EngineState.Finalizing);
+        Assert.Null(engine.LastOutputPath);
+
+        snapshots.Clear();
+        var result = await engine.GenerateAsync(Request(), null, default);
+        var states = snapshots.Select(s => s.State).ToList();
+        Assert.Equal(EngineState.Checking, states[0]);
+        Assert.True(states.IndexOf(EngineState.Generating) < states.IndexOf(EngineState.Finalizing));
+        Assert.True(states.IndexOf(EngineState.Finalizing) < states.IndexOf(EngineState.Idle));
+        Assert.True(File.Exists(result.OutputPath));
+        Assert.Equal(1, synth.Loads);
+        Assert.Equal(TtsMode.PresetVoice, engine.LoadedMode);
+    }
+
     // ---- Saying what a long run is doing ----
 
     [Fact]

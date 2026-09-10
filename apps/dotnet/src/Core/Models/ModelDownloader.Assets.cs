@@ -82,12 +82,13 @@ public sealed partial class ModelDownloader
             var plan = plans[i];
             var index = i + 1;
             long itemCompleted = plan.ExistingBytes;
-            void Report(DownloadPhase phase, double rate = 0, string? file = null)
+            void Report(DownloadPhase phase, double rate = 0, string? file = null,
+                DownloadProgress? download = null)
             {
                 highWater = Math.Max(highWater, completed + (plan.Complete ? 0 : itemCompleted));
                 var eta = total.HasValue && rate > 0 ? Math.Max(0, total.Value - highWater) / rate : (double?)null;
                 progress?.Report(new(phase, plan.Asset.Id, index, plans.Count, highWater, total,
-                    rate, eta, file, itemCompleted, plan.Total));
+                    rate, eta, file, itemCompleted, plan.Total, download));
             }
             if (!plan.Complete)
             {
@@ -95,7 +96,7 @@ public sealed partial class ModelDownloader
                     new AssetProgress(p =>
                     {
                         itemCompleted = Math.Max(itemCompleted, p.BytesReceived + p.BytesReused);
-                        Report(p.Phase, p.BytesPerSecond, p.CurrentFile);
+                        Report(p.Phase, p.BytesPerSecond, p.CurrentFile, p);
                     }), ct, plan.Sizes).ConfigureAwait(false);
             }
             Report(DownloadPhase.Verifying);

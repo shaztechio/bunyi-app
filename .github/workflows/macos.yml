@@ -56,6 +56,10 @@ jobs:
         run: xcodebuild -downloadComponent MetalToolchain || true
       - name: Generate project
         run: xcodegen generate
+      - name: Check measured download feedback
+        run: |
+          swiftc -parse-as-library ModelDownloadProgress.swift HTTPFileDownloader.swift ModelFileTransfer.swift tests/DownloadProgressChecks.swift tests/ModelFileTransferChecks.swift -o /tmp/bunyi-download-checks
+          python3 tests/check-model-transfer.py /tmp/bunyi-download-checks
       - name: Build
         run: |
           xcodebuild -project Bunyi.xcodeproj \

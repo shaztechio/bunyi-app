@@ -127,6 +127,7 @@ Every event contains `schemaVersion`, `type`, `operation`, `operationId`, and
 `timestamp`. Progress event types are:
 
 - `queued`;
+- `checking`;
 - `resolving`;
 - `sizing`;
 - `downloading`;
@@ -134,10 +135,15 @@ Every event contains `schemaVersion`, `type`, `operation`, `operationId`, and
 - `loading`;
 - `transcribing`;
 - `generating`;
+- `finalizing`;
 - `playing`;
 - `stopping`.
 
 Foreground `server run` also emits `ready` after binding its endpoint.
+
+`checking` identifies local model preparation; `finalizing` identifies writing
+the generated audio. Neither means the operation is complete: only the terminal
+`result` confirms success. These stages also apply to the resident server's jobs.
 
 A download event may contain:
 

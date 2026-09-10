@@ -35,6 +35,9 @@ targets:
       - LogsView.swift
       - HistoryView.swift
       - HTTPFileDownloader.swift
+      - ModelFileTransfer.swift
+      - ModelDownloadProgress.swift
+      - DownloadProgressView.swift
       - DownloadedModels.swift
       - Doctor.swift
       - DoctorView.swift

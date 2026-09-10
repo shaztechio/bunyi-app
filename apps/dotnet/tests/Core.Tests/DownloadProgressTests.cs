@@ -103,6 +103,20 @@ public class DownloadProgressTests
 public class StallMonitorTests
 {
     [Fact]
+    public void Checking_local_files_does_not_report_a_network_stall()
+    {
+        var time = new FakeTimeProvider();
+        var log = new RecordingLog();
+        using var monitor = new StallMonitor(log, time);
+        monitor.SetActive(false);
+        time.Advance(TimeSpan.FromMinutes(2));
+        Assert.Empty(log.Lines);
+        monitor.SetActive(true);
+        time.Advance(StallMonitor.StallAfter);
+        Assert.Contains(log.Lines, line => line.Contains("stalled"));
+    }
+
+    [Fact]
     public void Progress_is_logged_every_ten_seconds_while_bytes_arrive()
     {
         var time = new FakeTimeProvider();

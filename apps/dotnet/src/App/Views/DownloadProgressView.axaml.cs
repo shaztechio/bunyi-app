@@ -12,14 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using Bunyi.Core.Models;
+using Avalonia.Controls;
 
-namespace Bunyi.Core.Runtime;
+namespace Bunyi.App.Views;
 
-public sealed record DownloadAsset(string Id, ModelSource Source, ModelLayout Layout);
-public sealed record DownloadedAsset(string Id, string Folder, string Source, bool IsComplete);
-public sealed record AggregateDownloadProgress(DownloadPhase Phase, string ItemId,
-    int ItemIndex, int ItemCount, long BytesCompleted, long? BytesTotal,
-    double RateBytesPerSecond = 0, double? EtaSeconds = null, string? CurrentFile = null,
-    long ItemBytesCompleted = 0, long? ItemBytesTotal = null,
-    DownloadProgress? Download = null);
+public partial class DownloadProgressView : UserControl
+{
+    public DownloadProgressView() => InitializeComponent();
+}
