@@ -11,6 +11,11 @@ differ (MLX `.safetensors` on macOS vs ONNX on the .NET app).
 Everything the app keeps for a user lives under one root, with fixed subfolder
 names so a folder is recognisable across platforms:
 
+The table below describes the desktop apps. The standalone macOS CLI cannot
+enter the desktop app's private sandbox container; its corresponding default
+root and explicit sharing rules are defined in [`CLI.md`](CLI.md) §9. Windows
+and Linux CLI builds use the roots below unchanged.
+
 | | macOS | Windows | Linux |
 |---|---|---|---|
 | Data root | `~/Library/Application Support/Bunyi` (inside the sandbox container) | `%LOCALAPPDATA%\Bunyi` | `$XDG_DATA_HOME/Bunyi`, defaulting to `~/.local/share/Bunyi` |
