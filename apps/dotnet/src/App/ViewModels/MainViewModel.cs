@@ -996,7 +996,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         EngineState.Checking => "Checking the voice model…",
         EngineState.Finalizing => "Preparing your audio file…",
         EngineState.Downloading => status.Download is { } p
-            ? p.Phase == DownloadPhase.Downloading ? "Downloading voice model — speech has not started" : p.Human()
+            ? p.Phase == DownloadPhase.Downloading ? $"Downloading {status.DownloadResource} — speech has not started" : p.Human()
             : status.Detail ?? "Getting the model…",
         EngineState.Loading => "Loading the model…",
         EngineState.Transcribing => "Listening to the recording…",

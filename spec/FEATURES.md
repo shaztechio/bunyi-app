@@ -376,8 +376,8 @@ explain itself in the main window, including when History is selected:
   progress within a file counts toward the whole, and that "no new data"
   means no bytes arrived, not no growth on disk.
 - **Progress logging**: log measured network bytes every 10 s during
-  transfer and warn after 30 s without incoming data. Use the same receipt
-  timestamps as the live panel above; local file checks and hashing suspend
+  transfer and warn after 30 s without incoming data, evaluated at the logging
+  interval. Use the same network receipts as the live panel; local checks and hashing suspend
   network-stall detection.
 - **tokenizer.json auto-fetch**: if a downloaded model lacks the tokenizer
   the runtime requires, fetch a compatible one (from the self-host base
