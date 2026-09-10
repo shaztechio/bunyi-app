@@ -154,6 +154,9 @@ public partial class App : Application
                 engine, new SoundFlowAudioPlayer(log), log,
                 voices: new VoiceLibrary(log))
             {
+                ModelComplete = mode => ModelDownloader.Inspect(
+                    ModelDownloader.FolderFor(SourceFor(mode), settingsStore.ResolveModelsFolder(Current())),
+                    ModelLayout.For(mode)).IsComplete,
                 Settings = settingsViewModel,
                 Doctor = RunDoctor,
                 Logs = new LogsViewModel(log),
@@ -181,7 +184,7 @@ public partial class App : Application
                         // inside a backup, where the restore looks for exactly
                         // one.
                         settingsStore.ResolveModelsFolder(Current()),
-                        null,
+                        new InlineProgress<DownloadProgress>(viewModel.ReportTranscriptionDownload),
                         ct);
 
                     return Path.Combine(folder, "ggml-base.bin");

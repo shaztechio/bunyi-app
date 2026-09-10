@@ -42,6 +42,8 @@ public enum EngineState
     Stopping,
 
     Error,
+    Checking,
+    Finalizing,
 }
 
 /// <summary>A snapshot of what the engine is doing.</summary>
@@ -50,7 +52,9 @@ public sealed record EngineStatus(
     double Progress = 0,
     string? Detail = null,
     int Frames = 0,
-    string? Message = null)
+    string? Message = null,
+    DownloadProgress? Download = null,
+    string DownloadResource = "voice model")
 {
     /// <summary>
     /// Whether work is in progress. Everything that starts a run is gated on

@@ -53,6 +53,10 @@ public enum FileOutcome
 /// <summary>The result of asking for one file.</summary>
 public sealed record FileResult(FileOutcome Outcome, long BytesTransferred, long BytesOnDisk);
 
+/// <summary>Actual transfer counters; reused bytes never represent network activity.</summary>
+public sealed record FileTransferProgress(
+    DownloadPhase Phase, long Received, long Reused, long? Total);
+
 /// <summary>
 /// Downloads one file, reporting bytes as they arrive and resuming a partial
 /// transfer where the server allows it.
@@ -92,14 +96,17 @@ public sealed class HttpFileDownloader(HttpClient http, ILogSink log)
         string? expectedSha256,
         long? expectedSize,
         Action<long>? onBytes,
-        CancellationToken ct)
+        CancellationToken ct,
+        Action<FileTransferProgress>? onProgress = null)
     {
         ArgumentNullException.ThrowIfNull(uri);
         ArgumentException.ThrowIfNullOrWhiteSpace(destination);
 
+        onProgress?.Invoke(new(DownloadPhase.Verifying, 0, 0, expectedSize));
         if (await CanReuseAsync(destination, expectedSha256, expectedSize, ct).ConfigureAwait(false))
         {
             var length = new FileInfo(destination).Length;
+            TryDelete(destination + PartialExtension);
             return new FileResult(FileOutcome.Reused, 0, length);
         }
 
@@ -116,6 +123,7 @@ public sealed class HttpFileDownloader(HttpClient http, ILogSink log)
             if (expectedSize is { } size && resumeFrom >= size) resumeFrom = 0;
         }
 
+        onProgress?.Invoke(new(DownloadPhase.Downloading, 0, 0, expectedSize));
         using var request = new HttpRequestMessage(HttpMethod.Get, uri);
         if (resumeFrom > 0) request.Headers.Range = new RangeHeaderValue(resumeFrom, null);
 
@@ -134,23 +142,31 @@ public sealed class HttpFileDownloader(HttpClient http, ILogSink log)
         // sending the whole file, so whatever is on disk must be discarded
         // rather than appended to.
         var appending = resumeFrom > 0 && response.StatusCode == HttpStatusCode.PartialContent;
+        if (appending && response.Content.Headers.ContentRange?.From != resumeFrom)
+            throw new HttpRequestException("The server returned an unexpected resume offset. Try downloading again.");
         if (resumeFrom > 0 && !appending)
         {
             _log.Log($"{Path.GetFileName(destination)}: the server ignored the resume request, starting again.");
             resumeFrom = 0;
         }
 
-        var hash = expectedSha256 is null ? null : IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        var totalSize = response.Content.Headers.ContentEncoding.Count == 0
+            ? response.Content.Headers.ContentRange?.Length
+                ?? (response.Content.Headers.ContentLength is { } bodyLength ? bodyLength + resumeFrom : expectedSize)
+            : expectedSize;
+        using var hash = expectedSha256 is null ? null : IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
 
         // Hashing what is already on disk, so the digest covers the whole file
         // and not merely the part fetched this time.
         if (appending && hash is not null)
         {
+            onProgress?.Invoke(new(DownloadPhase.Verifying, 0, resumeFrom, totalSize));
             await using var existing = File.OpenRead(partial);
             await HashStreamAsync(existing, hash, ct).ConfigureAwait(false);
         }
 
         var transferred = 0L;
+        onProgress?.Invoke(new(DownloadPhase.Downloading, 0, resumeFrom, totalSize));
         await using (var file = new FileStream(
             partial,
             appending ? FileMode.Append : FileMode.Create,
@@ -167,14 +183,17 @@ public sealed class HttpFileDownloader(HttpClient http, ILogSink log)
                 var read = await network.ReadAsync(buffer, ct).ConfigureAwait(false);
                 if (read == 0) break;
 
-                await file.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
-                hash?.AppendData(buffer, 0, read);
-
                 transferred += read;
                 onBytes?.Invoke(read);
+                onProgress?.Invoke(new(DownloadPhase.Downloading, transferred, resumeFrom, totalSize));
+                await file.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
+                hash?.AppendData(buffer, 0, read);
             }
         }
 
+        onProgress?.Invoke(new(DownloadPhase.Verifying, transferred, resumeFrom, totalSize));
+        if (totalSize is { } requiredSize && transferred + resumeFrom != requiredSize)
+            throw new HttpRequestException("The model file download ended before the expected size. Try again to continue the download.");
         if (hash is not null && expectedSha256 is not null)
         {
             var actual = Convert.ToHexStringLower(hash.GetHashAndReset());

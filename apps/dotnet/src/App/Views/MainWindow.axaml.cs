@@ -414,6 +414,7 @@ public partial class MainWindow : Window
 
             // A source or folder may have changed under the engine.
             model.Settings!.Reload();
+            model.RefreshModelNotice();
         };
         _settings.Show(this);
     }

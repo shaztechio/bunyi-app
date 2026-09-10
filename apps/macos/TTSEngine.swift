@@ -65,6 +65,8 @@ enum TTSMode: String, CaseIterable, Identifiable {
 enum EngineStatus: Equatable {
     case idle
     case downloading(Double)      // 0...1
+    case checking
+    case finalizing
     case loading
     case transcribing             // auto-transcribing the clone reference
     case generating(Int)          // codec tokens emitted so far
@@ -137,6 +139,7 @@ final class TTSEngine {
     }
     /// Human-readable download detail ("42% — about 3.1 MB/s, ~6 min left").
     var downloadDetail: String?
+    var downloadFeedback: ModelDownloadProgress?
     /// Transcript produced by auto-transcription, so the UI can show it and
     /// save it with the voice instead of storing an empty string.
     var lastReferenceTranscript: String?
@@ -149,15 +152,6 @@ final class TTSEngine {
     private var model: Qwen3TTSModel?
 
     private let log = LogStore.shared
-    private var downloadStart = Date()
-    private var downloadApproxBytes: Double = 0
-    private var lastLoggedPercent = -1
-    /// When bytes last arrived. The stall detector needs this because a
-    /// download task buffers to the system temp directory and only moves the
-    /// finished file into the models folder — so folder size, which is all the
-    /// monitor could see, stays flat for minutes on a multi-gigabyte file and
-    /// a healthy transfer looks dead.
-    private var lastDownloadActivity = Date()
 
     /// Output lives in the app's own Application Support folder: the sandbox
     /// grants it without extra entitlements (unlike ~/Music), and "Show in
@@ -315,6 +309,7 @@ final class TTSEngine {
 
         log.log("Preparing \(mode.rawValue) — \(repoID)")
         let source = mode.effectiveSource
+        status = .checking
         let localDir = try await download(mode: mode, source: source)
         try await ensureTokenizerJSON(in: localDir, source: source)
 
@@ -375,42 +370,27 @@ final class TTSEngine {
     }
 
     private func downloadFromHub(mode: TTSMode, repoID: String) async throws -> URL {
-        // The models root, which HubApi and the disk monitor both want; the
-        // model's own folder sits under it.
-        let base = ModelsLocation.current()
         let localDir = Self.modelDirectory(for: mode)
-
-        // Pre-downloaded (or previously completed) models are used as-is,
-        // without touching the network — this also makes the app fully
-        // offline once a model is in place.
         if Self.hasCompleteModel(at: localDir) {
             log.log("Using existing model files at \(localDir.path)")
             return localDir
         }
-
-        let hub = HubApi(downloadBase: base)
-        status = .downloading(0)
-        downloadStart = Date()
-        downloadApproxBytes = mode.approxDownloadBytes
-        lastLoggedPercent = -1
-        lastDownloadActivity = Date()
-        log.log("Checking model files (already-downloaded files are skipped)")
-        let monitor = startDiskMonitor(at: base)
-        defer { monitor.cancel() }
-        // Snapshot is incremental: already-downloaded files are skipped, so
-        // this is fast when the model is cached.
-        let dir = try await hub.snapshot(
-            from: Hub.Repo(id: repoID),
-            matching: ["*.safetensors", "*.json", "*.model", "*.txt"]
-        ) { @Sendable [weak self] progress in
-            let fraction = progress.fractionCompleted
-            Task { @MainActor in
-                self?.noteDownloadProgress(fraction)
-            }
-        }
-        downloadDetail = nil
-        log.log("Model files ready at \(dir.path)")
-        return dir
+        status = .checking
+        // Keep Hub's repository discovery and glob semantics, but receive files
+        // through our byte-reporting transport. Snapshot reports file-weighted
+        // fractions and cannot identify a one-byte receipt or the active file.
+        let paths = try await HubApi(downloadBase: ModelsLocation.current()).getFilenames(
+            from: Hub.Repo(id: repoID), matching: ["*.safetensors", "*.json", "*.model", "*.txt"])
+        let files = paths.compactMap { path -> ManifestEntry? in
+            guard let safe = Self.safeRelativePath(path) else { return nil }
+            return ManifestEntry(path: safe, sha256: nil)
+        }.sorted { $0.path < $1.path }
+        guard !files.isEmpty else { throw TTSError.selfHostIncomplete }
+        let base = URL(string: "https://huggingface.co")!
+            .appendingPathComponent(repoID).appendingPathComponent("resolve/main")
+        try await downloadEntries(files, base: base, into: localDir, allRequired: true)
+        guard Self.hasCompleteModel(at: localDir) else { throw TTSError.selfHostIncomplete }
+        return localDir
     }
 
     // MARK: Self-hosted download
@@ -438,43 +418,109 @@ final class TTSEngine {
 
     private func downloadFromBaseURL(mode: TTSMode, base: URL) async throws -> URL {
         let localDir = Self.modelDirectory(for: mode)
-
-        if Self.hasCompleteModel(at: localDir) {
-            log.log("Using existing model files at \(localDir.path)")
-            return localDir
-        }
-
-        status = .downloading(0)
-        downloadStart = Date()
-        downloadApproxBytes = mode.approxDownloadBytes
-        lastLoggedPercent = -1
-        lastDownloadActivity = Date()
-
+        if Self.hasCompleteModel(at: localDir) { return localDir }
+        status = .checking
         let files = try await fileList(base: base)
-        log.log("Downloading \(files.count) files from \(base.absoluteString)")
-        try FileManager.default.createDirectory(
-            at: localDir, withIntermediateDirectories: true)
-        let monitor = startDiskMonitor(at: localDir)
-        defer { monitor.cancel() }
-
-        for (index, entry) in files.enumerated() {
-            try Task.checkCancellation()
-            try await downloadFile(entry: entry, base: base, into: localDir,
-                                   fileIndex: index, fileCount: files.count)
-            noteDownloadProgress(Double(index + 1) / Double(files.count))
-        }
-
-        downloadDetail = nil
-        guard Self.hasCompleteModel(at: localDir) else {
-            throw TTSError.selfHostIncomplete
-        }
-        log.log("Model files ready at \(localDir.path)")
+        try await downloadEntries(files, base: base, into: localDir)
+        guard Self.hasCompleteModel(at: localDir) else { throw TTSError.selfHostIncomplete }
         return localDir
+    }
+
+    private func downloadEntries(_ files: [ManifestEntry], base: URL, into localDir: URL, allRequired: Bool = false) async throws {
+        try FileManager.default.createDirectory(at: localDir, withIntermediateDirectories: true)
+        downloadFeedback = ModelDownloadProgress(phase: .sizing)
+        status = .downloading(0)
+        defer { downloadFeedback = nil; downloadDetail = nil }
+        var sizes: [String: Int64] = [:]
+        var present = Set(files.map(\.path))
+        for entry in files {
+            try Task.checkCancellation()
+            sizes[entry.path] = await Self.remoteSize(of: base.appendingPathComponent(entry.path))
+        }
+        func total() -> Int64 { present.allSatisfy { sizes[$0] != nil } ? sizes.values.reduce(0, +) : 0 }
+        var completed: Int64 = 0
+        let mailbox = DownloadReceiptMailbox()
+        for entry in files {
+            try Task.checkCancellation()
+            let dest = localDir.appendingPathComponent(entry.path)
+            let expected = sizes[entry.path]
+            downloadFeedback = ModelDownloadProgress(phase: .checking, available: completed,
+                total: total(), file: entry.path, fileTotal: expected ?? 0)
+            let reused: Int64? = try await Task.detached {
+                guard let size = try? dest.resourceValues(forKeys: [.fileSizeKey]).fileSize, size > 0 else { return nil }
+                if let digest = entry.sha256 {
+                    return try HTTPFileDownloader.sha256Hex(of: dest) == digest ? Int64(size) : nil
+                }
+                return expected == Int64(size) ? Int64(size) : nil
+            }.value
+            if let reused {
+                completed += reused; sizes[entry.path] = reused
+                try? FileManager.default.removeItem(at: dest.appendingPathExtension(HTTPFileDownloader.partialExtension))
+                log.log("Have \(entry.path) already (\(reused) bytes)")
+                continue
+            }
+            let otherPaths = present.filter { $0 != entry.path }
+            let otherTotal: Int64? = otherPaths.allSatisfy { sizes[$0] != nil }
+                ? otherPaths.reduce(Int64(0)) { $0 + (sizes[$1] ?? 0) } : nil
+            mailbox.begin(file: entry.path, completed: completed, total: total(),
+                          fileTotal: expected ?? 0, otherTotal: otherTotal)
+            downloadFeedback = mailbox.snapshot()
+            let ticker = Task { @MainActor [weak self] in
+                var loggedAt = Date()
+                var warned = false
+                while !Task.isCancelled {
+                    do { try await Task.sleep(for: .milliseconds(250)) } catch { break }
+                    guard let self, !Task.isCancelled else { break }
+                    if self.status == .stopping { break }
+                    let value = mailbox.snapshot()
+                    self.downloadFeedback = value
+                    self.status = .downloading(value.fraction)
+                    let now = Date()
+                    if value.stalled(at: now) && !warned {
+                        self.log.log("No new data for 30 s — the connection may be stalled")
+                        warned = true
+                    } else if !value.stalled(at: now) { warned = false }
+                    if now.timeIntervalSince(loggedAt) >= 10 {
+                        self.log.log("Download: \(value.received.formatted()) bytes received; \(value.file ?? "model files")")
+                        loggedAt = now
+                    }
+                }
+            }
+            let code: Int
+            do {
+                code = try await ModelFileTransfer(destination: dest, digest: entry.sha256,
+                    expected: expected, mailbox: mailbox).run(from: base.appendingPathComponent(entry.path))
+            } catch { ticker.cancel(); throw error }
+            ticker.cancel()
+            try Task.checkCancellation()
+            downloadFeedback = mailbox.snapshot()
+            if code != 200 {
+                guard code == 404 && !allRequired && !Self.requiredModelFiles.contains(entry.path) else {
+                    throw TTSError.selfHostFileMissing(entry.path, code)
+                }
+                present.remove(entry.path); sizes.removeValue(forKey: entry.path)
+                continue
+            }
+            let size = Int64(try dest.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0)
+            completed += size; sizes[entry.path] = size
+        }
+        // A previous Hub snapshot may have left partial cache transfers. Only
+        // after all replacement files succeed, retire its obsolete scratch files.
+        try Self.retireLegacyTransfers(in: localDir)
+    }
+
+    nonisolated private static func retireLegacyTransfers(in localDir: URL) throws {
+        let legacyCache = localDir.appendingPathComponent(".cache/huggingface/download")
+        if let old = FileManager.default.enumerator(at: legacyCache, includingPropertiesForKeys: nil) {
+            for case let url as URL in old where url.pathExtension == "incomplete" {
+                try FileManager.default.removeItem(at: url)
+            }
+        }
     }
 
     /// One file a self-hosted server publishes, and its digest if it published
     /// one.
-    struct ManifestEntry {
+    struct ManifestEntry: Sendable {
         let path: String
         /// Lowercase hex SHA-256, or nil when the manifest does not carry one.
         let sha256: String?
@@ -596,64 +642,6 @@ final class TTSEngine {
         return path
     }
 
-    /// Downloads one file, reporting progress within it.
-    ///
-    /// `fileFraction` places this file in the whole job: without it the bar only
-    /// moves when a file finishes, and one file is nearly the entire model, so
-    /// it appeared frozen for minutes on end.
-    private func downloadFile(entry: ManifestEntry, base: URL, into localDir: URL,
-                              fileIndex: Int, fileCount: Int) async throws {
-        let relPath = entry.path
-        let fileURL = base.appendingPathComponent(relPath)
-        let dest = localDir.appendingPathComponent(relPath)
-
-        // Already have it? Skip. Without this, stopping a download and starting
-        // again fetched every file from the beginning — several gigabytes to
-        // re-transfer because the last one was interrupted. The Hugging Face
-        // path has always been incremental; this one was not.
-        //
-        // With a digest, the digest decides. Matching sizes were the best test
-        // available before, but they are exactly the case a corrupt file
-        // survives: right length, wrong bytes, kept forever because "it exists
-        // and it is the right size". Hashing 11.6 GB costs a few seconds, and
-        // only on a re-download.
-        if FileManager.default.fileExists(atPath: dest.path) {
-            if let expected = entry.sha256 {
-                if let actual = try? HTTPFileDownloader.sha256Hex(of: dest),
-                   actual == expected {
-                    log.log("Have \(relPath) already (checksum matches)")
-                    return
-                }
-                log.log("Re-fetching \(relPath) — on disk but the checksum does not match")
-            } else if let local = try? FileManager.default
-                        .attributesOfItem(atPath: dest.path)[.size] as? Int64,
-                      let remote = await Self.remoteSize(of: fileURL), local == remote {
-                log.log("Have \(relPath) already (\(local.formatted(.byteCount(style: .file))))")
-                return
-            }
-        }
-
-        let code = try await HTTPFileDownloader.download(
-            from: fileURL, to: dest, expectedSHA256: entry.sha256
-        ) {
-            [weak self] received, expected in
-            guard expected > 0 else { return }
-            let within = Double(received) / Double(expected)
-            let overall = (Double(fileIndex) + within) / Double(fileCount)
-            Task { @MainActor [weak self] in
-                self?.noteDownloadProgress(overall)
-            }
-        }
-
-        guard code == 200 else {
-            if Self.requiredModelFiles.contains(relPath) {
-                throw TTSError.selfHostFileMissing(relPath, code)
-            }
-            log.log("Skipped \(relPath) (HTTP \(code))")
-            return
-        }
-    }
-
     /// The server's size for a file, or nil if it will not say.
     ///
     /// A HEAD per file is a handful of small round trips against a download
@@ -668,6 +656,7 @@ final class TTSEngine {
     nonisolated private static func remoteSize(of url: URL) async -> Int64? {
         var request = URLRequest(url: url)
         request.httpMethod = "HEAD"
+        request.setValue("identity", forHTTPHeaderField: "Accept-Encoding")
         guard let (_, response) = try? await URLSession.shared.data(for: request),
               let http = response as? HTTPURLResponse,
               http.statusCode == 200,
@@ -710,11 +699,15 @@ final class TTSEngine {
         candidates.append(Self.tokenizerJSONURL)
 
         for url in candidates {
-            if let (tmp, response) = try? await URLSession.shared.download(from: url),
-               (response as? HTTPURLResponse)?.statusCode == 200 {
-                try FileManager.default.moveItem(at: tmp, to: dest)
+            do {
+                try await downloadEntries([ManifestEntry(path: "tokenizer.json", sha256: nil)],
+                    base: url.deletingLastPathComponent(), into: dir, allRequired: true)
                 log.log("Added tokenizer.json to \(dir.path)")
                 return
+            } catch is CancellationError { throw CancellationError() }
+            catch let error as URLError where error.code == .cancelled { throw error }
+            catch {
+                log.log("Tokenizer source failed: \(error.localizedDescription)")
             }
         }
         throw TTSError.tokenizerDownloadFailed
@@ -762,83 +755,6 @@ final class TTSEngine {
             }
         }
         return true
-    }
-
-    /// The Hub fraction only moves when a whole file completes, so during a
-    /// multi-GB safetensors file it looks frozen. Watching bytes on disk
-    /// tells stalled and slow apart.
-    private func startDiskMonitor(at dir: URL) -> Task<Void, Never> {
-        Task { [log, weak self] in
-            var lastSize: Int64 = -1
-            var lastChange = Date()
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(10))
-                if Task.isCancelled { break }
-                let size = Self.directorySize(dir)
-                if size != lastSize {
-                    lastSize = size
-                    lastChange = Date()
-                    log.log("\(size.formatted(.byteCount(style: .file))) on disk in the models folder")
-                    continue
-                }
-                // Bytes still arriving counts as progress even though the file
-                // has not landed yet. Without this the warning fires on every
-                // multi-gigabyte download, and a warning that cries wolf is
-                // worse than none — it trains people to ignore the real one.
-                let receiving = await MainActor.run {
-                    guard let self else { return false }
-                    return Date().timeIntervalSince(self.lastDownloadActivity) < 30
-                }
-                if receiving {
-                    lastChange = Date()
-                } else if Date().timeIntervalSince(lastChange) >= 30 {
-                    lastChange = Date()
-                    log.log("No new data for 30 s — the connection may be stalled")
-                }
-            }
-        }
-    }
-
-    nonisolated private static func directorySize(_ dir: URL) -> Int64 {
-        var total: Int64 = 0
-        let keys: [URLResourceKey] = [.totalFileAllocatedSizeKey, .fileSizeKey]
-        if let enumerator = FileManager.default.enumerator(
-            at: dir, includingPropertiesForKeys: keys) {
-            for case let url as URL in enumerator {
-                let values = try? url.resourceValues(forKeys: Set(keys))
-                total += Int64(values?.totalFileAllocatedSize ?? values?.fileSize ?? 0)
-            }
-        }
-        return total
-    }
-
-    private func noteDownloadProgress(_ fraction: Double) {
-        status = .downloading(fraction)
-        lastDownloadActivity = Date()
-        let elapsed = Date().timeIntervalSince(downloadStart)
-        guard fraction > 0.001, elapsed > 1 else { return }
-
-        // The Hub API only reports a fraction, so rate and ETA are estimates
-        // based on the model's approximate size. Cached files complete
-        // instantly and inflate the early numbers; they settle quickly.
-        let rate = downloadApproxBytes * fraction / elapsed
-        let secondsLeft = elapsed * (1 - fraction) / fraction
-        let percent = Int(fraction * 100)
-        let detail = "\(percent)% — about "
-            + "\(Int64(rate).formatted(.byteCount(style: .file)))/s, "
-            + Self.etaText(secondsLeft)
-        downloadDetail = detail
-
-        if percent / 5 != lastLoggedPercent / 5 || percent == 100 {
-            lastLoggedPercent = percent
-            log.log("Download \(detail)")
-        }
-    }
-
-    private static func etaText(_ seconds: Double) -> String {
-        seconds < 90
-            ? "under a minute left"
-            : "about \(Int((seconds / 60).rounded())) min left"
     }
 
     // MARK: Generation
@@ -1021,6 +937,7 @@ final class TTSEngine {
             //
             // Same unchecked box as the clone path above, for the same reason:
             // MLXArray isn't Sendable, and only one generation runs at a time.
+            status = .finalizing
             let boxed = Unchecked(value: audio)
             let rate = Double(model.sampleRate)
             // One UI field means two different things: the delivery
@@ -1071,7 +988,15 @@ final class TTSEngine {
             // most likely to have been killed by memory pressure in the first
             // place.
             releaseGenerationMemory()
-            status = .error(error.localizedDescription)
+            let stage: String
+            switch status {
+            case .downloading: stage = "Model download failed"
+            case .loading: stage = "Model loading failed"
+            case .checking: stage = "Model preparation failed"
+            case .finalizing: stage = "Preparing the audio file failed"
+            default: stage = "Speech generation failed"
+            }
+            status = .error("\(stage). \(error.localizedDescription)")
         }
     }
 
@@ -1092,6 +1017,7 @@ final class TTSEngine {
     /// actually finished. The wait is real work, not an artificial delay.
     func stop() {
         downloadDetail = nil
+        downloadFeedback = nil
         // Only shows the intent. `generate` always runs its cancellation path
         // afterwards, and that is what decides when idle is true — doing the
         // wait here instead would race with it, because the work to wait on is

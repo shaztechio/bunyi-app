@@ -142,7 +142,8 @@ limitations under the License.
       child is collapsed still gets its share of RowSpacing, which would leave a
       gap where the hidden card used to be.
     -->
-    <Grid Grid.Row="1" RowDefinitions="Auto,*,Auto,Auto">
+    <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="{Binding ContentScrollMode}">
+    <Grid RowDefinitions="Auto,*,Auto,Auto">
 
       <!--
         §1 opens "A segmented picker selects one of three modes"; §2a adds "A
@@ -457,11 +458,14 @@ limitations under the License.
                  IsVisible="{Binding !ModeIsAvailable}"
                  FontSize="12" Opacity="0.75" Margin="0,16,0,0" />
     </Grid>
+    </ScrollViewer>
     <!--
       Bottom bar: status, progress, and the Generate/Stop swap. Outside the
       disabled group so Stop stays pressable.
     -->
     <StackPanel Grid.Row="2" Spacing="8" Margin="0,16,0,0">
+      <TextBlock Text="{Binding ModelNotice}" IsVisible="{Binding NeedsModel}" TextWrapping="Wrap" FontSize="12" />
+      <views:DownloadProgressView DataContext="{Binding Download}" />
       <!--
         A bar only where there is something to measure. A download reports a
         fraction; loading a model and generating do not — and a bar pulsing
@@ -469,7 +473,7 @@ limitations under the License.
         measurement it does not have. macOS shows a spinner for exactly these
         phases.
       -->
-      <ProgressBar Minimum="0" Maximum="1" Value="{Binding Progress}"
+      <ProgressBar Name="LegacyProgress" Minimum="0" Maximum="1" Value="{Binding Progress}"
                    IsVisible="{Binding ShowProgressBar}" Height="4" />
       <Grid ColumnDefinitions="Auto,*,Auto">
         <Path Grid.Column="0" Classes="spinner" IsVisible="{Binding ShowSpinner}"

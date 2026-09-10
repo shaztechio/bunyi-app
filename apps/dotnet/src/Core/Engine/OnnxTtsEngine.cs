@@ -191,7 +191,7 @@ public sealed class OnnxTtsEngine : ITtsEngine
         // §2: starting a run clears the previous result, so nothing offers to
         // play the old audio while new audio is being made.
         ClearLastOutput();
-        Publish(new EngineStatus(EngineState.Downloading), progress);
+        Publish(new EngineStatus(EngineState.Checking), progress);
 
         var started = Stopwatch.StartNew();
 
@@ -251,7 +251,10 @@ public sealed class OnnxTtsEngine : ITtsEngine
                     // refusing every future run. Reporting inline keeps status
                     // updates ordered with respect to the work producing them.
                     new InlineProgress<DownloadProgress>(p => Publish(
-                        new EngineStatus(EngineState.Downloading, p.Fraction, p.Human()), progress)),
+                        new EngineStatus(
+                            p.Phase is DownloadPhase.Resolving or DownloadPhase.Done
+                                ? EngineState.Checking : EngineState.Downloading,
+                            p.Fraction, p.Human(), Download: p), progress)),
                     token).ConfigureAwait(false);
 
                 token.ThrowIfCancellationRequested();
@@ -301,6 +304,7 @@ public sealed class OnnxTtsEngine : ITtsEngine
                     effective = request with { Instruct = null };
                 }
 
+                Publish(new EngineStatus(EngineState.Finalizing), progress);
                 var path = WriteOutput(effective, audio, folder);
 
                 bool instructWasIgnored() =>
@@ -337,7 +341,15 @@ public sealed class OnnxTtsEngine : ITtsEngine
             // much as one that finished.
             _log.Log($"Generation failed: {ex}");
             Release();
-            Publish(new EngineStatus(EngineState.Error, Message: ex.Message), progress);
+            var stage = _status.State switch
+            {
+                EngineState.Downloading => "Model download failed",
+                EngineState.Loading => "Model loading failed",
+                EngineState.Finalizing => "Preparing the audio file failed",
+                EngineState.Checking => "Model preparation failed",
+                _ => "Speech generation failed",
+            };
+            Publish(new EngineStatus(EngineState.Error, Message: $"{stage}. {ex.Message}"), progress);
             SignalIdleWaiters();
             throw;
         }
@@ -362,7 +374,7 @@ public sealed class OnnxTtsEngine : ITtsEngine
 
             // Intent only. The run's own cancellation path decides when idle is
             // true; doing the wait here would race with it.
-            _status = _status with { State = EngineState.Stopping, Detail = null };
+            _status = _status with { State = EngineState.Stopping, Detail = null, Download = null };
         }
 
         StatusChanged?.Invoke(this, Status);
@@ -492,7 +504,11 @@ public sealed class OnnxTtsEngine : ITtsEngine
 
     private void Publish(EngineStatus status, IProgress<EngineStatus>? progress)
     {
-        lock (_gate) _status = status;
+        lock (_gate)
+        {
+            if (_run?.IsCancellationRequested == true && status.IsBusy && status.State != EngineState.Stopping) return;
+            _status = status;
+        }
         StatusChanged?.Invoke(this, status);
         progress?.Report(status);
     }

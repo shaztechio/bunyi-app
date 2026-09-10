@@ -155,7 +155,7 @@ public sealed class ModelDownloader(HttpClient http, ILogSink log, TimeProvider?
         CancellationToken ct)
     {
         // Sizes first, so the bar has a real denominator rather than counting
-        // files. Unknown sizes simply do not contribute (spec §3b).
+        // files. An unknown size makes the overall total unknown (spec §3b).
         progress?.Report(new DownloadProgress(DownloadPhase.Sizing, FilesTotal: files.Count));
 
         var sizes = new Dictionary<string, long>(StringComparer.Ordinal);
@@ -166,24 +166,33 @@ public sealed class ModelDownloader(HttpClient http, ILogSink log, TimeProvider?
             if (size is { } value) sizes[file.RelativePath] = value;
         }
 
-        var total = sizes.Values.Sum();
+        var remainingFiles = files.Select(f => f.RelativePath).ToHashSet(StringComparer.Ordinal);
+        long Total() => remainingFiles.All(sizes.ContainsKey) ? sizes.Values.Sum() : 0;
+        var total = Total();
         _log.Log($"Downloading {files.Count} files, about {DownloadProgress.Bytes(total)}.");
 
         using var monitor = new StallMonitor(_log, _time);
         var started = Stopwatch.StartNew();
         long received = 0, reused = 0;
         var done = 0;
+        long fileReceived = 0, fileReused = 0, fileTotal = 0;
+        DateTimeOffset? lastReceived = null, waitingSince = null;
+        var phase = DownloadPhase.Downloading;
 
         void Report(string? current) => progress?.Report(new DownloadProgress(
-            DownloadPhase.Downloading,
+            phase,
             BytesReceived: received,
-            BytesReused: reused,
-            BytesTotal: total,
+            BytesReused: reused + fileReused,
+            BytesTotal: Total(),
             BytesPerSecond: Rate(received, started.Elapsed),
-            Eta: Eta(received, reused, total, started.Elapsed),
+            Eta: Eta(received, reused + fileReused, Total(), started.Elapsed),
             CurrentFile: current,
             FilesDone: done,
-            FilesTotal: files.Count));
+            FilesTotal: files.Count,
+            CurrentFileBytes: fileReceived + fileReused,
+            CurrentFileTotal: fileTotal,
+            LastReceivedAt: lastReceived,
+            WaitingSince: waitingSince));
 
         foreach (var file in files)
         {
@@ -195,8 +204,9 @@ public sealed class ModelDownloader(HttpClient http, ILogSink log, TimeProvider?
                 continue;
             }
 
-            Report(file.RelativePath);
             sizes.TryGetValue(file.RelativePath, out var expected);
+            fileReceived = fileReused = 0;
+            fileTotal = expected;
 
             var result = await _files.FetchAsync(
                 UriFor(source, file.RelativePath),
@@ -207,9 +217,21 @@ public sealed class ModelDownloader(HttpClient http, ILogSink log, TimeProvider?
                 {
                     Interlocked.Add(ref received, bytes);
                     monitor.Add(bytes);
-                    Report(file.RelativePath);
+                    lastReceived = _time.GetUtcNow();
                 },
-                ct).ConfigureAwait(false);
+                ct,
+                p =>
+                {
+                    monitor.SetActive(p.Phase == DownloadPhase.Downloading);
+                    if (p.Phase == DownloadPhase.Downloading && phase != p.Phase)
+                        waitingSince = _time.GetUtcNow();
+                    phase = p.Phase;
+                    fileReceived = p.Received;
+                    fileReused = p.Reused;
+                    fileTotal = p.Total ?? 0;
+                    if (p.Total is > 0) sizes[file.RelativePath] = p.Total.Value;
+                    Report(file.RelativePath);
+                }).ConfigureAwait(false);
 
             switch (result.Outcome)
             {
@@ -219,15 +241,22 @@ public sealed class ModelDownloader(HttpClient http, ILogSink log, TimeProvider?
                     // Best-effort by design: single-shard repos lack an index,
                     // and an absent tokenizer is backfilled later.
                     _log.Log($"Skipped {file.RelativePath} (not on the server).");
+                    remainingFiles.Remove(file.RelativePath);
+                    sizes.Remove(file.RelativePath);
                     break;
                 case FileOutcome.Reused:
-                    reused += result.BytesOnDisk;
                     _log.Log($"Have {file.RelativePath} already ({DownloadProgress.Bytes(result.BytesOnDisk)}).");
                     break;
             }
 
+            reused += result.BytesOnDisk - result.BytesTransferred;
+            fileReused = 0;
+            fileReceived = result.BytesOnDisk;
+            if (result.BytesOnDisk > 0) sizes[file.RelativePath] = result.BytesOnDisk;
+            fileTotal = result.BytesOnDisk;
             done++;
-            Report(null);
+            phase = DownloadPhase.Verifying;
+            Report(file.RelativePath);
         }
     }
 

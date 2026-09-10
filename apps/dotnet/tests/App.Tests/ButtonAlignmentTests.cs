@@ -291,7 +291,7 @@ public class ButtonAlignmentTests : HeadlessWindows
 
         Assert.Contains("49 frames", model.Status, StringComparison.Ordinal);
         Assert.Contains("3.9s of speech", model.Status, StringComparison.Ordinal);
-        Assert.StartsWith("Generating", model.Status, StringComparison.Ordinal);
+        Assert.StartsWith("Creating your speech", model.Status, StringComparison.Ordinal);
     }
 
     [AvaloniaFact]

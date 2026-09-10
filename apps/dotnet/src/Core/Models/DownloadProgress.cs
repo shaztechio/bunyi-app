@@ -58,8 +58,14 @@ public sealed record DownloadProgress(
     TimeSpan? Eta = null,
     string? CurrentFile = null,
     int FilesDone = 0,
-    int FilesTotal = 0)
+    int FilesTotal = 0,
+    long CurrentFileBytes = 0,
+    long CurrentFileTotal = 0,
+    DateTimeOffset? LastReceivedAt = null,
+    DateTimeOffset? WaitingSince = null)
 {
+    public double FileFraction => CurrentFileTotal > 0
+        ? Math.Clamp((double)CurrentFileBytes / CurrentFileTotal, 0, 1) : 0;
     /// <summary>0 to 1, or 0 when the total is not known yet.</summary>
     public double Fraction => BytesTotal > 0
         ? Math.Clamp((double)(BytesReceived + BytesReused) / BytesTotal, 0, 1)

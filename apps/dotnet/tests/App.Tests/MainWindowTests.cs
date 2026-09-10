@@ -301,7 +301,7 @@ public class MainWindowTests : HeadlessWindows
     public void Progress_is_shown_only_while_something_is_running()
     {
         var (window, _, engine, _) = Open(m => m.Script = "Hello there.");
-        var bar = Find<ProgressBar>(window, _ => true);
+        var bar = Find<ProgressBar>(window, b => b.Name == "LegacyProgress");
         Assert.False(bar.IsEffectivelyVisible);
 
         engine.Publish(new EngineStatus(EngineState.Downloading, 0.42, "42% — about 3.1 MB/s"));
@@ -365,7 +365,7 @@ public class MainWindowTests : HeadlessWindows
         // must move — but a bar pulsing across the window implies a measurement
         // it does not have. macOS shows a spinner for exactly these phases.
         var (window, model, engine, _) = Open(m => m.Script = "Hello there.");
-        var bar = Find<ProgressBar>(window, _ => true);
+        var bar = Find<ProgressBar>(window, b => b.Name == "LegacyProgress");
 
         engine.Publish(new EngineStatus(EngineState.Generating));
         Assert.True(model.ShowSpinner);

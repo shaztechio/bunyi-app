@@ -55,6 +55,8 @@ public sealed class FakeModelServer : IAsyncDisposable
 
     /// <summary>Publish the real size in x-linked-size, as the Hub does.</summary>
     public bool UseLinkedSizeHeader { get; set; }
+    public string? PauseAfterFirstByteOf { get; set; }
+    public TaskCompletionSource ReleaseBody { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     private FakeModelServer(IHost host) => _host = host;
 
@@ -194,6 +196,14 @@ public sealed class FakeModelServer : IAsyncDisposable
         }
 
         context.Response.ContentLength = body.Length;
+        if (PauseAfterFirstByteOf == path && body.Length > 1)
+        {
+            await context.Response.Body.WriteAsync(body[..1]);
+            await context.Response.Body.FlushAsync();
+            await ReleaseBody.Task.WaitAsync(context.RequestAborted);
+            await context.Response.Body.WriteAsync(body[1..]);
+            return;
+        }
         await context.Response.Body.WriteAsync(body);
     }
 

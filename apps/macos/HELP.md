@@ -32,6 +32,12 @@ The word is Malay and Indonesian for **sound**.
 
 The first time you use each mode, Bunyi downloads that mode's voice model — between about 1.5 GB and 4.5 GB — and shows a progress bar with an estimate of the time remaining. This happens once per mode. Every generation after that is offline and much faster.
 
+**Downloading is setup for speech.** Bunyi keeps the stage name visible and says when speech has not started yet. After setup, it creates your speech automatically. Downloaded models are saved for reuse; changing or deleting a model can require another download.
+
+Two progress bars show **Overall model download** and **Current file**. Each has its own percentage and exact byte count. A large file can receive data without its rounded percentage changing, so a **Received … bytes** message and the time since the last data arrived show that the download is moving—even one byte counts. Download time estimates refer to downloading only.
+
+If no data arrives, the message changes to **Waiting for more data**. After 30 seconds it says the download may be stalled. Incoming data clears that warning. **Checking model files**, **Loading model**, **Creating your speech**, and **Preparing your audio file** identify the work that follows. Only **Your audio is ready** means speech has finished and been saved.
+
 When generation finishes the audio plays automatically. **Play** repeats it, and the reveal button opens the folder where the file was saved.
 
 ## The three modes

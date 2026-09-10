@@ -195,7 +195,7 @@ public class ScreenReaderTests : HeadlessWindows
         // Ten seconds of frames, at one announcement per AnnouncementGap: the
         // state change, then one tick. Not forty-one.
         Assert.Equal(2, announced.Count);
-        Assert.StartsWith("Generating…", announced[0], StringComparison.Ordinal);
+        Assert.StartsWith("Creating your speech…", announced[0], StringComparison.Ordinal);
 
         // The status itself is untouched and still counts every frame — that is
         // #105, and the reason the two are separate properties.
@@ -217,7 +217,7 @@ public class ScreenReaderTests : HeadlessWindows
         clock.Advance(TimeSpan.FromMilliseconds(1));
         engine.Publish(new EngineStatus(EngineState.Idle));
 
-        Assert.StartsWith("Generating…", whileRunning, StringComparison.Ordinal);
+        Assert.StartsWith("Creating your speech…", whileRunning, StringComparison.Ordinal);
         Assert.Equal("Ready", model.Announcement);
     }
 
