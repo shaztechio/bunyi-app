@@ -16,7 +16,7 @@ import Foundation
 
 @main
 struct DownloadProgressChecks {
-    static func main() throws {
+    static func main() async throws {
         let mailbox = DownloadReceiptMailbox()
         mailbox.begin(file: "weights", completed: 2_350_000_000, total: 5_000_000_000,
                       fileTotal: 3_000_000_000, otherTotal: 2_000_000_000)
@@ -47,5 +47,6 @@ struct DownloadProgressChecks {
         let mixed = mailbox.snapshot()
         precondition(mixed.total == 0 && mixed.fileTotal == 400)
         print("Download progress checks passed: one-byte receipts, resume offsets, unknown totals, file transitions and stalls.")
+        try await checkTransfers()
     }
 }

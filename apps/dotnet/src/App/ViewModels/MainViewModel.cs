@@ -51,6 +51,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private bool _disposed;
     private CancellationTokenSource? _listenCancellation;
     public DownloadViewModel Download { get; } = new();
+    public void RefreshModelNotice() => OnPropertyChanged(nameof(NeedsModel));
     public Func<TtsMode, bool>? ModelComplete { get; init; }
     public bool NeedsModel => !IsBusy && !IsTranscribing && !ShowingHistory && ModelComplete?.Invoke(Mode) == false;
     public string ModelNotice => $"{Mode.DisplayName()} needs a voice-model download. Bunyi downloads the files, then creates your speech automatically. Downloaded models are saved for reuse.";
@@ -179,6 +180,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     private readonly TimeProvider _clock;
     private EngineState? _announcedState;
+    private DownloadPhase? _announcedDownloadPhase;
     private DateTimeOffset _announcedAt;
 
     public MainViewModel(
@@ -917,7 +919,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             if (_disposed) return;
             if (status.State is EngineState.Downloading or EngineState.Checking && status.Download is { } download)
+            {
+                if (_announcedDownloadPhase != download.Phase) _announcedState = null;
+                _announcedDownloadPhase = download.Phase;
                 Download.Update(download, _clock.GetUtcNow(), status.DownloadResource);
+            }
             else Download.Clear();
             if (status.Download is not { Phase: DownloadPhase.Downloading }) _downloadTicker?.Stop();
             // Core raises this on whichever thread did the work; everything

@@ -58,7 +58,7 @@ jobs:
         run: xcodegen generate
       - name: Check measured download feedback
         run: |
-          swiftc -parse-as-library ModelDownloadProgress.swift tests/DownloadProgressChecks.swift -o /tmp/bunyi-download-checks
+          swiftc -parse-as-library ModelDownloadProgress.swift HTTPFileDownloader.swift ModelFileTransfer.swift tests/DownloadProgressChecks.swift tests/ModelFileTransferChecks.swift -o /tmp/bunyi-download-checks
           /tmp/bunyi-download-checks
       - name: Build
         run: |

@@ -41,7 +41,7 @@ final class ModelFileTransfer: NSObject, URLSessionDataDelegate, @unchecked Send
         self.mailbox = mailbox
     }
 
-    func run(from url: URL) async throws -> Int {
+    func run(from url: URL, configuration: URLSessionConfiguration = .default) async throws -> Int {
         try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
         offset = (try? partial.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init) ?? 0
         if let expected, offset >= expected { offset = 0 }
@@ -50,7 +50,7 @@ final class ModelFileTransfer: NSObject, URLSessionDataDelegate, @unchecked Send
         if offset > 0 { request.setValue("bytes=\(offset)-", forHTTPHeaderField: "Range") }
         let queue = OperationQueue()
         queue.maxConcurrentOperationCount = 1
-        let session = URLSession(configuration: .default, delegate: self, delegateQueue: queue)
+        let session = URLSession(configuration: configuration, delegate: self, delegateQueue: queue)
         defer { session.finishTasksAndInvalidate() }
         let task = session.dataTask(with: request)
         return try await withTaskCancellationHandler {

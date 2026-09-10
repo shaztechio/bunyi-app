@@ -222,6 +222,7 @@ public sealed class ModelDownloader(HttpClient http, ILogSink log, TimeProvider?
                 ct,
                 p =>
                 {
+                    monitor.SetActive(p.Phase == DownloadPhase.Downloading);
                     if (p.Phase == DownloadPhase.Downloading && phase != p.Phase)
                         waitingSince = _time.GetUtcNow();
                     phase = p.Phase;

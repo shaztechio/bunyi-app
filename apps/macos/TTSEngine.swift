@@ -466,12 +466,24 @@ final class TTSEngine {
                           fileTotal: expected ?? 0, otherTotal: otherTotal)
             downloadFeedback = mailbox.snapshot()
             let ticker = Task { @MainActor [weak self] in
+                var loggedAt = Date()
+                var warned = false
                 while !Task.isCancelled {
                     do { try await Task.sleep(for: .milliseconds(250)) } catch { break }
                     guard let self, !Task.isCancelled else { break }
+                    if self.status == .stopping { break }
                     let value = mailbox.snapshot()
                     self.downloadFeedback = value
-                    if self.status != .stopping { self.status = .downloading(value.fraction) }
+                    self.status = .downloading(value.fraction)
+                    let now = Date()
+                    if value.stalled(at: now) && !warned {
+                        self.log.log("No new data for 30 s — the connection may be stalled")
+                        warned = true
+                    } else if !value.stalled(at: now) { warned = false }
+                    if now.timeIntervalSince(loggedAt) >= 10 {
+                        self.log.log("Download: \(value.received.formatted()) bytes received; \(value.file ?? "model files")")
+                        loggedAt = now
+                    }
                 }
             }
             let code: Int
@@ -480,6 +492,7 @@ final class TTSEngine {
                     expected: expected, mailbox: mailbox).run(from: base.appendingPathComponent(entry.path))
             } catch { ticker.cancel(); throw error }
             ticker.cancel()
+            try Task.checkCancellation()
             downloadFeedback = mailbox.snapshot()
             if code != 200 {
                 guard code == 404 && !allRequired && !Self.requiredModelFiles.contains(entry.path) else {
@@ -493,6 +506,10 @@ final class TTSEngine {
         }
         // A previous Hub snapshot may have left partial cache transfers. Only
         // after all replacement files succeed, retire its obsolete scratch files.
+        try Self.retireLegacyTransfers(in: localDir)
+    }
+
+    nonisolated private static func retireLegacyTransfers(in localDir: URL) throws {
         let legacyCache = localDir.appendingPathComponent(".cache/huggingface/download")
         if let old = FileManager.default.enumerator(at: legacyCache, includingPropertiesForKeys: nil) {
             for case let url as URL in old where url.pathExtension == "incomplete" {
