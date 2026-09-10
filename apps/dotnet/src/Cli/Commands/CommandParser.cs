@@ -24,7 +24,7 @@ public static class CommandParser
     private static readonly HashSet<string> Globals = ["json", "jsonl", "one-shot", "require-server", "help", "config"];
     private static readonly Dictionary<string, string[]> Options = new()
     {
-        ["help"] = [], ["version"] = [],
+        ["help"] = [], ["version"] = [], ["play"] = [],
         ["generate.preset"] = ["text", "text-file", "stdin", "speaker", "style", "language", "detach"],
         ["generate.design"] = ["text", "text-file", "stdin", "voice", "language", "detach"],
         ["generate.clone"] = ["text", "text-file", "stdin", "reference", "transcript", "auto-transcribe", "saved-voice", "language", "detach"],
@@ -77,6 +77,7 @@ public static class CommandParser
             else { operation += "." + words[1]; consumed = 2; }
         }
         if (!Options.TryGetValue(operation, out var allowed)) throw Invalid($"Unknown command '{operation}'. Use bunyi --help.");
+        if (operation == "play" && options.ContainsKey("require-server")) throw Invalid("Playback runs locally and cannot use --require-server.");
         if ((operation.StartsWith("server.", StringComparison.Ordinal) || operation.StartsWith("jobs.", StringComparison.Ordinal)) && options.ContainsKey("one-shot")) throw Invalid("Server and job commands cannot use --one-shot.");
         foreach (var name in options.Keys)
             if (!Globals.Contains(name) && !allowed.Contains(name)) throw Invalid($"Option --{name} is not valid for {operation}.");
@@ -85,7 +86,7 @@ public static class CommandParser
         var expected = operation switch
         {
             "config.set" => 2,
-            "transcribe" or "voices.remove" or "history.show" or "history.remove" or "backup.create" or "backup.restore" or "config.get" or "jobs.status" or "jobs.follow" or "jobs.cancel" => 1,
+            "play" or "transcribe" or "voices.remove" or "history.show" or "history.remove" or "backup.create" or "backup.restore" or "config.get" or "jobs.status" or "jobs.follow" or "jobs.cancel" => 1,
             _ => 0
         };
         if (positional.Length != expected) throw Invalid($"{operation} requires {expected} positional argument(s). Use bunyi --help.");
@@ -115,7 +116,7 @@ public static class CommandParser
         }
         if (request.Operation == "voices.add") { Required(request, "name"); ValidateReference(request, allowSaved: false); }
         if (request.Has("reference")) args["reference"] = ReadableFile(request.Get("reference")!);
-        if (request.Operation is "transcribe" or "backup.restore") args["target"] = ReadableFile(request.Get("target")!);
+        if (request.Operation is "play" or "transcribe" or "backup.restore") args["target"] = ReadableFile(request.Get("target")!);
         if (request.Operation is "history.show" or "history.remove" or "backup.create") args["target"] = Path.GetFullPath(request.Get("target")!);
         if (request.Has("config")) args["config"] = Path.GetFullPath(request.Get("config")!);
     }
@@ -163,6 +164,7 @@ public static class CommandParser
         bunyi generate clone (--text TEXT | --text-file FILE | --stdin) (--reference FILE (--transcript TEXT | --auto-transcribe) | --saved-voice ID)
           All generation modes: [--language auto|english|chinese|japanese|korean|german|french|russian|portuguese|spanish|italian]
         bunyi transcribe AUDIO [--language LANGUAGE] | speakers
+        bunyi play AUDIO [--json | --jsonl] (local WAV/MP3/FLAC playback; waits until finished; Ctrl+C stops)
         bunyi models list | status [--mode MODE] | download (--all | --mode MODE) | verify --mode MODE | remove --mode MODE
         bunyi voices list | add --name NAME --reference FILE (--transcript TEXT | --auto-transcribe) | remove ID
         bunyi history list | show PATH | remove PATH

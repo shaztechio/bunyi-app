@@ -25,6 +25,19 @@ public sealed class CommandProcessTests : IDisposable
     private readonly string root = Directory.CreateTempSubdirectory("bunyi-cli-process-").FullName;
 
     [Fact]
+    public async Task InvalidPlaybackReturnsFailureWithoutModelOrHistoryWrites()
+    {
+        var path = Path.Combine(root, "not-audio.wav");
+        await File.WriteAllTextAsync(path, "This is not audio.");
+        var played = await Run("play", path);
+        Assert.Equal(10, played.Exit);
+        Assert.Equal("playback_failed", played.Result.GetProperty("error").GetProperty("code").GetString());
+        Assert.False(Directory.Exists(Path.Combine(root, "Models")));
+        Assert.False(Directory.Exists(Path.Combine(root, "Outputs")));
+        Assert.Equal("This is not audio.", await File.ReadAllTextAsync(path));
+    }
+
+    [Fact]
     public async Task ConfigChangesSurviveProcessExitAndInvalidSourceFails()
     {
         var saved = await Run("config", "set", "unloadOnModeSwitch", "false");

@@ -79,6 +79,9 @@ try {
     $invalid = Invoke-BunyiJson -CommandArgs @('generate', 'preset') -ExpectedExit 3
     if ($invalid.ok -or -not $invalid.error.code) { throw 'Invalid input did not produce a structured error.' }
     $null = Invoke-BunyiJson -CommandArgs @('models', 'status', '--one-shot')
+    $missingAudio = Join-Path $smokeRoot 'missing.wav'
+    $invalid = Invoke-BunyiJson -CommandArgs @('play', $missingAudio) -ExpectedExit 3
+    if ($invalid.error.code -ne 'missing_input') { throw 'Playback must reject missing audio without loading a model.' }
     $null = Invoke-BunyiJson -CommandArgs @('server', 'start')
     $started = $true
     $null = Invoke-BunyiJson -CommandArgs @('server', 'start')

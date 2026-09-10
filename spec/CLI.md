@@ -134,6 +134,7 @@ Every event contains `schemaVersion`, `type`, `operation`, `operationId`, and
 - `loading`;
 - `transcribing`;
 - `generating`;
+- `playing`;
 - `stopping`.
 
 Foreground `server run` also emits `ready` after binding its endpoint.
@@ -356,6 +357,41 @@ and partial files resume on the next request. Completed job records may be
 discarded when the server exits; model and output files are the durable record.
 
 ## 8. Other feature commands
+
+### Audio playback
+
+```text
+bunyi play <audio-path> [--json | --jsonl]
+```
+
+Plays a local WAV, MP3, or FLAC file through the calling user's default audio
+output, without opening an external player window. Bunyi-generated WAV files
+are supported, including embedded metadata. The command waits until playback
+finishes, then releases its player and audio device before returning success.
+It never changes the file, creates a history entry, downloads or loads models,
+or acquires a model-folder lease.
+
+Playback always runs in the calling process, even when a model server is
+running. `--one-shot` is accepted but redundant; `--require-server` and
+`--detach` are rejected (exit 2). This is playback on the machine running the
+CLI, not remote audio streaming. Generation remains silent unless an agent or
+user separately invokes `play` on the returned `outputPath`.
+
+A missing or unreadable local file fails with `missing_input` (exit 3).
+An empty, corrupt, unsupported audio file, unavailable audio output, or other
+playback failure returns `playback_failed` (exit 10), never a false success
+through a silent/null backend. Ctrl+C, and SIGTERM on Linux, stops playback and
+releases resources before returning `cancelled` (exit 5).
+
+JSON-lines mode emits `playing` events with `positionSeconds` and
+`durationSeconds`, at most four per second. A successful terminal result has
+`operation: "play"`, absolute `inputPath`, `durationSeconds`, and
+`played: true`. It means the audio backend completed playback, not that a
+listener heard it (system volume or hardware may be muted). JSON mode emits
+only the terminal object. Native macOS implementation follows the same
+contract in #217.
+
+### Library and maintenance commands
 
 The exact secondary command forms are:
 

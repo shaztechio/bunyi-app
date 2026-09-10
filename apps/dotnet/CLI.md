@@ -105,6 +105,31 @@ on disk. `server stop` cancels work cooperatively and waits for safe unloading.
 
 ## Other commands
 
+### Play audio locally
+
+```text
+bunyi play /absolute/output.wav
+bunyi play /absolute/output.wav --jsonl
+```
+
+Plays WAV, MP3, or FLAC through the default audio output, without opening a
+player window. It waits until finished; Ctrl+C stops playback. No models or
+server are needed. `--detach` and `--require-server` are not supported for
+playback. A machine without usable audio output returns an error.
+
+In PowerShell, generate and then play the returned file:
+
+```powershell
+$result = bunyi generate preset --text "Hello!" --one-shot --json | ConvertFrom-Json
+if ($result.ok) { bunyi play $result.outputPath --json }
+```
+
+The successful playback result contains `inputPath`, `durationSeconds`, and
+`played: true`. Generation itself remains silent. Playback does not add to
+history or modify the source file.
+
+### Library and maintenance
+
 ```text
 bunyi speakers --json
 bunyi transcribe /absolute/reference.wav --json
@@ -130,7 +155,7 @@ bunyi logs clear --json
 Trash. Voice removal deletes the selected library entry and clip. Restoring a
 backup requires unloading a resident model first. See `bunyi --help` for the
 complete syntax. GUI-only interactions, such as playback controls and file
-pickers, are not CLI commands.
+pickers, are not CLI commands; local audio playback is available through `play`.
 
 ## Agent integration and isolation
 

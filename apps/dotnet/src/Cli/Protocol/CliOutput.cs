@@ -67,6 +67,10 @@ public sealed class CliOutput(TextWriter output, TextWriter error, bool json, bo
             }
             foreach (var key in new[] { "help", "outputPath", "transcript", "path", "version" })
                 if (message.TryGetValue(key, out var simple)) { output.WriteLine(simple); output.Flush(); return; }
+            if (message.GetValueOrDefault("played") is true)
+            {
+                output.WriteLine($"Played {message.GetValueOrDefault("inputPath")}"); output.Flush(); return;
+            }
             output.WriteLine(JsonSerializer.Serialize(message, CliProtocol.Json)); output.Flush();
         }
     }

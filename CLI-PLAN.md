@@ -32,6 +32,10 @@ controls, dialogs, and revealing a file in Finder or Explorer are GUI
 affordances rather than headless operations; the CLI returns absolute paths
 and structured results instead.
 
+Audio playback itself is exposed by `bunyi play <audio>`: foreground local
+playback with completion, cancellation, and structured errors. It is separate
+from generation and does not require the model server.
+
 ## Tracking issues
 
 - [#217 — native macOS CLI and persistent MLX server](https://github.com/shaztechio/bunyi-app/issues/217)
@@ -83,6 +87,7 @@ bunyi models remove --mode <mode>
 
 bunyi speakers
 bunyi transcribe <audio>
+bunyi play <audio>
 
 bunyi voices list|add|remove
 bunyi history list|show|remove

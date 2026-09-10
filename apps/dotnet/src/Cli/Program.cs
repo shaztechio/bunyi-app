@@ -15,6 +15,7 @@
 using Bunyi.Cli.Commands;
 using Bunyi.Cli.Protocol;
 using Bunyi.Cli.Server;
+using Bunyi.Core.Audio;
 using Bunyi.Core.Engine;
 using Bunyi.Core.Models;
 using Bunyi.Core.Runtime;
@@ -38,7 +39,8 @@ public static class Program
         finally { Console.CancelKeyPress -= cancel; }
     }
 
-    public static async Task<int> RunAsync(string[] args, TextReader input, TextWriter stdout, TextWriter stderr, CancellationToken ct = default)
+    public static async Task<int> RunAsync(string[] args, TextReader input, TextWriter stdout, TextWriter stderr, CancellationToken ct = default,
+        IFileAudioPlayback? playback = null)
     {
         var output = new CliOutput(stdout, stderr, args.Contains("--json"), args.Contains("--jsonl"));
         var request = new CommandRequest("command", [], Guid.NewGuid().ToString("N"));
@@ -49,6 +51,12 @@ public static class Program
             await CommandParser.NormalizeInputsAsync(request, input, ct);
             if (request.Has("config")) Environment.SetEnvironmentVariable("BUNYI_CONFIG_FILE", request.Get("config"));
             var log = new CliLog();
+            if (request.Operation == "play")
+            {
+                result = await PlaybackCommand.ExecuteAsync(request, playback ?? new FileAudioPlayback(log), output.Event, ct);
+                output.Finish(result);
+                return CliProtocol.ExitCode(result);
+            }
             var dispatcher = new CommandDispatcher(log);
             var client = new ServerClient();
             if (request.Operation == "server.start") result = await client.StartAsync(ct);
