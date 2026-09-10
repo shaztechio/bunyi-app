@@ -423,7 +423,9 @@ limitations under the License.
                          AutomationProperties.LabeledBy="{Binding #TranscriptLabel}"
                          AcceptsReturn="False" TextWrapping="Wrap"
                          IsEnabled="{Binding CanEditTranscript}"
-                         PlaceholderText="What the recording says, word for word" />
+                         PlaceholderText="Leave blank to transcribe when you press Generate" />
+                <TextBlock Text="Generate handles transcription, model downloads, and speech in one run."
+                           TextWrapping="Wrap" FontSize="12" Opacity="0.7" />
                 <TextBlock Classes="needed" Text="{Binding MissingReason}"
                            IsVisible="{Binding NeedsTranscript}" />
               </StackPanel>

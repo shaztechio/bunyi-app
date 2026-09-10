@@ -110,17 +110,18 @@ public sealed class VoiceCloneUiTests : HeadlessWindows
     // ---- The transcript (spec §4) ----
 
     [Fact]
-    public async Task Choosing_a_recording_listens_to_it()
+    public async Task Choosing_a_recording_does_not_start_transcription_or_downloads()
     {
-        // §4: a blank transcript is filled in on-device. It happens on choosing
-        // rather than on Generate so there is still something to edit it with.
+        // §4: selecting a recording is setup; Generate starts all the work.
         var model = New();
         model.ChooseReference = () => Task.FromResult<string?>("clip.wav");
-        model.Transcribe = (_, _) => Task.FromResult("This is what it says.");
+        model.Transcribe = (_, _) => throw new InvalidOperationException("Must wait for Generate");
 
         await model.PickReferenceCommand.ExecuteAsync(null);
 
-        Assert.Equal("This is what it says.", model.ReferenceTranscript);
+        Assert.Equal(string.Empty, model.ReferenceTranscript);
+        Assert.False(model.IsBusy);
+        Assert.False(model.Download.Visible);
     }
 
     [Fact]
@@ -165,6 +166,8 @@ public sealed class VoiceCloneUiTests : HeadlessWindows
 
         await model.PickReferenceCommand.ExecuteAsync(null);
 
+        await model.ListenAgainCommand.ExecuteAsync(null);
+
         Assert.True(model.HasReference);
         Assert.Equal(string.Empty, model.ReferenceTranscript);
         Assert.Contains("type what it says", model.Status, StringComparison.OrdinalIgnoreCase);
@@ -183,6 +186,130 @@ public sealed class VoiceCloneUiTests : HeadlessWindows
     }
 
     // ---- Generate ----
+
+    [AvaloniaFact]
+    public async Task One_generate_transcribes_then_generates_without_an_idle_gap()
+    {
+        var engine = new FakeEngine();
+        var player = new FakePlayer();
+        using var model = new MainViewModel(engine, player, new RecordingLog())
+        {
+            Mode = TtsMode.VoiceClone,
+            Script = "New words to speak",
+            ReferenceAudioPath = "clip.wav",
+        };
+        var busyChanges = new List<bool>();
+        model.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(model.IsBusy)) busyChanges.Add(model.IsBusy);
+        };
+        model.Transcribe = (_, _) =>
+        {
+            Assert.True(model.IsBusy);
+            Assert.False(model.ShowGenerate);
+            Assert.False(model.CanEditTranscript);
+            Assert.Null(engine.LastRequest);
+            return Task.FromResult("The recording's words");
+        };
+
+        Assert.True(model.CanGenerate);
+        var run = model.GenerateCommand.ExecuteAsync(null);
+        Assert.Equal("The recording's words", engine.LastRequest?.ReferenceTranscript);
+        Assert.True(model.IsBusy);
+        Assert.False(model.ShowGenerate);
+        Assert.Equal(new[] { true }, busyChanges);
+
+        engine.Complete("clone.wav");
+        await run;
+        Assert.Equal(new[] { true, false }, busyChanges);
+        Assert.Equal("The recording's words", model.ReferenceTranscript);
+        Assert.Equal("clone.wav", model.LastOutputPath);
+        Assert.Contains("clone.wav", player.Played);
+    }
+
+    [AvaloniaFact]
+    public async Task Stop_during_transcription_never_starts_speech_even_if_transcriber_ignores_cancellation()
+    {
+        var engine = new FakeEngine();
+        using var model = New(engine);
+        model.Mode = TtsMode.VoiceClone;
+        model.Script = "New words";
+        model.ReferenceAudioPath = "clip.wav";
+        var transcript = new TaskCompletionSource<string>();
+        CancellationToken receivedToken = default;
+        model.Transcribe = (_, ct) => { receivedToken = ct; return transcript.Task; };
+        var run = model.GenerateCommand.ExecuteAsync(null);
+
+        model.StopCommand.Execute(null);
+        Assert.True(receivedToken.IsCancellationRequested);
+        Assert.True(model.IsBusy);
+        transcript.SetResult("Late transcription");
+        await run;
+
+        Assert.Null(engine.LastRequest);
+        Assert.Empty(model.ReferenceTranscript);
+        Assert.False(model.IsBusy);
+        Assert.False(model.Download.Visible);
+        Assert.Equal("Stopped", model.Status);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Failed_or_empty_transcription_does_not_start_generation(bool throws)
+    {
+        var engine = new FakeEngine();
+        engine.Publish(new EngineStatus(EngineState.Error, Message: "An earlier generation failed"));
+        using var model = New(engine);
+        model.Mode = TtsMode.VoiceClone;
+        model.Script = "New words";
+        model.ReferenceAudioPath = "clip.wav";
+        model.Transcribe = (_, _) => throws
+            ? throw new InvalidOperationException("Recognition failed") : Task.FromResult("   ");
+
+        await model.GenerateCommand.ExecuteAsync(null);
+
+        Assert.Null(engine.LastRequest);
+        Assert.False(model.IsBusy);
+        Assert.True(model.CanEditTranscript);
+        Assert.Contains("Type what it says", model.Status);
+    }
+
+    [AvaloniaFact]
+    public async Task Generation_failure_after_transcription_preserves_the_engine_explanation()
+    {
+        var engine = new FakeEngine();
+        using var model = New(engine);
+        model.Mode = TtsMode.VoiceClone;
+        model.Script = "New words";
+        model.ReferenceAudioPath = "clip.wav";
+        model.Transcribe = (_, _) => Task.FromResult("The recording's words");
+        var run = model.GenerateCommand.ExecuteAsync(null);
+
+        engine.Publish(new EngineStatus(EngineState.Error, Message: "Could not download the model. Try again."));
+        engine.Pending.SetException(new IOException("Connection reset"));
+        await run;
+
+        Assert.Equal("Could not download the model. Try again.", model.Status);
+        Assert.False(model.IsBusy);
+    }
+
+    [Fact]
+    public async Task Generate_uses_a_typed_transcript_without_transcribing()
+    {
+        var engine = new FakeEngine();
+        using var model = New(engine);
+        model.Mode = TtsMode.VoiceClone;
+        model.Script = "New words";
+        model.ReferenceAudioPath = "clip.wav";
+        model.ReferenceTranscript = "My transcript";
+        model.Transcribe = (_, _) => throw new InvalidOperationException("Must not transcribe");
+        engine.Pending.SetResult(new GenerateResult("out.wav", default, 0, default));
+
+        await model.GenerateCommand.ExecuteAsync(null);
+
+        Assert.Equal("My transcript", engine.LastRequest?.ReferenceTranscript);
+    }
 
     [Fact]
     public void Generate_waits_for_a_recording()

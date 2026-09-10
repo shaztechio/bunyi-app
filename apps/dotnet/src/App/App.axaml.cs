@@ -203,7 +203,7 @@ public partial class App : Application
 
                 try
                 {
-                    return await transcriber.TranscribeAsync(trimmed ?? path, "english", ct);
+                    return await transcriber.TranscribeAsync(trimmed ?? path, viewModel.Language, ct);
                 }
                 finally
                 {

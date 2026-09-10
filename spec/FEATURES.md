@@ -31,7 +31,8 @@ A segmented picker selects one of three modes. macOS source:
 - Language selector: auto + english, chinese, japanese, korean, german,
   french, russian, portuguese, spanish, italian.
 - **The run needs**: text in every mode, plus a voice description for voice
-  design, and a reference clip *and its transcript* for voice clone. Checked
+  design, and a reference clip for voice clone (its transcript may be filled
+  automatically during Generate, §4). Checked
   before the button is pressed, not by the engine — the engine rejects a clone
   with no clip only *after* preparing the model, which on a first run means
   waiting out a multi-gigabyte download to be told a field is empty. Voice
@@ -475,8 +476,20 @@ macOS source: `TTSEngine.loadReferenceAudio`, `ReferenceTranscriber.swift`.
 - Voice clone is **ICL**: it requires the reference **transcript** to align
   audio to words. An empty transcript yields gibberish that ignores the
   target text — so the transcript is effectively mandatory.
-- **Auto-transcription**: if the transcript field is blank, transcribe the
-  clip on-device and use the result (also shown to the user, editable).
+- **One Generate operation for Voice clone**: choosing a reference recording
+  does not start transcription or a model download. With text and a recording
+  selected, Generate accepts a blank transcript when automatic transcription
+  is available. That one operation performs any required transcription-model
+  download, transcription, voice-model download/load, and speech generation
+  without returning to Ready or requiring another press of Generate between
+  stages. Stop cancels the operation at any stage; completed and partial model
+  downloads remain reusable. Inputs stay locked until the operation finishes.
+- **Auto-transcription**: on Generate, if the transcript field is blank,
+  transcribe the clip on-device and use the result (also shown to the user,
+  editable after the operation). A typed or saved transcript skips this step.
+  Failed or empty transcription stops generation with an explanation to type
+  the transcript or retry; cancellation must not proceed to the next stage.
+  An explicit Listen again action may still refresh the transcript separately.
   - macOS: Speech framework (`SFSpeechRecognizer`), fed PCM buffers (not a
     file URL — the recognition daemon can't read a sandboxed file).
   - .NET (Win+Linux): Whisper (whisper.cpp), so the same words come out on

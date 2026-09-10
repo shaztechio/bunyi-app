@@ -607,7 +607,7 @@ struct ContentView: View {
                 }
                 rowDivider
                 optionRow(icon: "text.quote", label: "Transcript") {
-                    TextField("Auto-detected if left blank", text: $referenceText)
+                    TextField("Leave blank to transcribe when you press Generate", text: $referenceText)
                         .textFieldStyle(.roundedBorder)
                 }
                 if let voiceError {
