@@ -57,6 +57,11 @@ Feature parity is a discipline, enforced by documents — see
 - [`spec/DATA-FORMATS.md`](spec/DATA-FORMATS.md) — on-disk layout, `manifest.txt`,
   `voices.json`, backup zip, output WAV (so a models folder or backup is
   interchangeable between apps of the same runtime family)
+- [`spec/CLI.md`](spec/CLI.md) — planned agent-facing CLI, machine output,
+  download progress, one-shot execution, and persistent server behavior
+
+The staged cross-platform implementation design is in
+[`CLI-PLAN.md`](CLI-PLAN.md).
 
 Any feature change updates the spec **and** every app.
 

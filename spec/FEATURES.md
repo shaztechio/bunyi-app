@@ -6,6 +6,10 @@ must implement the behavior described here. When a feature changes, update
 this spec *and* every app. Platform-specific mechanics (which ML runtime,
 which audio library) are noted but never change the observable behavior.
 
+The planned command-line interface exposes these features to agentic systems.
+Its command, progress, output, one-shot, and persistent-server contract is in
+[`CLI.md`](CLI.md).
+
 The right-hand "macOS source" references point at the reference
 implementation in `apps/macos/` so a second implementation has something
 concrete to match.
