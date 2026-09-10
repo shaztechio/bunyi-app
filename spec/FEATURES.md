@@ -375,11 +375,10 @@ explain itself in the main window, including when History is selected:
   bytes are buffered is an implementation detail — what is required is that
   progress within a file counts toward the whole, and that "no new data"
   means no bytes arrived, not no growth on disk.
-- **Progress + ETA**: a fraction-based bar plus a human line
-  ("42% — about 3.1 MB/s, ~6 min left"). Because per-file fraction can look
-  frozen during a multi-GB file, a **disk monitor** logs bytes-on-disk
-  every 10 s and warns after 30 s of no new data ("connection may be
-  stalled").
+- **Progress logging**: log measured network bytes every 10 s during
+  transfer and warn after 30 s without incoming data. Use the same receipt
+  timestamps as the live panel above; local file checks and hashing suspend
+  network-stall detection.
 - **tokenizer.json auto-fetch**: if a downloaded model lacks the tokenizer
   the runtime requires, fetch a compatible one (from the self-host base
   first, then a known fallback URL). See `DATA-FORMATS.md`.
@@ -918,7 +917,7 @@ require a separate spec update before Store publication.
 ## Feature → macOS source map (parity checklist)
 
 - Modes / generation / playback → `ContentView.swift`, `TTSEngine.generate`
-- Model download, resume, offline, progress/ETA, disk monitor → `TTSEngine.download*`, `noteDownloadProgress`, `startDiskMonitor`
+- Model download, resume, offline, progress/ETA, receipt monitoring → `TTSEngine.download*`, `ModelFileTransfer`, `ModelDownloadProgress`, `DownloadProgressView`
 - Self-host base URL + manifest → `TTSEngine.downloadFromBaseURL`, `fileList`
 - Per-mode source parsing → `ModelSettings.effectiveSource`
 - tokenizer.json auto-fetch → `TTSEngine.ensureTokenizerJSON`

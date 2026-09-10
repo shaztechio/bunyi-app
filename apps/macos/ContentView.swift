@@ -683,7 +683,7 @@ struct ContentView: View {
     private var bottomBar: some View {
         VStack(alignment: .leading, spacing: Space.row) {
             if let progress = engine.downloadFeedback {
-                DownloadProgressView(progress: progress)
+                DownloadProgressView(progress: progress, mode: mode.rawValue)
             } else if !engine.status.isBusy, tab != .history, !TTSEngine.isModelComplete(for: mode) {
                 Text("\(mode.rawValue) needs a voice-model download. Bunyi downloads the files, then creates your speech automatically. Downloaded models are saved for reuse.")
                     .font(.caption).fixedSize(horizontal: false, vertical: true)

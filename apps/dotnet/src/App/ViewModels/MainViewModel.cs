@@ -930,7 +930,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             {
                 if (_announcedDownloadPhase != download.Phase) _announcedState = null;
                 _announcedDownloadPhase = download.Phase;
-                Download.Update(download, _clock.GetUtcNow(), status.DownloadResource);
+                Download.Update(download, _clock.GetUtcNow(), status.DownloadResource, Mode.DisplayName());
             }
             else Download.Clear();
             if (status.Download is not { Phase: DownloadPhase.Downloading }) _downloadTicker?.Stop();

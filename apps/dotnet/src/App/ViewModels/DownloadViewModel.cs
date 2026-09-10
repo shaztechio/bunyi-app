@@ -30,8 +30,11 @@ public sealed class DownloadViewModel : ObservableObject
     private long _displayedReceived;
     private long _receipt;
     private string _resource = "voice model";
+    private string _mode = "";
 
     public bool Visible { get; private set; }
+    public string Context => string.IsNullOrEmpty(_mode) ? "Speech has not started"
+        : $"{_mode} · Speech has not started";
     public string Title => _progress.Phase switch
     {
         DownloadPhase.Resolving => $"Checking the {_resource}",
@@ -79,7 +82,7 @@ public sealed class DownloadViewModel : ObservableObject
             : "Download time remaining: estimating…";
     public string Announcement => $"{Title}. {Receipt}. Overall model download: {OverallPercent}. {LastArrival}.";
 
-    public void Update(DownloadProgress progress, DateTimeOffset now, string resource = "voice model")
+    public void Update(DownloadProgress progress, DateTimeOffset now, string resource = "voice model", string mode = "")
     {
         if (!Visible || progress.BytesReceived < _displayedReceived) _displayedReceived = 0;
         var change = progress.BytesReceived - _displayedReceived;
@@ -88,6 +91,7 @@ public sealed class DownloadViewModel : ObservableObject
         _progress = progress;
         _now = now;
         _resource = resource;
+        _mode = mode;
         Visible = progress.Phase is not (DownloadPhase.Resolving or DownloadPhase.Done);
         OnPropertyChanged(string.Empty);
     }

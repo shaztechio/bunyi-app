@@ -21,7 +21,7 @@ limitations under the License.
   <Border BorderThickness="1" BorderBrush="{DynamicResource BunyiCardBorder}" CornerRadius="10" Padding="12">
     <StackPanel Spacing="6">
       <TextBlock Text="{Binding Title}" FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap" />
-      <TextBlock Text="Speech has not started" Foreground="{DynamicResource BunyiAccent}" />
+      <TextBlock Text="{Binding Context}" Foreground="{DynamicResource BunyiAccent}" TextWrapping="Wrap" />
       <TextBlock Text="{Binding Explanation}" FontSize="12" TextWrapping="Wrap" />
       <Border Background="{DynamicResource BunyiSurface}" CornerRadius="6" Padding="8" Margin="0,2">
         <StackPanel Spacing="2">

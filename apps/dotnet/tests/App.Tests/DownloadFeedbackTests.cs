@@ -77,6 +77,35 @@ public class DownloadFeedbackTests : HeadlessWindows
     }
 
     [AvaloniaFact]
+    public async Task Stopping_transcription_setup_cannot_be_overwritten_by_a_late_receipt()
+    {
+        using var model = new MainViewModel(new FakeEngine(), new FakePlayer(), new RecordingLog())
+        {
+            ReferenceAudioPath = "reference.wav",
+        };
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        model.Transcribe = async (_, ct) =>
+        {
+            model.ReportTranscriptionDownload(Snapshot());
+            await release.Task;
+            ct.ThrowIfCancellationRequested();
+            return "Reference words";
+        };
+        var run = model.ListenAgainCommand.ExecuteAsync(null);
+        Assert.True(model.Download.Visible);
+        model.StopCommand.Execute(null);
+        model.ReportTranscriptionDownload(Snapshot(2));
+        model.TickDownload();
+        Assert.True(model.IsBusy);
+        Assert.False(model.Download.Visible);
+        Assert.Equal("Stopping…", model.Status);
+        release.TrySetResult();
+        await run;
+        Assert.False(model.IsBusy);
+        Assert.StartsWith("Stopped", model.Status);
+    }
+
+    [AvaloniaFact]
     public void The_window_has_two_named_meters_and_cannot_revert_to_download_after_loading()
     {
         var engine = new FakeEngine();

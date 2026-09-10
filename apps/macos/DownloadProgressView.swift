@@ -17,6 +17,7 @@ import SwiftUI
 /// The live receipt panel. Time passing changes the age, never the byte counters.
 struct DownloadProgressView: View {
     let progress: ModelDownloadProgress
+    let mode: String
     @State private var announcedAt = Date.distantPast
     @State private var announcedPhase: ModelDownloadProgress.Phase?
 
@@ -24,7 +25,8 @@ struct DownloadProgressView: View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             VStack(alignment: .leading, spacing: 6) {
                 Text(progress.title).font(.headline)
-                Text("Speech has not started").foregroundStyle(Color.accentColor)
+                Text("\(mode) · Speech has not started").foregroundStyle(Color.accentColor)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text("Bunyi saves this model for reuse. Speech starts automatically after setup.")
                     .font(.caption).fixedSize(horizontal: false, vertical: true)
                 VStack(alignment: .leading, spacing: 2) {
