@@ -1,0 +1,54 @@
+<!--
+Copyright 2026 Shazron Abdullah and Bunyi contributors
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:Bunyi.App.ViewModels"
+             x:Class="Bunyi.App.Views.DownloadProgressView"
+             x:DataType="vm:DownloadViewModel" IsVisible="{Binding Visible}">
+  <Border BorderThickness="1" BorderBrush="{DynamicResource BunyiCardBorder}" CornerRadius="10" Padding="12">
+    <StackPanel Spacing="6">
+      <TextBlock Text="{Binding Title}" FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap" />
+      <TextBlock Text="Speech has not started" Foreground="{DynamicResource BunyiAccent}" />
+      <TextBlock Text="{Binding Explanation}" FontSize="12" TextWrapping="Wrap" />
+      <Border Background="{DynamicResource BunyiSurface}" CornerRadius="6" Padding="8" Margin="0,2">
+        <StackPanel Spacing="2">
+          <TextBlock Name="DownloadReceipt" Text="{Binding Receipt}" FontWeight="SemiBold" TextWrapping="Wrap" />
+          <TextBlock Text="{Binding LastArrival}" FontSize="12" TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBlock Text="Overall model download" />
+        <TextBlock Grid.Column="1" Text="{Binding OverallPercent}" />
+      </Grid>
+      <ProgressBar Name="OverallDownloadProgress" Minimum="0" Maximum="1" Height="6"
+                   Value="{Binding OverallFraction}" IsVisible="{Binding HasOverallTotal}"
+                   AutomationProperties.Name="Overall model download progress" />
+      <TextBlock Text="{Binding OverallBytes}" FontSize="12" TextWrapping="Wrap" />
+      <StackPanel IsVisible="{Binding HasFile}" Spacing="4">
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBlock Text="{Binding FileName}" TextWrapping="Wrap" Margin="0,0,8,0" />
+          <TextBlock Grid.Column="1" Text="{Binding FilePercent}" />
+        </Grid>
+        <ProgressBar Name="CurrentFileDownloadProgress" Minimum="0" Maximum="1" Height="4"
+                     Value="{Binding FileFraction}" IsVisible="{Binding HasFileTotal}"
+                     AutomationProperties.Name="{Binding FileName}" />
+        <TextBlock Text="{Binding FileBytes}" FontSize="12" TextWrapping="Wrap" />
+      </StackPanel>
+      <TextBlock Text="{Binding SpeedAndEta}" IsVisible="{Binding Transferring}" FontSize="12" TextWrapping="Wrap" />
+      <TextBlock Text="{Binding Next}" FontSize="12" TextWrapping="Wrap" Margin="0,3,0,0" />
+    </StackPanel>
+  </Border>
+</UserControl>

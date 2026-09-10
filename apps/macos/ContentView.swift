@@ -196,6 +196,7 @@ struct ContentView: View {
                     // the pickers around it correctly greyed out. Refusing hits
                     // is what actually stops typing; the opacity is what makes
                     // it look refused.
+                    ScrollView {
                     VStack(alignment: .leading, spacing: Space.tight) {
                         textCard
                         exampleStrip
@@ -205,6 +206,7 @@ struct ContentView: View {
                     .opacity(engine.status.isBusy ? 0.6 : 1)
                     optionsCard
                         .disabled(engine.status.isBusy)
+                    }
                 }
             }
             .padding(Space.window)
@@ -673,9 +675,21 @@ struct ContentView: View {
     // MARK: Bottom bar (status + playback + generate)
 
     private var bottomBar: some View {
+        VStack(alignment: .leading, spacing: Space.row) {
+            if let progress = engine.downloadFeedback {
+                DownloadProgressView(progress: progress)
+            } else if !engine.status.isBusy, tab != .history, !TTSEngine.isModelComplete(for: mode) {
+                Text("\(mode.rawValue) needs a voice-model download. Bunyi downloads the files, then creates your speech automatically. Downloaded models are saved for reuse.")
+                    .font(.caption).fixedSize(horizontal: false, vertical: true)
+            }
         HStack(spacing: Space.card) {
+            if engine.downloadFeedback == nil {
             statusView
                 .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                Text(mode.rawValue).font(.callout).foregroundStyle(.secondary)
+                Spacer()
+            }
 
             // History has its own per-row playback, and its own player. Showing
             // this one too would put two players on screen that can play over
@@ -726,6 +740,7 @@ struct ContentView: View {
                 // an icon.
                 .accessibilityLabel("Generate")
             }
+        }
         }
         .padding(.horizontal, Space.card)
         .padding(.vertical, Space.row)
@@ -802,7 +817,7 @@ struct ContentView: View {
             // .secondary, not .tertiary. This bar is the app's only feedback
             // channel, and the faintest style SwiftUI offers is the wrong
             // place to put the one line that says whether it is working.
-            Label("Ready — press ⌘↩ to generate", systemImage: "checkmark.circle")
+            Label(engine.lastOutputURL == nil ? "Ready — press ⌘↩ to generate" : "Your audio is ready", systemImage: "checkmark.circle")
                 .foregroundStyle(.secondary)
                 .font(.callout)
         case .downloading(let fraction):
@@ -820,10 +835,16 @@ struct ContentView: View {
             }
         case .loading:
             busyLine("Loading model…")
+        case .checking:
+            busyLine("Checking the voice model…")
+        case .finalizing:
+            busyLine("Preparing your audio file…")
         case .transcribing:
             busyLine("Transcribing the reference clip…")
         case .generating(let tokens):
-            busyLine(tokens > 0 ? "Generating… (\(tokens) tokens)" : "Generating…")
+            busyLine(tokens > 0
+                ? "Creating your speech… \(tokens) frames · \(String(format: "%.1f", Double(tokens) / 12.5))s of speech so far"
+                : "Creating your speech…")
         case .stopping:
             // Says why it is still busy. The alternative — going idle while the
             // model is still generating — reads as finished and invites a

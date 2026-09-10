@@ -44,6 +44,18 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// intermittent CI failure that landed on whichever test came next.
     /// </remarks>
     private IBatchTimer? _ticker;
+    private IBatchTimer? _downloadTicker;
+    private readonly object _downloadGate = new();
+    private EngineStatus? _pendingDownload;
+    private bool _downloadPumpActive;
+    private bool _disposed;
+    private CancellationTokenSource? _listenCancellation;
+    public DownloadViewModel Download { get; } = new();
+    public Func<TtsMode, bool>? ModelComplete { get; init; }
+    public bool NeedsModel => !IsBusy && !IsTranscribing && !ShowingHistory && ModelComplete?.Invoke(Mode) == false;
+    public string ModelNotice => $"{Mode.DisplayName()} needs a voice-model download. Bunyi downloads the files, then creates your speech automatically. Downloaded models are saved for reuse.";
+    public Avalonia.Controls.Primitives.ScrollBarVisibility ContentScrollMode => ShowingHistory
+        ? Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled : Avalonia.Controls.Primitives.ScrollBarVisibility.Auto;
     private readonly ILogSink _log;
 
     [ObservableProperty] private TtsMode _mode = TtsMode.PresetVoice;
@@ -533,13 +545,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// window stays usable — but it is work the status line is reporting, and a
     /// status that changes with nothing moving beside it reads as stuck.
     /// </remarks>
-    public bool ShowSpinner => IsTranscribing || (IsBusy && Progress <= 0);
+    public bool ShowSpinner => !Download.Visible && (IsTranscribing || (IsBusy && Progress <= 0));
 
     /// <summary>Whether the transcript can be typed into right now.</summary>
     public bool CanEditTranscript => !IsTranscribing;
 
     /// <summary>A bar, only while something can actually be measured.</summary>
-    public bool ShowProgressBar => IsBusy && Progress > 0;
+    public bool ShowProgressBar => !Download.Visible && IsBusy && Progress > 0;
 
     /// <summary>
     /// Whether there is a result to play or reveal.
@@ -698,12 +710,20 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         if (Transcribe is null || !HasReference || IsTranscribing) return;
 
         IsTranscribing = true;
+        IsBusy = true;
+        using var cancellation = new CancellationTokenSource();
+        _listenCancellation = cancellation;
+        Refresh();
         Status = "Listening to the recording…";
 
         try
         {
-            ReferenceTranscript = await Transcribe(ReferenceAudioPath!, CancellationToken.None);
+            ReferenceTranscript = await Transcribe(ReferenceAudioPath!, cancellation.Token);
             Status = "Ready";
+        }
+        catch (OperationCanceledException)
+        {
+            Status = "Stopped. Downloaded files are kept for reuse.";
         }
         catch (Exception ex)
         {
@@ -714,7 +734,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         finally
         {
+            _listenCancellation = null;
+            lock (_downloadGate) { _pendingDownload = null; _downloadPumpActive = false; }
+            _downloadTicker?.Stop();
+            Download.Clear();
             IsTranscribing = false;
+            IsBusy = false;
+            Refresh();
         }
     }
 
@@ -743,7 +769,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             LastOutputPath = path;
 
             // §2: the result plays itself once it is written.
-            if (path is not null) Play();
+            if (path is not null) { Status = "Your audio is ready"; Play(); }
         }
         catch (OperationCanceledException)
         {
@@ -760,14 +786,22 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             // §10: the actionable sentence goes on screen, the full text to the
             // log.
-            Status = ex.Message;
+            Status = _engine.Status.Message ?? ex.Message;
             _log.Log($"Generation failed: {ex}");
         }
     }
 
     /// <summary>Stop, which replaces Generate while anything is running (spec §2).</summary>
     [RelayCommand]
-    private void Stop() => _engine.RequestStop();
+    private void Stop()
+    {
+        if (_listenCancellation is { } listening) { Status = "Stopping…"; listening.Cancel(); }
+        else _engine.RequestStop();
+    }
+
+    public void ReportTranscriptionDownload(DownloadProgress progress) => OnEngineStatusChanged(this,
+        new EngineStatus(progress.Phase == DownloadPhase.Done ? EngineState.Transcribing : EngineState.Downloading,
+            progress.Fraction, Download: progress, DownloadResource: "transcription model"));
 
     [RelayCommand]
     private void Play()
@@ -843,9 +877,49 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         Mode == TtsMode.VoiceClone ? ReferenceAudioPath : null,
         Mode == TtsMode.VoiceClone ? ReferenceTranscript : null);
 
-    private void OnEngineStatusChanged(object? sender, EngineStatus status) =>
+    private void OnEngineStatusChanged(object? sender, EngineStatus status)
+    {
+        // Keep one pending snapshot instead of queuing a UI action per read.
+        // Cumulative counters retain every byte, including sub-percent changes.
+        lock (_downloadGate)
+        {
+            if (_disposed) return;
+            if (status.State == EngineState.Downloading && status.Download is { Phase: DownloadPhase.Downloading })
+            {
+                _pendingDownload = status;
+                if (_downloadPumpActive) return;
+                _downloadPumpActive = true;
+                UiThread.Post(() =>
+                {
+                    if (_disposed) return;
+                    _downloadTicker ??= _timers.Create(TimeSpan.FromMilliseconds(250), TickDownload);
+                    _downloadTicker.Start();
+                    TickDownload();
+                });
+                return;
+            }
+            _pendingDownload = null;
+            _downloadPumpActive = false;
+        }
+        ApplyEngineStatus(status);
+    }
+
+    internal void TickDownload()
+    {
+        EngineStatus? pending;
+        lock (_downloadGate) pending = _pendingDownload;
+        if (pending is not null) ApplyEngineStatus(pending);
+        Download.Tick(_clock.GetUtcNow());
+    }
+
+    private void ApplyEngineStatus(EngineStatus status) =>
         UiThread.Post(() =>
         {
+            if (_disposed) return;
+            if (status.State is EngineState.Downloading or EngineState.Checking && status.Download is { } download)
+                Download.Update(download, _clock.GetUtcNow(), status.DownloadResource);
+            else Download.Clear();
+            if (status.Download is not { Phase: DownloadPhase.Downloading }) _downloadTicker?.Stop();
             // Core raises this on whichever thread did the work; everything
             // below is bound, so it has to land on the UI thread.
             IsBusy = status.IsBusy;
@@ -899,13 +973,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         _announcedState = state;
         _announcedAt = now;
-        Announcement = Status;
+        Announcement = Download.Visible ? Download.Announcement : Status;
     }
 
     private static string Describe(EngineStatus status) => status.State switch
     {
         EngineState.Idle => "Ready",
-        EngineState.Downloading => status.Detail ?? "Getting the model…",
+        EngineState.Checking => "Checking the voice model…",
+        EngineState.Finalizing => "Preparing your audio file…",
+        EngineState.Downloading => status.Download is { } p
+            ? p.Phase == DownloadPhase.Downloading ? "Downloading voice model — speech has not started" : p.Human()
+            : status.Detail ?? "Getting the model…",
         EngineState.Loading => "Loading the model…",
         EngineState.Transcribing => "Listening to the recording…",
         // With the count when there is one. The engine has published "N frames
@@ -914,8 +992,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // exact complaint that line was written to answer. macOS shows the
         // count too ("Generating… (N tokens)"), so this is parity as well.
         EngineState.Generating => status.Detail is { Length: > 0 } detail
-            ? $"Generating… {detail}"
-            : "Generating…",
+            ? $"Creating your speech… {detail}"
+            : "Creating your speech…",
         EngineState.Stopping => "Stopping…",
         EngineState.Error => status.Message ?? "Something went wrong.",
         _ => string.Empty,
@@ -924,6 +1002,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>Re-evaluates everything computed from the fields above.</summary>
     private void Refresh()
     {
+        OnPropertyChanged(nameof(NeedsModel));
+        OnPropertyChanged(nameof(ModelNotice));
+        OnPropertyChanged(nameof(ContentScrollMode));
         // Cleared as soon as the run would start, so a mark never outlives the
         // problem it described.
         if (Missing is not null && GenerationReadiness.CanGenerate(CurrentRequest()))
@@ -956,6 +1037,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     partial void OnShowingHistoryChanged(bool value)
     {
+        OnPropertyChanged(nameof(ContentScrollMode));
+        OnPropertyChanged(nameof(NeedsModel));
         OnPropertyChanged(nameof(SelectedSegment));
         // Read the folder every time it is shown, so it is never stale.
         if (value) History.Refresh();
@@ -1030,6 +1113,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
+        lock (_downloadGate) { _disposed = true; _pendingDownload = null; }
+        _downloadTicker?.Dispose();
+        _ticker?.Dispose();
         _engine.StatusChanged -= OnEngineStatusChanged;
         History.Dispose();
         _player.Dispose();

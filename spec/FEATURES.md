@@ -298,6 +298,50 @@ for them. Shipped binaries also carry the old paths and cannot be changed.
 > the machines this app targets — for voice design, 12.7 GB against 4.3 GB.
 
 ### 3b. Download behavior (identical across platforms)
+
+**Download feedback — approach A, live receipt (#219).** Model setup must
+explain itself in the main window, including when History is selected:
+
+- Keep a prominent **Downloading voice model** heading, the selected mode,
+  **Speech has not started**, and the explanation **Bunyi saves this model
+  for reuse. Speech starts automatically after setup.** visible independently
+  of the changing counters. A missing-model notice before Generate explains
+  first-use setup; derive it from the selected model's actual completeness,
+  not a first-launch flag. Identify transcription-model downloads separately.
+- Show two separately labelled, byte-weighted meters: **Overall model
+  download** and **Current file**, with the relative filename, percentage to
+  one decimal place, and exact, grouped available/total byte counts. Overall
+  progress includes reusable bytes across all files; current-file progress
+  includes an accepted resume offset. Never average file percentages. A file
+  change resets only the current-file meter. Discarded data is not counted.
+- Every positive network read counts, even **one byte**. A live receipt line
+  says **Received 1 byte** (or the number received since the last displayed
+  update), alongside **Last data arrived just now** / **N seconds ago**.
+  Counters update at most four times per second, coalescing callbacks without
+  dropping bytes. A one-byte read must become visible within 250 ms even if
+  neither rounded percentage changes. A receipt indicator may react to actual
+  arrivals; it must not animate continuously to imply a healthy transfer.
+- When a total is unknown, that meter shows **Size unknown** and exact bytes
+  available, without a fabricated fraction. Resolve file and overall totals
+  independently. Overall is unknown until every relevant file size is known
+  (missing optional files are excluded). Speed measures network bytes only;
+  ETA is explicitly **time left to download**, never time until audio is ready.
+- After three seconds without incoming bytes, say **Waiting for more data**.
+  At 30 seconds show **Download may be stalled**, the age of the last receipt,
+  and no stale speed or ETA. Clear that warning on the next positive read.
+  Checking local files, hashing and loading are distinct stages and must not
+  trigger a network-stall warning. Reusing a file is not a network receipt.
+- **Next: Check downloaded files → Load model → Create speech** explains
+  automatic continuation. Transfer at 100% does not mean audio is ready.
+  Checking existing files, checking downloaded files, loading the model,
+  creating speech and preparing the audio file each have an explicit stage
+  label; only a saved result can say **Your audio is ready**. Generation shows
+  produced-audio duration and frames (§2), never a fabricated percentage.
+- Keep essential text wrapping and Stop, Help and Logs reachable at minimum
+  window size and supported display scaling. Name both meters for assistive
+  technology. Live announcements remain paced (§12): do not speak every byte
+  or every timestamp tick. Respect reduced motion; text alone conveys activity.
+
 - **Resumable & incremental**: already-present files are skipped — on every
   source, not only the Hub. Stopping a download and starting again must not
   re-fetch what is already on disk; for a self-hosted model that is gigabytes
