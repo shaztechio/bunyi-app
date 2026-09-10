@@ -18,6 +18,7 @@ import SwiftUI
 struct DownloadProgressView: View {
     let progress: ModelDownloadProgress
     let mode: String
+    let reconnect: () -> Void
     @State private var announcedAt = Date.distantPast
     @State private var announcedPhase: ModelDownloadProgress.Phase?
 
@@ -29,6 +30,7 @@ struct DownloadProgressView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Text("Bunyi saves this model for reuse. Speech starts automatically after setup.")
                     .font(.caption).fixedSize(horizontal: false, vertical: true)
+                Text(progress.elapsedText(at: context.date)).font(.caption)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(progress.receiptText(at: context.date)).fontWeight(.medium)
                     Text(progress.arrivalText(at: context.date)).font(.caption)
@@ -46,6 +48,12 @@ struct DownloadProgressView: View {
                 if progress.phase == .downloading {
                     Text(progress.speedText(at: context.date)).font(.caption)
                 }
+                if progress.isSlow(at: context.date) {
+                    Text("Download is slow").foregroundStyle(.orange)
+                }
+                if progress.isSlow(at: context.date) || progress.stalled(at: context.date) {
+                    Button("Reconnect and resume", action: reconnect)
+                }
                 Text("Next: Check downloaded files → Load model → Create speech")
                     .font(.caption).fixedSize(horizontal: false, vertical: true)
             }
@@ -61,7 +69,8 @@ struct DownloadProgressView: View {
     private func meter(_ title: String, available: Int64, total: Int64, fraction: Double) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .firstTextBaseline) {
-                Text(title).fixedSize(horizontal: false, vertical: true)
+                Text(title + (total > 0 ? " · " + total.formatted(.byteCount(style: .file)) : ""))
+                    .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 8)
                 Text(total > 0 ? fraction.formatted(.percent.precision(.fractionLength(1))) : "Size unknown")
             }
@@ -78,6 +87,7 @@ struct DownloadProgressView: View {
         guard progress.phase != announcedPhase || now.timeIntervalSince(announcedAt) >= 10 else { return }
         announcedAt = now; announcedPhase = progress.phase
         let percent = progress.total > 0 ? progress.fraction.formatted(.percent.precision(.fractionLength(1))) : "size unknown"
-        AccessibilityNotification.Announcement("\(progress.title). \(progress.receiptText(at: now)). Overall model download: \(percent). \(progress.arrivalText(at: now)).").post()
+        let health = progress.isSlow(at: now) ? "Download is slow. " : ""
+        AccessibilityNotification.Announcement("\(progress.title). \(health)\(progress.receiptText(at: now)). Overall model download: \(percent). \(progress.arrivalText(at: now)).").post()
     }
 }

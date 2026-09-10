@@ -23,6 +23,7 @@ limitations under the License.
       <TextBlock Text="{Binding Title}" FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap" />
       <TextBlock Text="{Binding Context}" Foreground="{DynamicResource BunyiAccent}" TextWrapping="Wrap" />
       <TextBlock Text="{Binding Explanation}" FontSize="12" TextWrapping="Wrap" />
+      <TextBlock Text="{Binding Elapsed}" FontSize="12" />
       <Border Background="{DynamicResource BunyiSurface}" CornerRadius="6" Padding="8" Margin="0,2">
         <StackPanel Spacing="2">
           <TextBlock Name="DownloadReceipt" Text="{Binding Receipt}" FontWeight="SemiBold" TextWrapping="Wrap" />
@@ -30,7 +31,7 @@ limitations under the License.
         </StackPanel>
       </Border>
       <Grid ColumnDefinitions="*,Auto">
-        <TextBlock Text="Overall model download" />
+        <TextBlock Text="{Binding OverallLabel}" TextWrapping="Wrap" Margin="0,0,8,0" />
         <TextBlock Grid.Column="1" Text="{Binding OverallPercent}" />
       </Grid>
       <ProgressBar Name="OverallDownloadProgress" Minimum="0" Maximum="1" Height="6"
@@ -45,9 +46,11 @@ limitations under the License.
         <ProgressBar Name="CurrentFileDownloadProgress" Minimum="0" Maximum="1" Height="4"
                      Value="{Binding FileFraction}" IsVisible="{Binding HasFileTotal}"
                      AutomationProperties.Name="{Binding FileName}" />
-        <TextBlock Text="{Binding FileBytes}" FontSize="12" TextWrapping="Wrap" />
+        <TextBlock FontSize="12" TextWrapping="Wrap"><Run Text="{Binding FileTotalLabel}" /><Run Text=" · " /><Run Text="{Binding FileBytes}" /></TextBlock>
       </StackPanel>
       <TextBlock Text="{Binding SpeedAndEta}" IsVisible="{Binding Transferring}" FontSize="12" TextWrapping="Wrap" />
+      <TextBlock Text="{Binding Health}" IsVisible="{Binding Slow}" Foreground="{DynamicResource BunyiAccent}" TextWrapping="Wrap" />
+      <Button Content="Reconnect and resume" Command="{Binding ReconnectCommand}" IsVisible="{Binding CanReconnect}" />
       <TextBlock Text="{Binding Next}" FontSize="12" TextWrapping="Wrap" Margin="0,3,0,0" />
     </StackPanel>
   </Border>

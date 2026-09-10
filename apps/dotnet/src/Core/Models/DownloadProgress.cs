@@ -29,6 +29,7 @@ public enum DownloadPhase
     Downloading,
     /// <summary>Hashing what arrived.</summary>
     Verifying,
+    Reconnecting,
     Done,
 }
 
@@ -84,6 +85,7 @@ public sealed record DownloadProgress(
 
         return Phase switch
         {
+            DownloadPhase.Reconnecting => "Reconnecting — keeping downloaded bytes…",
             DownloadPhase.Manifest => "Looking for a file list…",
             DownloadPhase.Sizing => "Working out the download size…",
             DownloadPhase.Verifying => CurrentFile is null

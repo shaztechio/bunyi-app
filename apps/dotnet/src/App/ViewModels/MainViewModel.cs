@@ -933,7 +933,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 Download.Update(download, _clock.GetUtcNow(), status.DownloadResource, Mode.DisplayName());
             }
             else Download.Clear();
-            if (status.Download is not { Phase: DownloadPhase.Downloading }) _downloadTicker?.Stop();
+            if (Download.Visible)
+            {
+                _downloadTicker ??= _timers.Create(TimeSpan.FromMilliseconds(250), TickDownload);
+                _downloadTicker.Start();
+            }
+            else _downloadTicker?.Stop();
             // Core raises this on whichever thread did the work; everything
             // below is bound, so it has to land on the UI thread.
             IsBusy = status.IsBusy;

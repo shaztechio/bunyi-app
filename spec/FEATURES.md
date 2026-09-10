@@ -314,6 +314,9 @@ explain itself in the main window, including when History is selected:
   progress includes reusable bytes across all files; current-file progress
   includes an accepted resume offset. Never average file percentages. A file
   change resets only the current-file meter. Discarded data is not counted.
+  Show each known total in human-readable decimal units alongside its meter
+  (for example, **Overall model download · 10.3 GB**, **Current file · 452 MB**),
+  retaining the exact byte counts underneath. Unknown totals remain unknown.
 - Every positive network read counts, even **one byte**. A live receipt line
   says **Received 1 byte** (or the number received since the last displayed
   update), alongside **Last data arrived just now** / **N seconds ago**.
@@ -331,6 +334,23 @@ explain itself in the main window, including when History is selected:
   and no stale speed or ETA. Clear that warning on the next positive read.
   Checking local files, hashing and loading are distinct stages and must not
   trigger a network-stall warning. Reusing a file is not a network receipt.
+- Speed and download ETA use receipts over the most recent 10 seconds of the
+  current file/connection, including quiet time, instead of averaging earlier
+  files. After 30 seconds, show **Download is slow** when the 30-second rate
+  is below 256 KiB/s and more than one minute remains at that rate (or size is
+  unknown). No-data/stalled takes precedence. One byte clears a no-data warning
+  but does not clear sustained slowness. Recalculate health on timer ticks;
+  checking/hashing/loading never count as slow transfers.
+- **Model download elapsed: M:SS** (H:MM:SS for long waits) measures the current
+  setup attempt, including discovery, checks and reconnects. Stop ends the
+  attempt; a later Generate starts a new timer and reuses retained files.
+- During slow or stalled transfers offer **Reconnect and resume**. Cancel and
+  await the current file transfer, retain its partial file, then reopen that
+  file on a fresh connection. Keep the operation busy and continue speech setup
+  automatically; Stop cancels recovery too. Validate accepted range offsets
+  and the final size/checksum; a server that ignores Range restarts that file.
+  Reset recent speed history on reconnect, preserve elapsed time, and count
+  retained bytes once. Reconnect is user initiated, with no automatic retry loop.
 - **Next: Check downloaded files → Load model → Create speech** explains
   automatic continuation. Transfer at 100% does not mean audio is ready.
   Checking existing files, checking downloaded files, loading the model,

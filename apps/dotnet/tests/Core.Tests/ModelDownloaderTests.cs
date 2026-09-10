@@ -66,6 +66,70 @@ public sealed class ModelDownloaderTests : IAsyncLifetime
 
     private string ModelFolder => ModelDownloader.FolderFor(Source, _root);
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Reconnect_retains_partial_bytes_and_does_not_restart_completed_files(bool ignoreRange)
+    {
+        _server.IgnoreRangeRequests = ignoreRange;
+        _server.PauseAfterFirstByteOf = "model.onnx.data";
+        _server.Add("manifest.sha256", _server.Sha256Manifest("embeddings/config.json", "model.onnx", "model.onnx.data"));
+        var firstByte = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var freshClients = 0;
+        var downloader = new ModelDownloader(_http, _log, reconnectClientFactory: () =>
+        {
+            freshClients++;
+            return new HttpClient();
+        });
+        var snapshots = new System.Collections.Concurrent.ConcurrentQueue<DownloadProgress>();
+        var progress = new SynchronousProgress(p =>
+        {
+            snapshots.Enqueue(p);
+            if (p.CurrentFile == "model.onnx.data" && p.CurrentFileBytes == 1) firstByte.TrySetResult();
+            if (p.Phase == DownloadPhase.Reconnecting) _server.ReleaseBody.TrySetResult();
+        });
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var run = downloader.EnsureModelAsync(Source, Layout, _root, progress, deadline.Token);
+        await firstByte.Task.WaitAsync(deadline.Token);
+        await Task.Delay(50, deadline.Token); // Let the write following the receipt reach the partial file.
+        downloader.RequestReconnect();
+        var folder = await run;
+        Assert.Equal(1, freshClients);
+        Assert.Equal(1, _server.BodyRequestCount("model.onnx"));
+        Assert.Equal(2, _server.BodyRequestCount("model.onnx.data"));
+        Assert.Empty(await downloader.VerifyAsync(Source, Layout, folder, deadline.Token));
+        var finalFile = snapshots.Last(p => p.CurrentFile == "model.onnx.data");
+        Assert.Equal(finalFile.BytesTotal, finalFile.BytesReceived + finalFile.BytesReused);
+        Assert.Contains(snapshots, p => p.Phase == DownloadPhase.Reconnecting);
+        if (!ignoreRange) Assert.Contains(snapshots, p => p.CurrentFile == "model.onnx.data" && p.BytesReused == 1);
+    }
+
+    [Fact]
+    public async Task Stop_wins_over_reconnect_and_leaves_the_partial_file()
+    {
+        _server.PauseAfterFirstByteOf = "model.onnx.data";
+        var firstByte = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var stop = new CancellationTokenSource();
+        var downloader = NewDownloader();
+        var progress = new SynchronousProgress(p =>
+        {
+            if (p.CurrentFile == "model.onnx.data" && p.CurrentFileBytes == 1) firstByte.TrySetResult();
+            if (p.Phase == DownloadPhase.Reconnecting) stop.Cancel();
+        });
+        var run = downloader.EnsureModelAsync(Source, Layout, _root, progress, stop.Token);
+        await firstByte.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await Task.Delay(50);
+        downloader.RequestReconnect();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => run.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal(1, _server.BodyRequestCount("model.onnx.data"));
+        Assert.True(File.Exists(Path.Combine(ModelFolder, "model.onnx.data.incomplete")));
+    }
+
+    private sealed class SynchronousProgress(Action<DownloadProgress> report) : IProgress<DownloadProgress>
+    {
+        public void Report(DownloadProgress value) => report(value);
+    }
+
     [Fact]
     public async Task A_model_downloads_and_reports_itself_complete()
     {

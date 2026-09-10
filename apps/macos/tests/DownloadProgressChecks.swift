@@ -17,6 +17,25 @@ import Foundation
 @main
 struct DownloadProgressChecks {
     static func main() async throws {
+        let epoch = Date(timeIntervalSince1970: 0)
+        var speed = DownloadSpeedHistory()
+        speed.reset(at: epoch, received: 0)
+        for second in 0...31 {
+            speed.sample(at: epoch.addingTimeInterval(Double(second)), received: Int64(second * 55_000))
+        }
+        precondition(speed.rate(at: epoch.addingTimeInterval(31), received: 31 * 55_000, window: 10) == 55_000)
+        speed.sample(at: epoch.addingTimeInterval(61), received: 31 * 55_000)
+        precondition(speed.rate(at: epoch.addingTimeInterval(61), received: 31 * 55_000, window: 10) == 0)
+        speed.reset(at: epoch.addingTimeInterval(62), received: 31 * 55_000)
+        precondition(speed.rate(at: epoch.addingTimeInterval(62), received: 31 * 55_000, window: 10) == 0)
+        var slow = ModelDownloadProgress(phase: .downloading, lastReceived: epoch, waitingSince: epoch,
+            elapsed: 64, sampledAt: epoch, slow: true)
+        precondition(slow.isSlow(at: epoch))
+        precondition(!slow.isSlow(at: epoch.addingTimeInterval(30)))
+        precondition(slow.elapsedText(at: epoch) == "Model download elapsed: 1:04")
+        slow.phase = .verifying
+        precondition(!slow.isSlow(at: epoch))
+        precondition(slow.elapsedText(at: epoch.addingTimeInterval(3600)) == "Model download elapsed: 1:01:04")
         let mailbox = DownloadReceiptMailbox()
         mailbox.begin(file: "weights", completed: 2_350_000_000, total: 5_000_000_000,
                       fileTotal: 3_000_000_000, otherTotal: 2_000_000_000)
