@@ -196,16 +196,10 @@ struct ContentView: View {
                     // the pickers around it correctly greyed out. Refusing hits
                     // is what actually stops typing; the opacity is what makes
                     // it look refused.
-                    ScrollView {
-                    VStack(alignment: .leading, spacing: Space.tight) {
-                        textCard
-                        exampleStrip
-                    }
-                    .disabled(engine.status.isBusy)
-                    .allowsHitTesting(!engine.status.isBusy)
-                    .opacity(engine.status.isBusy ? 0.6 : 1)
-                    optionsCard
-                        .disabled(engine.status.isBusy)
+                    if engine.downloadFeedback != nil {
+                        ScrollView { editableForm }
+                    } else {
+                        editableForm
                     }
                 }
             }
@@ -670,6 +664,18 @@ struct ContentView: View {
         }
         .padding(.horizontal, Space.row)
         .padding(.vertical, Space.tight)
+    }
+
+    @ViewBuilder
+    private var editableForm: some View {
+        VStack(alignment: .leading, spacing: Space.tight) {
+            textCard
+            exampleStrip
+        }
+        .disabled(engine.status.isBusy)
+        .allowsHitTesting(!engine.status.isBusy)
+        .opacity(engine.status.isBusy ? 0.6 : 1)
+        optionsCard.disabled(engine.status.isBusy)
     }
 
     // MARK: Bottom bar (status + playback + generate)

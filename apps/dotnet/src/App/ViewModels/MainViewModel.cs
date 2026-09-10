@@ -55,7 +55,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public Func<TtsMode, bool>? ModelComplete { get; init; }
     public bool NeedsModel => !IsBusy && !IsTranscribing && !ShowingHistory && ModelComplete?.Invoke(Mode) == false;
     public string ModelNotice => $"{Mode.DisplayName()} needs a voice-model download. Bunyi downloads the files, then creates your speech automatically. Downloaded models are saved for reuse.";
-    public Avalonia.Controls.Primitives.ScrollBarVisibility ContentScrollMode => ShowingHistory
+    public Avalonia.Controls.Primitives.ScrollBarVisibility ContentScrollMode => ShowingHistory || !Download.Visible
         ? Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled : Avalonia.Controls.Primitives.ScrollBarVisibility.Auto;
     private readonly ILogSink _log;
 
@@ -797,13 +797,21 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void Stop()
     {
-        if (_listenCancellation is { } listening) { Status = "Stopping…"; listening.Cancel(); }
+        if (_listenCancellation is { } listening)
+        {
+            listening.Cancel();
+            OnEngineStatusChanged(this, new EngineStatus(EngineState.Stopping));
+        }
         else _engine.RequestStop();
     }
 
-    public void ReportTranscriptionDownload(DownloadProgress progress) => OnEngineStatusChanged(this,
-        new EngineStatus(progress.Phase == DownloadPhase.Done ? EngineState.Transcribing : EngineState.Downloading,
-            progress.Fraction, Download: progress, DownloadResource: "transcription model"));
+    public void ReportTranscriptionDownload(DownloadProgress progress)
+    {
+        if (_listenCancellation?.IsCancellationRequested == true) return;
+        OnEngineStatusChanged(this,
+            new EngineStatus(progress.Phase == DownloadPhase.Done ? EngineState.Transcribing : EngineState.Downloading,
+                progress.Fraction, Download: progress, DownloadResource: "transcription model"));
+    }
 
     [RelayCommand]
     private void Play()

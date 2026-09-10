@@ -59,7 +59,7 @@ jobs:
       - name: Check measured download feedback
         run: |
           swiftc -parse-as-library ModelDownloadProgress.swift HTTPFileDownloader.swift ModelFileTransfer.swift tests/DownloadProgressChecks.swift tests/ModelFileTransferChecks.swift -o /tmp/bunyi-download-checks
-          /tmp/bunyi-download-checks
+          python3 tests/check-model-transfer.py /tmp/bunyi-download-checks
       - name: Build
         run: |
           xcodebuild -project Bunyi.xcodeproj \
