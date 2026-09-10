@@ -209,6 +209,19 @@ jobs:
           -p:BunyiCuda=${{ matrix.cuda }}
           -o publish/${{ matrix.rid }}
 
+      - name: Publish CLI
+        working-directory: apps/dotnet
+        run: >
+          dotnet publish src/Cli -c Release -r ${{ matrix.rid }} --self-contained
+          -p:Version=${{ needs.version.outputs.version }}
+          -p:BunyiCuda=${{ matrix.cuda }}
+          -o publish/cli-${{ matrix.rid }}
+
+      - name: Test CLI distribution
+        shell: pwsh
+        working-directory: apps/dotnet
+        run: ./packaging/test-cli.ps1 -PublishDirectory publish/cli-${{ matrix.rid }}
+
       # Self-contained, so the folder is the whole app: no runtime to install
       # and nothing to unpack into Program Files. §15's "portable build" is
       # this, and the archive keeps the folder rather than scattering it.
@@ -222,6 +235,12 @@ jobs:
           Compress-Archive -Path "publish/${{ matrix.rid }}/*" -DestinationPath "dist/$name.zip"
           (Get-FileHash "dist/$name.zip" -Algorithm SHA256).Hash.ToLower() + "  $name.zip" |
             Out-File -Encoding ascii "dist/$name.zip.sha256"
+          $cliName = "Bunyi-CLI-${{ needs.version.outputs.version }}-${{ matrix.rid }}${{ matrix.suffix }}"
+          Compress-Archive -Path "publish/cli-${{ matrix.rid }}/*" -DestinationPath "dist/$cliName.zip"
+          (Get-FileHash "dist/$cliName.zip" -Algorithm SHA256).Hash.ToLower() + "  $cliName.zip" |
+            Out-File -Encoding ascii "dist/$cliName.zip.sha256"
+          Expand-Archive -LiteralPath "dist/$cliName.zip" -DestinationPath "publish/cli-extracted"
+          ./packaging/test-cli.ps1 -PublishDirectory publish/cli-extracted
 
       - name: Package (tar.gz)
         if: matrix.archive == 'tar.gz'
@@ -235,6 +254,13 @@ jobs:
           chmod +x "publish/${{ matrix.rid }}/Bunyi.App"
           tar -czf "dist/$name.tar.gz" -C "publish/${{ matrix.rid }}" .
           sha256sum "dist/$name.tar.gz" | sed "s|dist/||" > "dist/$name.tar.gz.sha256"
+          cli_name="Bunyi-CLI-${{ needs.version.outputs.version }}-${{ matrix.rid }}${{ matrix.suffix }}"
+          chmod +x "publish/cli-${{ matrix.rid }}/bunyi"
+          tar -czf "dist/$cli_name.tar.gz" -C "publish/cli-${{ matrix.rid }}" .
+          sha256sum "dist/$cli_name.tar.gz" | sed "s|dist/||" > "dist/$cli_name.tar.gz.sha256"
+          mkdir -p publish/cli-extracted
+          tar -xzf "dist/$cli_name.tar.gz" -C publish/cli-extracted
+          pwsh -File packaging/test-cli.ps1 -PublishDirectory publish/cli-extracted
 
       # A smoke check that the archive holds an app rather than an empty folder,
       # which a mistyped publish path would otherwise produce silently.
@@ -313,6 +339,12 @@ jobs:
             printf '### Installing\n\n'
             printf '**Windows** — unzip and run `Bunyi.App.exe`.\n'
             printf '**Linux** — untar and run `./Bunyi.App`.\n\n'
+            printf '**CLI for agents and terminals** — use the separate `Bunyi-CLI-` '
+            printf 'archive for your OS, extract the entire folder, and run `bunyi --help` '
+            printf '(Windows: `bunyi.exe --help`). Add that folder to PATH if desired. '
+            printf 'No desktop session or .NET installation is required. '
+            printf 'See [the CLI guide](https://github.com/shaztechio/bunyi-app/blob/%s/apps/dotnet/CLI.md) ' "$tag"
+            printf 'for one-shot generation, the resident server, and download progress.\n\n'
             printf 'Self-contained: there is no .NET runtime to install, and nothing is '
             printf 'written outside the folder you unpack plus your own app-data directory.\n\n'
             printf 'The **-cuda** downloads are the same app built against ONNX Runtime '

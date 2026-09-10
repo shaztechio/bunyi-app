@@ -92,11 +92,15 @@ public sealed class HttpFileDownloader(HttpClient http, ILogSink log)
         string? expectedSha256,
         long? expectedSize,
         Action<long>? onBytes,
-        CancellationToken ct)
+        CancellationToken ct,
+        Action<long>? onReused = null,
+        Action? onVerifying = null,
+        bool allowResume = true)
     {
         ArgumentNullException.ThrowIfNull(uri);
         ArgumentException.ThrowIfNullOrWhiteSpace(destination);
 
+        if (File.Exists(destination) && expectedSha256 is not null) onVerifying?.Invoke();
         if (await CanReuseAsync(destination, expectedSha256, expectedSize, ct).ConfigureAwait(false))
         {
             var length = new FileInfo(destination).Length;
@@ -110,7 +114,7 @@ public sealed class HttpFileDownloader(HttpClient http, ILogSink log)
         // result against; without either, a resumed file could be a mixture of
         // two different server-side versions and nothing would notice.
         var resumeFrom = 0L;
-        if (File.Exists(partial))
+        if (allowResume && File.Exists(partial))
         {
             resumeFrom = new FileInfo(partial).Length;
             if (expectedSize is { } size && resumeFrom >= size) resumeFrom = 0;
@@ -128,6 +132,12 @@ public sealed class HttpFileDownloader(HttpClient http, ILogSink log)
             return new FileResult(FileOutcome.Missing, 0, 0);
         }
 
+        if (response.StatusCode == HttpStatusCode.RequestedRangeNotSatisfiable && resumeFrom > 0)
+        {
+            response.Dispose();
+            return await FetchAsync(uri, destination, expectedSha256, expectedSize, onBytes, ct,
+                onReused, onVerifying, allowResume: false).ConfigureAwait(false);
+        }
         response.EnsureSuccessStatusCode();
 
         // A 200 to a ranged request means the server ignored the range: it is
@@ -140,12 +150,15 @@ public sealed class HttpFileDownloader(HttpClient http, ILogSink log)
             resumeFrom = 0;
         }
 
-        var hash = expectedSha256 is null ? null : IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        if (appending) onReused?.Invoke(resumeFrom);
+
+        using var hash = expectedSha256 is null ? null : IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
 
         // Hashing what is already on disk, so the digest covers the whole file
         // and not merely the part fetched this time.
         if (appending && hash is not null)
         {
+            onVerifying?.Invoke();
             await using var existing = File.OpenRead(partial);
             await HashStreamAsync(existing, hash, ct).ConfigureAwait(false);
         }
@@ -177,6 +190,7 @@ public sealed class HttpFileDownloader(HttpClient http, ILogSink log)
 
         if (hash is not null && expectedSha256 is not null)
         {
+            onVerifying?.Invoke();
             var actual = Convert.ToHexStringLower(hash.GetHashAndReset());
             if (!string.Equals(actual, expectedSha256, StringComparison.OrdinalIgnoreCase))
             {
@@ -190,6 +204,9 @@ public sealed class HttpFileDownloader(HttpClient http, ILogSink log)
                     Path.GetFileName(destination), expectedSha256, actual);
             }
         }
+
+        if (expectedSize is { } expected && new FileInfo(partial).Length != expected)
+            throw new IOException($"{Path.GetFileName(destination)} has an unexpected download size; the partial file can be retried.");
 
         File.Move(partial, destination, overwrite: true);
         return new FileResult(FileOutcome.Downloaded, transferred, new FileInfo(destination).Length);

@@ -14,6 +14,7 @@
 
 using Bunyi.Core.Diagnostics;
 using Bunyi.Core.Models;
+using Bunyi.Core.Runtime;
 using Xunit;
 
 namespace Bunyi.Core.Tests;
@@ -65,6 +66,85 @@ public sealed class ModelDownloaderTests : IAsyncLifetime
     private ModelSource Source => new ModelSource.BaseUrl(_server.BaseUrl);
 
     private string ModelFolder => ModelDownloader.FolderFor(Source, _root);
+
+    [Fact]
+    public async Task Aggregate_download_has_monotonic_bytes_and_reuses_all_assets_offline()
+    {
+        var reports = new List<AggregateDownloadProgress>();
+        var assets = new[] { new DownloadAsset("preset", Source, Layout) };
+        var downloader = NewDownloader();
+        await downloader.DownloadAssetsAsync(assets, _root, new InlineAggregate(reports.Add), default);
+        Assert.True(reports.Zip(reports.Skip(1), (a, b) => a.BytesCompleted <= b.BytesCompleted).All(v => v));
+        Assert.Equal(reports[^1].BytesTotal, reports[^1].BytesCompleted);
+        var requests = _server.RequestCount("model.onnx");
+        reports.Clear();
+        await downloader.DownloadAssetsAsync(assets, _root, new InlineAggregate(reports.Add), default);
+        Assert.Equal(requests, _server.RequestCount("model.onnx"));
+        Assert.Equal(reports[^1].BytesTotal, reports[^1].BytesCompleted);
+    }
+
+    [Fact]
+    public async Task Aggregate_unknown_size_is_null_and_small_disk_blocks_before_transfers()
+    {
+        var assets = new[] { new DownloadAsset("preset", Source, Layout) };
+        await Assert.ThrowsAsync<IOException>(() => NewDownloader().DownloadAssetsAsync(
+            assets, _root, null, default, new SmallDisk()));
+        Assert.Equal(0, _server.BodyRequestCount("model.onnx"));
+        _server.HideContentLengthOnHead = true;
+        var reports = new List<AggregateDownloadProgress>();
+        await NewDownloader().DownloadAssetsAsync(assets, _root, new InlineAggregate(reports.Add), default);
+        Assert.All(reports, p => Assert.Null(p.BytesTotal));
+        Assert.True(reports[^1].BytesCompleted > 0);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Aggregate_resumed_bytes_count_once_even_when_range_is_ignored(bool ignoreRange)
+    {
+        Directory.CreateDirectory(ModelFolder);
+        await File.WriteAllBytesAsync(Path.Combine(ModelFolder, "model.onnx.data.incomplete"), new byte[4096]);
+        _server.IgnoreRangeRequests = ignoreRange;
+        var reports = new List<AggregateDownloadProgress>();
+        await NewDownloader().DownloadAssetsAsync([new("preset", Source, Layout)], _root,
+            new InlineAggregate(reports.Add), default);
+        Assert.Equal(reports[^1].BytesTotal, reports[^1].BytesCompleted);
+        Assert.All(reports.Where(p => p.BytesTotal.HasValue), p => Assert.True(p.BytesCompleted <= p.BytesTotal));
+    }
+
+    private sealed class InlineAggregate(Action<AggregateDownloadProgress> report) : IProgress<AggregateDownloadProgress>
+    {
+        public void Report(AggregateDownloadProgress value) => report(value);
+    }
+
+    [Fact]
+    public async Task Unknown_sizes_still_use_the_layout_estimate_for_disk_preflight()
+    {
+        _server.HideContentLengthOnHead = true;
+        await Assert.ThrowsAsync<IOException>(() => NewDownloader().DownloadAssetsAsync(
+            [new("preset", Source, Layout with { ApproxDownloadBytes = 500_000 })],
+            _root, null, default, new SmallDisk()));
+        Assert.Equal(0, _server.BodyRequestCount("model.onnx"));
+    }
+
+    [Fact]
+    public async Task A_416_restarts_without_double_counting_the_partial()
+    {
+        Directory.CreateDirectory(ModelFolder);
+        await File.WriteAllBytesAsync(Path.Combine(ModelFolder, "model.onnx.data.incomplete"), new byte[4096]);
+        _server.RejectRangesWith416 = true;
+        var reports = new List<AggregateDownloadProgress>();
+        await NewDownloader().DownloadAssetsAsync([new("preset", Source, Layout)], _root,
+            new InlineAggregate(reports.Add), default);
+        Assert.Equal(reports[^1].BytesTotal, reports[^1].BytesCompleted);
+        Assert.All(reports.Where(p => p.BytesTotal.HasValue), p => Assert.True(p.BytesCompleted <= p.BytesTotal));
+    }
+
+    private sealed class SmallDisk : ISystemProbe
+    {
+        public long? AvailableMemoryBytes() => null;
+        public long? FreeSpaceBytes(string path) => 1;
+    }
 
     [Fact]
     public async Task A_model_downloads_and_reports_itself_complete()

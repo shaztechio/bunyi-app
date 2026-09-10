@@ -16,7 +16,8 @@ limitations under the License.
 
 # Bunyi CLI specification
 
-**Status: planned contract; no released implementation yet.**
+**Status: Windows/Linux implementation tracked in #218; native macOS tracked
+in #217. Neither CLI has been released yet.**
 
 This document is the source of truth for the observable behavior of the Bunyi
 command-line interface. [`FEATURES.md`](FEATURES.md) remains authoritative for
@@ -48,6 +49,7 @@ Global options:
 --jsonl            progress events followed by one final JSON document
 --one-shot         do not use a running Bunyi server
 --require-server   require a running Bunyi server
+--config <file>    settings file override (Windows/Linux)
 --help             command help
 ```
 
@@ -58,6 +60,11 @@ A model-dependent command uses the already-running server by default. If no
 server is running, it executes in the calling process and releases its model
 before exit. Starting a server is explicit and never happens as an unnoticed
 side effect of another command.
+
+`--detach` requires an already-running server and cannot be combined with
+`--one-shot`. An unavailable server is an error for a detached request; the
+command never silently runs it synchronously. A failed handshake with an
+existing server is also an error, not permission to run a second engine.
 
 Arguments representing filesystem locations accept relative paths but all
 reported paths are absolute. Existing input paths are resolved before an
@@ -129,6 +136,8 @@ Every event contains `schemaVersion`, `type`, `operation`, `operationId`, and
 - `generating`;
 - `stopping`.
 
+Foreground `server run` also emits `ready` after binding its endpoint.
+
 A download event may contain:
 
 ```json
@@ -149,6 +158,12 @@ A download event may contain:
 
 Byte totals are integers. Unknown totals and ETAs are `null`, not zero. Within
 one operation, `bytesCompleted` never decreases. Rate and ETA are estimates.
+Completed bytes measure unique usable or transferred file coverage, including
+reused files and resumable prefixes, rather than counting retry traffic twice.
+Known totals remain stable after sizing. A required file with unknown size
+makes the aggregate total unknown until completion; a known subtotal must not
+be presented as the total. Download progress is throttled to avoid flooding
+agent context, with immediate phase changes and an unthrottled terminal result.
 Generation progress reports frames and seconds of audio produced so far rather
 than inventing a completion percentage.
 
@@ -190,8 +205,14 @@ Voice design requires `--voice <description>`. Voice clone requires
 `--reference <audio-path>` and either `--transcript <text>` or
 `--auto-transcribe`.
 
+Alternatively, clone accepts `--saved-voice <id>` from `voices list`. It cannot
+be combined with reference or transcript options.
+
 Required inputs are validated before Doctor, model download, or model load.
-The same preflight checks as desktop generation then run before any download.
+The same preflight checks as desktop generation run before downloading its
+TTS model. Explicit auto-transcription first prepares Whisper (with its own
+download disk-space check), transcribes the reference, and disposes Whisper
+before loading the TTS model.
 
 The successful result contains:
 
@@ -210,7 +231,9 @@ but releases generation working memory.
 
 ## 4. Transcription and speakers
 
-`bunyi transcribe <audio-path>` returns the transcript as text or JSON.
+`bunyi transcribe <audio-path> [--language <language>]` returns the transcript
+as text or JSON. It processes the full clip; clone-reference auto-transcription
+uses the same ten-second trim as reference preparation in the desktop app.
 Transcription is local on every platform. The macOS implementation requires
 on-device Speech recognition or uses a local Whisper fallback; it never sends
 reference audio to Apple's server.
@@ -274,6 +297,12 @@ bunyi server stop
 `start` launches the same server in the background, waits until it accepts a
 status request, then returns. Starting an already-running compatible server is
 a successful no-op. A stale server record is repaired automatically.
+`run` emits a ready event in JSON-lines mode after binding the endpoint; it is
+a long-running stream whose terminal result is graceful shutdown. In JSON
+mode it writes only the shutdown result. `start` emits its bounded result only
+after readiness has been verified. Neither form installs a login service.
+On Linux, a supervisor's SIGTERM requests the same cooperative shutdown as
+`server stop`; it does not report stopped while model work is still active.
 
 The server:
 
@@ -286,6 +315,12 @@ The server:
   queue length, and uptime through `status`;
 - releases generation working memory after every run;
 - unloads the model before graceful exit.
+
+The ONNX server bounds its waiting queue at 32 jobs and rejects excess work
+with a structured busy error. It retains up to 256 terminal job records in
+memory; older records may be evicted. Progress streams coalesce updates for
+slow readers (64 buffered events); terminal state is never dropped. Clients
+must not interpret a missing intermediate progress update as a failure.
 
 `preload` downloads if needed and loads a model without generating. `unload`
 waits for active model work to finish or be cancelled, then releases it.
@@ -322,6 +357,22 @@ discarded when the server exits; model and output files are the durable record.
 
 ## 8. Other feature commands
 
+The exact secondary command forms are:
+
+```text
+bunyi voices add --name <name> --reference <path> (--transcript <text> | --auto-transcribe)
+bunyi voices remove <voice-id>
+bunyi history show|remove <output-path>
+bunyi backup create|restore <zip-path>
+bunyi config get <key>
+bunyi config set <key> <value>
+bunyi logs tail [--lines <count>]
+```
+
+Configuration keys are `modelsFolder`, `unloadOnModeSwitch`, and
+`modelSource.preset|design|clone`. Setting a models folder requires an existing
+directory. Backup creation refuses to overwrite an existing destination.
+
 - `voices list|add|remove` uses the saved-voice behavior and `voices.json`
   format in the shared specs. Adding a voice accepts a transcript or explicit
   auto-transcription.
@@ -344,6 +395,14 @@ an unqualified `--all` unless that behavior is separately specified and tested.
 Windows and Linux use the existing data and settings roots in
 `DATA-FORMATS.md`, so the Avalonia app and CLI share models, outputs, voices,
 and configuration.
+
+For isolated automation, Windows/Linux accept `BUNYI_DATA_DIR` as an absolute
+directory overriding both data and configuration roots. `--config <file>`
+overrides the settings file only (`BUNYI_CONFIG_FILE` is its environment
+equivalent). Use the same overrides for server startup and subsequent
+commands: the local endpoint is scoped to the user and those overrides.
+Custom profiles still respect the shared lease if they select the same models
+folder. Neither override migrates existing desktop data.
 
 The standalone macOS CLI is not entitled to the desktop app's private sandbox
 container. Its defaults are:
@@ -373,6 +432,14 @@ lease for model mutation and inference. Read-only history, model-status, and
 configuration commands do not require it. A contending process waits only when
 asked to; otherwise it returns `bunyi_busy` with the owning operation where
 available.
+
+A process retains the lease while a model remains resident, even between
+generations. This prevents another process from deleting or replacing its
+memory-mapped files. `server unload`, `server stop`, or unloading the desktop
+model releases that lease. Commands within the owning runtime can reuse it;
+model mutations still wait for that runtime's active inference to finish.
+The Windows/Linux implementation establishes this protection between its
+updated desktop app and CLI. Native macOS adoption is tracked in #217.
 
 Ctrl+C and `jobs cancel` request cooperative cancellation. The operation
 reports `stopping` until inference has actually stopped using its model. It

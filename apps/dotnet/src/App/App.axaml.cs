@@ -37,7 +37,6 @@ namespace Bunyi.App;
 /// </summary>
 public partial class App : Application
 {
-    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromMinutes(30) };
 
     public override void Initialize()
     {
@@ -61,87 +60,20 @@ public partial class App : Application
             var log = LogStore.Shared;
             Infrastructure.LinuxAccessibilityFocus.Install(log);
             if (OperatingSystem.IsLinux()) Styles.Add(Infrastructure.LinuxAccessibilityPresentation.CreateStyles());
-            var settingsStore = new SettingsStore(log);
-            var settings = settingsStore.Load();
-
-            ApplyAppearance(settings.Appearance);
-
-            // Read again for anything that runs later, rather than closing over
-            // the value above. AppSettings is an immutable record and Settings
-            // saves a change by persisting a NEW one, so a captured instance is
-            // a snapshot of the moment the app launched — and every source or
-            // folder the user changed afterwards was ignored until the next
-            // launch. Pressing Generate went on downloading from wherever the
-            // app started up pointing at, silently, which is the worst shape
-            // this could take: nothing failed, it just did the old thing.
-            //
-            // Loading is a small JSON read behind a lock, and it happens when a
-            // run starts or Doctor is asked — not in any loop.
-            AppSettings Current() => settingsStore.Load();
-
-            var probe = new SystemProbe();
-            var downloader = new ModelDownloader(Http, log);
-
-            ModelSource SourceFor(TtsMode mode) =>
-                ModelSource.Parse(Current().SourceFor(mode), DefaultSourceFor(mode));
-
-            // Doctor needs the same view of sources and folders the engine has,
-            // so it is built from the same functions rather than a second copy.
-            Task<DoctorReport> RunDoctor(TtsMode mode, bool deep, CancellationToken ct)
+            var runtime = new Bunyi.Core.Runtime.BunyiRuntime(log);
+            var settingsStore = runtime.Settings;
+            var settings = runtime.CurrentSettings;
+            var engine = runtime.Engine;
+            try
             {
-                // A mode with no export yet has nothing to check, and reporting
-                // on the preset-voice model instead would answer a question
-                // nobody asked — with the wrong size, about the wrong download.
-                if (!ModelLayout.Exists(mode))
-                {
-                    return Task.FromResult(new DoctorReport(mode, [
-                        new DoctorFinding(
-                            "Mode",
-                            $"{mode.DisplayName()} is not available in this version yet. "
-                            + "Preset voice and voice design both work.",
-                            DoctorSeverity.Blocker),
-                    ]));
-                }
-
-                var layout = ModelLayout.For(mode);
-
-                return Bunyi.Core.Diagnostics.Doctor.RunAsync(
-                    mode,
-                    SourceFor(mode),
-                    layout,
-                    settingsStore.ResolveModelsFolder(Current()),
-                    Bunyi.Core.Infrastructure.AppPaths.Outputs,
-                    probe,
-                    Reachable,
-                    (folder, token) => downloader.VerifyAsync(SourceFor(mode), layout, folder, token),
-                    deep,
-                    provider: null,
-                    ct: ct);
+                using var migration = runtime.AcquireOperation("models.migrate");
+                LegacyPaths.MoveMisplacedWhisper(runtime.ModelsRoot, log);
             }
-
-            // One synthesizer per mode. They are different pipelines over
-            // different exports, and the engine unloads whichever is being left
-            // behind when the mode changes.
-            var preset = new PresetSpeechSynthesizer(log);
-            var design = new DesignSpeechSynthesizer(log);
-            var clone = new CloneSpeechSynthesizer(log);
-
-            var engine = new OnnxTtsEngine(
-                mode => mode switch
-                {
-                    TtsMode.VoiceDesign => design,
-                    TtsMode.VoiceClone => clone,
-                    _ => (ISpeechSynthesizer)preset,
-                },
-                downloader,
-                log,
-                SourceFor,
-                ModelLayout.For,
-                () => settingsStore.ResolveModelsFolder(Current()),
-                () => Bunyi.Core.Infrastructure.AppPaths.Outputs,
-                typeof(App).Assembly.GetName().Version?.ToString(3) ?? "0.1.0",
-                time: null,
-                doctor: RunDoctor);
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            { log.Log("Model migration deferred: " + ex.Message); }
+            ApplyAppearance(settings.Appearance);
+            Task<DoctorReport> RunDoctor(TtsMode mode, bool deep, CancellationToken ct) =>
+                runtime.DoctorAsync(mode, deep, ct);
 
             var settingsViewModel = new SettingsViewModel(
                 settingsStore,
@@ -159,53 +91,8 @@ public partial class App : Application
                 Logs = new LogsViewModel(log),
             };
 
-            // §4: the transcript is filled in by listening, on-device. The model
-            // comes down through the same downloader as everything else, so
-            // §3b's progress, resume and checksums apply to it — and nothing
-            // fetches it until someone actually clones a voice.
-            // Anything left at the old path is moved, so an install that
-            // already fetched it does not download it again — and does not keep
-            // 141 MB somewhere nothing can see.
-            LegacyPaths.MoveMisplacedWhisper(settingsStore.ResolveModelsFolder(settings), log);
-
-            var transcriber = new WhisperTranscriber(
-                async ct =>
-                {
-                    var folder = await downloader.EnsureModelAsync(
-                        new ModelSource.Repo(ModelLayout.WhisperSource),
-                        ModelLayout.Whisper,
-                        // The models root itself, not a corner of it. Putting
-                        // it under whisper/ hid 141 MB from Settings ▸ Storage,
-                        // which lists models/<org>/<repo> — so it could not be
-                        // seen or deleted — and it put a second models/ tree
-                        // inside a backup, where the restore looks for exactly
-                        // one.
-                        settingsStore.ResolveModelsFolder(Current()),
-                        null,
-                        ct);
-
-                    return Path.Combine(folder, "ggml-base.bin");
-                },
-                log);
-
-            viewModel.Transcribe = async (path, ct) =>
-            {
-                // Only the first ten seconds are ever cloned from, so the
-                // transcript is taken from exactly that much. A transcript
-                // running past the audio makes the clone finish the recording
-                // instead of speaking the text.
-                var trimmed = ReferenceAudio.WriteTrimmedCopy(
-                    path, TimeSpan.FromSeconds(10), log);
-
-                try
-                {
-                    return await transcriber.TranscribeAsync(trimmed ?? path, "english", ct);
-                }
-                finally
-                {
-                    if (trimmed is not null && File.Exists(trimmed)) File.Delete(trimmed);
-                }
-            };
+            viewModel.Transcribe = (path, ct) => runtime.TranscribeAsync(path, viewModel.Language, null, ct);
+            settingsViewModel.AcquireOperation = runtime.AcquireOperation;
 
             // §3d: a model being deleted is evicted from memory first,
             // otherwise the app keeps generating from files that are gone — and
@@ -214,12 +101,13 @@ public partial class App : Application
             settingsViewModel.EvictLoadedModel = async () =>
             {
                 engine.RequestStop();
-                await engine.WaitForIdleAsync(TimeSpan.FromSeconds(15));
+                if (!await engine.WaitForIdleAsync(TimeSpan.FromSeconds(15)))
+                    throw new EngineBusyException(engine.Status.State);
                 await engine.UnloadAsync();
             };
 
             desktop.MainWindow = new MainWindow { DataContext = viewModel };
-            desktop.ShutdownRequested += async (_, _) => await engine.DisposeAsync();
+            desktop.ShutdownRequested += async (_, _) => await runtime.DisposeAsync();
 
             log.Log("Bunyi started.");
 
@@ -269,32 +157,6 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// Whether a source answers, for Doctor's reachability check.
-    /// </summary>
-    /// <remarks>
-    /// A HEAD, and a short timeout of its own: the question is whether the
-    /// server is there, and waiting the download client's thirty minutes to
-    /// find out it is not would defeat the point of asking before the download.
-    /// </remarks>
-    private static async Task<bool> Reachable(Uri uri, CancellationToken ct)
-    {
-        try
-        {
-            using var quick = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
-            using var request = new HttpRequestMessage(HttpMethod.Head, uri);
-            using var response = await quick.SendAsync(request, ct);
-
-            // Any answer means the server is alive. A 404 on one file is a
-            // different problem, and the download reports it far better.
-            return response.StatusCode != System.Net.HttpStatusCode.RequestTimeout;
-        }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
-        {
-            return false;
-        }
-    }
-
-    /// <summary>
     /// Applies the appearance to every window the app owns (spec §7).
     /// </summary>
     private void ApplyAppearance(Appearance appearance) =>
@@ -308,11 +170,5 @@ public partial class App : Application
     /// <summary>
     /// The built-in source for a mode when Settings leaves it blank (spec §3a).
     /// </summary>
-    private static string DefaultSourceFor(TtsMode mode) => mode switch
-    {
-        TtsMode.PresetVoice => "elbruno/Qwen3-TTS-12Hz-0.6B-CustomVoice-ONNX",
-        TtsMode.VoiceDesign => "wavekat/Qwen3-TTS-1.7B-VoiceDesign-ONNX",
-        TtsMode.VoiceClone => "wavekat/Qwen3-TTS-0.6B-Base-ONNX",
-        _ => string.Empty,
-    };
+    private static string DefaultSourceFor(TtsMode mode) => Bunyi.Core.Runtime.BunyiRuntime.DefaultSourceFor(mode);
 }

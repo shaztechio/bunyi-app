@@ -16,6 +16,7 @@ using Bunyi.Core.Audio;
 using Bunyi.Core.Diagnostics;
 using Bunyi.Core.Engine;
 using Bunyi.Core.Models;
+using Bunyi.Core.Runtime;
 using Xunit;
 
 namespace Bunyi.Core.Tests;
@@ -55,7 +56,8 @@ public sealed class EngineTests : IAsyncLifetime
 
     private OnnxTtsEngine NewEngine(
         FakeSynthesizer synth,
-        Func<TtsMode, bool, CancellationToken, Task<DoctorReport>>? doctor = null) => new(
+        Func<TtsMode, bool, CancellationToken, Task<DoctorReport>>? doctor = null,
+        Func<IDisposable>? acquireLease = null) => new(
         synth,
         new ModelDownloader(_http, _log),
         _log,
@@ -63,7 +65,90 @@ public sealed class EngineTests : IAsyncLifetime
         _ => Layout,
         () => _root,
         () => Path.Combine(_root, "Outputs"),
-        doctor: doctor);
+        doctor: doctor, acquireLease: acquireLease);
+
+    [Fact]
+    public async Task Preload_reuses_residency_for_later_generation_without_writing_audio()
+    {
+        var synth = new FakeSynthesizer();
+        await using var engine = NewEngine(synth);
+        await engine.PreloadAsync(TtsMode.PresetVoice, null, default);
+        Assert.Null(engine.LastOutputPath);
+        Assert.Equal(TtsMode.PresetVoice, engine.LoadedMode);
+        await engine.PreloadAsync(TtsMode.PresetVoice, null, default);
+        await engine.GenerateAsync(Request(), null, default);
+        Assert.Equal(1, synth.Loads);
+        await engine.UnloadAsync();
+        Assert.Null(engine.LoadedMode);
+        await engine.PreloadAsync(TtsMode.PresetVoice, null, default);
+        Assert.Equal(2, synth.Loads);
+    }
+
+    [Fact]
+    public async Task Output_metadata_keeps_source_path_but_never_embeds_url_credentials()
+    {
+        var source = new ModelSource.BaseUrl(new Uri("https://user:password@models.example.test/export?token=secret#private"));
+        var folder = ModelDownloader.FolderFor(source, _root);
+        Directory.CreateDirectory(folder);
+        await File.WriteAllBytesAsync(Path.Combine(folder, "model.onnx"), [1]);
+        await using var engine = new OnnxTtsEngine(new FakeSynthesizer(), new ModelDownloader(_http, _log),
+            _log, _ => source, _ => Layout, () => _root, () => Path.Combine(_root, "Outputs"));
+        var result = await engine.GenerateAsync(Request(), null, default);
+        Assert.Equal("https://models.example.test/export", WavMetadata.TryRead(result.OutputPath)!.ModelRepo);
+    }
+
+    [Fact]
+    public async Task Resident_model_keeps_other_process_leases_out_until_unloaded()
+    {
+        await using var engine = NewEngine(new FakeSynthesizer(),
+            acquireLease: () => ModelOperationLease.Acquire(_root));
+        await engine.PreloadAsync(TtsMode.PresetVoice, null, default);
+        Assert.Throws<BunyiBusyException>(() => ModelOperationLease.Acquire(_root));
+        await engine.UnloadAsync();
+        using var available = ModelOperationLease.Acquire(_root);
+    }
+
+    [Fact]
+    public async Task Failed_preload_releases_its_lease()
+    {
+        await using var engine = NewEngine(new FakeSynthesizer(),
+            doctor: (_, _, _) => throw new InvalidOperationException("preflight failed"),
+            acquireLease: () => ModelOperationLease.Acquire(_root));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => engine.PreloadAsync(TtsMode.PresetVoice, null, default));
+        using var available = ModelOperationLease.Acquire(_root);
+    }
+
+    [Fact]
+    public async Task Unload_refuses_active_inference_and_disposal_cancels_before_disposing()
+    {
+        var synth = new FakeSynthesizer { Gate = new SemaphoreSlim(0) };
+        var engine = NewEngine(synth);
+        var run = engine.GenerateAsync(Request(), null, default);
+        await synth.Entered.Task;
+        await Assert.ThrowsAsync<EngineBusyException>(engine.UnloadAsync);
+        await engine.DisposeAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => run);
+        Assert.False(synth.IsLoaded);
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => engine.PreloadAsync(TtsMode.PresetVoice, null, default));
+    }
+
+    [Fact]
+    public async Task Cancellation_and_disposal_wait_for_uninterruptible_native_work_to_return()
+    {
+        var synth = new FakeSynthesizer { Gate = new SemaphoreSlim(0), IgnoreCancellationWhileWaiting = true };
+        var engine = NewEngine(synth);
+        var run = engine.GenerateAsync(Request(), null, default);
+        await synth.Entered.Task;
+        var disposing = engine.DisposeAsync().AsTask();
+        Assert.False(disposing.IsCompleted);
+        Assert.False(run.IsCompleted);
+        Assert.Equal(EngineState.Stopping, engine.Status.State);
+        await Assert.ThrowsAsync<EngineBusyException>(() => engine.PreloadAsync(TtsMode.PresetVoice, null, default));
+        synth.Gate.Release();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => run);
+        await disposing;
+        Assert.False(synth.IsLoaded);
+    }
 
     private static GenerateRequest Request(string text = "Hello there.") =>
         new(TtsMode.PresetVoice, text, "english", "ryan");
@@ -526,6 +611,7 @@ public sealed class EngineTests : IAsyncLifetime
     private sealed class FakeSynthesizer : ISpeechSynthesizer
     {
         public SemaphoreSlim? Gate { get; set; }
+        public bool IgnoreCancellationWhileWaiting { get; set; }
         public Exception? Throw { get; set; }
         public short[] Samples { get; set; } = new short[24_000];
         public int Loads { get; private set; }
@@ -554,7 +640,7 @@ public sealed class EngineTests : IAsyncLifetime
 
             foreach (var n in ReportFrames) frames?.Report(n);
 
-            if (Gate is not null) await Gate.WaitAsync(ct).ConfigureAwait(false);
+            if (Gate is not null) await Gate.WaitAsync(IgnoreCancellationWhileWaiting ? CancellationToken.None : ct).ConfigureAwait(false);
             ct.ThrowIfCancellationRequested();
             if (Throw is not null) throw Throw;
 

@@ -67,6 +67,15 @@ public sealed class OnnxTtsEngine : ITtsEngine
     private CancellationTokenSource? _run;
     private EngineStatus _status = EngineStatus.Idle;
     private string? _loadedFolder;
+    private TtsMode? _loadedMode;
+    private readonly Func<IDisposable>? _acquireLease;
+    private readonly Action? _validateOperation;
+    private IDisposable? _modelLease;
+    private string? _leaseRoot;
+    private readonly SemaphoreSlim _lifecycle = new(1, 1);
+    private bool _disposed;
+    public string? LoadedFolder => _loadedFolder;
+    public TtsMode? LoadedMode => _loadedMode;
 
     /// <summary>One synthesizer for every mode.</summary>
     /// <remarks>
@@ -83,11 +92,13 @@ public sealed class OnnxTtsEngine : ITtsEngine
         Func<string>? outputFolder = null,
         string appVersion = "0.1.0",
         TimeProvider? time = null,
-        Func<TtsMode, bool, CancellationToken, Task<DoctorReport>>? doctor = null)
+        Func<TtsMode, bool, CancellationToken, Task<DoctorReport>>? doctor = null,
+        Func<IDisposable>? acquireLease = null,
+        Action? validateOperation = null)
         : this(
             _ => synthesizer ?? throw new ArgumentNullException(nameof(synthesizer)),
             downloader, log, sourceFor, layoutFor, modelsRoot, outputFolder,
-            appVersion, time, doctor)
+            appVersion, time, doctor, acquireLease, validateOperation)
     {
     }
 
@@ -107,7 +118,9 @@ public sealed class OnnxTtsEngine : ITtsEngine
         Func<string>? outputFolder = null,
         string appVersion = "0.1.0",
         TimeProvider? time = null,
-        Func<TtsMode, bool, CancellationToken, Task<DoctorReport>>? doctor = null)
+        Func<TtsMode, bool, CancellationToken, Task<DoctorReport>>? doctor = null,
+        Func<IDisposable>? acquireLease = null,
+        Action? validateOperation = null)
     {
         _synthFor = synthesizerFor ?? throw new ArgumentNullException(nameof(synthesizerFor));
 
@@ -123,6 +136,8 @@ public sealed class OnnxTtsEngine : ITtsEngine
         _appVersion = appVersion;
         _time = time ?? TimeProvider.System;
         _doctor = doctor;
+        _acquireLease = acquireLease;
+        _validateOperation = validateOperation;
     }
 
     /// <summary>
@@ -143,6 +158,7 @@ public sealed class OnnxTtsEngine : ITtsEngine
 
         _synth = wanted;
         _loadedFolder = null;
+        _loadedMode = null;
     }
 
     /// <inheritdoc />
@@ -166,11 +182,97 @@ public sealed class OnnxTtsEngine : ITtsEngine
     /// <inheritdoc />
     public async Task UnloadAsync()
     {
-        await _synth.UnloadAsync().ConfigureAwait(false);
+        if (!_lifecycle.Wait(0)) throw new EngineBusyException(Status.State);
+        try { await UnloadCoreAsync().ConfigureAwait(false); }
+        finally { _lifecycle.Release(); }
+    }
 
-        // Forget which folder was loaded too, or the next run skips loading and
-        // generates against a model that is no longer there.
+    private async Task UnloadCoreAsync()
+    {
+        await _synth.UnloadAsync().ConfigureAwait(false);
         _loadedFolder = null;
+        _loadedMode = null;
+        _modelLease?.Dispose();
+        _modelLease = null;
+        _leaseRoot = null;
+    }
+
+    private async Task EnsureLeaseAsync()
+    {
+        _validateOperation?.Invoke();
+        var root = Path.GetFullPath(_modelsRoot());
+        if (_modelLease is not null && _leaseRoot != root) await UnloadCoreAsync().ConfigureAwait(false);
+        if (_modelLease is null && _acquireLease is not null)
+        {
+            _modelLease = _acquireLease();
+            _leaseRoot = root;
+        }
+    }
+
+    private async Task EvictBeforeModelMutation(ModelSource source, ModelLayout layout, string root)
+    {
+        var folder = ModelDownloader.FolderFor(source, root);
+        if (_synth.IsLoaded && (_loadedFolder != folder || !ModelDownloader.Inspect(folder, layout).IsComplete))
+        {
+            await _synth.UnloadAsync().ConfigureAwait(false);
+            _loadedFolder = null;
+            _loadedMode = null;
+        }
+    }
+
+    public async Task PreloadAsync(TtsMode mode, IProgress<EngineStatus>? progress, CancellationToken ct)
+    {
+        if (!_lifecycle.Wait(0)) throw new EngineBusyException(Status.State);
+        CancellationTokenSource? run = null;
+        try
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            lock (_gate)
+            {
+                run = _run = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                _status = new EngineStatus(EngineState.Downloading);
+            }
+            var token = run.Token;
+            await Task.Run(async () =>
+            {
+                await EnsureLeaseAsync().ConfigureAwait(false);
+                var source = _sourceFor(mode);
+                var root = _modelsRoot();
+                var layout = _layoutFor(mode);
+                await UseSynthesizerFor(mode).ConfigureAwait(false);
+                await EvictBeforeModelMutation(source, layout, root).ConfigureAwait(false);
+                if (_doctor is not null)
+                {
+                    var report = await _doctor(mode, false, token).ConfigureAwait(false);
+                    if (report.HasBlockers) throw new PreflightFailedException(report);
+                }
+                var folder = await _downloader.EnsureModelAsync(source, layout, root,
+                    new InlineProgress<DownloadProgress>(p => Publish(new EngineStatus(EngineState.Downloading,
+                        p.Fraction, p.Human()), progress)), token).ConfigureAwait(false);
+                if (!_synth.IsLoaded || _loadedFolder != folder)
+                {
+                    Publish(new EngineStatus(EngineState.Loading), progress);
+                    await _synth.LoadAsync(folder, token).ConfigureAwait(false);
+                    _loadedFolder = folder;
+                }
+                _loadedMode = mode;
+                token.ThrowIfCancellationRequested();
+            }, CancellationToken.None).ConfigureAwait(false);
+            Publish(EngineStatus.Idle, progress);
+        }
+        catch (OperationCanceledException) { await FinishStoppingAsync(progress).ConfigureAwait(false); throw; }
+        catch (Exception ex) { Publish(new EngineStatus(EngineState.Error, Message: ex.Message), progress); throw; }
+        finally
+        {
+            try { if (!_synth.IsLoaded) await UnloadCoreAsync().ConfigureAwait(false); }
+            finally
+            {
+                lock (_gate) { if (ReferenceEquals(_run, run)) _run = null; }
+                run?.Dispose();
+                _lifecycle.Release();
+                SignalIdleWaiters();
+            }
+        }
     }
 
     /// <inheritdoc />
@@ -180,12 +282,14 @@ public sealed class OnnxTtsEngine : ITtsEngine
         CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(request);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (!_lifecycle.Wait(0)) throw new EngineBusyException(Status.State);
 
         CancellationTokenSource run;
         lock (_gate)
         {
-            if (_status.IsBusy) throw new EngineBusyException(_status.State);
             run = _run = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            _status = new EngineStatus(EngineState.Downloading);
         }
 
         // §2: starting a run clears the previous result, so nothing offers to
@@ -203,6 +307,9 @@ public sealed class OnnxTtsEngine : ITtsEngine
             {
                 var token = run.Token;
                 var mode = request.Mode;
+                await EnsureLeaseAsync().ConfigureAwait(false);
+                var source = _sourceFor(mode);
+                var root = _modelsRoot();
 
                 // Before anything else, because everything else is worse while
                 // the model of the mode being left is still resident. The
@@ -218,6 +325,7 @@ public sealed class OnnxTtsEngine : ITtsEngine
                 // unloads nothing: the synthesizer is the same object, and this
                 // returns without doing anything.
                 await UseSynthesizerFor(mode).ConfigureAwait(false);
+                await EvictBeforeModelMutation(source, _layoutFor(mode), root).ConfigureAwait(false);
 
                 // §11: Doctor runs BEFORE any download begins, because the
                 // point is not to discover after 3.4 GB that there was never
@@ -241,9 +349,9 @@ public sealed class OnnxTtsEngine : ITtsEngine
                 }
 
                 var folder = await _downloader.EnsureModelAsync(
-                    _sourceFor(mode),
+                    source,
                     _layoutFor(mode),
-                    _modelsRoot(),
+                    root,
                     // Deliberately NOT Progress<T>. That posts to the captured
                     // synchronization context, so a report can be delivered
                     // after the run has already published its final status —
@@ -262,6 +370,7 @@ public sealed class OnnxTtsEngine : ITtsEngine
                     await _synth.LoadAsync(folder, token).ConfigureAwait(false);
                     _loadedFolder = folder;
                 }
+                _loadedMode = mode;
 
                 token.ThrowIfCancellationRequested();
                 Publish(new EngineStatus(EngineState.Generating), progress);
@@ -301,7 +410,7 @@ public sealed class OnnxTtsEngine : ITtsEngine
                     effective = request with { Instruct = null };
                 }
 
-                var path = WriteOutput(effective, audio, folder);
+                var path = WriteOutput(effective, audio, folder, source);
 
                 bool instructWasIgnored() =>
                     !string.IsNullOrWhiteSpace(request.Instruct)
@@ -322,7 +431,6 @@ public sealed class OnnxTtsEngine : ITtsEngine
             // compete with buffers the run no longer needs.
             Release();
             Publish(EngineStatus.Idle, progress);
-            SignalIdleWaiters();
 
             return result;
         }
@@ -338,16 +446,18 @@ public sealed class OnnxTtsEngine : ITtsEngine
             _log.Log($"Generation failed: {ex}");
             Release();
             Publish(new EngineStatus(EngineState.Error, Message: ex.Message), progress);
-            SignalIdleWaiters();
             throw;
         }
         finally
         {
-            lock (_gate)
+            try { if (!_synth.IsLoaded) await UnloadCoreAsync().ConfigureAwait(false); }
+            finally
             {
-                if (ReferenceEquals(_run, run)) _run = null;
+                lock (_gate) { if (ReferenceEquals(_run, run)) _run = null; }
+                run.Dispose();
+                _lifecycle.Release();
+                SignalIdleWaiters();
             }
-            run.Dispose();
         }
     }
 
@@ -378,7 +488,7 @@ public sealed class OnnxTtsEngine : ITtsEngine
         TaskCompletionSource<bool> waiter;
         lock (_gate)
         {
-            if (!_status.IsBusy) return Task.FromResult(true);
+            if (_run is null) return Task.FromResult(true);
             waiter = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             _idleWaiters.Add(waiter);
         }
@@ -425,7 +535,6 @@ public sealed class OnnxTtsEngine : ITtsEngine
         Release();
         Publish(EngineStatus.Idle, progress);
         _log.Log("Stopped the current operation.");
-        SignalIdleWaiters();
     }
 
     private void Release()
@@ -438,7 +547,7 @@ public sealed class OnnxTtsEngine : ITtsEngine
         }
     }
 
-    private string WriteOutput(GenerateRequest request, SynthesisResult audio, string modelFolder)
+    private string WriteOutput(GenerateRequest request, SynthesisResult audio, string modelFolder, ModelSource source)
     {
         var now = _time.GetLocalNow();
         var folder = AppPaths.EnsureFolder(_outputFolder());
@@ -446,7 +555,7 @@ public sealed class OnnxTtsEngine : ITtsEngine
 
         WavWriter.Write(path, audio.Samples, audio.SampleRate);
 
-        var metadata = MetadataFor(request, modelFolder, now);
+        var metadata = MetadataFor(request, modelFolder, now, source);
         if (!WavMetadata.TryWrite(path, metadata))
         {
             // Best-effort by design: a file that plays without its metadata
@@ -457,7 +566,7 @@ public sealed class OnnxTtsEngine : ITtsEngine
         return path;
     }
 
-    private OutputMetadata MetadataFor(GenerateRequest request, string modelFolder, DateTimeOffset now)
+    private OutputMetadata MetadataFor(GenerateRequest request, string modelFolder, DateTimeOffset now, ModelSource source)
     {
         var instruct = string.IsNullOrWhiteSpace(request.Instruct) ? null : request.Instruct;
 
@@ -476,17 +585,18 @@ public sealed class OnnxTtsEngine : ITtsEngine
                 ? (string.IsNullOrWhiteSpace(request.ReferenceTranscript) ? null : request.ReferenceTranscript)
                 : null,
 
-            ModelRepo = SourceName(request.Mode, modelFolder),
+            ModelRepo = SourceName(source, modelFolder),
             AppVersion = _appVersion,
             Platform = OutputMetadata.CurrentPlatform,
             Created = now,
         };
     }
 
-    private string SourceName(TtsMode mode, string modelFolder) => _sourceFor(mode) switch
+    private static string SourceName(ModelSource source, string modelFolder) => source switch
     {
         ModelSource.Repo repo => repo.Id,
-        ModelSource.BaseUrl url => url.Url.AbsoluteUri,
+        ModelSource.BaseUrl url => new UriBuilder(url.Url)
+            { UserName = "", Password = "", Query = "", Fragment = "" }.Uri.AbsoluteUri,
         _ => modelFolder,
     };
 
@@ -539,6 +649,15 @@ public sealed class OnnxTtsEngine : ITtsEngine
     public async ValueTask DisposeAsync()
     {
         RequestStop();
-        await _synth.DisposeAsync().ConfigureAwait(false);
+        await _lifecycle.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            if (_disposed) return;
+            _disposed = true;
+            await UnloadCoreAsync().ConfigureAwait(false);
+            foreach (var synth in Enum.GetValues<TtsMode>().Select(_synthFor).Distinct())
+                await synth.DisposeAsync().ConfigureAwait(false);
+        }
+        finally { _lifecycle.Release(); }
     }
 }

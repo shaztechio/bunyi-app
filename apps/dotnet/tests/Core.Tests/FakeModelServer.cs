@@ -46,6 +46,7 @@ public sealed class FakeModelServer : IAsyncDisposable
 
     /// <summary>Refuse range requests outright, as a server without support would.</summary>
     public bool SupportsRanges { get; set; } = true;
+    public bool RejectRangesWith416 { get; set; }
 
     /// <summary>Cut the connection after this many bytes of a body, once.</summary>
     public int? AbortAfterBytes { get; set; }
@@ -166,6 +167,11 @@ public sealed class FakeModelServer : IAsyncDisposable
 
         var start = 0;
         var rangeHeader = context.Request.Headers.Range.ToString();
+        if (RejectRangesWith416 && !string.IsNullOrEmpty(rangeHeader))
+        {
+            context.Response.StatusCode = StatusCodes.Status416RangeNotSatisfiable;
+            return;
+        }
 
         if (!string.IsNullOrEmpty(rangeHeader) && SupportsRanges && !IgnoreRangeRequests)
         {

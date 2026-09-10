@@ -118,6 +118,24 @@ public sealed class SettingsStore
         }
     }
 
+    /// <summary>CLI writes must fail loudly; an agent cannot see a desktop log warning.</summary>
+    public void SaveStrict(AppSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        lock (_gate)
+        {
+            var folder = System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(_path))!;
+            Directory.CreateDirectory(folder);
+            var temp = _path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            try
+            {
+                File.WriteAllText(temp, JsonSerializer.Serialize(settings, Json));
+                File.Move(temp, _path, overwrite: true);
+            }
+            finally { if (File.Exists(temp)) File.Delete(temp); }
+        }
+    }
+
     /// <summary>
     /// The models folder to use: the one the user chose if it still resolves,
     /// otherwise the default (spec §3d).

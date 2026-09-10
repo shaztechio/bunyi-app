@@ -25,9 +25,9 @@ name: .NET build (Windows + Linux)
 on:
   push:
     branches: [main]
-    paths: ["apps/dotnet/**", "spec/**", ".github/workflows/dotnet.yml"]
+    paths: ["apps/dotnet/**", "spec/**", ".github/workflows/dotnet.yml", ".github/workflows/dotnet-release.yml"]
   pull_request:
-    paths: ["apps/dotnet/**", "spec/**", ".github/workflows/dotnet.yml"]
+    paths: ["apps/dotnet/**", "spec/**", ".github/workflows/dotnet.yml", ".github/workflows/dotnet-release.yml"]
   workflow_dispatch:
 
 permissions:
@@ -120,6 +120,18 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: ./packaging/windows/build-msix.ps1 -PublishDirectory artifacts/win-x64
+
+      - name: Publish and exercise the standalone CLI
+        shell: pwsh
+        run: |
+          $rid = if ($IsWindows) { 'win-x64' } else { 'linux-x64' }
+          foreach ($cuda in @('false', 'true')) {
+            $suffix = if ($cuda -eq 'true') { '-cuda' } else { '' }
+            $folder = "artifacts/cli-$rid$suffix"
+            dotnet publish src/Cli -c Release -r $rid --self-contained "-p:BunyiCuda=$cuda" -o $folder
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            ./packaging/test-cli.ps1 -PublishDirectory $folder
+          }
 
       - name: Upload unsigned Store package
         if: runner.os == 'Windows'

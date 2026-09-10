@@ -37,6 +37,10 @@ and structured results instead.
 - [#217 — native macOS CLI and persistent MLX server](https://github.com/shaztechio/bunyi-app/issues/217)
 - [#218 — Windows/Linux CLI and persistent ONNX server](https://github.com/shaztechio/bunyi-app/issues/218)
 
+The Windows/Linux implementation and standalone distribution guide are in
+[`apps/dotnet/CLI.md`](apps/dotnet/CLI.md). Native macOS remains the separate
+#217 implementation; this plan does not replace MLX with ONNX on macOS.
+
 ## Product shape
 
 One command supports two execution paths:

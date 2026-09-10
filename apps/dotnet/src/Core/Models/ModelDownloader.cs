@@ -32,7 +32,7 @@ public sealed class RequiredFileMissingException(string file, int statusCode)
 /// Gets a model onto disk: from a Hugging Face repo, or from a base URL the
 /// user self-hosts (spec §3b, §3c).
 /// </summary>
-public sealed class ModelDownloader(HttpClient http, ILogSink log, TimeProvider? time = null)
+public sealed partial class ModelDownloader(HttpClient http, ILogSink log, TimeProvider? time = null)
 {
     private const string HubHost = "https://huggingface.co";
 
@@ -152,14 +152,17 @@ public sealed class ModelDownloader(HttpClient http, ILogSink log, TimeProvider?
         IReadOnlyList<ModelFile> files,
         string folder,
         IProgress<DownloadProgress>? progress,
-        CancellationToken ct)
+        CancellationToken ct,
+        IReadOnlyDictionary<string, long>? preparedSizes = null)
     {
         // Sizes first, so the bar has a real denominator rather than counting
         // files. Unknown sizes simply do not contribute (spec §3b).
         progress?.Report(new DownloadProgress(DownloadPhase.Sizing, FilesTotal: files.Count));
 
-        var sizes = new Dictionary<string, long>(StringComparer.Ordinal);
-        foreach (var file in files)
+        var sizes = preparedSizes is null
+            ? new Dictionary<string, long>(StringComparer.Ordinal)
+            : new Dictionary<string, long>(preparedSizes, StringComparer.Ordinal);
+        foreach (var file in preparedSizes is null ? files : [])
         {
             ct.ThrowIfCancellationRequested();
             var size = await _files.SizeOfAsync(UriFor(source, file.RelativePath), ct).ConfigureAwait(false);
@@ -209,7 +212,11 @@ public sealed class ModelDownloader(HttpClient http, ILogSink log, TimeProvider?
                     monitor.Add(bytes);
                     Report(file.RelativePath);
                 },
-                ct).ConfigureAwait(false);
+                ct,
+                onReused: bytes => { reused += bytes; Report(file.RelativePath); },
+                onVerifying: () => progress?.Report(new DownloadProgress(DownloadPhase.Verifying,
+                    BytesReceived: received, BytesReused: reused, BytesTotal: total,
+                    CurrentFile: file.RelativePath))).ConfigureAwait(false);
 
             switch (result.Outcome)
             {
@@ -370,10 +377,19 @@ public sealed class ModelDownloader(HttpClient http, ILogSink log, TimeProvider?
     /// </summary>
     public static string FolderFor(ModelSource source, string modelsRoot) => source switch
     {
-        ModelSource.Repo repo => Path.Combine(modelsRoot, "models", Path.Combine(repo.Id.Split('/'))),
+        ModelSource.Repo repo => Path.Combine(modelsRoot, "models", ValidatedRepoPath(repo.Id)),
         ModelSource.BaseUrl url => Path.Combine(modelsRoot, "models", "self-hosted", Slug(url.Url)),
         _ => throw new ArgumentOutOfRangeException(nameof(source)),
     };
+
+    private static string ValidatedRepoPath(string id)
+    {
+        var segments = id.Split('/');
+        if (segments.Length != 2 || segments.Any(segment => segment.Length == 0 || segment is "." or ".."
+            || segment.Any(c => !char.IsAsciiLetterOrDigit(c) && c is not '.' and not '_' and not '-')))
+            throw new ArgumentException("A model repository must be an org/repo identifier without filesystem traversal.");
+        return Path.Combine(segments);
+    }
 
     /// <summary>
     /// A filesystem-safe folder name for a base URL.
@@ -404,9 +420,10 @@ public sealed class ModelDownloader(HttpClient http, ILogSink log, TimeProvider?
 
     private static Uri Combine(Uri baseUrl, string relative)
     {
-        var text = baseUrl.AbsoluteUri;
-        if (!text.EndsWith('/')) text += "/";
-        return new Uri(text + relative);
+        var builder = new UriBuilder(baseUrl);
+        builder.Path = builder.Path.TrimEnd('/') + "/" + relative;
+        builder.Fragment = string.Empty;
+        return builder.Uri;
     }
 
     private async Task<string?> TryGetStringAsync(Uri uri, CancellationToken ct)
