@@ -36,6 +36,10 @@ The first time you use each mode, Bunyi downloads that mode's model — between 
 
 Two progress bars show **Overall model download** and **Current file**. Each has its own percentage and exact byte count. A large file can receive data without its rounded percentage changing, so a **Received … bytes** message and the time since the last data arrived show that the download is moving—even one byte counts. Download time estimates refer to downloading only.
 
+Both bars also show their total size in MB or GB. **Model download elapsed** shows how long this setup attempt has taken, including checking files and reconnecting. Speed and remaining time use recent incoming data, so earlier fast files cannot hide a slow current download.
+
+**Download is slow** means data has been arriving slowly for at least 30 seconds and substantial downloading remains. **Reconnect and resume** opens a fresh connection for the current file while keeping downloaded data. It can help a poor connection, but does not guarantee a faster server. **Stop** also keeps partial files; the next Generate resumes when the server supports it. If the server ignores resume requests, that file starts again.
+
 If no data arrives, the message changes to **Waiting for more data**. After 30 seconds it says the download may be stalled. Incoming data clears that warning. **Checking model files**, **Loading model**, **Creating your speech**, and **Preparing your audio file** identify the work that follows. Only **Your audio is ready** means speech has finished and been saved.
 
 When generation finishes the audio plays automatically. **Play** repeats it, and the folder button opens the folder where the file was saved.
@@ -64,7 +68,7 @@ Give Bunyi a short recording of a voice and it reads your text in that voice.
 
 Two things matter for a good clone:
 
-- **The transcript.** Cloning works by lining up the recording with the words in it, so Bunyi needs to know what the clip says. Leave the transcript box blank and it listens to the clip and writes the transcript for you, on your own computer. Whatever you type yourself is always used instead.
+- **The transcript.** Cloning works by lining up the recording with its words. Leave this box blank and press **Generate**: Bunyi downloads any needed transcription and voice models, transcribes the recording on your computer, and creates your speech in one run. Selecting a recording does not start a download. Whatever you type yourself is used instead. **Stop** cancels the current run and keeps downloaded files for reuse. You can edit the transcript afterwards and generate again.
 - **The recording.** A few clean seconds of a single person speaking, without music or background noise, beats a long noisy clip. Bunyi converts the audio to the rate the model needs, so you do not have to prepare the file.
 
 Only the first ten seconds of the clip are used, and the transcript is taken from exactly that much — a transcript running past the audio makes the clone finish the recording instead of speaking your text.
@@ -189,5 +193,7 @@ The same lines are also written to a file, so a run that ended badly still left 
 **A model will not download from your own server.** Use `https://` rather than `http://`. The Logs name the exact file and status code that failed.
 
 **Generating is slow.** The first run after starting Bunyi includes loading the model, which takes a while on its own. If every run is slow, check where your models folder is: reading the model from a slow external drive slows down the speaking itself.
+
+**The model did not finish speaking before the safety limit.** Bunyi discarded the unfinished take instead of saving it with a long unwanted tail. Press Generate again. If this keeps happening, try a shorter passage. This does not require downloading the model again.
 
 **Not enough memory.** Doctor warns rather than stopping you, and the run will usually finish anyway. Closing other applications first is the thing that helps most.

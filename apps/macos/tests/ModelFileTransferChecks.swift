@@ -29,20 +29,20 @@ extension DownloadProgressChecks {
 
         let receipt = DownloadReceiptMailbox()
         receipt.begin(file: "weights", completed: 0, total: 4096, fileTotal: 4096)
-        let transfer = Task {
-            try await ModelFileTransfer(destination: dest, digest: digest, expected: 4096, mailbox: receipt)
-                .run(from: URL(string: "\(base)/one-byte")!, configuration: configuration)
-        }
+        let fileTransfer = ModelFileTransfer(destination: dest, digest: digest, expected: 4096, mailbox: receipt)
+        let transfer = Task { try await fileTransfer.run(from: URL(string: "\(base)/one-byte")!, configuration: configuration) }
         var sawByte = false
         for _ in 0..<500 {
             if receipt.snapshot().received == 1 { sawByte = true; break }
             try await Task.sleep(for: .milliseconds(10))
         }
-        transfer.cancel()
+        fileTransfer.requestReconnect()
         do { _ = try await transfer.value; preconditionFailure("Cancelled download succeeded") }
         catch let error as URLError { precondition(error.code == .cancelled) }
         _ = try await URLSession.shared.data(from: URL(string: "\(base)/release")!)
         precondition(sawByte, "The first byte was not observable before the rest of the file")
+        precondition(fileTransfer.reconnectRequested)
+        precondition(FileManager.default.fileExists(atPath: partial.path))
         precondition(!FileManager.default.fileExists(atPath: dest.path))
 
         for ignored in [false, true] {

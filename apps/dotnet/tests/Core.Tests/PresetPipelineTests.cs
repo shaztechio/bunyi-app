@@ -60,7 +60,10 @@ public class PresetPipelineTests
     }
 
     private static SamplingOptions Greedy { get; } =
-        new(Temperature: 1f, TopK: 1, RepetitionPenalty: 1f);
+        // Keep the shipping repetition penalty while removing randomness.
+        // Disabling it let this fixture run into its 80-frame cap, which the
+        // old tests mistakenly counted as successful speech.
+        new(Temperature: 1f, TopK: 1, RepetitionPenalty: SamplingOptions.Default.RepetitionPenalty);
 
     private static PresetPipeline Open() =>
         new(Root!, new NullLog(), provider: ExecutionProviderChoice.Cpu);
@@ -163,9 +166,8 @@ public class PresetPipelineTests
     {
         var (pipeline, _) = Ours();
 
-        var capped = pipeline.Generate(new PresetRequest(Text, "ryan"), Greedy, maxFrames: 3);
-
-        Assert.Equal(3, capped.Frames);
+        Assert.Throws<GenerationDidNotFinishException>(() =>
+            pipeline.Generate(new PresetRequest(Text, "ryan"), Greedy, maxFrames: 3));
     }
 
     [SkippableFact]

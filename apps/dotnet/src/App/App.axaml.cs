@@ -161,6 +161,7 @@ public partial class App : Application
                 Doctor = RunDoctor,
                 Logs = new LogsViewModel(log),
             };
+            viewModel.Download.Reconnect = downloader.RequestReconnect;
 
             // §4: the transcript is filled in by listening, on-device. The model
             // comes down through the same downloader as everything else, so
@@ -202,7 +203,7 @@ public partial class App : Application
 
                 try
                 {
-                    return await transcriber.TranscribeAsync(trimmed ?? path, "english", ct);
+                    return await transcriber.TranscribeAsync(trimmed ?? path, viewModel.Language, ct);
                 }
                 finally
                 {

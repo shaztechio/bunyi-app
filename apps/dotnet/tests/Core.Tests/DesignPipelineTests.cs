@@ -243,11 +243,9 @@ public class DesignPipelineTests
 
         using var pipeline = new DesignPipeline(Root!, "int4", new NullLog(), provider: ExecutionProviderChoice.Cpu);
 
-        var capped = pipeline.Generate(
+        Assert.Throws<GenerationDidNotFinishException>(() => pipeline.Generate(
             new DesignRequest(Reference.text, Reference.instruct, Reference.language),
-            Greedy, maxFrames: 3);
-
-        Assert.Equal(3, capped.Frames);
+            Greedy, maxFrames: 3));
     }
 
     [SkippableFact]

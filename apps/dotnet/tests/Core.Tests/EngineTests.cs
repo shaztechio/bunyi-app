@@ -275,6 +275,27 @@ public sealed class EngineTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task An_unfinished_take_has_no_file_or_playable_result_and_can_be_retried()
+    {
+        var synth = new FakeSynthesizer { Throw = new Bunyi.Core.Qwen.GenerationDidNotFinishException() };
+        await using var engine = NewEngine(synth);
+
+        await Assert.ThrowsAsync<Bunyi.Core.Qwen.GenerationDidNotFinishException>(
+            () => engine.GenerateAsync(Request(), null, default));
+
+        Assert.Equal(EngineState.Error, engine.Status.State);
+        Assert.Contains("Please generate again", engine.Status.Message);
+        Assert.Null(engine.LastOutputPath);
+        var outputs = Path.Combine(_root, "Outputs");
+        Assert.True(!Directory.Exists(outputs) || !Directory.EnumerateFiles(outputs).Any());
+        Assert.Equal(1, synth.Releases);
+
+        synth.Throw = null;
+        var result = await engine.GenerateAsync(Request(), null, default);
+        Assert.True(File.Exists(result.OutputPath));
+    }
+
+    [Fact]
     public async Task An_error_leaves_the_engine_usable_rather_than_stuck()
     {
         var synth = new FakeSynthesizer { Throw = new InvalidOperationException("once") };

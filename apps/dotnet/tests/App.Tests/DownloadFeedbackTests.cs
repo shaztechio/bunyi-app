@@ -34,6 +34,60 @@ public class DownloadFeedbackTests : HeadlessWindows
         LastReceivedAt: Start, WaitingSince: Start);
 
     [Fact]
+    public void Slow_receipts_use_recent_speed_and_reconnect_preserves_elapsed_time()
+    {
+        var reconnects = 0;
+        var model = new DownloadViewModel { Reconnect = () => reconnects++ };
+        for (var second = 0; second <= 31; second++)
+            model.Update(Snapshot(1 + second * 55_000) with
+            {
+                LastReceivedAt = Start.AddSeconds(second),
+                BytesPerSecond = 20_000_000, // Old whole-model average must be ignored.
+            }, Start.AddSeconds(second));
+        Assert.True(model.Slow);
+        Assert.Equal(55_000, model.RecentRate);
+        Assert.Contains("55.0 KB/s", model.SpeedAndEta);
+        Assert.Contains("5.0 GB", model.OverallLabel);
+        Assert.Contains("3.0 GB", model.FileTotalLabel);
+        Assert.Equal("Model download elapsed: 0:31", model.Elapsed);
+        model.Tick(Start.AddSeconds(61));
+        Assert.True(model.Stalled);
+        Assert.False(model.Slow);
+        model.Update(Snapshot(31 * 55_000 + 2) with { LastReceivedAt = Start.AddSeconds(62) }, Start.AddSeconds(62));
+        Assert.True(model.Slow); // A single byte cannot imply a healthy connection.
+        model.ReconnectCommand.Execute(null);
+        model.ReconnectCommand.Execute(null);
+        Assert.Equal(1, reconnects);
+        model.Update(Snapshot() with { Phase = DownloadPhase.Reconnecting }, Start.AddSeconds(63));
+        model.Update(Snapshot(), Start.AddSeconds(64));
+        Assert.False(model.Slow);
+        Assert.Equal("Model download elapsed: 1:04", model.Elapsed);
+        model.Update(Snapshot() with { Phase = DownloadPhase.Verifying }, Start.AddSeconds(70));
+        model.Tick(Start.AddHours(1));
+        Assert.False(model.Slow);
+        Assert.Equal("Model download elapsed: 1:00:00", model.Elapsed);
+        model.Clear();
+        model.Update(Snapshot(), Start.AddHours(2));
+        Assert.Equal("Model download elapsed: 0:00", model.Elapsed);
+    }
+
+    [Fact]
+    public void New_file_resets_speed_and_small_remaining_downloads_do_not_warn()
+    {
+        var model = new DownloadViewModel();
+        for (var second = 0; second <= 31; second++)
+            model.Update(Snapshot(1 + second * 55_000) with
+            {
+                CurrentFileTotal = 1_200_000_000 + second * 55_000 + 100,
+                LastReceivedAt = Start.AddSeconds(second),
+            }, Start.AddSeconds(second));
+        Assert.False(model.Slow);
+        model.Update(Snapshot(20_000_000) with { CurrentFile = "next", LastReceivedAt = Start.AddSeconds(32) }, Start.AddSeconds(32));
+        Assert.Equal(0, model.RecentRate);
+        Assert.False(model.Slow);
+    }
+
+    [Fact]
     public void A_single_byte_is_visible_even_when_both_percentages_are_unchanged()
     {
         var model = new DownloadViewModel();
