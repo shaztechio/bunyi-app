@@ -89,6 +89,21 @@ small-file live .NET probe on Windows/Linux, and both complete affected
 vocoder downloads with URLSession on macOS. The live probes require the
 test Worker and published objects to remain available.
 
+## Initial test deployment: 11 September 2026
+
+Deployed version: `305bc2a3-e4c4-4d62-900f-e56995c11970`, test hostname only.
+On the Singapore Windows machine, .NET measured these complete transfers:
+
+| File | Bytes | Full GET | Stop/resume |
+| --- | ---: | ---: | ---: |
+| Preset vocoder | 456,261,632 | 23.01 s / 19.83 MB/s | 10.52 s / 43.35 MB/s |
+| Clone vocoder | 912,219,264 | 41.69 s / 21.88 MB/s | 24.09 s / 37.87 MB/s |
+
+All four runs matched their published SHA-256. These are individual
+measurements, not guaranteed throughput. The five-minute expiry check also
+passed: the stale signed URL returned 403, and the original Worker URL
+supplied a fresh 206 range response with the requested offset and length.
+
 ## References
 
 - [R2 presigned URLs](https://developers.cloudflare.com/r2/api/s3/presigned-urls/)

@@ -43,4 +43,3 @@ for (const root of roots) {
 }
 const sorted = Object.fromEntries(Object.entries(published).sort(([a], [b]) => a.localeCompare(b, "en")));
 await writeFile(new URL("../src/published-files.json", import.meta.url), JSON.stringify(sorted, null, 2) + "\n");
-

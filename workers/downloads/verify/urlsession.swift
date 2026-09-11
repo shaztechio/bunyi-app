@@ -61,4 +61,3 @@ try input.seek(toOffset: UInt64(offset))
 let expected = try input.read(upToCount: Int(end - offset + 1))
 try require(rangeData == expected, "Range bytes do not match the verified file")
 print("URLSession Range redirect OK: exact bytes verified")
-

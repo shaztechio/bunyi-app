@@ -154,4 +154,3 @@ test("all published paths are canonical and cover the six model roots", async ()
   }
   assert.equal(roots.size, 6);
 });
-
