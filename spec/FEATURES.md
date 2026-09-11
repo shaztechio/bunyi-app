@@ -94,8 +94,17 @@ A segmented picker selects one of three modes. macOS source:
 ## 2. Generation output
 
 - Sample rate **24 kHz**, mono, WAV.
-- **A safety limit is not successful completion.** When the runtime knows that
-  generation exhausted its frame budget without an end-of-speech token, fail
+- **Generation ends on the model's end-of-speech token or the user's Stop.**
+  Do not impose a text-length-derived frame budget or apply the export's
+  `max_new_tokens` default as an automatic app cutoff. Frame and elapsed counters
+  remain visible while waiting for the model to finish; Stop remains available.
+  Removing a cutoff is not a fix for a model that rambles or never emits EOS.
+  ONNX logs periodic EOS sampling probability and the actual termination reason
+  without logging the user's input text. macOS's upstream-enforced cap cannot
+  currently be disabled by its caller; the parity work is tracked in #224.
+- **An explicitly requested diagnostic limit is not successful completion.**
+  Low-level inference tools/tests may still supply a frame cap. When the runtime knows that
+  generation exhausted that explicit budget without an end-of-speech token, fail
   visibly and ask the user to generate again (or try a shorter passage if it
   keeps happening). Do not save or auto-play that take. Keep Stop and memory
   cleanup working, and allow another Generate. Do not guess an endpoint from
