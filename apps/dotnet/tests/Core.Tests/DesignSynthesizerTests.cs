@@ -237,15 +237,31 @@ public class DesignSynthesizerTests
     }
 
     [Fact]
-    public void An_overshoot_saturates_rather_than_wrapping()
+    public void An_overdriven_wave_keeps_its_shape_instead_of_flattening_peaks()
     {
-        // A vocoder can exceed 1.0 slightly. Wrapping is not a quiet distortion
-        // — it is a loud crack in the middle of a word, because the sample
-        // jumps from full positive to full negative.
-        var pcm = DesignSpeechSynthesizer.ToPcm16([1.4f, -1.8f]);
+        float[] samples = [0f, 0.5f, 1f, 1.5f, 2f, -2f, -1f];
+        var pcm = DesignSpeechSynthesizer.ToPcm16(samples);
 
-        Assert.Equal(short.MaxValue, pcm[0]);
-        Assert.Equal(-short.MaxValue, pcm[1]);
+        Assert.Equal(new short[] { 0, 8028, 16056, 24084, 32112, -32112, -16056 }, pcm);
+        Assert.Equal(2f, samples[4]); // Do not mutate the model's buffer.
+    }
+
+    [Theory]
+    [InlineData(float.NaN)]
+    [InlineData(float.PositiveInfinity)]
+    [InlineData(float.NegativeInfinity)]
+    public void Non_finite_audio_fails_before_conversion(float invalid)
+    {
+        var error = Assert.Throws<InvalidDataException>(() =>
+            DesignSpeechSynthesizer.ToPcm16([0f, invalid]));
+        Assert.Contains("generate again", error.Message);
+    }
+
+    [Fact]
+    public void Even_extreme_finite_peaks_can_be_attenuated_without_overflow()
+    {
+        var pcm = DesignSpeechSynthesizer.ToPcm16([float.MaxValue, -float.MaxValue]);
+        Assert.Equal(new short[] { 32112, -32112 }, pcm);
     }
 
     [Fact]

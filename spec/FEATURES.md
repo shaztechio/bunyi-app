@@ -89,6 +89,14 @@ A segmented picker selects one of three modes. macOS source:
 ## 2. Generation output
 
 - Sample rate **24 kHz**, mono, WAV.
+- **Protect output from clipping in every mode.** Before saving, inspect the
+  generated floating-point samples. If the absolute peak exceeds 1.0, reduce
+  the entire clip by one uniform gain so its peak is 0.98. Preserve relative
+  amplitudes instead of flattening individual peaks; leave in-range audio
+  unchanged, including quiet clips. Record attenuation in the log. Reject
+  non-finite samples with an error asking the user to generate again, before
+  writing a WAV. This prevents conversion clipping; it cannot repair artifacts
+  already produced by the model or clipping in previously saved files.
 - Saved to an `Outputs` subfolder of the app's per-user data folder — macOS
   `~/Library/Application Support/Bunyi/Outputs` (inside the sandbox container
   — no extra file-access entitlement needed), Windows

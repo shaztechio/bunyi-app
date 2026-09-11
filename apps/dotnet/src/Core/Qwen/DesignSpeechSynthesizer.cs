@@ -109,25 +109,36 @@ public sealed class DesignSpeechSynthesizer(
             ct: ct);
 
         return Task.FromResult(new SynthesisResult(
-            ToPcm16(result.Samples), 24_000, result.Frames));
+            ToPcm16(result.Samples, _log), 24_000, result.Frames));
     }
 
     /// <summary>
     /// Turns the model's floats into the 16-bit samples §2 writes.
     /// </summary>
     /// <remarks>
-    /// Clamped before scaling. A vocoder can overshoot 1.0 slightly, and an
-    /// unclamped conversion wraps rather than saturating — which is not a
-    /// quiet distortion but a loud crack in the middle of the word.
+    /// Attenuate an overdriven clip uniformly before conversion. Clamping
+    /// individual peaks flattens the waveform and can introduce crackling.
     /// </remarks>
-    internal static short[] ToPcm16(float[] samples)
+    internal static short[] ToPcm16(float[] samples, ILogSink? log = null)
     {
         ArgumentNullException.ThrowIfNull(samples);
+
+        double peak = 0;
+        foreach (var sample in samples)
+        {
+            if (!float.IsFinite(sample))
+                throw new InvalidDataException("The model produced invalid audio. Please generate again.");
+            peak = Math.Max(peak, Math.Abs((double)sample));
+        }
+
+        var gain = peak > 1 ? 0.98 / peak : 1;
+        if (gain < 1)
+            log?.Log($"Output level: reduced by {-20 * Math.Log10(gain):F1} dB to prevent clipping (peak {peak:F3}).");
 
         var pcm = new short[samples.Length];
         for (var i = 0; i < samples.Length; i++)
         {
-            var value = Math.Clamp(samples[i], -1f, 1f);
+            var value = (float)(samples[i] * gain);
             pcm[i] = (short)Math.Round(value * short.MaxValue);
         }
 

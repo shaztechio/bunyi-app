@@ -957,7 +957,7 @@ final class TTSEngine {
             // This is where the beachball came from. MLX is lazy: the array the
             // generator yields is an unevaluated graph, and nothing in the
             // package evaluates it. The first thing that does is
-            // `audio.asArray(Float.self)` inside saveAudioArray — so calling
+            // `audio.asArray(Float.self)` before saving — so calling
             // that here ran the whole audio decode on the main actor, freezing
             // the UI at the very end of every generation, in every mode.
             //
@@ -988,16 +988,22 @@ final class TTSEngine {
                 appVersion: Self.appVersion,
                 created: Date()
             )
-            try await Task.detached(priority: .userInitiated) {
+            let outputGain = try await Task.detached(priority: .userInitiated) {
                 // Proves the offload rather than trusting it: this traps if the
                 // evaluation is ever back on the main thread.
                 dispatchPrecondition(condition: .notOnQueue(.main))
-                try saveAudioArray(boxed.value, sampleRate: rate, to: url)
+                let prepared = try OutputLevel.prepare(boxed.value.asArray(Float.self))
+                try saveAudioArray(MLXArray(prepared.samples), sampleRate: rate, to: url)
                 // Tagging is best-effort: a file that plays but lacks its
                 // metadata is a far better outcome than losing the audio
                 // because a chunk could not be appended.
                 try? WAVMetadata.embed(metadata, in: url)
+                return prepared.gain
             }.value
+            if outputGain < 1 {
+                log.log(String(format: "Output level: reduced by %.1f dB to prevent clipping.",
+                               -20 * log10(outputGain)))
+            }
             log.log(String(format: "Saved %@ (%.1f s total)", url.path,
                            Date().timeIntervalSince(generateStart)))
             releaseGenerationMemory()

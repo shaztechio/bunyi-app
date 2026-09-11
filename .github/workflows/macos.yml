@@ -60,7 +60,11 @@ jobs:
         run: |
           swiftc -parse-as-library ModelDownloadProgress.swift HTTPFileDownloader.swift ModelFileTransfer.swift tests/DownloadProgressChecks.swift tests/ModelFileTransferChecks.swift -o /tmp/bunyi-download-checks
           python3 tests/check-model-transfer.py /tmp/bunyi-download-checks
-      - name: Build
+      - name: Check output level protection
+        run: |
+          swiftc -parse-as-library OutputLevel.swift tests/OutputLevelChecks.swift -o /tmp/bunyi-output-level-checks
+          /tmp/bunyi-output-level-checks
+      - name: Build app
         run: |
           xcodebuild -project Bunyi.xcodeproj \
             -scheme "Bunyi" \
