@@ -18,6 +18,9 @@
   "account_id": "a22215ba113580f2c0f3fe4cb775335d",
   "compatibility_date": "2026-09-11",
   "workers_dev": true,
+  "routes": [
+    { "pattern": "models.bunyi.app/*", "zone_name": "bunyi.app" }
+  ],
   "preview_urls": false,
   "keep_vars": true,
   "vars": {

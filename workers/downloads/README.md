@@ -8,8 +8,11 @@ The original model URL remains the source identity in both apps.
 ## Setup and deployment
 
 `npm ci`, `npm test`, then `npm run build` performs a dry run.
-`npm run deploy` publishes only to `bunyi-downloads.bunyi.workers.dev`.
-There are deliberately no production routes in the configuration.
+`npm run deploy` updates the live Worker at `models.bunyi.app/*` and its
+test address, `bunyi-downloads.bunyi.workers.dev`. The production route was
+activated in the dashboard on 11 September 2026 after native-client tests
+passed. The checked-in route records that activation for future deployments.
+Keep its dashboard failure mode set to **Fail closed (block)**.
 
 The existing Worker must have these **secrets**, entered through Cloudflare:
 `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY`. Use an Object Read only
@@ -62,11 +65,18 @@ Keep the production R2 custom domain unchanged until validation succeeds:
 6. Verify the killed/error states in unit tests; do not trigger the real
    production kill switch just to test the new Worker.
 
-Only after these gates pass should a separately reviewed change route
-`models.bunyi.app` to the signer. Preserve the existing model paths and
-folders. Record how the existing cost monitor and domain-disable action
-will behave with the Worker route, and how to roll back that route.
-This PR does not change either app's default source or production DNS.
+These checks passed before production activation. Existing model paths,
+folders and source settings remain unchanged; the R2 custom domain and DNS
+remain in place underneath the Worker route. New or resumed requests use
+the redirect immediately; an already-open download requires reconnecting.
+
+For rollback, remove only the `models.bunyi.app/*` Worker route in the
+dashboard and remove the same route from this configuration before another
+deployment. That restores the previous R2 public delivery path. Do not
+delete the bucket custom domain or DNS record. A rollback is not an emergency
+stop: set `DOWNLOADS_ENABLED=false` or use the existing kill switch to stop
+new signed links. The Worker consults its KV state even if the old domain
+disable action alone would not intercept a Worker route.
 
 ## Verification tools
 
