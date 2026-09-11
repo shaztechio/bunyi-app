@@ -48,6 +48,8 @@ For shorter text, the audio plays automatically when generation finishes. **Play
 
 **Buffering audio** means the next part is still being made. Playback starts or resumes after at least 10 seconds of audio are ready, so there is a longer initial wait and fewer interruptions. When generation finishes, any shorter remainder plays immediately. Slower computers may still pause between parts. The completed recording does not contain these waiting gaps, and it may have a slightly different volume from the preview. A long preview does not play again automatically when its file is saved.
 
+The playback panel says **Preparing playback** before the first sound, **Playing audio** while you listen, and **Waiting for more audio** when playback pauses. The waiting message confirms that Bunyi is still generating and will resume automatically. Its progress bar shows seconds of speech ready toward the 10-second buffer, not how many seconds you must wait. **Finishing your recording** means Bunyi is preparing the saved file.
+
 **Stop** silences the preview immediately and asks generation to stop. A cancelled or failed take is not saved. If the audio file has already been saved and only preview playback remains, Stop keeps that file. If the audio device cannot play the preview, generation continues and you can play the completed file afterwards.
 
 If the download is a lot to ask for before hearing anything, the **Storage** tab in Settings gives you a command per mode to fetch a model in advance instead.

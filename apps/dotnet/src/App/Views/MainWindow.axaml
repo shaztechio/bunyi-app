@@ -485,6 +485,21 @@ limitations under the License.
       disabled group so Stop stays pressable.
     -->
     <StackPanel Grid.Row="2" Spacing="8" Margin="0,16,0,0">
+      <Border Name="PlaybackStatusPanel" Classes="card" IsVisible="{Binding IsPreviewSession}"
+              Padding="14,10">
+        <StackPanel Spacing="5">
+          <TextBlock Name="PreviewStatus" Text="{Binding PreviewStatus}"
+                     FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" />
+          <TextBlock Name="PreviewDetail" Text="{Binding PreviewDetail}"
+                     FontSize="12" TextWrapping="Wrap" />
+          <StackPanel IsVisible="{Binding ShowPreviewBuffer}" Spacing="4" Margin="0,3,0,0">
+            <ProgressBar Name="PreviewBufferProgress" Minimum="0" Maximum="{Binding PreviewBufferTarget}"
+                         Value="{Binding PreviewBufferSeconds}" Height="5"
+                         AutomationProperties.Name="Seconds of audio ready for playback" />
+            <TextBlock Name="PreviewBufferLabel" Text="{Binding PreviewBufferText}" FontSize="12" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
       <TextBlock Text="{Binding ModelNotice}" IsVisible="{Binding NeedsModel}" TextWrapping="Wrap" FontSize="12" />
       <views:DownloadProgressView DataContext="{Binding Download}" />
       <StackPanel IsVisible="{Binding CanUseHuggingFace}" Spacing="8" Margin="0,8">
@@ -563,8 +578,6 @@ limitations under the License.
                      VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                      AutomationProperties.AccessibilityView="Raw" />
         </Border>
-          <TextBlock Name="PreviewStatus" Text="{Binding PreviewStatus}" IsVisible="{Binding IsPreviewSession}"
-                     FontSize="11" Opacity="0.7" AutomationProperties.AccessibilityView="Raw" />
         </StackPanel>
         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
           <Button Classes="icon" Name="PlayButton" Command="{Binding PlayCommand}"

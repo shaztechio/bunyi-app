@@ -26,6 +26,8 @@ namespace Bunyi.Core.Audio;
 public interface IStreamingAudioPlayer : IDisposable
 {
     bool IsBuffering { get; }
+    bool HasStarted { get; }
+    double BufferedSeconds { get; }
     string? Failure { get; }
     void Add(AudioPreviewChunk chunk, CancellationToken cancellationToken);
     Task CompleteAsync(CancellationToken cancellationToken);
@@ -39,9 +41,10 @@ public interface IStreamingAudioPlayer : IDisposable
 public sealed class StreamingAudioPlayer(ILogSink log) : IStreamingAudioPlayer
 {
     private const int SampleRate = 24000;
+    public const int BufferTargetSeconds = 10;
     private const int TailSamples = 256;
     // Count playable PCM only; the held smoothing tail is not queued audio.
-    private const int PrebufferSamples = SampleRate * 10;
+    private const int PrebufferSamples = SampleRate * BufferTargetSeconds;
     private readonly float[] _ring = new float[SampleRate * 20];
     private readonly object _deviceGate = new();
     private long _written;
@@ -63,6 +66,9 @@ public sealed class StreamingAudioPlayer(ILogSink log) : IStreamingAudioPlayer
     private float[] _tail = [];
 
     public bool IsBuffering => Volatile.Read(ref _buffering) != 0;
+    public bool HasStarted => FirstPlaybackTimestamp != 0;
+    public double BufferedSeconds => Math.Clamp(
+        Volatile.Read(ref _written) - Volatile.Read(ref _read), 0, _ring.Length) / (double)SampleRate;
     public string? Failure => Volatile.Read(ref _failure);
     /// <summary>Stopwatch timestamp of the first device callback consuming PCM; zero until then.</summary>
     public long FirstPlaybackTimestamp => Interlocked.Read(ref _firstPlaybackTimestamp);

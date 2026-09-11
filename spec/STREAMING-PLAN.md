@@ -92,6 +92,10 @@ bounded (the Windows demo queue holds 20 seconds). Backpressure
 observes cancellation off device/UI threads. Starvation means Buffering until
 more data or explicit completion arrives; it never means EOS. Do not append
 buffering silence to the output or restart playback from sample zero at save.
+Use a prominent playback-status panel with explicit preparing/playing/waiting/
+finishing messages. Silent refills show playable seconds ready toward the
+10-second target and promise automatic resumption, not an estimated wait time.
+Coalesce accessible status announcements while updating visible state promptly.
 
 Stop existing result/History audio before preview; prevent competing playback
 during its session. Keep inputs disabled through initial queue drain, while

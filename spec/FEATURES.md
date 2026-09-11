@@ -299,6 +299,16 @@ completed before this feature is marked implemented.
   playback, pause for more audio and resume in order. Do not repeat or skip
   samples, and do not save buffering silence into the recording. Chunk size
   and decoder overlap are runtime choices validated for audio quality.
+- **Explain silent waits prominently.** Keep a readable playback-status panel
+  beside the generation controls. Distinguish preparing speech, preparing the
+  first playback, playing audio, waiting for more audio after playback pauses,
+  and finishing/saving the recording. During a refill say **Waiting for more
+  audio** and **Bunyi is still generating. Playback will resume automatically.**
+  Show playable seconds ready toward the 10-second target with a labelled
+  progress bar; these seconds describe buffered speech, not a waiting-time ETA
+  or total generation progress. Update the panel promptly on pause/resume.
+  Keep status changes available to assistive technology without announcing
+  every buffer tick. A normal pause must not look like completion or an error.
 - **Live audio is a preview of an unfinished take.** Stop it and clear queued
   audio if generation fails, reaches a known safety limit, or is cancelled.
   Earlier preview audio may already have been heard; do not save or offer

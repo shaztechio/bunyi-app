@@ -6,6 +6,9 @@ immediately. The timing measurements below describe the earlier two-second
 buffer build and do not measure startup latency with the new buffer policy.
 The updated App test suite passes all 396 tests, including exact startup and
 resume thresholds and playback of a completed remainder below the threshold.
+The subsequent playback-status panel adds explicit wait/resume messages and
+playable-buffer progress. Its UI tests exercise pause, resume, finalization and
+deferred accessibility announcements; these are not screen-reader audio tests.
 
 Validated on Windows using the installed default self-hosted ONNX exports,
 CPU execution, the same 54-word English passage in each mode, and one continuous

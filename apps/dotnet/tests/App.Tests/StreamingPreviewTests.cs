@@ -44,6 +44,8 @@ public sealed class StreamingPreviewTests : HeadlessWindows
         var samples = Enumerable.Repeat(.1f, 240000 - 1).ToArray();
         var output = new float[512];
         queue(samples, 1f, CancellationToken.None);
+        Assert.Equal(239999d / 24000, player.BufferedSeconds);
+        Assert.False(player.HasStarted);
         read(output, 1);
         Assert.All(output, value => Assert.Equal(0f, value));
         Assert.Equal(0, player.FirstPlaybackTimestamp);
@@ -54,6 +56,8 @@ public sealed class StreamingPreviewTests : HeadlessWindows
         Assert.False(player.IsBuffering);
         var timestamp = player.FirstPlaybackTimestamp;
         Assert.True(timestamp > 0);
+        Assert.True(player.HasStarted);
+        Assert.Equal((240000d - 512) / 24000, player.BufferedSeconds);
         read(output, 1);
         Assert.Equal(timestamp, player.FirstPlaybackTimestamp);
     }
@@ -102,6 +106,8 @@ public sealed class StreamingPreviewTests : HeadlessWindows
     private sealed class Preview : IStreamingAudioPlayer
     {
         public bool IsBuffering { get; set; } = true;
+        public bool HasStarted { get; set; }
+        public double BufferedSeconds { get; set; }
         public string? Failure { get; set; }
         public int Chunks { get; private set; }
         public bool Stopped { get; private set; }
@@ -212,6 +218,84 @@ public sealed class StreamingPreviewTests : HeadlessWindows
         await pending;
         Assert.Equal("finished.wav", model.LastOutputPath);
         Assert.Contains("press Play", model.Status);
+    }
+
+    [AvaloniaFact]
+    public async Task Playback_panel_explains_initial_wait_underrun_resume_and_finalization()
+    {
+        var engine = new FakeEngine();
+        var preview = new Preview();
+        using var model = Model(engine, new FakePlayer(), preview, TtsMode.PresetVoice, 50);
+        var window = Open(new MainWindow { DataContext = model });
+        var pending = model.GenerateCommand.ExecuteAsync(null);
+        engine.Publish(new EngineStatus(EngineState.Generating));
+        model.TickPreview();
+        Assert.Equal("Preparing playback", model.PreviewStatus);
+        Assert.Contains("10 seconds", model.PreviewDetail);
+        Assert.True(window.FindControl<Border>("PlaybackStatusPanel")!.IsVisible);
+        Assert.True(model.ShowPreviewBuffer);
+
+        preview.IsBuffering = false;
+        preview.HasStarted = true;
+        model.TickPreview();
+        Assert.Equal("Playing audio", model.PreviewStatus);
+        Assert.False(model.ShowPreviewBuffer);
+
+        preview.IsBuffering = true;
+        preview.BufferedSeconds = 4.8;
+        model.TickPreview();
+        Assert.Equal("Waiting for more audio", window.FindControl<TextBlock>("PreviewStatus")!.Text);
+        Assert.Contains("resume automatically", window.FindControl<TextBlock>("PreviewDetail")!.Text);
+        Assert.Equal("4 of 10 seconds of audio ready", model.PreviewBufferText);
+        Assert.Equal(4.8, window.FindControl<ProgressBar>("PreviewBufferProgress")!.Value);
+
+        preview.IsBuffering = false;
+        model.TickPreview();
+        Assert.Equal("Playing audio", model.PreviewStatus);
+        preview.IsBuffering = true;
+        engine.Publish(new EngineStatus(EngineState.Finalizing));
+        Assert.Equal("Finishing your recording", model.PreviewStatus);
+        Assert.False(model.ShowPreviewBuffer);
+        engine.Complete("finished.wav");
+        Assert.Equal("Finishing playback", model.PreviewStatus);
+        Assert.Contains("saved", model.PreviewDetail);
+        preview.Drained.TrySetResult();
+        await pending;
+        Assert.False(window.FindControl<Border>("PlaybackStatusPanel")!.IsVisible);
+    }
+
+    private sealed class PreviewClock : TimeProvider
+    {
+        public DateTimeOffset Now { get; set; } = new(2026, 9, 12, 0, 0, 0, TimeSpan.Zero);
+        public override DateTimeOffset GetUtcNow() => Now;
+    }
+
+    [AvaloniaFact]
+    public async Task A_pause_announcement_is_deferred_instead_of_lost_and_buffer_ticks_stay_quiet()
+    {
+        // Checks the view model's paced announcement value, not a real screen reader.
+        var engine = new FakeEngine();
+        var preview = new Preview { HasStarted = true, IsBuffering = false };
+        var clock = new PreviewClock();
+        using var model = new MainViewModel(engine, new FakePlayer(), new RecordingLog(),
+            clock: clock, previewPlayerFactory: () => preview) { Script = Words(50) };
+        var pending = model.GenerateCommand.ExecuteAsync(null);
+        Assert.Contains("Playing audio", model.Announcement);
+        preview.IsBuffering = true;
+        model.TickPreview();
+        Assert.Equal("Waiting for more audio", model.PreviewStatus);
+        Assert.DoesNotContain("Waiting for more audio", model.Announcement);
+        clock.Now += MainViewModel.AnnouncementGap;
+        model.TickPreview();
+        Assert.Contains("Waiting for more audio", model.Announcement);
+        Assert.Contains("resume automatically", model.Announcement);
+        var spoken = model.Announcement;
+        preview.BufferedSeconds = 3;
+        model.TickPreview();
+        Assert.Equal(spoken, model.Announcement);
+        engine.Complete("finished.wav");
+        preview.Drained.TrySetResult();
+        await pending;
     }
 
     [AvaloniaFact]
