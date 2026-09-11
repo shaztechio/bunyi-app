@@ -31,17 +31,17 @@ public sealed class StreamingPreviewTests : HeadlessWindows
     private delegate void ReadPcm(Span<float> samples, int channels);
 
     [Fact]
-    public void First_two_second_chunk_starts_without_waiting_for_the_next_inference_chunk()
+    public void Playback_waits_for_ten_full_seconds_of_playable_audio()
     {
         using var player = new StreamingAudioPlayer(new RecordingLog());
         // Exercise the production producer/consumer queue directly, without
-        // constructing a native device. A two-second decode holds 256 samples
-        // for boundary smoothing, leaving exactly 47744 ready for playback.
+        // constructing a native device. Held smoothing samples do not count
+        // toward the ten seconds of PCM that must be ready for playback.
         const System.Reflection.BindingFlags hidden = System.Reflection.BindingFlags.Instance
             | System.Reflection.BindingFlags.NonPublic;
         var queue = typeof(StreamingAudioPlayer).GetMethod("Write", hidden)!.CreateDelegate<QueuePcm>(player);
         var read = typeof(StreamingAudioPlayer).GetMethod("Read", hidden)!.CreateDelegate<ReadPcm>(player);
-        var samples = Enumerable.Repeat(.1f, 48000 - 256 - 1).ToArray();
+        var samples = Enumerable.Repeat(.1f, 240000 - 1).ToArray();
         var output = new float[512];
         queue(samples, 1f, CancellationToken.None);
         read(output, 1);
@@ -56,6 +56,47 @@ public sealed class StreamingPreviewTests : HeadlessWindows
         Assert.True(timestamp > 0);
         read(output, 1);
         Assert.Equal(timestamp, player.FirstPlaybackTimestamp);
+    }
+
+    [Fact]
+    public void Underrun_waits_for_ten_seconds_again_before_resuming()
+    {
+        using var player = new StreamingAudioPlayer(new RecordingLog());
+        const System.Reflection.BindingFlags hidden = System.Reflection.BindingFlags.Instance
+            | System.Reflection.BindingFlags.NonPublic;
+        var queue = typeof(StreamingAudioPlayer).GetMethod("Write", hidden)!.CreateDelegate<QueuePcm>(player);
+        var read = typeof(StreamingAudioPlayer).GetMethod("Read", hidden)!.CreateDelegate<ReadPcm>(player);
+        queue(Enumerable.Repeat(.1f, 240000).ToArray(), 1f, CancellationToken.None);
+        read(new float[240001], 1);
+        Assert.True(player.IsBuffering);
+
+        queue(Enumerable.Repeat(.2f, 239999).ToArray(), 1f, CancellationToken.None);
+        var output = new float[512];
+        read(output, 1);
+        Assert.All(output, value => Assert.Equal(0f, value));
+        Assert.True(player.IsBuffering);
+        queue([.2f], 1f, CancellationToken.None);
+        read(output, 1);
+        Assert.All(output, value => Assert.Equal(.2f, value));
+        Assert.False(player.IsBuffering);
+    }
+
+    [Fact]
+    public async Task Completed_generation_plays_a_remainder_shorter_than_ten_seconds()
+    {
+        using var player = new StreamingAudioPlayer(new RecordingLog());
+        const System.Reflection.BindingFlags hidden = System.Reflection.BindingFlags.Instance
+            | System.Reflection.BindingFlags.NonPublic;
+        var queue = typeof(StreamingAudioPlayer).GetMethod("Write", hidden)!.CreateDelegate<QueuePcm>(player);
+        var read = typeof(StreamingAudioPlayer).GetMethod("Read", hidden)!.CreateDelegate<ReadPcm>(player);
+        queue(Enumerable.Repeat(.3f, 1000).ToArray(), 1f, CancellationToken.None);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+        var completion = player.CompleteAsync(timeout.Token);
+        var output = new float[1000];
+        read(output, 1);
+        Assert.All(output, value => Assert.Equal(.3f, value));
+        await completion;
+        Assert.Null(player.Failure);
     }
 
     private sealed class Preview : IStreamingAudioPlayer

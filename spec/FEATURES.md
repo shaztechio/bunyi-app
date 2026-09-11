@@ -293,8 +293,8 @@ completed before this feature is marked implemented.
   equivalent implementation, especially for Voice Design. Codec progress
   events alone do not count as audio streaming.
 - **Play as audio becomes available.** Queue chunks on one audio device and
-  start after a small buffer (initial target: about two seconds), or when
-  generation completes with less audio. Show when generation and playback are
+  start or resume only after at least 10 seconds of playable audio are queued,
+  or when generation completes with less audio remaining. Show when generation and playback are
   active and when playback is buffering. If generation is slower than
   playback, pause for more audio and resume in order. Do not repeat or skip
   samples, and do not save buffering silence into the recording. Chunk size

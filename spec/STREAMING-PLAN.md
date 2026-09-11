@@ -85,8 +85,10 @@ decoder context and the final peak can both produce differences.
 
 ## Playback, failure and commit contract
 
-Use one persistent queued audio device, with a small startup/resume buffer
-(initial target about two seconds) and bounded outstanding PCM. Backpressure
+Use one persistent queued audio device, with at least 10 seconds of playable
+PCM queued before starting or resuming. Once generation completes, drain any
+shorter remainder without waiting for that threshold. Keep outstanding PCM
+bounded (the Windows demo queue holds 20 seconds). Backpressure
 observes cancellation off device/UI threads. Starvation means Buffering until
 more data or explicit completion arrives; it never means EOS. Do not append
 buffering silence to the output or restart playback from sample zero at save.

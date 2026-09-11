@@ -40,8 +40,9 @@ public sealed class StreamingAudioPlayer(ILogSink log) : IStreamingAudioPlayer
 {
     private const int SampleRate = 24000;
     private const int TailSamples = 256;
-    private const int PrebufferSamples = SampleRate * 2 - TailSamples;
-    private readonly float[] _ring = new float[SampleRate * 10];
+    // Count playable PCM only; the held smoothing tail is not queued audio.
+    private const int PrebufferSamples = SampleRate * 10;
+    private readonly float[] _ring = new float[SampleRate * 20];
     private readonly object _deviceGate = new();
     private long _written;
     private long _read;

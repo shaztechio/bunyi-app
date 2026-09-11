@@ -1,5 +1,12 @@
 # Windows streaming demonstration — 12 September 2026
 
+The updated demo buffers at least **10 seconds of playable PCM** before starting
+or resuming, with a bounded 20-second queue. Completed shorter remainders drain
+immediately. The timing measurements below describe the earlier two-second
+buffer build and do not measure startup latency with the new buffer policy.
+The updated App test suite passes all 396 tests, including exact startup and
+resume thresholds and playback of a completed remainder below the threshold.
+
 Validated on Windows using the installed default self-hosted ONNX exports,
 CPU execution, the same 54-word English passage in each mode, and one continuous
 generation per mode. Each result below is one run, including model load in the
