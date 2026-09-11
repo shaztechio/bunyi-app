@@ -145,6 +145,14 @@ public sealed class TokenSampler(Func<double>? random = null)
         return best[0];
     }
 
+    /// <summary>Reads the distribution left by Sample without mutating it.</summary>
+    internal static double ProbabilityOf(ReadOnlySpan<float> weights, int token)
+    {
+        double total = 0;
+        foreach (var value in weights) total += value;
+        return total > 0 ? weights[token] / total : 0;
+    }
+
     /// <summary>
     /// Divides a positive score by the penalty and multiplies a negative one.
     /// </summary>

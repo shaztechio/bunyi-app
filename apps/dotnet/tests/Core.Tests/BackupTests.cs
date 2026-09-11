@@ -48,6 +48,16 @@ public sealed class BackupTests : IDisposable
     // ---- The archive ----
 
     [Fact]
+    public async Task Backup_omits_the_live_operation_lease()
+    {
+        Model("elbruno/Qwen3", "config.json", 100);
+        using var lease = Bunyi.Core.Runtime.ModelOperationLease.Acquire(Models);
+        await New().BackupAsync(Models, Zip, null, default);
+        using var archive = ZipFile.OpenRead(Zip);
+        Assert.DoesNotContain(archive.Entries, entry => entry.FullName.Contains(".bunyi-operation.lock", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task A_backup_holds_every_file_in_the_models_folder()
     {
         Model("elbruno/Qwen3", "config.json", 100);

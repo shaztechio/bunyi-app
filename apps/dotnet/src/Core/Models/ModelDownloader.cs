@@ -32,7 +32,7 @@ public sealed class RequiredFileMissingException(string file, int statusCode)
 /// Gets a model onto disk: from a Hugging Face repo, or from a base URL the
 /// user self-hosts (spec §3b, §3c).
 /// </summary>
-public sealed class ModelDownloader(HttpClient http, ILogSink log, TimeProvider? time = null,
+public sealed partial class ModelDownloader(HttpClient http, ILogSink log, TimeProvider? time = null,
     Func<HttpClient>? reconnectClientFactory = null)
 {
     private const string HubHost = "https://huggingface.co";
@@ -40,7 +40,7 @@ public sealed class ModelDownloader(HttpClient http, ILogSink log, TimeProvider?
     private readonly HttpClient _http = http ?? throw new ArgumentNullException(nameof(http));
     private readonly ILogSink _log = log ?? throw new ArgumentNullException(nameof(log));
     private readonly TimeProvider _time = time ?? TimeProvider.System;
-    private readonly HttpFileDownloader _files = new(http, log);
+    private readonly HttpFileDownloader _files = new(http, log, time);
     private readonly object _transferGate = new();
     private CancellationTokenSource? _activeTransfer;
     private bool _restartRequested;
@@ -125,7 +125,9 @@ public sealed class ModelDownloader(HttpClient http, ILogSink log, TimeProvider?
 
         foreach (var name in new[] { "manifest.sha256", "manifest.txt" })
         {
-            var text = await TryGetStringAsync(Combine(baseUrl.Url, name), ct).ConfigureAwait(false);
+            var text = await TryGetStringAsync(Combine(baseUrl.Url, name), ct, wait =>
+                progress?.Report(new(wait is null ? DownloadPhase.Manifest : DownloadPhase.Waiting,
+                    CurrentFile: name, ServiceWait: wait))).ConfigureAwait(false);
             if (text is null) continue;
 
             var result = ManifestParser.Parse(text);
@@ -169,17 +171,22 @@ public sealed class ModelDownloader(HttpClient http, ILogSink log, TimeProvider?
         IReadOnlyList<ModelFile> files,
         string folder,
         IProgress<DownloadProgress>? progress,
-        CancellationToken ct)
+        CancellationToken ct,
+        IReadOnlyDictionary<string, long>? preparedSizes = null)
     {
         // Sizes first, so the bar has a real denominator rather than counting
         // files. An unknown size makes the overall total unknown (spec §3b).
         progress?.Report(new DownloadProgress(DownloadPhase.Sizing, FilesTotal: files.Count));
 
-        var sizes = new Dictionary<string, long>(StringComparer.Ordinal);
-        foreach (var file in files)
+        var sizes = preparedSizes is null
+            ? new Dictionary<string, long>(StringComparer.Ordinal)
+            : new Dictionary<string, long>(preparedSizes, StringComparer.Ordinal);
+        foreach (var file in preparedSizes is null ? files : [])
         {
             ct.ThrowIfCancellationRequested();
-            var size = await _files.SizeOfAsync(UriFor(source, file.RelativePath), ct).ConfigureAwait(false);
+            var size = await _files.SizeOfAsync(UriFor(source, file.RelativePath), ct, wait =>
+                progress?.Report(new(wait is null ? DownloadPhase.Sizing : DownloadPhase.Waiting,
+                    CurrentFile: file.RelativePath, FilesTotal: files.Count, ServiceWait: wait))).ConfigureAwait(false);
             if (size is { } value) sizes[file.RelativePath] = value;
         }
 
@@ -195,6 +202,7 @@ public sealed class ModelDownloader(HttpClient http, ILogSink log, TimeProvider?
         long fileReceived = 0, fileReused = 0, fileTotal = 0;
         DateTimeOffset? lastReceived = null, waitingSince = null;
         var phase = DownloadPhase.Downloading;
+        DownloadWait? serviceWait = null;
 
         void Report(string? current) => progress?.Report(new DownloadProgress(
             phase,
@@ -209,7 +217,8 @@ public sealed class ModelDownloader(HttpClient http, ILogSink log, TimeProvider?
             CurrentFileBytes: fileReceived + fileReused,
             CurrentFileTotal: fileTotal,
             LastReceivedAt: lastReceived,
-            WaitingSince: waitingSince));
+            WaitingSince: waitingSince,
+            ServiceWait: serviceWait));
 
         foreach (var file in files)
         {
@@ -233,7 +242,7 @@ public sealed class ModelDownloader(HttpClient http, ILogSink log, TimeProvider?
                 ct.ThrowIfCancellationRequested();
                 using var attempt = CancellationTokenSource.CreateLinkedTokenSource(ct);
                 using var freshClient = retry ? (reconnectClientFactory?.Invoke() ?? new HttpClient()) : null;
-                var transfer = freshClient is null ? _files : new HttpFileDownloader(freshClient, _log);
+                var transfer = freshClient is null ? _files : new HttpFileDownloader(freshClient, _log, _time);
                 lock (_transferGate) { _activeTransfer = attempt; _restartRequested = false; }
                 try
                 {
@@ -249,7 +258,16 @@ public sealed class ModelDownloader(HttpClient http, ILogSink log, TimeProvider?
                             lastReceived = _time.GetUtcNow();
                         },
                         attempt.Token,
-                        p =>
+                        onWait: wait =>
+                        {
+                            lock (_transferGate) _canReconnect = false;
+                            monitor.SetActive(false);
+                            serviceWait = wait;
+                            phase = wait is null ? DownloadPhase.Downloading : DownloadPhase.Waiting;
+                            waitingSince = _time.GetUtcNow();
+                            Report(file.RelativePath);
+                        },
+                        onProgress: p =>
                         {
                             lock (_transferGate) _canReconnect = !_restartRequested && p.Phase == DownloadPhase.Downloading;
                             monitor.SetActive(p.Phase == DownloadPhase.Downloading);
@@ -449,10 +467,19 @@ public sealed class ModelDownloader(HttpClient http, ILogSink log, TimeProvider?
     /// </summary>
     public static string FolderFor(ModelSource source, string modelsRoot) => source switch
     {
-        ModelSource.Repo repo => Path.Combine(modelsRoot, "models", Path.Combine(repo.Id.Split('/'))),
+        ModelSource.Repo repo => Path.Combine(modelsRoot, "models", ValidatedRepoPath(repo.Id)),
         ModelSource.BaseUrl url => Path.Combine(modelsRoot, "models", "self-hosted", Slug(url.Url)),
         _ => throw new ArgumentOutOfRangeException(nameof(source)),
     };
+
+    private static string ValidatedRepoPath(string id)
+    {
+        var segments = id.Split('/');
+        if (segments.Length != 2 || segments.Any(segment => segment.Length == 0 || segment is "." or ".."
+            || segment.Any(c => !char.IsAsciiLetterOrDigit(c) && c is not '.' and not '_' and not '-')))
+            throw new ArgumentException("A model repository must be an org/repo identifier without filesystem traversal.");
+        return Path.Combine(segments);
+    }
 
     /// <summary>
     /// A filesystem-safe folder name for a base URL.
@@ -483,16 +510,18 @@ public sealed class ModelDownloader(HttpClient http, ILogSink log, TimeProvider?
 
     private static Uri Combine(Uri baseUrl, string relative)
     {
-        var text = baseUrl.AbsoluteUri;
-        if (!text.EndsWith('/')) text += "/";
-        return new Uri(text + relative);
+        var builder = new UriBuilder(baseUrl);
+        builder.Path = builder.Path.TrimEnd('/') + "/" + relative;
+        builder.Fragment = string.Empty;
+        return builder.Uri;
     }
 
-    private async Task<string?> TryGetStringAsync(Uri uri, CancellationToken ct)
+    private async Task<string?> TryGetStringAsync(Uri uri, CancellationToken ct, Action<DownloadWait?>? waiting = null)
     {
         try
         {
-            using var response = await _http.GetAsync(uri, ct).ConfigureAwait(false);
+            using var response = await DownloadHttp.SendAsync(_http,
+                () => new HttpRequestMessage(HttpMethod.Get, uri), ct, waiting, _time).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode) return null;
             return await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
         }

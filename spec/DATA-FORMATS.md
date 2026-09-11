@@ -11,6 +11,12 @@ differ (MLX `.safetensors` on macOS vs ONNX on the .NET app).
 Everything the app keeps for a user lives under one root, with fixed subfolder
 names so a folder is recognisable across platforms:
 
+The table below describes the desktop apps. The standalone macOS CLI cannot
+enter the desktop app's private sandbox container; its corresponding default
+root and explicit sharing rules are defined in [`CLI.md`](CLI.md) §9. Windows
+and Linux CLI builds use the roots below by default. `BUNYI_DATA_DIR` and
+settings-file overrides for isolated automation are defined in `CLI.md` §9.
+
 | | macOS | Windows | Linux |
 |---|---|---|---|
 | Data root | `~/Library/Application Support/Bunyi` (inside the sandbox container) | `%LOCALAPPDATA%\Bunyi` | `$XDG_DATA_HOME/Bunyi`, defaulting to `~/.local/share/Bunyi` |
@@ -35,6 +41,13 @@ the contract, not the storage.
 ## Models folder
 
 Root is the models folder (default per-user app data; user-relocatable).
+
+The Windows/Linux runtime also keeps `.bunyi-operation.lock` directly in this
+root. It is an empty OS-managed lease file shared by desktop and CLI, not model
+data. Do not delete it to recover a busy runtime: process exit releases the
+lease automatically, and deleting the path can split concurrent lock owners.
+It is excluded from backups. Server sockets, process locks, and transient job
+records live outside model data and are likewise not portable backup content.
 
 ```
 <models-folder>/

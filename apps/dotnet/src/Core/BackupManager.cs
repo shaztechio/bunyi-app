@@ -82,6 +82,7 @@ public sealed class BackupManager(ILogSink log)
 
         var files = Directory
             .EnumerateFiles(modelsFolder, "*", SearchOption.AllDirectories)
+            .Where(path => !string.Equals(Path.GetFileName(path), ".bunyi-operation.lock", StringComparison.Ordinal))
             .Where(f => !f.EndsWith(".incomplete", StringComparison.OrdinalIgnoreCase))
             .ToList();
 

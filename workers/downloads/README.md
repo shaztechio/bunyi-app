@@ -29,6 +29,13 @@ expiry, and in-progress transfers may continue afterwards.
 The existing hostname WAF/domain disable alone does not revoke S3 links.
 Monitor S3 reads as well as public-domain traffic in the existing cost monitor.
 
+Paused responses carry HTTP 503, `Retry-After: 60`, and
+`X-Bunyi-Download-Status: paused`. Configuration or KV read errors remain generic
+503s. The app handles older deployments without the marker as unavailable and
+still offers an explicit Hugging Face source switch. Deploy the Worker change
+after review to enable the more specific paused wording; this does not require
+new secrets, bindings, or routes.
+
 `keep_vars` preserves dashboard variables during deployment, while explicitly
 configured variables are still applied. If emergency-paused in the dashboard,
 update the checked-in configuration before deploying again; the supplied

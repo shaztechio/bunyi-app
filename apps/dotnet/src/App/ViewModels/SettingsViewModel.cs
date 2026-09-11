@@ -180,6 +180,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// the delete fails outright.
     /// </remarks>
     public Func<Task>? EvictLoadedModel { get; set; }
+    public Func<string, IDisposable>? AcquireOperation { get; set; }
 
     /// <summary>Re-reads everything that can change outside this window.</summary>
     public void Reload()
@@ -268,8 +269,22 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     private void Persist(AppSettings settings)
     {
-        _settings = settings;
-        _store.Save(settings);
+        try
+        {
+            using var lease = AcquireOperation?.Invoke("config.set");
+            _store.SaveStrict(settings);
+            _settings = settings;
+        }
+        catch (IOException ex)
+        {
+            BackupStatus = ex.Message;
+            _log.Log(ex.Message);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            BackupStatus = ex.Message;
+            _log.Log(ex.Message);
+        }
     }
 
     /// <summary>Saves the three sources under a name (spec §3a).</summary>
@@ -385,6 +400,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         {
             // Off the window's thread: this reads and writes gigabytes, and §6
             // is explicit that it must never block the UI.
+            if (EvictLoadedModel is not null) await EvictLoadedModel();
+            using var lease = AcquireOperation?.Invoke(what);
             var message = await Task.Run(
                 () => work(new BackupManager(_log), progress, _backupCancel.Token),
                 _backupCancel.Token);
@@ -491,10 +508,18 @@ public sealed partial class SettingsViewModel : ObservableObject
         if (row is null || ConfirmDelete is null) return;
         if (!await ConfirmDelete(row)) return;
 
-        // Evict before removing the files, not after.
-        if (EvictLoadedModel is not null) await EvictLoadedModel();
-
-        DownloadedModels.TryDelete(row.Model, _log);
+        try
+        {
+            // Evict before removing the files, not after.
+            if (EvictLoadedModel is not null) await EvictLoadedModel();
+            using var lease = AcquireOperation?.Invoke("models.remove");
+            DownloadedModels.TryDelete(row.Model, _log);
+        }
+        catch (Exception ex) when (ex is IOException or Bunyi.Core.Engine.EngineBusyException)
+        {
+            BackupStatus = ex.Message;
+            _log.Log(ex.Message);
+        }
         Reload();
     }
 }

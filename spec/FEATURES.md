@@ -6,6 +6,11 @@ must implement the behavior described here. When a feature changes, update
 this spec *and* every app. Platform-specific mechanics (which ML runtime,
 which audio library) are noted but never change the observable behavior.
 
+The command-line interface exposes these features to agentic systems.
+Its command, progress, output, one-shot, and persistent-server contract is in
+[`CLI.md`](CLI.md). Windows/Linux implement it through the shared ONNX runtime;
+native macOS implementation is tracked separately in #217.
+
 The right-hand "macOS source" references point at the reference
 implementation in `apps/macos/` so a second implementation has something
 concrete to match.
@@ -26,6 +31,12 @@ A segmented picker selects one of three modes. macOS source:
 | **Voice design** | VoiceDesign | text, voice description | yes (`instruct`) |
 | **Voice clone** | Base | text, reference audio clip, reference transcript | **no** — Base model ignores `instruct` |
 
+- **Script layout**: in every generation mode, the heading stays above the
+  editor and the editor's scrollbar stays inside its border, with space
+  between the text and the scrollbar. Long scripts
+  scroll within the editor. If the form cannot fit in the window, its fields
+  remain reachable without overlapping; the .NET app scrolls the form while
+  keeping the mode picker and Generate/Stop bar in place.
 - Speaker list for preset voice comes from the loaded model
   (`supportedSpeakers`); a fallback list is shown until a model loads.
 - Language selector: auto + english, chinese, japanese, korean, german,
@@ -89,8 +100,17 @@ A segmented picker selects one of three modes. macOS source:
 ## 2. Generation output
 
 - Sample rate **24 kHz**, mono, WAV.
-- **A safety limit is not successful completion.** When the runtime knows that
-  generation exhausted its frame budget without an end-of-speech token, fail
+- **Generation ends on the model's end-of-speech token or the user's Stop.**
+  Do not impose a text-length-derived frame budget or apply the export's
+  `max_new_tokens` default as an automatic app cutoff. Frame and elapsed counters
+  remain visible while waiting for the model to finish; Stop remains available.
+  Removing a cutoff is not a fix for a model that rambles or never emits EOS.
+  ONNX logs periodic EOS sampling probability and the actual termination reason
+  without logging the user's input text. macOS's upstream-enforced cap cannot
+  currently be disabled by its caller; the parity work is tracked in #224.
+- **An explicitly requested diagnostic limit is not successful completion.**
+  Low-level inference tools/tests may still supply a frame cap. When the runtime knows that
+  generation exhausted that explicit budget without an end-of-speech token, fail
   visibly and ask the user to generate again (or try a shorter passage if it
   keeps happening). Do not save or auto-play that take. Keep Stop and memory
   cleanup working, and allow another Generate. Do not guess an endpoint from
@@ -352,6 +372,33 @@ output's metadata, so it must be one the user chose.
 A platform ships this only if its mirror publishes `manifest.sha256`
 (`DATA-FORMATS.md`). Offering a source the app itself endorses is a higher bar
 than documenting one a user picked, and unverified bytes do not clear it.
+
+**Download service recovery.** A paused/unavailable built-in mirror must stop
+the operation with a clear explanation and offer **Download from Hugging Face**.
+The action changes only the affected mode to its canonical upstream repository,
+then retries generation with the current inputs. It is never automatic. The UI
+explains that this saves the source choice and may require a separate download:
+source-specific caches remain separate; never append a partial mirror file to
+an upstream file without verified identity. Custom server configurations do not
+receive this offer. A changed mode/source invalidates an old offer. The Worker
+marks a killswitch 503 with `X-Bunyi-Download-Status: paused`; older mirror 503s
+are described as unavailable, not definitively identified as killswitch events.
+
+For HTTP 429, honor `Retry-After` (seconds or HTTP date) and the Hugging Face
+`RateLimit` reset (`t` seconds), using the later valid deadline when both exist.
+Without valid server timing, use exponential delays of 2, 4, and 8 seconds plus
+up to one second of jitter. Permit at most three retries per request. If the
+server requires more than 15 minutes, or retries are exhausted, fail clearly
+with the retry timing instead of retrying early. Show a waiting/countdown state
+with Stop available; do not report a deliberate wait as a stalled transfer.
+Preserve accepted bytes and totals. Retry the original source URL, obtaining a
+fresh redirect, and retain Range headers. Apply this policy to manifests, size
+checks, and file transfers, including transcription model preparation. HTTP
+429/503 and server failures must not become “no manifest” or “unknown size”.
+Completed models still work offline; killswitch changes do not revoke already
+issued links or guarantee that an active transfer stops immediately. Implemented
+in Windows/Linux and the .NET CLI/server; native macOS parity is tracked in
+[#225](https://github.com/shaztechio/bunyi-app/issues/225).
 
 **Both platforms ship it now**, at the prefixes below. The two weight sets live
 on one host and never share a path — the runtime family is in the URL, because

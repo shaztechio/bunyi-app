@@ -173,35 +173,6 @@ public sealed class TalkerLoop : IDisposable
     /// <summary>Codec frames per second of speech.</summary>
     public const double FramesPerSecond = 12.5;
 
-    /// <summary>
-    /// How many frames a piece of text could plausibly need.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Sampling is random — the export's own defaults are temperature 0.9 and
-    /// top-k 50 — and a draw occasionally never produces the token that ends a
-    /// run. The export's cap is 8192 frames, which is eleven minutes of audio
-    /// and, on a CPU, about half an hour of grinding. As a safety net for
-    /// someone waiting on one sentence, that is no net at all.
-    /// </para>
-    /// <para>
-    /// So the bound comes from the text instead. Speech runs about ten
-    /// characters a second at a slow pace; three times that, with a floor for
-    /// very short text, is far past anything a faithful reading needs while
-    /// still failing in seconds rather than in half an hour. A run that reaches
-    /// it may be rambling or unfinished, and must not be reported as successful.
-    /// </para>
-    /// </remarks>
-    public static int FrameBudget(string? text, int hardCap)
-    {
-        var characters = text?.Trim().Length ?? 0;
-        var plausible = Math.Max(10.0, characters / 10.0);
-        var generous = plausible * 3.0;
-
-        var frames = (int)Math.Ceiling(generous * FramesPerSecond);
-        return Math.Clamp(frames, 1, Math.Max(1, hardCap));
-    }
-
     /// <summary>Speaks a primed sequence.</summary>
     /// <param name="rows">The prefill sequence, one row per position.</param>
     /// <param name="trailingHidden">
@@ -220,7 +191,7 @@ public sealed class TalkerLoop : IDisposable
         float[][] rows,
         float[] trailingHidden,
         SamplingOptions sampling,
-        int cap,
+        int? cap,
         string what,
         IProgress<int>? progress = null,
         IReadOnlyList<int[]>? vocoderContext = null,
@@ -230,8 +201,10 @@ public sealed class TalkerLoop : IDisposable
         ArgumentNullException.ThrowIfNull(rows);
         ArgumentNullException.ThrowIfNull(trailingHidden);
         ObjectDisposedException.ThrowIf(_disposed, this);
+        if (cap is <= 0) throw new ArgumentOutOfRangeException(nameof(cap));
 
-        _log.Log($"{what}: {rows.Length} tokens of context.");
+        _log.Log($"{what}: {rows.Length} tokens of context. " +
+            (cap is { } limit ? $"Explicit diagnostic limit: {limit} frames." : "Waiting for EOS or Stop; no automatic frame limit."));
 
         var talkerClock = Stopwatch.StartNew();
 
@@ -263,7 +236,9 @@ public sealed class TalkerLoop : IDisposable
         // vocabulary, except the one that ends generation.
         var suppressFrom = _config.VocabSize - 1024;
 
-        while (frames.Count < cap)
+        double highestEosProbability = 0;
+        var eosEligibleSteps = 0;
+        while (cap is null || frames.Count < cap.Value)
         {
             ct.ThrowIfCancellationRequested();
 
@@ -283,7 +258,20 @@ public sealed class TalkerLoop : IDisposable
             if (frames.Count < 2) step[_config.CodecEosTokenId] = float.NegativeInfinity;
 
             var first = _sampler.Sample(step, sampling, produced);
-            if (first == _config.CodecEosTokenId) break;
+            // Sample leaves unnormalized probabilities in step after filtering.
+            // Observe the actual EOS chance without changing token selection.
+            var eosProbability = TokenSampler.ProbabilityOf(step, _config.CodecEosTokenId);
+            highestEosProbability = Math.Max(highestEosProbability, eosProbability);
+            if (eosProbability > 0) eosEligibleSteps++;
+            if (first == _config.CodecEosTokenId)
+            {
+                _log.Log($"{what}: EOS selected after {frames.Count} frames ({frames.Count / FramesPerSecond:0.00}s of speech); EOS probability {eosProbability:E3}.");
+                break;
+            }
+            if (frames.Count > 0 && frames.Count % 125 == 0)
+                _log.Log($"{what}: waiting for EOS at {frames.Count} frames ({frames.Count / FramesPerSecond:0}s of speech), "
+                    + $"{talkerClock.Elapsed.TotalSeconds:0}s elapsed; EOS probability {eosProbability:E3}, "
+                    + $"highest {highestEosProbability:E3}, eligible on {eosEligibleSteps} steps.");
 
             produced.Add(first);
 
@@ -307,7 +295,7 @@ public sealed class TalkerLoop : IDisposable
                 "The model produced no audio for that text. Try different words.");
         }
 
-        if (frames.Count >= cap)
+        if (cap is { } frameLimit && frames.Count >= frameLimit)
         {
             // A limit stop is not EOS. Do not vocode, save, or autoplay an
             // unfinished take that may contain a long unwanted tail.

@@ -1,15 +1,17 @@
 # Stream long speech in all three modes
 
 Updated 2026-09-12. The Windows demonstration is authorized implementation
-work. Production streaming and macOS parity remain follow-ups; this document
-does not claim that decoder quality or hardware validation has passed.
+work. Production streaming and macOS parity remain follow-ups. Windows real-model
+and audio-device results are recorded in the [demo validation](../apps/dotnet/tools/StreamingProbe/VALIDATION.md);
+production listening-quality acceptance remains pending.
 
 Observable behavior is defined in [FEATURES.md §2b](FEATURES.md#2b-streaming-long-speech)
 and persistence in [DATA-FORMATS.md](DATA-FORMATS.md#streaming-temporary-output).
 The [intent brief](plans/2026-09-11-speech-streaming-brief.md) and
-[current-main research](plans/2026-09-11-speech-streaming-research-dossier.md)
+[research snapshot](plans/2026-09-11-speech-streaming-research-dossier.md)
 record scope and evidence. Source anchors in the dossier describe `3eec46e`;
-implementation can move their line numbers.
+implementation can move their line numbers. Integration also includes `d04e748`:
+the newer CLI runtime, script layout and removal of automatic generation caps.
 
 ## Scope and routing
 
@@ -23,7 +25,8 @@ implementation can move their line numbers.
   **strictly greater than 20 seconds**. Exactly 20 stays on the existing path.
   Freeze this decision even if actual duration or controls later change.
 - The threshold adds no confirmation. The earlier 30-second warning proposal
-  remains separate. Keep existing safety budgets independent of the estimate.
+  remains separate. The estimate never imposes a generation cap: normal .NET
+  generation ends at natural EOS or Stop, as required by §2.
 - The demo estimator uses word/script counts with pause allowances. Its rates
   are provisional; language selection currently does not alter those rates.
   Production requires versioned, calibrated rules and shared cross-app fixtures,
@@ -94,8 +97,9 @@ Help, Logs and Stop remain available. File generation and playback completion
 are separate: release model working memory when workers finish, allow queued
 audio to drain, then expose ordinary Replay/reveal. PCM must not retain tensors.
 
-Distinguish natural EOS, safety-limit failure, cancellation and inference error.
-Current .NET budget exhaustion **throws and discards** the take. Flush the tail
+Distinguish natural EOS, explicit diagnostic-limit failure, cancellation and
+inference error. .NET has no automatic frame cap; exhaustion of an explicitly
+requested diagnostic cap **throws and discards** the take. Flush the tail
 only for natural EOS. Any failure immediately silences/discards pending preview
 and publishes no recording; users may already have heard a provisional prefix.
 Do not infer successful completion merely from queue-empty or producer exit.

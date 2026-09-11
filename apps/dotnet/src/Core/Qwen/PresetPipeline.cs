@@ -151,7 +151,7 @@ public sealed class PresetPipeline : IPresetPipeline
             _prefill.Build(request, _tokenizer),
             _prefill.TrailingHidden,
             options ?? _config.Sampling,
-            maxFrames ?? TalkerLoop.FrameBudget(request.Text, _config.MaxNewTokens),
+            maxFrames,
             "Preset voice",
             progress,
             vocoderContext: null,

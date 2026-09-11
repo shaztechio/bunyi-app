@@ -46,13 +46,22 @@ public static class AppPaths
     /// Windows <c>%LOCALAPPDATA%\Bunyi</c>; Linux <c>$XDG_DATA_HOME/Bunyi</c>,
     /// defaulting to <c>~/.local/share/Bunyi</c>.
     /// </summary>
-    public static string DataRoot => Path.Combine(DataHome(), ProductName);
+    public static string DataRoot => OverrideRoot() ?? Path.Combine(DataHome(), ProductName);
 
     /// <summary>
     /// Per-user configuration. Windows <c>%APPDATA%\Bunyi</c>; Linux
     /// <c>$XDG_CONFIG_HOME/Bunyi</c>, defaulting to <c>~/.config/Bunyi</c>.
     /// </summary>
-    public static string ConfigRoot => Path.Combine(ConfigHome(), ProductName);
+    public static string ConfigRoot => OverrideRoot() ?? Path.Combine(ConfigHome(), ProductName);
+
+    private static string? OverrideRoot()
+    {
+        var value = Environment.GetEnvironmentVariable("BUNYI_DATA_DIR");
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        if (!Path.IsPathFullyQualified(value))
+            throw new ArgumentException("BUNYI_DATA_DIR must be an absolute path.");
+        return Path.GetFullPath(value);
+    }
 
     /// <summary>The default models folder. The user may point elsewhere (spec §3d).</summary>
     public static string DefaultModelsFolder => Path.Combine(DataRoot, "Models");

@@ -40,8 +40,10 @@ preview decoding costs CPU time; the demo does not claim faster total generation
 
 Validation completed:
 
-- Release solution tests: **774 Core passed, 8 model-dependent tests skipped;
-  384 App passed**. The real-model probes above are separate from those skips.
+- Release solution tests after integrating main `d04e748`: **818 Core passed,
+  8 model-dependent tests skipped; 394 App and 95 CLI passed** (1,307 passed).
+  The real-model probes above were run before this integration and are separate
+  from those skips.
 - Tests cover the strict 20-second boundary, all-mode callback wiring, held-tail
   startup, sample offsets, clone context exclusion, cancellation, invalid samples,
   decoder/device failure, History arbitration, no repeated final autoplay,

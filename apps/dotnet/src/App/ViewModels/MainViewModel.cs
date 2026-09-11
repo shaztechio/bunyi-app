@@ -56,7 +56,33 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private CancellationTokenSource? _listenCancellation;
     private CancellationTokenSource? _generateCancellation;
     public DownloadViewModel Download { get; } = new();
-    public void RefreshModelNotice() => OnPropertyChanged(nameof(NeedsModel));
+    public void RefreshModelNotice()
+    {
+        _downloadFailure = null;
+        OnPropertyChanged(nameof(NeedsModel));
+        OnPropertyChanged(nameof(CanUseHuggingFace));
+    }
+    private DownloadServiceException? _downloadFailure;
+    private TtsMode _downloadFailureMode;
+    public Func<TtsMode, DownloadServiceException, bool>? CanRecoverDownload { get; init; }
+    public Action<TtsMode, DownloadServiceException>? UseHuggingFace { get; init; }
+    public bool CanUseHuggingFace => !IsBusy && _downloadFailure is { } failure
+        && Mode == _downloadFailureMode && UseHuggingFace is not null
+        && CanRecoverDownload?.Invoke(Mode, failure) == true;
+
+    [RelayCommand]
+    private async Task DownloadFromHuggingFaceAsync()
+    {
+        if (!CanUseHuggingFace) return;
+        try
+        {
+            UseHuggingFace!(Mode, _downloadFailure!);
+            Settings?.Reload();
+            RefreshModelNotice();
+            await GenerateAsync();
+        }
+        catch (Exception ex) { Status = ex.Message; }
+    }
     public Func<TtsMode, bool>? ModelComplete { get; init; }
     public bool NeedsModel => !IsBusy && !IsTranscribing && !ShowingHistory && ModelComplete?.Invoke(Mode) == false;
     public string ModelNotice => $"{Mode.DisplayName()} needs a voice-model download. Bunyi downloads the files, then creates your speech automatically. Downloaded models are saved for reuse.";
@@ -771,7 +797,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 throw new InvalidOperationException("No speech was detected.");
             ReferenceTranscript = transcript;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex is not (OperationCanceledException or DownloadServiceException))
         {
             throw new InvalidOperationException(
                 "Could not transcribe the recording. Type what it says, or press Generate to try again.", ex);
@@ -786,6 +812,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private async Task GenerateAsync()
     {
         if (IsBusy) return;
+        _downloadFailure = null;
+        OnPropertyChanged(nameof(CanUseHuggingFace));
 
         // Pressed before it is ready: say what is missing, put the cursor in it,
         // and mark it. Doing nothing was the old behaviour and it is what made
@@ -871,6 +899,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             // §10: the actionable sentence goes on screen, the full text to the
             // log.
+            if (ex is DownloadServiceException failure)
+            {
+                _downloadFailure = failure;
+                _downloadFailureMode = Mode;
+            }
             Status = engineStarted ? _engine.Status.Message ?? ex.Message : ex.Message;
             _log.Log($"Generation failed: {ex}");
         }
@@ -1150,6 +1183,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>Re-evaluates everything computed from the fields above.</summary>
     private void Refresh()
     {
+        OnPropertyChanged(nameof(CanUseHuggingFace));
         OnPropertyChanged(nameof(NeedsModel));
         OnPropertyChanged(nameof(ModelNotice));
         OnPropertyChanged(nameof(ContentScrollMode));
@@ -1246,6 +1280,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     partial void OnModeChanged(TtsMode value)
     {
+        _downloadFailure = null;
         ReleaseModelOfModeBeingLeft();
 
         OnPropertyChanged(nameof(SelectedSegment));

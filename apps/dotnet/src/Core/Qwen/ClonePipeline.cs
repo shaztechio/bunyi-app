@@ -200,7 +200,7 @@ public sealed class ClonePipeline : IClonePipeline
             _prefill.Build(request, _tokenizer, speaker, codes),
             _prefill.TrailingHidden,
             options ?? _config.Sampling,
-            maxFrames ?? TalkerLoop.FrameBudget(request.Text, _config.MaxNewTokens),
+            maxFrames,
             "Voice clone",
             progress,
             vocoderContext: codes,
