@@ -441,8 +441,9 @@ public partial class MainWindow : Window
     protected override async void OnClosing(WindowClosingEventArgs e)
     {
         var engine = Engine;
+        var model = DataContext as MainViewModel;
 
-        if (_closeConfirmed || engine is null || !engine.Status.IsBusy)
+        if (_closeConfirmed || engine is null || !(model?.IsBusy ?? engine.Status.IsBusy))
         {
             base.OnClosing(e);
             return;
@@ -457,7 +458,8 @@ public partial class MainWindow : Window
         if (keepWorking) return;
 
         _waitingToClose = true;
-        engine.RequestStop();
+        if (model is not null) model.StopCommand.Execute(null);
+        else engine.RequestStop();
 
         await engine.WaitForIdleAsync(TimeSpan.FromSeconds(15));
 
@@ -504,7 +506,9 @@ public partial class MainWindow : Window
     internal Task<bool> ConfirmAsync() =>
         AskAsync(
             "Stop the current operation?",
-            "Bunyi is still working. Stopping will discard what it is doing. "
+            (DataContext is MainViewModel { IsPreviewSession: true, LastOutputPath: not null }
+                ? "Bunyi is finishing the preview. Stopping keeps your saved audio. "
+                : "Bunyi is still working. Stopping will discard what it is doing. ")
             + "The window closes once it has stopped, or after 15 seconds.",
             confirm: "Stop and Close",
             cancel: "Keep Working",

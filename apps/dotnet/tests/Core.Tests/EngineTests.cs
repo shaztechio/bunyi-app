@@ -71,6 +71,50 @@ public sealed class EngineTests : IAsyncLifetime
     // ---- Saying what a long run is doing ----
 
     [Fact]
+    public async Task Stopping_at_finalization_publishes_no_file_or_temporary_take()
+    {
+        await using var engine = NewEngine(new FakeSynthesizer());
+        engine.StatusChanged += (_, status) =>
+        {
+            if (status.State == EngineState.Finalizing) engine.RequestStop();
+        };
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => engine.GenerateAsync(Request(), null, default));
+        Assert.Null(engine.LastOutputPath);
+        var folder = Path.Combine(_root, "Outputs");
+        Assert.True(!Directory.Exists(folder) || !Directory.EnumerateFiles(folder).Any());
+    }
+
+    [Fact]
+    public async Task A_preview_failure_is_signalled_before_model_memory_is_released()
+    {
+        var synth = new FakeSynthesizer { Throw = new InvalidDataException("Invalid audio") };
+        await using var engine = NewEngine(synth);
+        var signalled = false;
+        var request = Request() with { AudioPreview = chunk =>
+        {
+            Assert.NotNull(chunk.Failure);
+            Assert.Equal(0, synth.Releases);
+            signalled = true;
+        }};
+        await Assert.ThrowsAsync<InvalidDataException>(() => engine.GenerateAsync(request, null, default));
+        Assert.True(signalled);
+        Assert.Equal(1, synth.Releases);
+        Assert.Null(engine.LastOutputPath);
+    }
+
+    [Fact]
+    public async Task Successful_output_commits_one_final_file_and_cleans_its_temporary_file()
+    {
+        await using var engine = NewEngine(new FakeSynthesizer());
+        var result = await engine.GenerateAsync(Request(), null, default);
+        Assert.Equal([result.OutputPath], Directory.GetFiles(Path.Combine(_root, "Outputs")));
+        Assert.Equal("Hello there.", WavMetadata.TryRead(result.OutputPath)!.Text);
+        engine.RequestStop();
+        Assert.True(File.Exists(result.OutputPath));
+    }
+
+    [Fact]
     public async Task Generation_reports_the_frames_it_has_made()
     {
         // Reported as stuck when it was working: eighteen cores busy, and the

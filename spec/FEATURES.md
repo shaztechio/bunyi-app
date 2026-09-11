@@ -129,6 +129,8 @@ A segmented picker selects one of three modes. macOS source:
   offers to play the old audio while new audio is being made, and a cancelled
   run leaves nothing to play rather than falling back to the file from
   before. The old file is untouched on disk — it is still in `Outputs`.
+  The planned streaming path (§2b) starts this run's preview during generation
+  and does not automatically replay it when the final file becomes available.
 - **While work is in progress the inputs are disabled** — text, language,
   speaker, style, reference clip, saved voice, and the mode picker. Their
   values were already handed to the engine when the run started, so leaving
@@ -241,6 +243,75 @@ reveal-in-file-manager.
   History is open and hiding it would strand the user. The single-file
   playback controls are also hidden here — History has its own per-row
   player, and two players on screen can play over each other.
+
+## 2b. Streaming long speech
+
+**Status: planned for all three modes on both apps.** The implementation and
+validation milestones are tracked in [STREAMING-PLAN.md](STREAMING-PLAN.md).
+A Windows demonstration build and its [validation record](../apps/dotnet/tools/StreamingProbe/VALIDATION.md)
+are available on this feature branch; this section does not claim
+shipping parity. macOS requires playable audio events from its Swift inference
+library and validation on Apple Silicon. Both platform follow-ups must be
+completed before this feature is marked implemented.
+
+- **Stream when the audio may exceed 20 seconds.** Show a rough speech-length
+  range before Generate, using the target text and language. Stream only if
+  the **unrounded upper estimate is strictly greater than 20 seconds**;
+  exactly 20 seconds or less keeps the existing complete-file generation and
+  autoplay. This predicts output-audio length, not processing time. Do not
+  count style instructions, the voice description, or the reference transcript
+  as words to speak. Both apps use the same estimation rules, including
+  explicit auto-language and mixed-script behavior.
+- **Decide once, when Generate is pressed**, from a snapshot of the request.
+  A generation that outlasts its estimate does not change paths midway. The
+  estimate is approximate; it is not a hard duration limit or an ETA. The
+  20-second streaming threshold itself does not introduce a confirmation.
+- **All three modes use one continuous generation.** Preserve preset speaker
+  and style, design description, and clone reference audio and transcript.
+  Decode playable audio chunks during that run, keeping the voice and acoustic
+  context continuous. Restarting generation sentence by sentence is not an
+  equivalent implementation, especially for Voice Design. Codec progress
+  events alone do not count as audio streaming.
+- **Play as audio becomes available.** Queue chunks on one audio device and
+  start after a small buffer (initial target: about two seconds), or when
+  generation completes with less audio. Show when generation and playback are
+  active and when playback is buffering. If generation is slower than
+  playback, pause for more audio and resume in order. Do not repeat or skip
+  samples, and do not save buffering silence into the recording. Chunk size
+  and decoder overlap are runtime choices validated for audio quality.
+- **Live audio is a preview of an unfinished take.** Stop it and clear queued
+  audio if generation fails, reaches a known safety limit, or is cancelled.
+  Earlier preview audio may already have been heard; do not save or offer
+  replay of the failed take. Keep the safety-limit error and memory cleanup
+  from §2, including reliable termination reporting on macOS.
+- **Protect both preview and saved audio from clipping.** Preview gain can
+  respond to incoming chunks because the final peak is not yet known. Never
+  amplify quiet audio; avoid audible gain steps at chunk boundaries. Reject
+  non-finite samples. The completed WAV still follows §2's one uniform gain
+  across the entire recording, so its level may differ from the preview.
+  Do not replace whole-recording attenuation with independent per-chunk gains
+  in the saved file.
+- **Keep playback and model work separate.** Stop previous result or History
+  playback before preview starts and prevent competing playback during the
+  initial stream. Keep inputs disabled for this session, including its final
+  playback drain; Help and Logs remain reachable. Stop (Escape) immediately
+  silences preview and requests cooperative cancellation while inference is
+  active. Show Stopping until the model actually stops. After the completed
+  file has been finalized, Stop only ends the remaining playback and keeps
+  that successful file. Prevent stale chunks from reaching a later session.
+- **One completed recording, one History entry.** On successful completion,
+  finalize one ordinary WAV carrying the original full text and mode-specific
+  metadata. Playback drains the existing queue without automatically starting
+  again from the beginning. Then offer normal Replay and reveal actions. A
+  cancelled or failed run publishes no partial WAV to History. Temporary-file
+  rules are in [DATA-FORMATS.md](DATA-FORMATS.md#streaming-temporary-output).
+- **Bound audio buffering and keep the window responsive.** Inference,
+  decoder work, disk writes and backpressure waits stay off the UI and audio
+  device callbacks. A preview-device failure is reported and disables live
+  playback, while generation continues saving its result; it must not leave
+  the producer blocked on an abandoned playback queue. Inference/disk errors
+  remain generation failures. Streaming does not promise realtime throughput
+  or eliminate the model's growing inference memory.
 
 ## 3. Model management
 

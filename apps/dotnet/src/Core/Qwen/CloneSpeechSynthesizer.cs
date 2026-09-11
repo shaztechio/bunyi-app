@@ -136,7 +136,7 @@ public sealed class CloneSpeechSynthesizer(
             new CloneRequest(request.Text, request.ReferenceTranscript, request.Language),
             reference,
             progress: frames,
-            ct: ct);
+            ct: ct, audioPreview: request.AudioPreview);
 
         return Task.FromResult(new SynthesisResult(
             DesignSpeechSynthesizer.ToPcm16(result.Samples, _log), 24_000, result.Frames));

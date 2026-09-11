@@ -115,7 +115,7 @@ public sealed class PresetSpeechSynthesizer(
                 request.Instruct,
                 request.Language),
             progress: frames,
-            ct: ct);
+            ct: ct, audioPreview: request.AudioPreview);
 
         return Task.FromResult(new SynthesisResult(
             DesignSpeechSynthesizer.ToPcm16(result.Samples, _log), 24_000, result.Frames));

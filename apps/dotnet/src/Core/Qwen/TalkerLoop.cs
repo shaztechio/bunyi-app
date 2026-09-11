@@ -224,7 +224,8 @@ public sealed class TalkerLoop : IDisposable
         string what,
         IProgress<int>? progress = null,
         IReadOnlyList<int[]>? vocoderContext = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        Action<AudioPreviewChunk>? audioPreview = null)
     {
         ArgumentNullException.ThrowIfNull(rows);
         ArgumentNullException.ThrowIfNull(trailingHidden);
@@ -237,6 +238,24 @@ public sealed class TalkerLoop : IDisposable
         var (logits, hidden, pastKeys, pastValues) = RunPrefill(rows);
 
         var frames = new List<int[]>();
+        // Preview windows are deliberately bounded; they do not rerun the
+        // growing prefix. Parameters remain experimental until listening and
+        // same-code comparison on all three exports establish boundary quality.
+        var preview = audioPreview is null ? null : new RollingAudioPreview(
+            window => RunVocoder(window, null), chunk =>
+            {
+                if (chunk.Failure is not null)
+                    _log.Log($"Streaming preview stopped; generation will continue: {chunk.Failure}");
+                audioPreview(chunk);
+            }, vocoderContext);
+        var previewTime = TimeSpan.Zero;
+        void Preview(bool completed)
+        {
+            if (preview is null) return;
+            var clock = Stopwatch.StartNew();
+            try { preview.Update(frames, completed, ct); }
+            finally { previewTime += clock.Elapsed; }
+        }
         var produced = new List<int>();
         var position = rows.Length;
 
@@ -271,6 +290,7 @@ public sealed class TalkerLoop : IDisposable
             var frame = PredictFrame(first, hidden, sampling);
             frames.Add(frame);
             progress?.Report(frames.Count);
+            Preview(completed: false);
 
             var next = NextInput(frame, trailingHidden);
             (logits, hidden, pastKeys, pastValues) =
@@ -297,11 +317,14 @@ public sealed class TalkerLoop : IDisposable
             throw new GenerationDidNotFinishException();
         }
 
-        var talker = talkerClock.Elapsed;
+        Preview(completed: true);
+        ct.ThrowIfCancellationRequested();
+        var talker = talkerClock.Elapsed - previewTime;
 
         var vocoderClock = Stopwatch.StartNew();
         var samples = RunVocoder(frames, vocoderContext);
-        var vocoder = vocoderClock.Elapsed;
+        ct.ThrowIfCancellationRequested();
+        var vocoder = vocoderClock.Elapsed + previewTime;
 
         // Split at the one seam that matters. The talker runs on whatever
         // provider was chosen; the vocoder is pinned to the CPU and stays

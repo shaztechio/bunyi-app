@@ -43,6 +43,16 @@ public sealed class CloneSynthesizerTests : IDisposable
     // ---- What the window is told ----
 
     [Fact]
+    public async Task Preview_callback_reaches_clone_pipeline()
+    {
+        var pipeline = new FakePipeline();
+        await using var synth = await LoadedAsync(pipeline);
+        AudioPreviewChunk? chunk = null;
+        await synth.SynthesizeAsync(Request(audio: MakeClip()) with { AudioPreview = value => chunk = value }, default);
+        Assert.NotNull(chunk);
+        Assert.Equal(0.25f, chunk.Samples[0]);
+    }
+    [Fact]
     public void It_offers_no_speakers()
     {
         // The voice comes from the recording. A picker as well would be two
@@ -257,9 +267,11 @@ public sealed class CloneSynthesizerTests : IDisposable
             SamplingOptions? options = null,
             IProgress<int>? progress = null,
             int? maxFrames = null,
-            CancellationToken ct = default)
+            CancellationToken ct = default,
+            Action<AudioPreviewChunk>? audioPreview = null)
         {
             LastRequest = request;
+            audioPreview?.Invoke(new AudioPreviewChunk([0.25f], 24_000, 0));
             LastSampleCount = reference.Length;
 
             return new SpeechResult(new float[2400], [[0, 0]]);

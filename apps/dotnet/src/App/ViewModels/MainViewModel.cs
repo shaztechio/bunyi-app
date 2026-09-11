@@ -31,6 +31,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private readonly ITtsEngine _engine;
     private readonly IAudioPlayer _player;
     private readonly IBatchTimerFactory _timers;
+    private readonly Func<IStreamingAudioPlayer> _previewPlayerFactory;
+    private IStreamingAudioPlayer? _previewPlayer;
+    private IBatchTimer? _previewTicker;
+    private long _previewRun;
 
     /// <summary>
     /// The playback ticker, made when something first plays.
@@ -99,6 +103,19 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty] private bool _isBusy;
     [ObservableProperty] private string? _lastOutputPath;
     [ObservableProperty] private bool _isPlaying;
+    [ObservableProperty] private bool _isPreviewSession;
+    [ObservableProperty] private string _previewStatus = string.Empty;
+
+    public bool HasSpeechEstimate => !string.IsNullOrWhiteSpace(Script);
+    public string SpeechEstimateText
+    {
+        get
+        {
+            var estimate = SpeechDurationEstimate.ForText(Script, Language);
+            return $"Estimated speech: {Math.Ceiling(estimate.LowerSeconds):0}–{Math.Ceiling(estimate.UpperSeconds):0} seconds"
+                + (estimate.ShouldStream ? " · streaming preview" : "");
+        }
+    }
 
     /// <summary>How far through the clip playback is, from 0 to 1.</summary>
     [ObservableProperty] private double _playProgress;
@@ -191,12 +208,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         Func<string>? outputFolder = null,
         IBatchTimerFactory? timers = null,
         VoiceLibrary? voices = null,
-        TimeProvider? clock = null)
+        TimeProvider? clock = null,
+        Func<IStreamingAudioPlayer>? previewPlayerFactory = null)
     {
         _engine = engine ?? throw new ArgumentNullException(nameof(engine));
         _player = player ?? throw new ArgumentNullException(nameof(player));
         _log = log ?? throw new ArgumentNullException(nameof(log));
         _clock = clock ?? TimeProvider.System;
+        _previewPlayerFactory = previewPlayerFactory ?? (() => new StreamingAudioPlayer(_log));
 
         _timers = timers ?? new DispatcherTimerFactory();
 
@@ -331,6 +350,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         get => ShowingHistory ? HistorySegment.Instance : Mode;
         set
         {
+            if (IsPreviewSession) return;
             var was = SelectedSegment;
 
             if (value is TtsMode mode)
@@ -780,6 +800,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         Missing = null;
 
+        // Freeze every generation option before an asynchronous transcription
+        // or download. The duration gate belongs to this submitted request.
+        var request = CurrentRequest();
+        var shouldStream = SpeechDurationEstimate.ForText(request.Text, request.Language).ShouldStream;
+
         using var cancellation = new CancellationTokenSource();
         _generateCancellation = cancellation;
         IsBusy = true;
@@ -787,23 +812,53 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _engine.ClearLastOutput();
         LastOutputPath = null;
         var engineStarted = false;
+        var outputSaved = false;
+        IsPreviewSession = shouldStream;
+        PreviewStatus = shouldStream ? "Buffering audio" : string.Empty;
         try
         {
-            if (Mode == TtsMode.VoiceClone && string.IsNullOrWhiteSpace(ReferenceTranscript))
+            if (request.Mode == TtsMode.VoiceClone && string.IsNullOrWhiteSpace(request.ReferenceTranscript))
+            {
                 await TranscribeReferenceAsync(cancellation.Token);
+                request = request with { ReferenceTranscript = ReferenceTranscript };
+            }
 
             cancellation.Token.ThrowIfCancellationRequested();
+            if (shouldStream)
+            {
+                var preview = _previewPlayerFactory();
+                _previewPlayer = preview;
+                var run = Interlocked.Increment(ref _previewRun);
+                _previewTicker ??= _timers.Create(TimeSpan.FromMilliseconds(250), TickPreview);
+                _previewTicker.Start();
+                request = request with { AudioPreview = chunk =>
+                {
+                    if (run != Interlocked.Read(ref _previewRun) || cancellation.IsCancellationRequested) return;
+                    preview.Add(chunk, cancellation.Token);
+                }};
+            }
             engineStarted = true;
-            await _engine.GenerateAsync(CurrentRequest(), null, cancellation.Token);
+            await _engine.GenerateAsync(request, null, cancellation.Token);
             var path = _engine.LastOutputPath;
             LastOutputPath = path;
+            outputSaved = path is not null;
 
             // §2: the result plays itself once it is written.
-            if (path is not null) { Status = "Your audio is ready"; Play(); }
+            if (path is not null)
+            {
+                if (_previewPlayer is { } preview)
+                {
+                    Status = "Your audio is saved · finishing preview";
+                    await preview.CompleteAsync(cancellation.Token);
+                    Status = preview.Failure is null ? "Your audio is ready"
+                        : "Your audio is ready · preview unavailable; press Play to listen";
+                }
+                else { Status = "Your audio is ready"; Play(); }
+            }
         }
         catch (OperationCanceledException)
         {
-            Status = "Stopped";
+            Status = outputSaved ? "Preview stopped · your audio is saved" : "Stopped";
         }
         catch (PreflightFailedException failed)
         {
@@ -821,6 +876,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         finally
         {
+            Interlocked.Increment(ref _previewRun);
+            _previewTicker?.Stop();
+            if (_previewPlayer is { } preview)
+            {
+                preview.Stop();
+                await Task.Run(preview.Dispose);
+            }
+            _previewPlayer = null;
+            IsPreviewSession = false;
+            PreviewStatus = string.Empty;
             _generateCancellation = null;
             lock (_downloadGate) { _pendingDownload = null; _downloadPumpActive = false; }
             _downloadTicker?.Stop();
@@ -834,11 +899,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void Stop()
     {
+        _previewPlayer?.Stop();
         if (_generateCancellation is { } generation)
         {
-            generation.Cancel();
-            if (_engine.Status.IsBusy) _engine.RequestStop();
             OnEngineStatusChanged(this, new EngineStatus(EngineState.Stopping));
+            if (_engine.Status.IsBusy) _engine.RequestStop();
+            generation.Cancel();
         }
         else if (_listenCancellation is { } listening)
         {
@@ -859,6 +925,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void Play()
     {
+        if (IsPreviewSession) return;
         if (LastOutputPath is null) return;
 
         if (IsPlaying)
@@ -913,6 +980,24 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         IsPlaying = false;
         PlayProgress = 0;
         Elapsed = TimeSpan.Zero;
+    }
+
+    internal void TickPreview()
+    {
+        if (_previewPlayer is not { } preview || !IsPreviewSession) return;
+        var next = preview.Failure is not null
+            ? "Preview unavailable · generation will still save your audio"
+            : preview.IsBuffering ? "Buffering audio" : "Streaming preview";
+        if (PreviewStatus == next) return;
+        PreviewStatus = next;
+        // Buffer underruns can alternate rapidly. Reuse the live region's
+        // ten-second budget instead of announcing every audio callback.
+        var now = _clock.GetUtcNow();
+        if (now - _announcedAt >= AnnouncementGap)
+        {
+            _announcedAt = now;
+            Announcement = next;
+        }
     }
 
     [RelayCommand]
@@ -990,7 +1075,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             OnPropertyChanged(nameof(ShowSpinner));
             OnPropertyChanged(nameof(ShowProgressBar));
             ProgressDetail = status.Detail;
-            Status = Describe(status);
+            if (!(IsPreviewSession && status.State == EngineState.Idle)) Status = Describe(status);
             AnnounceIfDue(status.State);
 
             if (_engine.Speakers.Count > 0 && !_engine.Speakers.SequenceEqual(Speakers))
@@ -1035,7 +1120,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         _announcedState = state;
         _announcedAt = now;
-        Announcement = Download.Visible ? Download.Announcement : Status;
+        Announcement = Download.Visible ? Download.Announcement
+            : IsPreviewSession ? $"{Status}. {PreviewStatus}" : Status;
     }
 
     private static string Describe(EngineStatus status) => status.State switch
@@ -1082,6 +1168,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(IsIndeterminate));
         OnPropertyChanged(nameof(ShowSpinner));
         OnPropertyChanged(nameof(ShowProgressBar));
+        OnPropertyChanged(nameof(HasSpeechEstimate));
+        OnPropertyChanged(nameof(SpeechEstimateText));
     }
 
     // Everything CurrentRequest reads has to refresh the button, or Generate
@@ -1175,6 +1263,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
+        Interlocked.Increment(ref _previewRun);
+        _generateCancellation?.Cancel();
+        _previewPlayer?.Stop();
+        _previewTicker?.Dispose();
+        if (_previewPlayer is { } preview) _ = Task.Run(preview.Dispose);
         lock (_downloadGate) { _disposed = true; _pendingDownload = null; }
         _downloadTicker?.Dispose();
         _ticker?.Dispose();

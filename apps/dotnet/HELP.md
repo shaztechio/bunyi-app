@@ -42,7 +42,13 @@ Both bars also show their total size in MB or GB. **Model download elapsed** sho
 
 If no data arrives, the message changes to **Waiting for more data**. After 30 seconds it says the download may be stalled. Incoming data clears that warning. **Checking model files**, **Loading model**, **Creating your speech**, and **Preparing your audio file** identify the work that follows. Only **Your audio is ready** means speech has finished and been saved.
 
-When generation finishes the audio plays automatically. **Play** repeats it, and the folder button opens the folder where the file was saved.
+For shorter text, the audio plays automatically when generation finishes. **Play** repeats it, and the folder button opens the folder where the file was saved.
+
+**Streaming preview.** In this demonstration build, all three modes show an estimated speech length. When the upper estimate is more than 20 seconds, you hear a preview while the rest is being generated. This is the estimated recording length, not the time your computer will spend making it. Exactly 20 seconds or less uses the ordinary playback after generation.
+
+**Buffering audio** means the next part is still being made. Playback resumes automatically; slower computers may pause between parts. The completed recording does not contain these waiting gaps, and it may have a slightly different volume from the preview. A long preview does not play again automatically when its file is saved.
+
+**Stop** silences the preview immediately and asks generation to stop. A cancelled or failed take is not saved. If the audio file has already been saved and only preview playback remains, Stop keeps that file. If the audio device cannot play the preview, generation continues and you can play the completed file afterwards.
 
 If the download is a lot to ask for before hearing anything, the **Storage** tab in Settings gives you a command per mode to fetch a model in advance instead.
 

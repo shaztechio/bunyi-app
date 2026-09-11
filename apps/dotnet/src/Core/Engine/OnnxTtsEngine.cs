@@ -305,13 +305,12 @@ public sealed class OnnxTtsEngine : ITtsEngine
                 }
 
                 Publish(new EngineStatus(EngineState.Finalizing), progress);
-                var path = WriteOutput(effective, audio, folder);
+                var path = WriteOutput(effective, audio, folder, token);
 
                 bool instructWasIgnored() =>
                     !string.IsNullOrWhiteSpace(request.Instruct)
                     && request.Mode != TtsMode.VoiceClone
                     && !_synth.SupportsInstruct;
-                LastOutputPath = path;
 
                 _log.Log(
                     $"Saved {path} — {audio.Duration.TotalSeconds:0.0}s, " +
@@ -332,11 +331,15 @@ public sealed class OnnxTtsEngine : ITtsEngine
         }
         catch (OperationCanceledException)
         {
+            EndPreview(request, "Generation was stopped.");
             await FinishStoppingAsync(progress).ConfigureAwait(false);
             throw;
         }
         catch (Exception ex)
         {
+            // Silence queued provisional audio before potentially slow runtime
+            // cleanup. A failed take must not keep playing during Release().
+            EndPreview(request, "Generation failed; this preview was not saved.");
             // The same release path as success: a run that threw allocated as
             // much as one that finished.
             _log.Log($"Generation failed: {ex}");
@@ -450,23 +453,44 @@ public sealed class OnnxTtsEngine : ITtsEngine
         }
     }
 
-    private string WriteOutput(GenerateRequest request, SynthesisResult audio, string modelFolder)
+    private void EndPreview(GenerateRequest request, string reason)
     {
+        try { request.AudioPreview?.Invoke(new AudioPreviewChunk([], WavWriter.SampleRate, 0, reason)); }
+        catch (Exception ex) { _log.Log($"Could not end the streaming preview: {ex.Message}"); }
+    }
+
+    private string WriteOutput(GenerateRequest request, SynthesisResult audio, string modelFolder, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
         var now = _time.GetLocalNow();
         var folder = AppPaths.EnsureFolder(_outputFolder());
         var path = Path.Combine(folder, WavWriter.FileNameFor(request.Mode, now));
-
-        WavWriter.Write(path, audio.Samples, audio.SampleRate);
-
-        var metadata = MetadataFor(request, modelFolder, now);
-        if (!WavMetadata.TryWrite(path, metadata))
+        var temporary = Path.Combine(folder, $".bunyi-output-{Guid.NewGuid():N}.partial");
+        try
         {
-            // Best-effort by design: a file that plays without its metadata
-            // beats losing the audio to a failed tag write.
-            _log.Log($"Could not write metadata into {Path.GetFileName(path)}; the audio is fine.");
-        }
+            WavWriter.Write(temporary, audio.Samples, audio.SampleRate);
+            ct.ThrowIfCancellationRequested();
+            var metadata = MetadataFor(request, modelFolder, now);
+            if (!WavMetadata.TryWrite(temporary, metadata))
+                _log.Log($"Could not write metadata into {Path.GetFileName(path)}; the audio is fine.");
 
-        return path;
+            // Serialize Stop intent and commit. Once committed, the completed
+            // file survives a Stop aimed at the remaining preview playback.
+            lock (_gate)
+            {
+                ct.ThrowIfCancellationRequested();
+                if (_status.State == EngineState.Stopping) throw new OperationCanceledException(ct);
+                File.Move(temporary, path, overwrite: true);
+                LastOutputPath = path;
+            }
+            return path;
+        }
+        finally
+        {
+            try { if (File.Exists(temporary)) File.Delete(temporary); }
+            catch (IOException ex) { _log.Log($"Could not remove temporary audio: {ex.Message}"); }
+            catch (UnauthorizedAccessException ex) { _log.Log($"Could not remove temporary audio: {ex.Message}"); }
+        }
     }
 
     private OutputMetadata MetadataFor(GenerateRequest request, string modelFolder, DateTimeOffset now)

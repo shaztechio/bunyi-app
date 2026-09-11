@@ -55,7 +55,8 @@ public interface IDesignPipeline : IDisposable
         SamplingOptions? options = null,
         IProgress<int>? progress = null,
         int? maxFrames = null,
-        CancellationToken ct = default);
+        CancellationToken ct = default,
+        Action<AudioPreviewChunk>? audioPreview = null);
 }
 
 public sealed class DesignPipeline : IDesignPipeline
@@ -132,7 +133,8 @@ public sealed class DesignPipeline : IDesignPipeline
         SamplingOptions? options = null,
         IProgress<int>? progress = null,
         int? maxFrames = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        Action<AudioPreviewChunk>? audioPreview = null)
     {
         ArgumentNullException.ThrowIfNull(request);
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -145,7 +147,7 @@ public sealed class DesignPipeline : IDesignPipeline
             "Voice design",
             progress,
             vocoderContext: null,
-            ct);
+            ct, audioPreview);
     }
 
     public void Dispose()

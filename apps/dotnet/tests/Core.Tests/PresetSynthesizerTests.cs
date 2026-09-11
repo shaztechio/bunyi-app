@@ -43,9 +43,11 @@ public class PresetSynthesizerTests
         public SpeechResult Generate(
             PresetRequest request, SamplingOptions? options = null,
             IProgress<int>? progress = null, int? maxFrames = null,
-            CancellationToken ct = default)
+            CancellationToken ct = default,
+            Action<AudioPreviewChunk>? audioPreview = null)
         {
             Asked = request;
+            audioPreview?.Invoke(new AudioPreviewChunk([0.25f], 24_000, 0));
             ct.ThrowIfCancellationRequested();
 
             return Answer?.Invoke(request)
@@ -77,6 +79,17 @@ public class PresetSynthesizerTests
         return (synth, opened);
     }
 
+    [Fact]
+    public async Task Preview_callback_reaches_pipeline()
+    {
+        var (synth, _) = New();
+        await synth.LoadAsync(@"C:\models\preview", default);
+        AudioPreviewChunk? chunk = null;
+        await synth.SynthesizeAsync(new GenerateRequest(TtsMode.PresetVoice, "hello",
+            AudioPreview: value => chunk = value), default);
+        Assert.NotNull(chunk);
+        Assert.Equal(0.25f, chunk.Samples[0]);
+    }
     [Fact]
     public async Task It_offers_the_exports_speakers_once_loaded_and_none_before()
     {

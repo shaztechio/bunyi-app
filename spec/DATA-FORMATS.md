@@ -334,6 +334,10 @@ Stored in a `Voices` subfolder of app data, alongside copied audio clips.
 
 ## Output WAV
 
+The planned long-speech streaming behavior is specified in
+[FEATURES.md §2b](FEATURES.md#2b-streaming-long-speech). Its completed file uses
+this same format; no per-chunk output format or metadata schema is introduced.
+
 - **Embedded metadata**: a RIFF `LIST`/`INFO` chunk appended to the file,
   carrying what produced it. Standard fields so ordinary tools show something
   useful — `INAM` (the text, truncated), `IART` (speaker or voice
@@ -361,3 +365,29 @@ Stored in a `Voices` subfolder of app data, alongside copied audio clips.
   container).
 - Filename: `<Mode>-<ISO8601-basic timestamp>.wav`
   (e.g. `Voice-clone-20260725T2312.wav`).
+
+### Streaming temporary output
+
+Planned for §2b; implementation status is tracked in
+[STREAMING-PLAN.md](STREAMING-PLAN.md).
+
+- Partial audio is private working data, never a discoverable completed WAV
+  or History item. Use an app-owned unique temporary name and finalize with
+  an atomic rename within the destination filesystem only after successful
+  generation, output validation, WAV length finalization and best-effort
+  metadata embedding.
+- Preserve unattenuated floating-point samples until the full peak is known,
+  whether in memory for the demonstration or in a bounded disk spool for the
+  production implementation. Apply §2's single whole-recording gain when
+  writing the final PCM WAV. Live-preview gain is not persisted as a series
+  of per-chunk changes. No buffering silence or clone reference samples are
+  included in the final target speech.
+- Cancellation, safety-limit termination, inference error or write failure
+  discards the partial take after its workers and file handles settle. No
+  partial success is added to History. Cancellation before the final commit
+  point discards the temporary output; Stop after that point keeps the
+  completed recording and ends playback only.
+- Startup cleanup may remove abandoned app-owned streaming temporary files
+  using a documented naming/ownership rule. It must not delete completed
+  outputs or arbitrary user files. Temporary data is not part of a portable
+  output or backup contract.

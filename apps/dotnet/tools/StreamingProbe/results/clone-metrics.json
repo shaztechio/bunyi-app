@@ -1,0 +1,36 @@
+{
+  "mode": "clone",
+  "text": "Welcome to this demonstration of streaming speech. You can hear the opening while the next part is still being generated. The voice continues in one uninterrupted take, keeping its rhythm and expression throughout the passage. When the recording is complete, the application saves the whole result so you can listen again whenever you like.",
+  "estimate": {
+    "LowerSeconds": 18.700000000000003,
+    "UpperSeconds": 29,
+    "ShouldStream": true
+  },
+  "frames": 243,
+  "audioSeconds": 19.44,
+  "firstChunkSeconds": 11.4695548,
+  "synthesisSeconds": 81.9747494,
+  "firstDeviceReadSeconds": 11.5310616,
+  "playbackCompletedSeconds": 83.7020372,
+  "previewChunks": 10,
+  "previewSamples": 466560,
+  "finalSamples": 466560,
+  "rootMeanSquareError": 0.010165164452986923,
+  "relativeRootMeanSquareError": 0.041486858727108125,
+  "maximumAbsoluteError": 0.41821980476379395,
+  "chunkArrivalSeconds": [
+    11.4695782,
+    16.9666542,
+    22.7496121,
+    30.1835795,
+    36.8947496,
+    44.7193666,
+    52.0101566,
+    62.0602914,
+    70.4967288,
+    75.9370062
+  ],
+  "peakWorkingSetBytes": 3908268032,
+  "playerFailure": null,
+  "note": "CPU; same generated codec sequence, rolling preview versus authoritative full decoder. Preview WAV uses one gain for comparison; live preview has its own clipping protection."
+}

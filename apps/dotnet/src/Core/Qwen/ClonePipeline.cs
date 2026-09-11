@@ -39,7 +39,8 @@ public interface IClonePipeline : IDisposable
         SamplingOptions? options = null,
         IProgress<int>? progress = null,
         int? maxFrames = null,
-        CancellationToken ct = default);
+        CancellationToken ct = default,
+        Action<AudioPreviewChunk>? audioPreview = null);
 }
 
 /// <summary>
@@ -150,7 +151,8 @@ public sealed class ClonePipeline : IClonePipeline
         SamplingOptions? options = null,
         IProgress<int>? progress = null,
         int? maxFrames = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        Action<AudioPreviewChunk>? audioPreview = null)
     {
         ArgumentNullException.ThrowIfNull(request);
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -202,7 +204,7 @@ public sealed class ClonePipeline : IClonePipeline
             "Voice clone",
             progress,
             vocoderContext: codes,
-            ct);
+            ct, audioPreview);
     }
 
     /// <summary>
