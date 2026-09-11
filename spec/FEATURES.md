@@ -384,6 +384,17 @@ explain itself in the main window, including when History is selected:
   first, then a known fallback URL). See `DATA-FORMATS.md`.
 
 ### 3c. Self-hosting
+- The project mirror may redirect GET and HEAD requests to short-lived R2
+  S3 download URLs. The configured base URL remains the model's identity;
+  signed destinations are transient and must never become saved settings.
+  Resume requests obtain a fresh redirect from the original URL and retain
+  their Range semantics. Manifests and final checksum validation stay the same.
+  The download signer grants only reads of explicitly published model files,
+  emits uncached redirects, and has an emergency stop for issuing new links.
+  Previously issued links remain usable until their short expiry; an existing
+  transfer may continue. Hostname WAF rules do not revoke signed R2 links.
+  Rollout requires full-file throughput, checksum, and Stop/resume verification
+  with both native download clients; a short range benchmark is insufficient.
 - The app fetches `<base>/manifest.txt` (newline-separated relative paths)
   and downloads each `<base>/<path>`. If absent, it uses a built-in
   default file list for that runtime.

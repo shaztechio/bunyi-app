@@ -1,0 +1,66 @@
+# Copyright 2026 Shazron Abdullah and Bunyi contributors
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: Download Worker
+on:
+  pull_request:
+    paths:
+      - 'workers/downloads/**'
+      - '.github/workflows/download-worker.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'workers/downloads/**'
+      - '.github/workflows/download-worker.yml'
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: workers/downloads
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: workers/downloads/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+  native-redirects:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: workers/downloads
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v5
+        if: runner.os != 'macOS'
+        with:
+          dotnet-version: '10.0.x'
+      - name: Verify .NET HEAD, full file, cancellation and Range redirects
+        if: runner.os != 'macOS'
+        run: dotnet run --project verify/dotnet -- https://bunyi-downloads.bunyi.workers.dev onnx/customvoice/vocoder.onnx 4ee20178c7ab322891ce412d92edcfbade2e5e94a8cffe054e17b760fc764e45
+      - name: Verify URLSession HEAD, full file and Range redirects
+        if: runner.os == 'macOS'
+        run: |
+          swift verify/urlsession.swift https://bunyi-downloads.bunyi.workers.dev onnx/customvoice/vocoder.onnx.data f4cd93d2b48b833a6aaca7d5a3c95dd99853baba565514cb91777e3ce3c4cc8d
+          swift verify/urlsession.swift https://bunyi-downloads.bunyi.workers.dev onnx/voiceclone/int4/vocoder.onnx.data d29e56c20bc6ff8d996daaae914d5d1ec1cd8170be578dc792b44978208a9575
