@@ -32,7 +32,8 @@ A segmented picker selects one of three modes. macOS source:
 | **Voice clone** | Base | text, reference audio clip, reference transcript | **no** — Base model ignores `instruct` |
 
 - **Script layout**: in every generation mode, the heading stays above the
-  editor and the editor's scrollbar stays inside its border. Long scripts
+  editor and the editor's scrollbar stays inside its border, with space
+  between the text and the scrollbar. Long scripts
   scroll within the editor. If the form cannot fit in the window, its fields
   remain reachable without overlapping; the .NET app scrolls the form while
   keeping the mode picker and Generate/Stop bar in place.

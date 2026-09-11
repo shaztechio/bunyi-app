@@ -15,6 +15,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Presenters;
 using Avalonia.Headless.XUnit;
 using Avalonia.Layout;
 using Avalonia.VisualTree;
@@ -67,6 +68,10 @@ public sealed class ScriptLayoutTests : HeadlessWindows
         Assert.True(barTop.Y >= labelBottom);
         Assert.True(barTop.Y + bar.Bounds.Height <= card.Bounds.Height - card.Padding.Bottom + 0.5);
         Assert.True(barTop.X + bar.Bounds.Width <= card.Bounds.Width - card.Padding.Right + 0.5);
+        var text = script.GetVisualDescendants().OfType<TextPresenter>().Single();
+        var textRight = text.TranslatePoint(new Point(text.Bounds.Width, 0), card)!.Value.X;
+        Assert.True(barTop.X - textRight >= 8 - 0.5,
+            $"Only {barTop.X - textRight} pixels separate the text from the scrollbar.");
         scroller.ScrollToEnd();
         window.UpdateLayout();
         Assert.True(scroller.Offset.Y > 0);

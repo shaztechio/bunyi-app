@@ -26,6 +26,10 @@ limitations under the License.
         Icon="/Assets/bunyi.png">
 
   <Window.Styles>
+    <!-- TextBox padding surrounds the scrollbar too; inset its content separately. -->
+    <Style Selector="TextBox#ScriptBox /template/ ScrollViewer#PART_ScrollViewer">
+      <Setter Property="Padding" Value="0,0,8,0" />
+    </Style>
     <Style Selector="TextBlock.eyebrow">
       <Setter Property="FontSize" Value="10" />
       <Setter Property="FontWeight" Value="Bold" />
