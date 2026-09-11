@@ -96,6 +96,7 @@ public sealed class FakeEngine : ITtsEngine
     public TaskCompletionSource<GenerateResult> Pending { get; } = new();
 
     public GenerateRequest? LastRequest { get; private set; }
+    public Exception? GenerateFailure { get; set; }
     public int StopRequests { get; private set; }
 
     public void ClearLastOutput() => LastOutputPath = null;
@@ -112,6 +113,11 @@ public sealed class FakeEngine : ITtsEngine
         GenerateRequest request, IProgress<EngineStatus>? progress, CancellationToken ct)
     {
         LastRequest = request;
+        if (GenerateFailure is { } error)
+        {
+            Publish(new EngineStatus(EngineState.Error, Message: error.Message));
+            return Task.FromException<GenerateResult>(error);
+        }
         Publish(new EngineStatus(EngineState.Generating));
         return Pending.Task;
     }

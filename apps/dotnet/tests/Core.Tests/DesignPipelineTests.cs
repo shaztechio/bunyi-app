@@ -269,8 +269,7 @@ public class DesignPipelineTests
                 seen = frames;
                 if (frames >= 2) cancelled.Cancel();
             }),
-            maxFrames: 40,
-            cancelled.Token));
+            ct: cancelled.Token)); // The default uncapped path must remain cancellable.
 
         Assert.InRange(seen, 2, 4);
     }

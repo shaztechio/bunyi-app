@@ -34,6 +34,12 @@ and launch. On Windows and Linux, extract the portable archive and run Bunyi;
 no runtime installation is needed. Windows builds are unsigned; see the
 code signing policy below for first-launch instructions.
 
+**For agents and terminals:** the [Windows/Linux CLI guide](apps/dotnet/CLI.md)
+covers one-shot generation, an optional resident server, and observable model
+downloads. The CLI is not yet released; its standalone archives are built by
+the next Windows/Linux release. Native macOS CLI work is tracked in
+[#217](https://github.com/shaztechio/bunyi-app/issues/217).
+
 ## How it's structured
 
 Qwen3-TTS has no single cross-platform runtime — MLX is Apple-Silicon only —
@@ -57,6 +63,11 @@ Feature parity is a discipline, enforced by documents — see
 - [`spec/DATA-FORMATS.md`](spec/DATA-FORMATS.md) — on-disk layout, `manifest.txt`,
   `voices.json`, backup zip, output WAV (so a models folder or backup is
   interchangeable between apps of the same runtime family)
+- [`spec/CLI.md`](spec/CLI.md) — agent-facing CLI, machine output,
+  download progress, one-shot execution, and persistent server behavior
+
+The staged cross-platform implementation design is in
+[`CLI-PLAN.md`](CLI-PLAN.md).
 
 Any feature change updates the spec **and** every app.
 
