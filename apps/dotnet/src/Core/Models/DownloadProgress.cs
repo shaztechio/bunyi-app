@@ -30,6 +30,7 @@ public enum DownloadPhase
     /// <summary>Hashing what arrived.</summary>
     Verifying,
     Reconnecting,
+    Waiting,
     Done,
 }
 
@@ -63,7 +64,8 @@ public sealed record DownloadProgress(
     long CurrentFileBytes = 0,
     long CurrentFileTotal = 0,
     DateTimeOffset? LastReceivedAt = null,
-    DateTimeOffset? WaitingSince = null)
+    DateTimeOffset? WaitingSince = null,
+    DownloadWait? ServiceWait = null)
 {
     public double FileFraction => CurrentFileTotal > 0
         ? Math.Clamp((double)CurrentFileBytes / CurrentFileTotal, 0, 1) : 0;
@@ -85,6 +87,7 @@ public sealed record DownloadProgress(
 
         return Phase switch
         {
+            DownloadPhase.Waiting => $"{ServiceWait?.Host ?? "The server"} is limiting downloads. Retrying in {ServiceWait?.SecondsRemaining ?? 0}s…",
             DownloadPhase.Reconnecting => "Reconnecting — keeping downloaded bytes…",
             DownloadPhase.Manifest => "Looking for a file list…",
             DownloadPhase.Sizing => "Working out the download size…",

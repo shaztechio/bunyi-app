@@ -125,7 +125,7 @@ public sealed class DesignPipeline : IDesignPipeline
     /// <param name="request">Text, description and language.</param>
     /// <param name="options">Sampling, or the export's defaults when null.</param>
     /// <param name="progress">Frames produced so far.</param>
-    /// <param name="maxFrames">A cap, or the export's own when null.</param>
+    /// <param name="maxFrames">An explicit diagnostic cap; null waits for EOS or Stop.</param>
     /// <param name="ct">Cancellation, checked once a frame.</param>
     public SpeechResult Generate(
         DesignRequest request,
@@ -141,7 +141,7 @@ public sealed class DesignPipeline : IDesignPipeline
             _prefill.Build(request, _tokenizer),
             _prefill.TrailingHidden,
             options ?? _config.Sampling,
-            maxFrames ?? TalkerLoop.FrameBudget(request.Text, _config.MaxNewTokens),
+            maxFrames,
             "Voice design",
             progress,
             vocoderContext: null,

@@ -40,7 +40,7 @@ public sealed partial class ModelDownloader(HttpClient http, ILogSink log, TimeP
     private readonly HttpClient _http = http ?? throw new ArgumentNullException(nameof(http));
     private readonly ILogSink _log = log ?? throw new ArgumentNullException(nameof(log));
     private readonly TimeProvider _time = time ?? TimeProvider.System;
-    private readonly HttpFileDownloader _files = new(http, log);
+    private readonly HttpFileDownloader _files = new(http, log, time);
     private readonly object _transferGate = new();
     private CancellationTokenSource? _activeTransfer;
     private bool _restartRequested;
@@ -125,7 +125,9 @@ public sealed partial class ModelDownloader(HttpClient http, ILogSink log, TimeP
 
         foreach (var name in new[] { "manifest.sha256", "manifest.txt" })
         {
-            var text = await TryGetStringAsync(Combine(baseUrl.Url, name), ct).ConfigureAwait(false);
+            var text = await TryGetStringAsync(Combine(baseUrl.Url, name), ct, wait =>
+                progress?.Report(new(wait is null ? DownloadPhase.Manifest : DownloadPhase.Waiting,
+                    CurrentFile: name, ServiceWait: wait))).ConfigureAwait(false);
             if (text is null) continue;
 
             var result = ManifestParser.Parse(text);
@@ -182,7 +184,9 @@ public sealed partial class ModelDownloader(HttpClient http, ILogSink log, TimeP
         foreach (var file in preparedSizes is null ? files : [])
         {
             ct.ThrowIfCancellationRequested();
-            var size = await _files.SizeOfAsync(UriFor(source, file.RelativePath), ct).ConfigureAwait(false);
+            var size = await _files.SizeOfAsync(UriFor(source, file.RelativePath), ct, wait =>
+                progress?.Report(new(wait is null ? DownloadPhase.Sizing : DownloadPhase.Waiting,
+                    CurrentFile: file.RelativePath, FilesTotal: files.Count, ServiceWait: wait))).ConfigureAwait(false);
             if (size is { } value) sizes[file.RelativePath] = value;
         }
 
@@ -198,6 +202,7 @@ public sealed partial class ModelDownloader(HttpClient http, ILogSink log, TimeP
         long fileReceived = 0, fileReused = 0, fileTotal = 0;
         DateTimeOffset? lastReceived = null, waitingSince = null;
         var phase = DownloadPhase.Downloading;
+        DownloadWait? serviceWait = null;
 
         void Report(string? current) => progress?.Report(new DownloadProgress(
             phase,
@@ -212,7 +217,8 @@ public sealed partial class ModelDownloader(HttpClient http, ILogSink log, TimeP
             CurrentFileBytes: fileReceived + fileReused,
             CurrentFileTotal: fileTotal,
             LastReceivedAt: lastReceived,
-            WaitingSince: waitingSince));
+            WaitingSince: waitingSince,
+            ServiceWait: serviceWait));
 
         foreach (var file in files)
         {
@@ -236,7 +242,7 @@ public sealed partial class ModelDownloader(HttpClient http, ILogSink log, TimeP
                 ct.ThrowIfCancellationRequested();
                 using var attempt = CancellationTokenSource.CreateLinkedTokenSource(ct);
                 using var freshClient = retry ? (reconnectClientFactory?.Invoke() ?? new HttpClient()) : null;
-                var transfer = freshClient is null ? _files : new HttpFileDownloader(freshClient, _log);
+                var transfer = freshClient is null ? _files : new HttpFileDownloader(freshClient, _log, _time);
                 lock (_transferGate) { _activeTransfer = attempt; _restartRequested = false; }
                 try
                 {
@@ -252,6 +258,15 @@ public sealed partial class ModelDownloader(HttpClient http, ILogSink log, TimeP
                             lastReceived = _time.GetUtcNow();
                         },
                         attempt.Token,
+                        onWait: wait =>
+                        {
+                            lock (_transferGate) _canReconnect = false;
+                            monitor.SetActive(false);
+                            serviceWait = wait;
+                            phase = wait is null ? DownloadPhase.Downloading : DownloadPhase.Waiting;
+                            waitingSince = _time.GetUtcNow();
+                            Report(file.RelativePath);
+                        },
                         onProgress: p =>
                         {
                             lock (_transferGate) _canReconnect = !_restartRequested && p.Phase == DownloadPhase.Downloading;
@@ -501,11 +516,12 @@ public sealed partial class ModelDownloader(HttpClient http, ILogSink log, TimeP
         return builder.Uri;
     }
 
-    private async Task<string?> TryGetStringAsync(Uri uri, CancellationToken ct)
+    private async Task<string?> TryGetStringAsync(Uri uri, CancellationToken ct, Action<DownloadWait?>? waiting = null)
     {
         try
         {
-            using var response = await _http.GetAsync(uri, ct).ConfigureAwait(false);
+            using var response = await DownloadHttp.SendAsync(_http,
+                () => new HttpRequestMessage(HttpMethod.Get, uri), ct, waiting, _time).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode) return null;
             return await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
         }

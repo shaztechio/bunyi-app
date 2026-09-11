@@ -63,7 +63,10 @@ public sealed class CliOutput(TextWriter output, TextWriter error, bool json, bo
             if (json || jsonl) { WriteJson(message); return; }
             if (CliProtocol.ExitCode(message) != 0)
             {
-                error.WriteLine(JsonSerializer.Serialize(message.GetValueOrDefault("error"), CliProtocol.Json)); error.Flush(); return;
+                error.WriteLine(JsonSerializer.Serialize(message.GetValueOrDefault("error"), CliProtocol.Json));
+                if (message.TryGetValue("recovery", out var recovery))
+                    error.WriteLine(JsonSerializer.Serialize(recovery, CliProtocol.Json));
+                error.Flush(); return;
             }
             foreach (var key in new[] { "help", "outputPath", "transcript", "path", "version" })
                 if (message.TryGetValue(key, out var simple)) { output.WriteLine(simple); output.Flush(); return; }

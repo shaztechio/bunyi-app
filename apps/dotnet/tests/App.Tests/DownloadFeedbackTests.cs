@@ -26,6 +26,73 @@ namespace Bunyi.App.Tests;
 /// <summary>Presentation and headless layout checks; not a native screen-reader test.</summary>
 public class DownloadFeedbackTests : HeadlessWindows
 {
+    [Fact]
+    public void A_service_wait_keeps_progress_and_elapsed_without_false_stall_or_reconnect()
+    {
+        var model = new DownloadViewModel { Reconnect = () => throw new InvalidOperationException() };
+        model.Update(Snapshot(), Start);
+        var bytes = model.OverallBytes;
+        model.Update(Snapshot() with { Phase = DownloadPhase.Waiting,
+            ServiceWait = new("huggingface.co", Start.AddSeconds(120), 1, 120) }, Start);
+        model.Tick(Start.AddSeconds(60));
+        Assert.Contains("Retrying in 60s", model.Receipt);
+        Assert.Equal(bytes, model.OverallBytes);
+        Assert.Equal("Model download elapsed: 1:00", model.Elapsed);
+        Assert.False(model.Slow);
+        Assert.False(model.Stalled);
+        Assert.False(model.CanReconnect);
+        Assert.Contains("stop", model.Explanation);
+    }
+
+    [AvaloniaFact]
+    public async Task Mirror_failure_offers_an_explicit_retry_with_the_same_inputs()
+    {
+        var failure = new DownloadServiceException("download_service_unavailable", "Downloads paused",
+            new("https://models.bunyi.app/onnx/customvoice/manifest.sha256"));
+        var engine = new FakeEngine { GenerateFailure = failure };
+        var switches = 0;
+        using var model = new MainViewModel(engine, new FakePlayer(), new RecordingLog())
+        {
+            Script = "Hello again", CanRecoverDownload = (_, ex) => ex == failure && switches == 0,
+            UseHuggingFace = (_, _) => { switches++; engine.GenerateFailure = null; },
+        };
+        var window = new MainWindow { DataContext = model };
+        window.Show();
+        await model.GenerateCommand.ExecuteAsync(null);
+        Assert.Equal(0, switches);
+        Assert.True(model.CanUseHuggingFace);
+        Assert.True(window.FindControl<Button>("DownloadFromHuggingFaceButton")!.IsEffectivelyVisible);
+        var request = engine.LastRequest;
+        var retry = model.DownloadFromHuggingFaceCommand.ExecuteAsync(null);
+        Assert.Equal(1, switches);
+        Assert.Equal(request, engine.LastRequest);
+        Assert.False(model.CanUseHuggingFace);
+        engine.Complete("test-output.wav");
+        await retry;
+        window.Close();
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Changing_mode_or_settings_invalidates_the_recovery_offer(bool changeMode)
+    {
+        var engine = new FakeEngine { GenerateFailure = new DownloadServiceException("download_service_unavailable", "Paused", new("https://models.bunyi.app/file")) };
+        var switches = 0;
+        using var model = new MainViewModel(engine, new FakePlayer(), new RecordingLog())
+        {
+            Script = "Hello", CanRecoverDownload = (_, _) => true,
+            UseHuggingFace = (_, _) => switches++,
+        };
+        await model.GenerateCommand.ExecuteAsync(null);
+        Assert.True(model.CanUseHuggingFace);
+        if (changeMode) model.Mode = Bunyi.Core.TtsMode.VoiceClone;
+        else model.RefreshModelNotice();
+        Assert.False(model.CanUseHuggingFace);
+        await model.DownloadFromHuggingFaceCommand.ExecuteAsync(null);
+        Assert.Equal(0, switches);
+    }
+
     private static readonly DateTimeOffset Start = DateTimeOffset.Parse("2026-09-10T12:00:00Z");
     private static DownloadProgress Snapshot(long received = 1) => new(
         DownloadPhase.Downloading, BytesReceived: received, BytesReused: 2_350_000_000,

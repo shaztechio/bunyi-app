@@ -89,6 +89,25 @@ public sealed class BunyiRuntime : IAsyncDisposable
     public ModelSource SourceFor(TtsMode mode) =>
         ModelSource.Parse(CurrentSettings.SourceFor(mode), DefaultSourceFor(mode));
 
+    /// <summary>Only the selected built-in mirror can offer a source switch.</summary>
+    public bool CanUseHuggingFace(TtsMode mode, DownloadServiceException failure)
+    {
+        if (failure.Code != "download_service_unavailable" || SourceFor(mode) is not ModelSource.BaseUrl source)
+            return false;
+        var mirror = new Uri(ModelConfigLibrary.BunyiMirror.For(mode)!);
+        return source.Url.AbsoluteUri.TrimEnd('/') == mirror.AbsoluteUri.TrimEnd('/')
+            && failure.SourceUri.GetLeftPart(UriPartial.Authority) == mirror.GetLeftPart(UriPartial.Authority)
+            && failure.SourceUri.AbsolutePath.StartsWith(mirror.AbsolutePath.TrimEnd('/') + "/", StringComparison.Ordinal);
+    }
+
+    public void UseHuggingFace(TtsMode mode, DownloadServiceException failure)
+    {
+        // Check again at invocation time: settings may have changed since the failure.
+        if (!CanUseHuggingFace(mode, failure)) throw new InvalidOperationException("The model source has changed. Press Generate to try your current source.");
+        using var lease = AcquireOperation("config.set");
+        Settings.SaveStrict(CurrentSettings.WithSourceFor(mode, DefaultSourceFor(mode)));
+    }
+
     public Task<DoctorReport> DoctorAsync(TtsMode mode, bool deep, CancellationToken ct) =>
         Doctor.RunAsync(mode, SourceFor(mode), ModelLayout.For(mode), ModelsRoot, AppPaths.Outputs,
             new SystemProbe(), Reachable,

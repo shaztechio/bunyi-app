@@ -90,6 +90,8 @@ public partial class App : Application
                     ModelDownloader.FolderFor(runtime.SourceFor(mode), runtime.ModelsRoot),
                     ModelLayout.For(mode)).IsComplete,
                 Settings = settingsViewModel,
+                CanRecoverDownload = runtime.CanUseHuggingFace,
+                UseHuggingFace = runtime.UseHuggingFace,
                 Doctor = RunDoctor,
                 Logs = new LogsViewModel(log),
             };
