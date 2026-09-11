@@ -198,263 +198,274 @@ limitations under the License.
         </DockPanel>
       </Border>
 
-      <Border Grid.Row="1" Classes="card" IsVisible="{Binding !ShowingHistory}"
-              IsEnabled="{Binding !IsBusy}" Margin="0,16,0,0">
-        <!--
-          A Grid in reading order - eyebrow, box, the missing-input line, the
-          examples - for the same keyboard reason as the window's outer Grid.
-          As a DockPanel the examples had to be declared before the box they
-          are drawn under, and Tab reached them first.
-        -->
-        <Grid RowDefinitions="Auto,*,Auto,Auto">
-          <TextBlock Grid.Row="0" Name="ScriptLabel" Text="SCRIPT" Classes="eyebrow" />
-
-
-          <TextBlock Grid.Row="2" Classes="needed" Margin="0,6,0,0"
-                     Text="{Binding MissingReason}"
-                     IsVisible="{Binding NeedsText}" />
-
-          <!--
-            Named by the heading above it, the way the option pickers are named
-            by the label beside them. Without this the one box the whole app is
-            built around announced as an unnamed "edit": a person tabbing into
-            it was told a text field existed and nothing about what to type.
-            Found by walking the real tree for controls with no name, after the
-            same fault turned up on the dropdowns (#159, #192).
-          -->
-          <infra:AccessibleTextBox Grid.Row="1" Name="ScriptBox" Text="{Binding Script}"
-                   Classes.needed="{Binding NeedsText}"
-                   AutomationProperties.LabeledBy="{Binding #ScriptLabel}"
-                   AcceptsReturn="True" TextWrapping="Wrap"
-                   MinHeight="140" FontSize="15"
-                   PlaceholderText="Type or paste what you would like spoken." />
-          <!--
-            The examples. They vanish once the script has anything in it and do
-            not return over a generated result — an invitation to try something
-            belongs to a window that has not been used yet, not beside audio the
-            user just made.
-          -->
-          <StackPanel Grid.Row="3" Name="Examples" IsVisible="{Binding ShowExamples}"
-                      Margin="0,8,0,0" Spacing="4">
-            <TextBlock Text="{Binding ExamplePrompt}" FontSize="11" Opacity="0.7" />
-            <ItemsControl ItemsSource="{Binding Examples}"
-                          AutomationProperties.Name="Example prompts">
-              <ItemsControl.ItemsPanel>
-                <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
-              </ItemsControl.ItemsPanel>
-              <ItemsControl.ItemTemplate>
-                <DataTemplate>
-                  <Button Content="{Binding}" Margin="0,0,8,4" FontSize="12"
-                          Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).UseExampleCommand}"
-                          CommandParameter="{Binding}" />
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
-          </StackPanel>
-        </Grid>
-      </Border>
-
-      <Border Grid.Row="2" Classes="card" IsVisible="{Binding !ShowingHistory}"
-              IsEnabled="{Binding !IsBusy}" Margin="0,16,0,0">
-        <StackPanel Spacing="12" Grid.IsSharedSizeScope="True">
-          <TextBlock Text="OPTIONS" Classes="eyebrow" />
-
-          <Grid Name="LanguageRow">
-            <Grid.ColumnDefinitions>
-              <ColumnDefinition Width="Auto" SharedSizeGroup="OptionLabel" />
-              <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-            <TextBlock Grid.Column="0" Name="LanguageLabel" Text="Language" Classes="rowLabel" />
+      <!-- Keep the form's minimum size; scroll it when clone options need more
+           room than the window provides, instead of squeezing the script card. -->
+      <ScrollViewer Grid.Row="1" Grid.RowSpan="2" Name="GenerationScroller"
+                    IsVisible="{Binding !ShowingHistory}"
+                    VerticalContentAlignment="Stretch" AllowAutoHide="False"
+                    HorizontalScrollBarVisibility="Disabled"
+                    VerticalScrollBarVisibility="Auto">
+        <Grid RowDefinitions="*,Auto">
+          <Border Grid.Row="0" Classes="card"
+                  IsEnabled="{Binding !IsBusy}" Margin="0,16,0,0">
             <!--
-              LabeledBy, not a repeated Name: the label already exists on
-              screen, and ControlAutomationPeer.GetNameCore falls back to it, so
-              the words a reader says and the words the eye reads cannot drift.
-              Without it this box announced as an unnamed combo box.
-
-              ItemStatus is how the *change* is announced. Reported from using
-              the app with Narrator: arrowing through the list changed the value
-              silently. Measured, and the cause is in the toolkit —
-              ComboBoxAutomationPeer raises property changes for
-              IsDropDownOpen, Text and IsEditable, and none for SelectedItem, so
-              a non-editable box like this one emits nothing at all when the
-              selection moves. Raising Value ourselves would not help either:
-              ValuePatternIdentifiers.ValueProperty is absent from the Win32
-              bridge's property map, so it could not cross.
-
-              ItemStatus is the one mapped property that fits, and it needs no
-              code: ControlAutomationPeer already watches
-              AutomationProperties.ItemStatusProperty and raises the peer change
-              itself, and AutomationNode maps it to UIA_ItemStatusPropertyId.
-              Bound through the same converter the item template uses, so what
-              is announced is the words on screen rather than the raw id.
-
-              Confirmed by ear, under Narrator, 3 Sep 2026 — not only as a UIA
-              event. Worth saying because the whole of #192 was about the gap
-              between a property being set and a person hearing it, and this is
-              the one step no tool in this repository can take.
+              A Grid in reading order - eyebrow, box, the missing-input line, the
+              examples - for the same keyboard reason as the window's outer Grid.
+              As a DockPanel the examples had to be declared before the box they
+              are drawn under, and Tab reached them first.
             -->
-            <infra:AccessibleComboBox Grid.Column="1" ItemsSource="{Binding AllLanguages}"
-                      SelectedItem="{Binding Language}"
-                      AutomationProperties.LabeledBy="{Binding #LanguageLabel}"
-                      AutomationProperties.ItemStatus="{Binding Language, Converter={x:Static vm:IdentifierName.Instance}}"
-                      MinWidth="180" HorizontalAlignment="Left">
-              <ComboBox.ItemTemplate>
-                <DataTemplate x:DataType="x:String">
-                  <TextBlock Text="{Binding Converter={x:Static vm:IdentifierName.Instance}}" />
-                </DataTemplate>
-              </ComboBox.ItemTemplate>
-            </infra:AccessibleComboBox>
-          </Grid>
+            <Grid RowDefinitions="Auto,*,Auto,Auto">
+              <TextBlock Grid.Row="0" Name="ScriptLabel" Text="SCRIPT" Classes="eyebrow" />
 
-          <Grid Name="SpeakerRow" IsVisible="{Binding ShowSpeakers}">
-            <Grid.ColumnDefinitions>
-              <ColumnDefinition Width="Auto" SharedSizeGroup="OptionLabel" />
-              <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-            <TextBlock Grid.Column="0" Name="SpeakerLabel" Text="Speaker" Classes="rowLabel" />
-            <!-- Named and announced the same way as Language, above. -->
-            <infra:AccessibleComboBox Grid.Column="1" ItemsSource="{Binding Speakers}"
-                      SelectedItem="{Binding Speaker}"
-                      AutomationProperties.LabeledBy="{Binding #SpeakerLabel}"
-                      AutomationProperties.ItemStatus="{Binding Speaker, Converter={x:Static vm:IdentifierName.Instance}}"
-                      MinWidth="180" HorizontalAlignment="Left">
-              <ComboBox.ItemTemplate>
-                <DataTemplate x:DataType="x:String">
-                  <TextBlock Text="{Binding Converter={x:Static vm:IdentifierName.Instance}}" />
-                </DataTemplate>
-              </ComboBox.ItemTemplate>
-            </infra:AccessibleComboBox>
-          </Grid>
 
-          <Grid IsVisible="{Binding ShowInstruct}">
-            <Grid.ColumnDefinitions>
-              <ColumnDefinition Width="Auto" SharedSizeGroup="OptionLabel" />
-              <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-            <TextBlock Grid.Column="0" Name="InstructLabelText"
-                       Text="{Binding InstructLabel}" Classes="rowLabel" />
-            <StackPanel Grid.Column="1" Spacing="4">
-              <!-- Named by its row label; it changes per mode, so bind rather than repeat. -->
-              <infra:AccessibleTextBox Name="InstructBox" Text="{Binding Instruct}"
-                       Classes.needed="{Binding NeedsInstruction}"
-                       AutomationProperties.LabeledBy="{Binding #InstructLabelText}"
-                       PlaceholderText="{Binding InstructPlaceholder}" />
-              <TextBlock Classes="needed" Text="{Binding MissingReason}"
-                         IsVisible="{Binding NeedsInstruction}" />
+              <TextBlock Grid.Row="2" Classes="needed" Margin="0,6,0,0"
+                         Text="{Binding MissingReason}"
+                         IsVisible="{Binding NeedsText}" />
+
+              <!--
+                Named by the heading above it, the way the option pickers are named
+                by the label beside them. Without this the one box the whole app is
+                built around announced as an unnamed "edit": a person tabbing into
+                it was told a text field existed and nothing about what to type.
+                Found by walking the real tree for controls with no name, after the
+                same fault turned up on the dropdowns (#159, #192).
+              -->
+              <infra:ScriptTextBox Grid.Row="1" Name="ScriptBox" Text="{Binding Script}"
+                       Classes.needed="{Binding NeedsText}"
+                       AutomationProperties.LabeledBy="{Binding #ScriptLabel}"
+                       AcceptsReturn="True" TextWrapping="Wrap"
+                       MinHeight="140" FontSize="15" ScrollViewer.AllowAutoHide="False"
+                       PlaceholderText="Type or paste what you would like spoken." />
+              <!--
+                The examples. They vanish once the script has anything in it and do
+                not return over a generated result — an invitation to try something
+                belongs to a window that has not been used yet, not beside audio the
+                user just made.
+              -->
+              <StackPanel Grid.Row="3" Name="Examples" IsVisible="{Binding ShowExamples}"
+                          Margin="0,8,0,0" Spacing="4">
+                <TextBlock Text="{Binding ExamplePrompt}" FontSize="11" Opacity="0.7" />
+                <ItemsControl ItemsSource="{Binding Examples}"
+                              AutomationProperties.Name="Example prompts">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <Button Content="{Binding}" Margin="0,0,8,4" FontSize="12"
+                              Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).UseExampleCommand}"
+                              CommandParameter="{Binding}" />
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </Grid>
+          </Border>
+
+          <Border Grid.Row="1" Classes="card"
+                  IsEnabled="{Binding !IsBusy}" Margin="0,16,0,0">
+            <StackPanel Spacing="12" Grid.IsSharedSizeScope="True">
+              <TextBlock Text="OPTIONS" Classes="eyebrow" />
+
+              <Grid Name="LanguageRow">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="Auto" SharedSizeGroup="OptionLabel" />
+                  <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Name="LanguageLabel" Text="Language" Classes="rowLabel" />
+                <!--
+                  LabeledBy, not a repeated Name: the label already exists on
+                  screen, and ControlAutomationPeer.GetNameCore falls back to it, so
+                  the words a reader says and the words the eye reads cannot drift.
+                  Without it this box announced as an unnamed combo box.
+
+                  ItemStatus is how the *change* is announced. Reported from using
+                  the app with Narrator: arrowing through the list changed the value
+                  silently. Measured, and the cause is in the toolkit —
+                  ComboBoxAutomationPeer raises property changes for
+                  IsDropDownOpen, Text and IsEditable, and none for SelectedItem, so
+                  a non-editable box like this one emits nothing at all when the
+                  selection moves. Raising Value ourselves would not help either:
+                  ValuePatternIdentifiers.ValueProperty is absent from the Win32
+                  bridge's property map, so it could not cross.
+
+                  ItemStatus is the one mapped property that fits, and it needs no
+                  code: ControlAutomationPeer already watches
+                  AutomationProperties.ItemStatusProperty and raises the peer change
+                  itself, and AutomationNode maps it to UIA_ItemStatusPropertyId.
+                  Bound through the same converter the item template uses, so what
+                  is announced is the words on screen rather than the raw id.
+
+                  Confirmed by ear, under Narrator, 3 Sep 2026 — not only as a UIA
+                  event. Worth saying because the whole of #192 was about the gap
+                  between a property being set and a person hearing it, and this is
+                  the one step no tool in this repository can take.
+                -->
+                <infra:AccessibleComboBox Grid.Column="1" ItemsSource="{Binding AllLanguages}"
+                          SelectedItem="{Binding Language}"
+                          AutomationProperties.LabeledBy="{Binding #LanguageLabel}"
+                          AutomationProperties.ItemStatus="{Binding Language, Converter={x:Static vm:IdentifierName.Instance}}"
+                          MinWidth="180" HorizontalAlignment="Left">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="x:String">
+                      <TextBlock Text="{Binding Converter={x:Static vm:IdentifierName.Instance}}" />
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </infra:AccessibleComboBox>
+              </Grid>
+
+              <Grid Name="SpeakerRow" IsVisible="{Binding ShowSpeakers}">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="Auto" SharedSizeGroup="OptionLabel" />
+                  <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Name="SpeakerLabel" Text="Speaker" Classes="rowLabel" />
+                <!-- Named and announced the same way as Language, above. -->
+                <infra:AccessibleComboBox Grid.Column="1" ItemsSource="{Binding Speakers}"
+                          SelectedItem="{Binding Speaker}"
+                          AutomationProperties.LabeledBy="{Binding #SpeakerLabel}"
+                          AutomationProperties.ItemStatus="{Binding Speaker, Converter={x:Static vm:IdentifierName.Instance}}"
+                          MinWidth="180" HorizontalAlignment="Left">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="x:String">
+                      <TextBlock Text="{Binding Converter={x:Static vm:IdentifierName.Instance}}" />
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </infra:AccessibleComboBox>
+              </Grid>
+
+              <Grid IsVisible="{Binding ShowInstruct}">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="Auto" SharedSizeGroup="OptionLabel" />
+                  <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Name="InstructLabelText"
+                           Text="{Binding InstructLabel}" Classes="rowLabel" />
+                <StackPanel Grid.Column="1" Spacing="4">
+                  <!-- Named by its row label; it changes per mode, so bind rather than repeat. -->
+                  <infra:AccessibleTextBox Name="InstructBox" Text="{Binding Instruct}"
+                           Classes.needed="{Binding NeedsInstruction}"
+                           AutomationProperties.LabeledBy="{Binding #InstructLabelText}"
+                           PlaceholderText="{Binding InstructPlaceholder}" />
+                  <TextBlock Classes="needed" Text="{Binding MissingReason}"
+                             IsVisible="{Binding NeedsInstruction}" />
+                </StackPanel>
+              </Grid>
+
+              <!-- Clone mode: the recording, and what it says (spec §4, §5). -->
+              <StackPanel Spacing="8" IsVisible="{Binding ShowReference}">
+                <!--
+                  Saved voices first: picking one fills everything below, so it is
+                  the shortest way to a clone and belongs before the long way.
+                -->
+                <Grid IsVisible="{Binding HasSavedVoices}" ColumnSpacing="10">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" SharedSizeGroup="OptionLabel" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Grid.Column="0" Name="SavedVoiceLabel" Text="Saved voice" Classes="rowLabel" />
+                  <!-- Named and announced the same way as Language, above. -->
+                  <infra:AccessibleComboBox Grid.Column="1" ItemsSource="{Binding SavedVoices}"
+                            SelectedItem="{Binding SelectedVoice}"
+                            AutomationProperties.LabeledBy="{Binding #SavedVoiceLabel}"
+                            AutomationProperties.ItemStatus="{Binding SelectedVoice.Name}"
+                            HorizontalAlignment="Stretch"
+                            PlaceholderText="Choose a voice you saved earlier">
+                    <ComboBox.ItemTemplate>
+                      <DataTemplate x:DataType="core:SavedVoice">
+                        <TextBlock Text="{Binding Name}" />
+                      </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                  </infra:AccessibleComboBox>
+                  <Button Grid.Column="2" Content="Delete"
+                          Command="{Binding DeleteVoiceCommand}"
+                          ToolTip.Tip="Remove this voice and the recording it kept" />
+                </Grid>
+                <Grid ColumnSpacing="10">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" SharedSizeGroup="OptionLabel" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Grid.Column="0" Text="Recording" Classes="rowLabel" />
+                  <Button Grid.Column="1" Name="ChooseRecordingButton" Content="Choose…"
+                          Classes.needed="{Binding NeedsReference}"
+                          Command="{Binding PickReferenceCommand}"
+                          IsEnabled="{Binding CanEditTranscript}" />
+                  <TextBlock Grid.Column="2" Text="{Binding ReferenceName}"
+                             VerticalAlignment="Center" Opacity="0.75"
+                             TextTrimming="CharacterEllipsis" />
+                </Grid>
+
+                <Grid ColumnSpacing="10">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" SharedSizeGroup="OptionLabel" />
+                    <ColumnDefinition Width="*" />
+                  </Grid.ColumnDefinitions>
+                  <StackPanel Grid.Column="1" Spacing="4">
+                    <TextBlock Text="{x:Static vm:MainViewModel.ReferenceHint}"
+                               FontSize="12" Opacity="0.65" TextWrapping="Wrap" />
+                    <TextBlock Classes="needed" Text="{Binding MissingReason}"
+                               IsVisible="{Binding NeedsReference}" />
+                  </StackPanel>
+                </Grid>
+
+                <!--
+                  A Grid rather than a horizontal StackPanel. A StackPanel measures
+                  its children against infinite width, so a wrapping TextBox never
+                  wraps — it grows to the length of one line of transcript and runs
+                  off the side of the window. The star column gives it whatever is
+                  left over, which is what it needs to wrap inside.
+                -->
+                <Grid IsVisible="{Binding HasReference}" ColumnSpacing="10">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" SharedSizeGroup="OptionLabel" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Grid.Column="0" Name="TranscriptLabel" Text="It says" Classes="rowLabel" />
+                  <StackPanel Grid.Column="1" Spacing="4">
+                    <TextBox Name="TranscriptBox" Text="{Binding ReferenceTranscript}"
+                             Classes.needed="{Binding NeedsTranscript}"
+                             AutomationProperties.LabeledBy="{Binding #TranscriptLabel}"
+                             AcceptsReturn="False" TextWrapping="Wrap"
+                             IsEnabled="{Binding CanEditTranscript}"
+                             PlaceholderText="Leave blank to transcribe when you press Generate" />
+                    <TextBlock Text="Generate handles transcription, model downloads, and speech in one run."
+                               TextWrapping="Wrap" FontSize="12" Opacity="0.7" />
+                    <TextBlock Classes="needed" Text="{Binding MissingReason}"
+                               IsVisible="{Binding NeedsTranscript}" />
+                  </StackPanel>
+                  <Button Grid.Column="2" Content="Listen again"
+                          Command="{Binding ListenAgainCommand}"
+                          VerticalAlignment="Top"
+                          IsEnabled="{Binding CanEditTranscript}" />
+                </Grid>
+
+                <!--
+                  Saving needs both halves, so it lives under them. §5: a name, the
+                  recording and the transcript, kept together.
+                -->
+                <Grid IsVisible="{Binding HasReference}" ColumnSpacing="10">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" SharedSizeGroup="OptionLabel" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Grid.Column="0" Text="Save as" Classes="rowLabel" />
+                  <TextBox Grid.Column="1" Text="{Binding NewVoiceName}"
+                           PlaceholderText="Name this voice to use it again later" />
+                  <Button Grid.Column="2" Content="Save voice"
+                          Command="{Binding SaveVoiceCommand}"
+                          VerticalAlignment="Top" />
+                </Grid>
+              </StackPanel>
             </StackPanel>
-          </Grid>
+          </Border>
 
-          <!-- Clone mode: the recording, and what it says (spec §4, §5). -->
-          <StackPanel Spacing="8" IsVisible="{Binding ShowReference}">
-            <!--
-              Saved voices first: picking one fills everything below, so it is
-              the shortest way to a clone and belongs before the long way.
-            -->
-            <Grid IsVisible="{Binding HasSavedVoices}" ColumnSpacing="10">
-              <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" SharedSizeGroup="OptionLabel" />
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-              </Grid.ColumnDefinitions>
-              <TextBlock Grid.Column="0" Name="SavedVoiceLabel" Text="Saved voice" Classes="rowLabel" />
-              <!-- Named and announced the same way as Language, above. -->
-              <infra:AccessibleComboBox Grid.Column="1" ItemsSource="{Binding SavedVoices}"
-                        SelectedItem="{Binding SelectedVoice}"
-                        AutomationProperties.LabeledBy="{Binding #SavedVoiceLabel}"
-                        AutomationProperties.ItemStatus="{Binding SelectedVoice.Name}"
-                        HorizontalAlignment="Stretch"
-                        PlaceholderText="Choose a voice you saved earlier">
-                <ComboBox.ItemTemplate>
-                  <DataTemplate x:DataType="core:SavedVoice">
-                    <TextBlock Text="{Binding Name}" />
-                  </DataTemplate>
-                </ComboBox.ItemTemplate>
-              </infra:AccessibleComboBox>
-              <Button Grid.Column="2" Content="Delete"
-                      Command="{Binding DeleteVoiceCommand}"
-                      ToolTip.Tip="Remove this voice and the recording it kept" />
-            </Grid>
-            <Grid ColumnSpacing="10">
-              <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" SharedSizeGroup="OptionLabel" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
-              </Grid.ColumnDefinitions>
-              <TextBlock Grid.Column="0" Text="Recording" Classes="rowLabel" />
-              <Button Grid.Column="1" Name="ChooseRecordingButton" Content="Choose…"
-                      Classes.needed="{Binding NeedsReference}"
-                      Command="{Binding PickReferenceCommand}"
-                      IsEnabled="{Binding CanEditTranscript}" />
-              <TextBlock Grid.Column="2" Text="{Binding ReferenceName}"
-                         VerticalAlignment="Center" Opacity="0.75"
-                         TextTrimming="CharacterEllipsis" />
-            </Grid>
-
-            <Grid ColumnSpacing="10">
-              <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" SharedSizeGroup="OptionLabel" />
-                <ColumnDefinition Width="*" />
-              </Grid.ColumnDefinitions>
-              <StackPanel Grid.Column="1" Spacing="4">
-                <TextBlock Text="{x:Static vm:MainViewModel.ReferenceHint}"
-                           FontSize="12" Opacity="0.65" TextWrapping="Wrap" />
-                <TextBlock Classes="needed" Text="{Binding MissingReason}"
-                           IsVisible="{Binding NeedsReference}" />
-              </StackPanel>
-            </Grid>
-
-            <!--
-              A Grid rather than a horizontal StackPanel. A StackPanel measures
-              its children against infinite width, so a wrapping TextBox never
-              wraps — it grows to the length of one line of transcript and runs
-              off the side of the window. The star column gives it whatever is
-              left over, which is what it needs to wrap inside.
-            -->
-            <Grid IsVisible="{Binding HasReference}" ColumnSpacing="10">
-              <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" SharedSizeGroup="OptionLabel" />
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-              </Grid.ColumnDefinitions>
-              <TextBlock Grid.Column="0" Name="TranscriptLabel" Text="It says" Classes="rowLabel" />
-              <StackPanel Grid.Column="1" Spacing="4">
-                <TextBox Name="TranscriptBox" Text="{Binding ReferenceTranscript}"
-                         Classes.needed="{Binding NeedsTranscript}"
-                         AutomationProperties.LabeledBy="{Binding #TranscriptLabel}"
-                         AcceptsReturn="False" TextWrapping="Wrap"
-                         IsEnabled="{Binding CanEditTranscript}"
-                         PlaceholderText="Leave blank to transcribe when you press Generate" />
-                <TextBlock Text="Generate handles transcription, model downloads, and speech in one run."
-                           TextWrapping="Wrap" FontSize="12" Opacity="0.7" />
-                <TextBlock Classes="needed" Text="{Binding MissingReason}"
-                           IsVisible="{Binding NeedsTranscript}" />
-              </StackPanel>
-              <Button Grid.Column="2" Content="Listen again"
-                      Command="{Binding ListenAgainCommand}"
-                      VerticalAlignment="Top"
-                      IsEnabled="{Binding CanEditTranscript}" />
-            </Grid>
-
-            <!--
-              Saving needs both halves, so it lives under them. §5: a name, the
-              recording and the transcript, kept together.
-            -->
-            <Grid IsVisible="{Binding HasReference}" ColumnSpacing="10">
-              <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" SharedSizeGroup="OptionLabel" />
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-              </Grid.ColumnDefinitions>
-              <TextBlock Grid.Column="0" Text="Save as" Classes="rowLabel" />
-              <TextBox Grid.Column="1" Text="{Binding NewVoiceName}"
-                       PlaceholderText="Name this voice to use it again later" />
-              <Button Grid.Column="2" Content="Save voice"
-                      Command="{Binding SaveVoiceCommand}"
-                      VerticalAlignment="Top" />
-            </Grid>
-          </StackPanel>
-        </StackPanel>
-      </Border>
+        </Grid>
+      </ScrollViewer>
 
       <TextBlock Grid.Row="3" Text="That mode is not implemented yet."
                  IsVisible="{Binding !ModeIsAvailable}"
