@@ -1,5 +1,31 @@
 # Windows streaming demonstration — 12 September 2026
 
+## Adaptive-buffer update
+
+The latest demo uses generated speech progress and conservative measured PCM
+production rates to choose a buffer target, with a 10-second minimum. Slow
+runs may wait for most or all speech. A private disposable PCM cache feeds a
+20-second device ring, so a larger target does not block generation or require
+unbounded audio memory. The forecast target is bounded by the expected unplayed
+remainder and extends when generation outlasts the original estimate.
+
+Validation includes steady-rate simulations at 0.2, 0.5 and 1.5 seconds of audio
+per wall-clock second without underruns, slowdown/stall adjustments, duration
+underestimation, a 45-second disk-cache round trip through the actual feeder and
+device callback without a native device, and cancellation/cache cleanup.
+All nine adaptive tests pass, alongside 398 App tests and 95 CLI tests. The
+remaining 818 Core tests pass; eight model-dependent tests are skipped.
+
+A real CPU clone probe through the disk-backed player produced 19.44 seconds of
+audio, completed synthesis at 72.43 seconds, began device consumption at 72.45
+seconds and finished draining at 92.08 seconds, with no device error. It waited
+for the complete recording, demonstrating the conservative slow-run behavior.
+The subsequent forecast-display cap does not change that run's start decision.
+The report is `results/clone-adaptive-metrics.json`. These timings are a single
+run, not a guarantee against future stalls or inaccurate duration predictions.
+
+## Earlier fixed-buffer demonstrations
+
 The updated demo buffers at least **10 seconds of playable PCM** before starting
 or resuming, with a bounded 20-second queue. Completed shorter remainders drain
 immediately. The timing measurements below describe the earlier two-second

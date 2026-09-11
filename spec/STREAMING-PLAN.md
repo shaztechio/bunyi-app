@@ -85,16 +85,21 @@ decoder context and the final peak can both produce differences.
 
 ## Playback, failure and commit contract
 
-Use one persistent queued audio device, with at least 10 seconds of playable
-PCM queued before starting or resuming. Once generation completes, drain any
-shorter remainder without waiting for that threshold. Keep outstanding PCM
-bounded (the Windows demo queue holds 20 seconds). Backpressure
+Use one persistent queued audio device, with an adaptive startup/resume target
+and a minimum of 10 seconds. Estimate the remaining production deficit from
+generated speech progress, conservative overall/recent production rates and the
+frozen upper duration estimate, allowing for chunk delivery gaps. Reassess idle
+intervals and extend forecasts when text duration is underestimated. This is a
+prediction, not a promise against arbitrary future stalls. Once generation
+completes, drain a shorter remainder. Keep outstanding audio memory bounded:
+the Windows demo uses a private temporary PCM cache plus a 20-second device
+queue so a larger target cannot deadlock a full queue. Backpressure
 observes cancellation off device/UI threads. Starvation means Buffering until
 more data or explicit completion arrives; it never means EOS. Do not append
 buffering silence to the output or restart playback from sample zero at save.
 Use a prominent playback-status panel with explicit preparing/playing/waiting/
 finishing messages. Silent refills show playable seconds ready toward the
-10-second target and promise automatic resumption, not an estimated wait time.
+adaptive target and promise automatic resumption, not an estimated wait time.
 Coalesce accessible status announcements while updating visible state promptly.
 
 Stop existing result/History audio before preview; prevent competing playback

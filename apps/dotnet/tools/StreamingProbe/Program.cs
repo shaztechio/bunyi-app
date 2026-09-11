@@ -35,6 +35,7 @@ var estimate = SpeechDurationEstimate.ForText(mode == "reference" ? referenceTex
 var log = new ProbeLog();
 using var cancellation = new CancellationTokenSource(TimeSpan.FromMinutes(8));
 using IStreamingAudioPlayer? player = args.Contains("--play") ? new StreamingAudioPlayer(log) : null;
+player?.ConfigureBuffer(estimate.UpperSeconds);
 var chunks = new List<float[]>();
 var chunkTimes = new List<double>();
 long sampleOffset = 0;
@@ -52,6 +53,9 @@ void Preview(AudioPreviewChunk chunk)
     sampleOffset += chunk.Samples.Length;
     Console.WriteLine($"PREVIEW chunk={chunks.Count} seconds={sampleOffset / 24000.0:F2} elapsed={clock.Elapsed.TotalSeconds:F2}");
     player?.Add(chunk, cancellation.Token);
+    player?.ReportGeneratedSeconds(sampleOffset / 24000.0);
+    if (player is not null)
+        Console.WriteLine($"BUFFER ready={player.BufferedSeconds:F2} target={player.BufferTargetSeconds:F0} playing={player.HasStarted && !player.IsBuffering}");
 }
 
 try

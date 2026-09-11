@@ -293,7 +293,7 @@ completed before this feature is marked implemented.
   equivalent implementation, especially for Voice Design. Codec progress
   events alone do not count as audio streaming.
 - **Play as audio becomes available.** Queue chunks on one audio device and
-  start or resume only after at least 10 seconds of playable audio are queued,
+  start or resume only after an adaptive amount of playable audio is queued,
   or when generation completes with less audio remaining. Show when generation and playback are
   active and when playback is buffering. If generation is slower than
   playback, pause for more audio and resume in order. Do not repeat or skip
@@ -304,11 +304,24 @@ completed before this feature is marked implemented.
   first playback, playing audio, waiting for more audio after playback pauses,
   and finishing/saving the recording. During a refill say **Waiting for more
   audio** and **Bunyi is still generating. Playback will resume automatically.**
-  Show playable seconds ready toward the 10-second target with a labelled
+  Show playable seconds ready toward the current target with a labelled
   progress bar; these seconds describe buffered speech, not a waiting-time ETA
   or total generation progress. Update the panel promptly on pause/resume.
   Keep status changes available to assistive technology without announcing
   every buffer tick. A normal pause must not look like completion or an error.
+- **Adapt buffering to generation speed.** Keep a minimum 10-second head start.
+  Use generated speech seconds, elapsed generation/decoding time, and the frozen
+  upper duration estimate to increase the target when generation is slower than
+  playback. Use conservative recent and overall rates plus a chunk-arrival
+  allowance; extend the forecast when generation outlasts the text estimate.
+  Recalculate before starting or resuming, including while no chunks arrive.
+  Normal completion releases any shorter remainder. This predicts the buffer
+  needed to finish without interruption; it cannot guarantee against an unknown
+  future stall or output length. For slow runs it may wait until most or all
+  speech is ready. Show that the target adjusts to generation speed. Keep audio
+  memory bounded: longer previews may spool to a private temporary PCM file,
+  with disk reads/writes kept off the audio callback and UI thread. Remove that
+  cache on completion, cancellation or disposal; never expose it as a recording.
 - **Live audio is a preview of an unfinished take.** Stop it and clear queued
   audio if generation fails, reaches a known safety limit, or is cancelled.
   Earlier preview audio may already have been heard; do not save or offer

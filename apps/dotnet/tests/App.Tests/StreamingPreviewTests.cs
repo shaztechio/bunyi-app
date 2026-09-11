@@ -108,6 +108,11 @@ public sealed class StreamingPreviewTests : HeadlessWindows
         public bool IsBuffering { get; set; } = true;
         public bool HasStarted { get; set; }
         public double BufferedSeconds { get; set; }
+        public double BufferTargetSeconds { get; set; } = 10;
+        public double EstimatedSeconds { get; private set; }
+        public double GeneratedSeconds { get; private set; }
+        public void ConfigureBuffer(double estimatedSpeechSeconds) => EstimatedSeconds = estimatedSpeechSeconds;
+        public void ReportGeneratedSeconds(double seconds) => GeneratedSeconds = seconds;
         public string? Failure { get; set; }
         public int Chunks { get; private set; }
         public bool Stopped { get; private set; }
@@ -231,7 +236,7 @@ public sealed class StreamingPreviewTests : HeadlessWindows
         engine.Publish(new EngineStatus(EngineState.Generating));
         model.TickPreview();
         Assert.Equal("Preparing playback", model.PreviewStatus);
-        Assert.Contains("10 seconds", model.PreviewDetail);
+        Assert.Contains("generation speed", model.PreviewDetail);
         Assert.True(window.FindControl<Border>("PlaybackStatusPanel")!.IsVisible);
         Assert.True(model.ShowPreviewBuffer);
 
@@ -248,6 +253,12 @@ public sealed class StreamingPreviewTests : HeadlessWindows
         Assert.Contains("resume automatically", window.FindControl<TextBlock>("PreviewDetail")!.Text);
         Assert.Equal("4 of 10 seconds of audio ready", model.PreviewBufferText);
         Assert.Equal(4.8, window.FindControl<ProgressBar>("PreviewBufferProgress")!.Value);
+        preview.BufferTargetSeconds = 45;
+        engine.Publish(new EngineStatus(EngineState.Generating, Frames: 250));
+        Assert.Equal(20, preview.GeneratedSeconds);
+        Assert.True(preview.EstimatedSeconds > 20);
+        Assert.Equal("4 of 45 seconds of audio ready", model.PreviewBufferText);
+        Assert.Equal(45, window.FindControl<ProgressBar>("PreviewBufferProgress")!.Maximum);
 
         preview.IsBuffering = false;
         model.TickPreview();

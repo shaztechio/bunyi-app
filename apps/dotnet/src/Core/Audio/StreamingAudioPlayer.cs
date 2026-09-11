@@ -28,6 +28,9 @@ public interface IStreamingAudioPlayer : IDisposable
     bool IsBuffering { get; }
     bool HasStarted { get; }
     double BufferedSeconds { get; }
+    double BufferTargetSeconds { get; }
+    void ConfigureBuffer(double estimatedSpeechSeconds);
+    void ReportGeneratedSeconds(double seconds);
     string? Failure { get; }
     void Add(AudioPreviewChunk chunk, CancellationToken cancellationToken);
     Task CompleteAsync(CancellationToken cancellationToken);
@@ -41,16 +44,22 @@ public interface IStreamingAudioPlayer : IDisposable
 public sealed class StreamingAudioPlayer(ILogSink log) : IStreamingAudioPlayer
 {
     private const int SampleRate = 24000;
-    public const int BufferTargetSeconds = 10;
+    public const int MinimumBufferSeconds = 10;
     private const int TailSamples = 256;
     // Count playable PCM only; the held smoothing tail is not queued audio.
-    private const int PrebufferSamples = SampleRate * BufferTargetSeconds;
+    private long _prebufferSamples = SampleRate * MinimumBufferSeconds;
     private readonly float[] _ring = new float[SampleRate * 20];
+    private readonly AdaptivePlaybackBuffer _bufferPlan = new();
+    private readonly long _createdAt = System.Diagnostics.Stopwatch.GetTimestamp();
+    private readonly CancellationTokenSource _feedCancellation = new();
+    private PreviewAudioSpool? _spool;
+    private Task? _feeder;
     private readonly object _deviceGate = new();
     private long _written;
     private long _read;
     private long _expectedOffset;
     private int _stopped;
+    private int _disposed;
     private int _complete;
     private int _buffering = 1;
     private MiniAudioEngine? _engine;
@@ -67,8 +76,28 @@ public sealed class StreamingAudioPlayer(ILogSink log) : IStreamingAudioPlayer
 
     public bool IsBuffering => Volatile.Read(ref _buffering) != 0;
     public bool HasStarted => FirstPlaybackTimestamp != 0;
-    public double BufferedSeconds => Math.Clamp(
-        Volatile.Read(ref _written) - Volatile.Read(ref _read), 0, _ring.Length) / (double)SampleRate;
+    private long ProducedSamples => Math.Max(_spool?.SamplesWritten ?? 0, Volatile.Read(ref _written));
+    public double BufferedSeconds => Math.Max(0, ProducedSamples - Volatile.Read(ref _read)) / (double)SampleRate;
+    private double ElapsedSeconds => System.Diagnostics.Stopwatch.GetElapsedTime(_createdAt).TotalSeconds;
+    public double BufferTargetSeconds
+    {
+        get
+        {
+            var target = _bufferPlan.TargetSeconds(ElapsedSeconds, Volatile.Read(ref _read) / (double)SampleRate);
+            Volatile.Write(ref _prebufferSamples, (long)Math.Min(long.MaxValue / 2d, Math.Ceiling(target * SampleRate)));
+            return target;
+        }
+    }
+    public void ConfigureBuffer(double estimatedSpeechSeconds)
+    {
+        _bufferPlan.Configure(estimatedSpeechSeconds);
+        _ = BufferTargetSeconds;
+    }
+    public void ReportGeneratedSeconds(double seconds)
+    {
+        _bufferPlan.ObserveGenerated(seconds);
+        _ = BufferTargetSeconds;
+    }
     public string? Failure => Volatile.Read(ref _failure);
     /// <summary>Stopwatch timestamp of the first device callback consuming PCM; zero until then.</summary>
     public long FirstPlaybackTimestamp => Interlocked.Read(ref _firstPlaybackTimestamp);
@@ -99,13 +128,47 @@ public sealed class StreamingAudioPlayer(ILogSink log) : IStreamingAudioPlayer
             var ratio = gain / _gain;
             for (var i = 0; i < _tail.Length; i++)
                 _tail[i] *= 1f + (ratio - 1f) * (i + 1f) / _tail.Length;
-            Write(_tail, 1f, cancellationToken);
+            Cache(_tail, 1f, cancellationToken);
         }
         var held = Math.Min(TailSamples, chunk.Samples.Length);
-        Write(chunk.Samples.AsSpan(0, chunk.Samples.Length - held), gain, cancellationToken);
+        Cache(chunk.Samples.AsSpan(0, chunk.Samples.Length - held), gain, cancellationToken);
         _tail = chunk.Samples.AsSpan(chunk.Samples.Length - held).ToArray();
         for (var i = 0; i < _tail.Length; i++) _tail[i] *= gain;
         _gain = gain;
+    }
+
+    private void Cache(ReadOnlySpan<float> samples, float gain, CancellationToken ct)
+    {
+        if (Volatile.Read(ref _stopped) != 0 || Failure is not null) return;
+        try
+        {
+            _spool!.Append(samples, gain, ct);
+            // The small held-tail flush is part of the same chunk delivery.
+            if (samples.Length > TailSamples)
+            {
+                _bufferPlan.ObserveProduced(_spool.SamplesWritten / (double)SampleRate, ElapsedSeconds);
+                _ = BufferTargetSeconds;
+            }
+        }
+        catch (IOException ex) { Fail($"Could not buffer preview audio: {ex.Message}"); }
+        catch (UnauthorizedAccessException ex) { Fail($"Could not buffer preview audio: {ex.Message}"); }
+    }
+
+    private async Task FeedAsync()
+    {
+        var samples = new float[8192];
+        var ct = _feedCancellation.Token;
+        try
+        {
+            while (!ct.IsCancellationRequested && Failure is null)
+            {
+                var count = _spool!.Read(samples);
+                if (count > 0) Write(samples.AsSpan(0, count), 1f, ct);
+                else await Task.Delay(10, ct).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+        catch (Exception ex) { Fail($"Could not read buffered preview audio: {ex.Message}"); }
     }
 
     private void Write(ReadOnlySpan<float> samples, float gain, CancellationToken cancellationToken)
@@ -124,7 +187,7 @@ public sealed class StreamingAudioPlayer(ILogSink log) : IStreamingAudioPlayer
                 continue;
             }
             var count = Math.Min(free, samples.Length - offset);
-            if (write - Volatile.Read(ref _read) < PrebufferSamples) _lastReadAt = Environment.TickCount64;
+            if (write - Volatile.Read(ref _read) < Volatile.Read(ref _prebufferSamples)) _lastReadAt = Environment.TickCount64;
             for (var i = 0; i < count; i++)
                 _ring[(int)((write + i) % _ring.Length)] = samples[offset + i] * gain;
             Volatile.Write(ref _written, write + count);
@@ -141,11 +204,13 @@ public sealed class StreamingAudioPlayer(ILogSink log) : IStreamingAudioPlayer
             try
             {
                 _engine = new MiniAudioEngine();
+                _spool = new PreviewAudioSpool();
                 var format = new AudioFormat { Channels = 1, SampleRate = SampleRate, Format = SampleFormat.F32 };
                 _device = _engine.InitializePlaybackDevice(null, format);
                 _source = new PreviewSource(_engine, format, this);
                 _device.MasterMixer.AddComponent(_source);
                 _device.Start();
+                _feeder = Task.Run(FeedAsync);
                 _lastReadAt = Environment.TickCount64;
                 return true;
             }
@@ -163,7 +228,8 @@ public sealed class StreamingAudioPlayer(ILogSink log) : IStreamingAudioPlayer
         if (Volatile.Read(ref _stopped) != 0 || Failure is not null || channels < 1) return;
         var read = Volatile.Read(ref _read);
         var available = Volatile.Read(ref _written) - read;
-        if (IsBuffering && available < PrebufferSamples && Volatile.Read(ref _complete) == 0) return;
+        var queued = ProducedSamples - read;
+        if (IsBuffering && queued < Volatile.Read(ref _prebufferSamples) && Volatile.Read(ref _complete) == 0) return;
         var count = (int)Math.Min(available, buffer.Length / channels);
         if (count > 0)
             Interlocked.CompareExchange(ref _firstPlaybackTimestamp, System.Diagnostics.Stopwatch.GetTimestamp(), 0);
@@ -181,10 +247,14 @@ public sealed class StreamingAudioPlayer(ILogSink log) : IStreamingAudioPlayer
         Volatile.Write(ref _complete, 1);
         // The inference producer is finished; flush its held tail off the UI
         // thread because a full ring can backpressure this last write too.
-        await Task.Run(() => Write(_tail, 1f, cancellationToken), cancellationToken).ConfigureAwait(false);
+        await Task.Run(() =>
+        {
+            if (_spool is not null) Cache(_tail, 1f, cancellationToken);
+            else Write(_tail, 1f, cancellationToken);
+        }, cancellationToken).ConfigureAwait(false);
         _tail = [];
         _lastReadAt = Environment.TickCount64;
-        while (Volatile.Read(ref _stopped) == 0 && Failure is null && Volatile.Read(ref _read) < Volatile.Read(ref _written))
+        while (Volatile.Read(ref _stopped) == 0 && Failure is null && Volatile.Read(ref _read) < ProducedSamples)
         {
             cancellationToken.ThrowIfCancellationRequested();
             CheckDeviceProgress();
@@ -198,6 +268,14 @@ public sealed class StreamingAudioPlayer(ILogSink log) : IStreamingAudioPlayer
 
     private void CheckDeviceProgress()
     {
+        // A full device ring is expected when a larger adaptive buffer is
+        // accumulating in the disk cache. The producer can keep making audio.
+        if (IsBuffering && Volatile.Read(ref _complete) == 0
+            && ProducedSamples - Volatile.Read(ref _read) < Volatile.Read(ref _prebufferSamples))
+        {
+            _lastReadAt = Environment.TickCount64;
+            return;
+        }
         var read = Volatile.Read(ref _read);
         if (read != _lastRead) { _lastRead = read; _lastReadAt = Environment.TickCount64; }
         else if (Environment.TickCount64 - _lastReadAt > 5000)
@@ -210,11 +288,18 @@ public sealed class StreamingAudioPlayer(ILogSink log) : IStreamingAudioPlayer
             log.Log($"Streaming preview unavailable: {detail}. Generation will still save the audio file.");
     }
 
-    public void Stop() => Interlocked.Exchange(ref _stopped, 1);
+    public void Stop()
+    {
+        Interlocked.Exchange(ref _stopped, 1);
+        try { _feedCancellation.Cancel(); }
+        catch (ObjectDisposedException) { }
+    }
 
     public void Dispose()
     {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
         Stop();
+        _feeder?.GetAwaiter().GetResult();
         lock (_deviceGate)
         {
             try
@@ -225,9 +310,16 @@ public sealed class StreamingAudioPlayer(ILogSink log) : IStreamingAudioPlayer
                 _engine?.Dispose();
             }
             catch (Exception ex) { log.Log($"Could not close streaming playback: {ex.Message}"); }
+            finally
+            {
+                try { _spool?.Dispose(); }
+                catch (IOException ex) { log.Log($"Could not close the preview cache: {ex.Message}"); }
+                _feedCancellation.Dispose();
+            }
             _source = null;
             _device = null;
             _engine = null;
+            _spool = null;
         }
     }
 

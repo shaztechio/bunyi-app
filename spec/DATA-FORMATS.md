@@ -384,6 +384,15 @@ this same format; no per-chunk output format or metadata schema is introduced.
 Planned for §2b; implementation status is tracked in
 [STREAMING-PLAN.md](STREAMING-PLAN.md).
 
+The Windows adaptive-preview demo additionally uses a disposable playback cache
+named `bunyi-preview-<32 hexadecimal GUID characters>.pcm` in the OS temporary
+directory. It contains 24 kHz mono native float PCM after live-preview gain,
+is opened with delete-on-close, and is excluded from History and backups.
+Separate file handles let generation append while a worker feeds the bounded
+audio-device queue. This cache is never used to create the authoritative final
+WAV, which still uses the full decoder and uniform gain. A cache failure disables
+preview with a visible message while final-file generation continues.
+
 - Partial audio is private working data, never a discoverable completed WAV
   or History item. Use an app-owned unique temporary name and finalize with
   an atomic rename within the destination filesystem only after successful
