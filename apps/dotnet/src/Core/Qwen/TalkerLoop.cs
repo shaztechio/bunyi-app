@@ -189,7 +189,7 @@ public sealed class TalkerLoop : IDisposable
     /// characters a second at a slow pace; three times that, with a floor for
     /// very short text, is far past anything a faithful reading needs while
     /// still failing in seconds rather than in half an hour. A run that reaches
-    /// it has stopped speaking the text and started rambling.
+    /// it may be rambling or unfinished, and must not be reported as successful.
     /// </para>
     /// </remarks>
     public static int FrameBudget(string? text, int hardCap)
@@ -279,6 +279,8 @@ public sealed class TalkerLoop : IDisposable
             position++;
         }
 
+        ct.ThrowIfCancellationRequested();
+
         if (frames.Count == 0)
         {
             throw new InvalidOperationException(
@@ -287,13 +289,12 @@ public sealed class TalkerLoop : IDisposable
 
         if (frames.Count >= cap)
         {
-            // It ran out of budget rather than finishing. Said plainly, because
-            // the audio is probably wrong and the user is about to wonder why —
-            // and because trying again really is the fix: the next draw of a
-            // random sample usually ends normally.
+            // A limit stop is not EOS. Do not vocode, save, or autoplay an
+            // unfinished take that may contain a long unwanted tail.
             _log.Log(
                 $"{what}: stopped after {frames.Count / FramesPerSecond:0}s of speech because the "
-                + "model did not finish on its own. Generating again usually works.");
+                + "model did not finish on its own. Discarding this take.");
+            throw new GenerationDidNotFinishException();
         }
 
         var talker = talkerClock.Elapsed;

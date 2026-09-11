@@ -89,6 +89,18 @@ A segmented picker selects one of three modes. macOS source:
 ## 2. Generation output
 
 - Sample rate **24 kHz**, mono, WAV.
+- **A safety limit is not successful completion.** When the runtime knows that
+  generation exhausted its frame budget without an end-of-speech token, fail
+  visibly and ask the user to generate again (or try a shorter passage if it
+  keeps happening). Do not save or auto-play that take. Keep Stop and memory
+  cleanup working, and allow another Generate. Do not guess an endpoint from
+  text length or low volume and silently trim valid speech. This guard does
+  not detect every unwanted word in a take that eventually ends normally.
+  ONNX implements this; reliable MLX termination reporting and the matching
+  guard are tracked in [#224](https://github.com/shaztechio/bunyi-app/issues/224).
+- **Sampling follows the model reference.** ONNX repetition penalties apply
+  once per distinct generated token at each step, not once per occurrence;
+  otherwise repeated sound codes receive an unintended compounded penalty.
 - **Protect output from clipping in every mode.** Before saving, inspect the
   generated floating-point samples. If the absolute peak exceeds 1.0, reduce
   the entire clip by one uniform gain so its peak is 0.98. Preserve relative

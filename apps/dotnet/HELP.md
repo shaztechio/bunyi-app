@@ -194,4 +194,6 @@ The same lines are also written to a file, so a run that ended badly still left 
 
 **Generating is slow.** The first run after starting Bunyi includes loading the model, which takes a while on its own. If every run is slow, check where your models folder is: reading the model from a slow external drive slows down the speaking itself.
 
+**The model did not finish speaking before the safety limit.** Bunyi discarded the unfinished take instead of saving it with a long unwanted tail. Press Generate again. If this keeps happening, try a shorter passage. This does not require downloading the model again.
+
 **Not enough memory.** Doctor warns rather than stopping you, and the run will usually finish anyway. Closing other applications first is the thing that helps most.
