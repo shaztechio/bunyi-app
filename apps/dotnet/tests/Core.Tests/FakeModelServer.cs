@@ -38,6 +38,7 @@ public sealed class FakeModelServer : IAsyncDisposable
 {
     private readonly IHost _host;
     private readonly ConcurrentDictionary<string, byte[]> _files = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, Uri> _redirects = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, int> _requests = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, int> _bodyRequests = new(StringComparer.Ordinal);
 
@@ -99,6 +100,12 @@ public sealed class FakeModelServer : IAsyncDisposable
         return this;
     }
 
+    public FakeModelServer AddRedirect(string path, Uri destination)
+    {
+        _redirects[path] = destination;
+        return this;
+    }
+
     /// <summary>Serves text at <paramref name="path"/>.</summary>
     public FakeModelServer Add(string path, string content) =>
         Add(path, System.Text.Encoding.UTF8.GetBytes(content));
@@ -143,6 +150,13 @@ public sealed class FakeModelServer : IAsyncDisposable
     {
         var path = context.Request.Path.Value?.TrimStart('/') ?? string.Empty;
         _requests.AddOrUpdate(path, 1, (_, count) => count + 1);
+
+        if (_redirects.TryGetValue(path, out var destination))
+        {
+            context.Response.StatusCode = StatusCodes.Status307TemporaryRedirect;
+            context.Response.Headers.Location = destination.AbsoluteUri;
+            return;
+        }
 
         if (!_files.TryGetValue(path, out var content))
         {

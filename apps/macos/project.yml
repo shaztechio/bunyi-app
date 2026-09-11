@@ -43,6 +43,7 @@ targets:
       - DoctorView.swift
       - ModelConfigLibrary.swift
       - OutputMetadata.swift
+      - OutputLevel.swift
       - ModelSettings.swift
       - SettingsView.swift
       - BackupManager.swift

@@ -158,7 +158,10 @@ public sealed class TokenSampler(Func<double>? random = null)
     {
         if (penalty == 1f || generated is null || generated.Count == 0) return;
 
-        foreach (var token in generated)
+        // The reference gathers the original scores and assigns them back in
+        // one operation. Duplicate indices therefore receive one penalty, not
+        // a compounded penalty for every previous occurrence of the sound.
+        foreach (var token in generated.Distinct())
         {
             if ((uint)token >= (uint)logits.Length) continue;
 

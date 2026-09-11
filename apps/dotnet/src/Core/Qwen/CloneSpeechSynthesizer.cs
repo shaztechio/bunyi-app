@@ -139,7 +139,7 @@ public sealed class CloneSpeechSynthesizer(
             ct: ct);
 
         return Task.FromResult(new SynthesisResult(
-            DesignSpeechSynthesizer.ToPcm16(result.Samples), 24_000, result.Frames));
+            DesignSpeechSynthesizer.ToPcm16(result.Samples, _log), 24_000, result.Frames));
     }
 
     /// <inheritdoc />

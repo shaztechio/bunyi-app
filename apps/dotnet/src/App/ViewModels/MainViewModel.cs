@@ -50,6 +50,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private bool _downloadPumpActive;
     private bool _disposed;
     private CancellationTokenSource? _listenCancellation;
+    private CancellationTokenSource? _generateCancellation;
     public DownloadViewModel Download { get; } = new();
     public void RefreshModelNotice() => OnPropertyChanged(nameof(NeedsModel));
     public Func<TtsMode, bool>? ModelComplete { get; init; }
@@ -428,12 +429,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// hovered for its own tooltip, and a screen reader skips it entirely. This
     /// still says whether a run would start.
     /// </remarks>
-    public bool CanGenerate => !IsBusy && GenerationReadiness.CanGenerate(CurrentRequest());
+    public bool CanGenerate => !IsBusy && GenerationReadiness.CanGenerate(CurrentRequest(), Transcribe is not null);
 
     /// <summary>
     /// Why it cannot, for the tooltip §1 requires.
     /// </summary>
-    public string? BlockedReason => GenerationReadiness.BlockedReason(CurrentRequest());
+    public string? BlockedReason => GenerationReadiness.BlockedReason(CurrentRequest(), Transcribe is not null);
 
     /// <summary>The examples an unused window offers (spec §1).</summary>
     public IReadOnlyList<string> Examples => ExamplePrompts.For(Mode);
@@ -588,13 +589,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Chooses the recording to clone, and listens to it (spec §4).
+    /// Chooses the recording to clone; Generate starts preparation (spec §4).
     /// </summary>
     /// <remarks>
-    /// The transcript is filled in as soon as the recording is chosen rather
-    /// than when Generate is pressed. §4 wants it shown and editable, and it can
-    /// only be either if it arrives while there is still something to edit it
-    /// with.
+    /// Picking a file must not start a separate download or transcription job.
+    /// A transcript already typed is retained and takes precedence on Generate.
     /// </remarks>
     [RelayCommand]
     private async Task PickReferenceAsync()
@@ -608,12 +607,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // that has nothing to do with the file now in the field.
         SelectedVoice = null;
         ReferenceAudioPath = chosen;
-
-        // A transcript already typed is the user's, and §4 says it always wins.
-        if (string.IsNullOrWhiteSpace(ReferenceTranscript))
-        {
-            await ListenAsync();
-        }
     }
 
     /// <summary>The saved voice in use, or null (spec §5).</summary>
@@ -709,7 +702,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     private async Task ListenAsync()
     {
-        if (Transcribe is null || !HasReference || IsTranscribing) return;
+        if (Transcribe is null || !HasReference || IsBusy) return;
 
         IsTranscribing = true;
         IsBusy = true;
@@ -720,7 +713,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         try
         {
-            ReferenceTranscript = await Transcribe(ReferenceAudioPath!, cancellation.Token);
+            await TranscribeReferenceAsync(cancellation.Token);
             Status = "Ready";
         }
         catch (OperationCanceledException)
@@ -746,6 +739,29 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
+    private async Task TranscribeReferenceAsync(CancellationToken ct)
+    {
+        IsTranscribing = true;
+        Status = "Transcribing the reference recording…";
+        try
+        {
+            var transcript = await Transcribe!(ReferenceAudioPath!, ct);
+            ct.ThrowIfCancellationRequested();
+            if (string.IsNullOrWhiteSpace(transcript))
+                throw new InvalidOperationException("No speech was detected.");
+            ReferenceTranscript = transcript;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            throw new InvalidOperationException(
+                "Could not transcribe the recording. Type what it says, or press Generate to try again.", ex);
+        }
+        finally
+        {
+            IsTranscribing = false;
+        }
+    }
+
     [RelayCommand]
     private async Task GenerateAsync()
     {
@@ -754,7 +770,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // Pressed before it is ready: say what is missing, put the cursor in it,
         // and mark it. Doing nothing was the old behaviour and it is what made
         // the button look broken.
-        if (GenerationReadiness.Missing(CurrentRequest()) is { } missing)
+        if (GenerationReadiness.Missing(CurrentRequest(), Transcribe is not null) is { } missing)
         {
             Missing = missing;
             Status = missing.Reason;
@@ -764,9 +780,21 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         Missing = null;
 
+        using var cancellation = new CancellationTokenSource();
+        _generateCancellation = cancellation;
+        IsBusy = true;
+        StopPlayback();
+        _engine.ClearLastOutput();
+        LastOutputPath = null;
+        var engineStarted = false;
         try
         {
-            await _engine.GenerateAsync(CurrentRequest(), null, CancellationToken.None);
+            if (Mode == TtsMode.VoiceClone && string.IsNullOrWhiteSpace(ReferenceTranscript))
+                await TranscribeReferenceAsync(cancellation.Token);
+
+            cancellation.Token.ThrowIfCancellationRequested();
+            engineStarted = true;
+            await _engine.GenerateAsync(CurrentRequest(), null, cancellation.Token);
             var path = _engine.LastOutputPath;
             LastOutputPath = path;
 
@@ -788,8 +816,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             // §10: the actionable sentence goes on screen, the full text to the
             // log.
-            Status = _engine.Status.Message ?? ex.Message;
+            Status = engineStarted ? _engine.Status.Message ?? ex.Message : ex.Message;
             _log.Log($"Generation failed: {ex}");
+        }
+        finally
+        {
+            _generateCancellation = null;
+            lock (_downloadGate) { _pendingDownload = null; _downloadPumpActive = false; }
+            _downloadTicker?.Stop();
+            Download.Clear();
+            IsBusy = _engine.Status.IsBusy;
+            Refresh();
         }
     }
 
@@ -797,7 +834,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void Stop()
     {
-        if (_listenCancellation is { } listening)
+        if (_generateCancellation is { } generation)
+        {
+            generation.Cancel();
+            if (_engine.Status.IsBusy) _engine.RequestStop();
+            OnEngineStatusChanged(this, new EngineStatus(EngineState.Stopping));
+        }
+        else if (_listenCancellation is { } listening)
         {
             listening.Cancel();
             OnEngineStatusChanged(this, new EngineStatus(EngineState.Stopping));
@@ -807,7 +850,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     public void ReportTranscriptionDownload(DownloadProgress progress)
     {
-        if (_listenCancellation?.IsCancellationRequested == true) return;
+        if (_listenCancellation?.IsCancellationRequested == true || _generateCancellation?.IsCancellationRequested == true) return;
         OnEngineStatusChanged(this,
             new EngineStatus(progress.Phase == DownloadPhase.Done ? EngineState.Transcribing : EngineState.Downloading,
                 progress.Fraction, Download: progress, DownloadResource: "transcription model"));
@@ -933,10 +976,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 Download.Update(download, _clock.GetUtcNow(), status.DownloadResource, Mode.DisplayName());
             }
             else Download.Clear();
-            if (status.Download is not { Phase: DownloadPhase.Downloading }) _downloadTicker?.Stop();
+            if (Download.Visible)
+            {
+                _downloadTicker ??= _timers.Create(TimeSpan.FromMilliseconds(250), TickDownload);
+                _downloadTicker.Start();
+            }
+            else _downloadTicker?.Stop();
             // Core raises this on whichever thread did the work; everything
             // below is bound, so it has to land on the UI thread.
-            IsBusy = status.IsBusy;
+            IsBusy = status.IsBusy || _generateCancellation is not null;
             Progress = status.Progress;
             OnPropertyChanged(nameof(IsIndeterminate));
             OnPropertyChanged(nameof(ShowSpinner));
@@ -1021,7 +1069,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(ContentScrollMode));
         // Cleared as soon as the run would start, so a mark never outlives the
         // problem it described.
-        if (Missing is not null && GenerationReadiness.CanGenerate(CurrentRequest()))
+        if (Missing is not null && GenerationReadiness.CanGenerate(CurrentRequest(), Transcribe is not null))
         {
             Missing = null;
         }

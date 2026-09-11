@@ -48,7 +48,7 @@ public sealed record MissingInput(RequiredInput Input, string Reason);
 public static class GenerationReadiness
 {
     /// <summary>Whether the request can be generated as it stands.</summary>
-    public static bool CanGenerate(GenerateRequest request) => Missing(request) is null;
+    public static bool CanGenerate(GenerateRequest request, bool canTranscribe = false) => Missing(request, canTranscribe) is null;
 
     /// <summary>
     /// What is missing, and where to look for it.
@@ -60,7 +60,7 @@ public static class GenerationReadiness
     /// hovered for the explanation it is supposed to carry, and is skipped
     /// entirely by a screen reader.
     /// </remarks>
-    public static MissingInput? Missing(GenerateRequest request)
+    public static MissingInput? Missing(GenerateRequest request, bool canTranscribe = false)
     {
         ArgumentNullException.ThrowIfNull(request);
 
@@ -82,7 +82,7 @@ public static class GenerationReadiness
                 RequiredInput.Reference,
                 "Choose a short recording of the voice to clone."),
 
-            TtsMode.VoiceClone when IsBlank(request.ReferenceTranscript) => new MissingInput(
+            TtsMode.VoiceClone when IsBlank(request.ReferenceTranscript) && !canTranscribe => new MissingInput(
                 RequiredInput.Transcript,
                 "Type what the recording says, or let it be filled in automatically."),
 
@@ -97,7 +97,7 @@ public static class GenerationReadiness
     /// §1 requires the button to say why on hover, so this is a sentence for a
     /// person rather than a code. Each names the one thing to do next.
     /// </remarks>
-    public static string? BlockedReason(GenerateRequest request) => Missing(request)?.Reason;
+    public static string? BlockedReason(GenerateRequest request, bool canTranscribe = false) => Missing(request, canTranscribe)?.Reason;
 
     /// <summary>
     /// Whether the script is effectively empty. Whitespace counts as nothing.

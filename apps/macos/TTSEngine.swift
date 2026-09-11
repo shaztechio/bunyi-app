@@ -140,6 +140,12 @@ final class TTSEngine {
     /// Human-readable download detail ("42% — about 3.1 MB/s, ~6 min left").
     var downloadDetail: String?
     var downloadFeedback: ModelDownloadProgress?
+    private var activeModelTransfer: ModelFileTransfer?
+    func reconnectDownload() {
+        guard downloadFeedback?.phase == .downloading else { return }
+        activeModelTransfer?.requestReconnect()
+        downloadFeedback?.phase = .reconnecting
+    }
     /// Transcript produced by auto-transcription, so the UI can show it and
     /// save it with the voice instead of storing an empty string.
     var lastReferenceTranscript: String?
@@ -427,6 +433,7 @@ final class TTSEngine {
     }
 
     private func downloadEntries(_ files: [ManifestEntry], base: URL, into localDir: URL, allRequired: Bool = false) async throws {
+        let setupStarted = Date()
         try FileManager.default.createDirectory(at: localDir, withIntermediateDirectories: true)
         downloadFeedback = ModelDownloadProgress(phase: .sizing)
         status = .downloading(0)
@@ -439,13 +446,14 @@ final class TTSEngine {
         }
         func total() -> Int64 { present.allSatisfy { sizes[$0] != nil } ? sizes.values.reduce(0, +) : 0 }
         var completed: Int64 = 0
-        let mailbox = DownloadReceiptMailbox()
+        let mailbox = DownloadReceiptMailbox(started: setupStarted)
         for entry in files {
             try Task.checkCancellation()
             let dest = localDir.appendingPathComponent(entry.path)
             let expected = sizes[entry.path]
             downloadFeedback = ModelDownloadProgress(phase: .checking, available: completed,
-                total: total(), file: entry.path, fileTotal: expected ?? 0)
+                total: total(), file: entry.path, fileTotal: expected ?? 0,
+                elapsed: Date().timeIntervalSince(setupStarted))
             let reused: Int64? = try await Task.detached {
                 guard let size = try? dest.resourceValues(forKeys: [.fileSizeKey]).fileSize, size > 0 else { return nil }
                 if let digest = entry.sha256 {
@@ -462,38 +470,56 @@ final class TTSEngine {
             let otherPaths = present.filter { $0 != entry.path }
             let otherTotal: Int64? = otherPaths.allSatisfy { sizes[$0] != nil }
                 ? otherPaths.reduce(Int64(0)) { $0 + (sizes[$1] ?? 0) } : nil
-            mailbox.begin(file: entry.path, completed: completed, total: total(),
-                          fileTotal: expected ?? 0, otherTotal: otherTotal)
-            downloadFeedback = mailbox.snapshot()
-            let ticker = Task { @MainActor [weak self] in
-                var loggedAt = Date()
-                var warned = false
-                while !Task.isCancelled {
-                    do { try await Task.sleep(for: .milliseconds(250)) } catch { break }
-                    guard let self, !Task.isCancelled else { break }
-                    if self.status == .stopping { break }
-                    let value = mailbox.snapshot()
-                    self.downloadFeedback = value
-                    self.status = .downloading(value.fraction)
-                    let now = Date()
-                    if value.stalled(at: now) && !warned {
-                        self.log.log("No new data for 30 s — the connection may be stalled")
-                        warned = true
-                    } else if !value.stalled(at: now) { warned = false }
-                    if now.timeIntervalSince(loggedAt) >= 10 {
-                        self.log.log("Download: \(value.received.formatted()) bytes received; \(value.file ?? "model files")")
-                        loggedAt = now
+            var code = 0
+            while true {
+                try Task.checkCancellation()
+                mailbox.begin(file: entry.path, completed: completed, total: total(),
+                              fileTotal: expected ?? 0, otherTotal: otherTotal)
+                downloadFeedback = mailbox.snapshot()
+                let ticker = Task { @MainActor [weak self] in
+                    var loggedAt = Date()
+                    var warned = false
+                    while !Task.isCancelled {
+                        do { try await Task.sleep(for: .milliseconds(250)) } catch { break }
+                        guard let self, !Task.isCancelled else { break }
+                        if self.status == .stopping { break }
+                        let value = mailbox.snapshot()
+                        self.downloadFeedback = value
+                        self.status = .downloading(value.fraction)
+                        let now = Date()
+                        if value.stalled(at: now) && !warned {
+                            self.log.log("No new data for 30 s — the connection may be stalled")
+                            warned = true
+                        } else if !value.stalled(at: now) { warned = false }
+                        if now.timeIntervalSince(loggedAt) >= 10 {
+                            self.log.log("Download: \(value.received.formatted()) bytes received; \(value.file ?? "model files")")
+                            loggedAt = now
+                        }
                     }
                 }
-            }
-            let code: Int
-            do {
-                code = try await ModelFileTransfer(destination: dest, digest: entry.sha256,
-                    expected: expected, mailbox: mailbox).run(from: base.appendingPathComponent(entry.path))
-            } catch { ticker.cancel(); throw error }
-            ticker.cancel()
-            try Task.checkCancellation()
-            downloadFeedback = mailbox.snapshot()
+                let transfer = ModelFileTransfer(destination: dest, digest: entry.sha256,
+                    expected: expected, mailbox: mailbox)
+                activeModelTransfer = transfer
+                do {
+                    code = try await transfer.run(from: base.appendingPathComponent(entry.path))
+                } catch {
+                    activeModelTransfer = nil
+                    ticker.cancel()
+                    try Task.checkCancellation()
+                    if transfer.reconnectRequested {
+                        mailbox.reconnecting()
+                        downloadFeedback = mailbox.snapshot()
+                        log.log("Reconnecting \(entry.path); retaining the partial file.")
+                        continue
+                    }
+                    throw error
+                }
+                activeModelTransfer = nil
+                ticker.cancel()
+                try Task.checkCancellation()
+                downloadFeedback = mailbox.snapshot()
+                break
+                }
             if code != 200 {
                 guard code == 404 && !allRequired && !Self.requiredModelFiles.contains(entry.path) else {
                     throw TTSError.selfHostFileMissing(entry.path, code)
@@ -931,7 +957,7 @@ final class TTSEngine {
             // This is where the beachball came from. MLX is lazy: the array the
             // generator yields is an unevaluated graph, and nothing in the
             // package evaluates it. The first thing that does is
-            // `audio.asArray(Float.self)` inside saveAudioArray — so calling
+            // `audio.asArray(Float.self)` before saving — so calling
             // that here ran the whole audio decode on the main actor, freezing
             // the UI at the very end of every generation, in every mode.
             //
@@ -962,16 +988,22 @@ final class TTSEngine {
                 appVersion: Self.appVersion,
                 created: Date()
             )
-            try await Task.detached(priority: .userInitiated) {
+            let outputGain = try await Task.detached(priority: .userInitiated) {
                 // Proves the offload rather than trusting it: this traps if the
                 // evaluation is ever back on the main thread.
                 dispatchPrecondition(condition: .notOnQueue(.main))
-                try saveAudioArray(boxed.value, sampleRate: rate, to: url)
+                let prepared = try OutputLevel.prepare(boxed.value.asArray(Float.self))
+                try saveAudioArray(MLXArray(prepared.samples), sampleRate: rate, to: url)
                 // Tagging is best-effort: a file that plays but lacks its
                 // metadata is a far better outcome than losing the audio
                 // because a chunk could not be appended.
                 try? WAVMetadata.embed(metadata, in: url)
+                return prepared.gain
             }.value
+            if outputGain < 1 {
+                log.log(String(format: "Output level: reduced by %.1f dB to prevent clipping.",
+                               -20 * log10(outputGain)))
+            }
             log.log(String(format: "Saved %@ (%.1f s total)", url.path,
                            Date().timeIntervalSince(generateStart)))
             releaseGenerationMemory()

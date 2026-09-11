@@ -61,6 +61,26 @@ public sealed class ServerTests
     }
 
     [Fact]
+    public async Task Unfinished_speech_fails_its_job_and_the_next_job_can_succeed()
+    {
+        var calls = 0;
+        await using var server = await RunningServer.Start((request, _, _) => Task.FromResult(
+            ++calls == 1
+                ? Program.Failure(request, new Bunyi.Core.Qwen.GenerationDidNotFinishException())
+                : CliProtocol.Result(request, ("outputPath", "/next.wav"))));
+        var failed = Request("generate.clone");
+        await server.Client.ExecuteAsync(failed, true, _ => { }, default);
+        var result = await server.Client.FollowAsync(failed.OperationId, _ => { }, default);
+        using var json = JsonDocument.Parse(JsonSerializer.Serialize(result, CliProtocol.Json));
+        Assert.Equal("generation_did_not_finish", json.RootElement.GetProperty("error").GetProperty("code").GetString());
+        Assert.Equal(10, CliProtocol.ExitCode(result));
+        Assert.False(result.ContainsKey("outputPath"));
+        Assert.Equal("failed", Text(await server.Client.JobStatusAsync(failed.OperationId, default), "state"));
+        var next = await server.Client.ExecuteAsync(Request(), false, _ => { }, default);
+        Assert.Equal("result", Text(next, "type"));
+    }
+
+    [Fact]
     public async Task AttachedDisconnectCancelsButStopWaitsForActualWorkCompletion()
     {
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

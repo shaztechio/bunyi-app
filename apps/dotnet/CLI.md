@@ -166,6 +166,12 @@ response. Human diagnostics go to stderr. Handle exit codes 2 (arguments),
 3 (input/preflight), 4 (busy/server), 5 (cancelled), and 10 (operation failure).
 Success is exit 0 with a successful terminal object.
 
+`generation_did_not_finish` (exit 10) means the model reached its safety limit
+without ending the speech. That take is discarded; retry the command, or use a
+shorter passage if it keeps happening. A resident server records that job as
+failed and remains available. Successful output uses the same clipping
+protection as the desktop app.
+
 Default storage is shared with the desktop. Set `BUNYI_DATA_DIR` to an absolute
 directory to isolate automation data and settings. `--config <absolute-file>`
 or `BUNYI_CONFIG_FILE` overrides only settings. Pass identical overrides to

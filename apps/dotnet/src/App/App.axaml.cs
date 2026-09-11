@@ -93,6 +93,7 @@ public partial class App : Application
                 Doctor = RunDoctor,
                 Logs = new LogsViewModel(log),
             };
+            viewModel.Download.Reconnect = runtime.Downloader.RequestReconnect;
 
             viewModel.Transcribe = (path, ct) => runtime.TranscribeAsync(path, viewModel.Language,
                 new InlineProgress<Bunyi.Core.Runtime.AggregateDownloadProgress>(p =>

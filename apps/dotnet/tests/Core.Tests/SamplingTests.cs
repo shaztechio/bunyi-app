@@ -158,6 +158,26 @@ public class SamplingTests
     }
 
     [Fact]
+    public void Repeating_the_same_sound_does_not_compound_its_penalty()
+    {
+        float[] logits = [4f, -4f, 1f];
+        TokenSampler.ApplyRepetitionPenalty(logits, 2f, [0, 1, 0, 1, 0]);
+        Assert.Equal([2f, -8f, 1f], logits);
+    }
+
+    [Fact]
+    public void The_same_distinct_history_has_the_same_sampling_distribution()
+    {
+        for (var draw = 0.0; draw < 1; draw += 0.05)
+        {
+            var once = With(draw).Sample([4f, 3f, -1f], SamplingOptions.Default, [0, 1]);
+            var repeated = With(draw).Sample([4f, 3f, -1f], SamplingOptions.Default,
+                [0, 1, 0, 0, 1, 0, 1]);
+            Assert.Equal(once, repeated);
+        }
+    }
+
+    [Fact]
     public void The_penalty_ignores_tokens_outside_the_vocabulary()
     {
         // The code predictor's vocabulary is smaller than the talker's, and a

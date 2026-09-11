@@ -32,6 +32,17 @@ final class ModelFileTransfer: NSObject, URLSessionDataDelegate, @unchecked Send
     private var failure: Error?
     private let lock = NSLock()
     private var continuation: CheckedContinuation<Int, Error>?
+    private var activeTask: URLSessionDataTask?
+    private var reconnect = false
+    var reconnectRequested: Bool { lock.withLock { reconnect } }
+
+    func requestReconnect() {
+        let task = lock.withLock {
+            reconnect = true
+            return activeTask
+        }
+        task?.cancel()
+    }
 
     init(destination: URL, digest: String?, expected: Int64?, mailbox: DownloadReceiptMailbox) {
         self.destination = destination
@@ -53,6 +64,8 @@ final class ModelFileTransfer: NSObject, URLSessionDataDelegate, @unchecked Send
         let session = URLSession(configuration: configuration, delegate: self, delegateQueue: queue)
         defer { session.finishTasksAndInvalidate() }
         let task = session.dataTask(with: request)
+        lock.withLock { activeTask = task }
+        defer { lock.withLock { activeTask = nil } }
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 lock.withLock { self.continuation = continuation }

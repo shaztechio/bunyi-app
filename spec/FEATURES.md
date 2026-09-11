@@ -36,7 +36,8 @@ A segmented picker selects one of three modes. macOS source:
 - Language selector: auto + english, chinese, japanese, korean, german,
   french, russian, portuguese, spanish, italian.
 - **The run needs**: text in every mode, plus a voice description for voice
-  design, and a reference clip *and its transcript* for voice clone. Checked
+  design, and a reference clip for voice clone (its transcript may be filled
+  automatically during Generate, §4). Checked
   before the button is pressed, not by the engine — the engine rejects a clone
   with no clip only *after* preparing the model, which on a first run means
   waiting out a multi-gigabyte download to be told a field is empty. Voice
@@ -93,6 +94,26 @@ A segmented picker selects one of three modes. macOS source:
 ## 2. Generation output
 
 - Sample rate **24 kHz**, mono, WAV.
+- **A safety limit is not successful completion.** When the runtime knows that
+  generation exhausted its frame budget without an end-of-speech token, fail
+  visibly and ask the user to generate again (or try a shorter passage if it
+  keeps happening). Do not save or auto-play that take. Keep Stop and memory
+  cleanup working, and allow another Generate. Do not guess an endpoint from
+  text length or low volume and silently trim valid speech. This guard does
+  not detect every unwanted word in a take that eventually ends normally.
+  ONNX implements this; reliable MLX termination reporting and the matching
+  guard are tracked in [#224](https://github.com/shaztechio/bunyi-app/issues/224).
+- **Sampling follows the model reference.** ONNX repetition penalties apply
+  once per distinct generated token at each step, not once per occurrence;
+  otherwise repeated sound codes receive an unintended compounded penalty.
+- **Protect output from clipping in every mode.** Before saving, inspect the
+  generated floating-point samples. If the absolute peak exceeds 1.0, reduce
+  the entire clip by one uniform gain so its peak is 0.98. Preserve relative
+  amplitudes instead of flattening individual peaks; leave in-range audio
+  unchanged, including quiet clips. Record attenuation in the log. Reject
+  non-finite samples with an error asking the user to generate again, before
+  writing a WAV. This prevents conversion clipping; it cannot repair artifacts
+  already produced by the model or clipping in previously saved files.
 - Saved to an `Outputs` subfolder of the app's per-user data folder — macOS
   `~/Library/Application Support/Bunyi/Outputs` (inside the sandbox container
   — no extra file-access entitlement needed), Windows
@@ -319,6 +340,9 @@ explain itself in the main window, including when History is selected:
   progress includes reusable bytes across all files; current-file progress
   includes an accepted resume offset. Never average file percentages. A file
   change resets only the current-file meter. Discarded data is not counted.
+  Show each known total in human-readable decimal units alongside its meter
+  (for example, **Overall model download · 10.3 GB**, **Current file · 452 MB**),
+  retaining the exact byte counts underneath. Unknown totals remain unknown.
 - Every positive network read counts, even **one byte**. A live receipt line
   says **Received 1 byte** (or the number received since the last displayed
   update), alongside **Last data arrived just now** / **N seconds ago**.
@@ -336,6 +360,23 @@ explain itself in the main window, including when History is selected:
   and no stale speed or ETA. Clear that warning on the next positive read.
   Checking local files, hashing and loading are distinct stages and must not
   trigger a network-stall warning. Reusing a file is not a network receipt.
+- Speed and download ETA use receipts over the most recent 10 seconds of the
+  current file/connection, including quiet time, instead of averaging earlier
+  files. After 30 seconds, show **Download is slow** when the 30-second rate
+  is below 256 KiB/s and more than one minute remains at that rate (or size is
+  unknown). No-data/stalled takes precedence. One byte clears a no-data warning
+  but does not clear sustained slowness. Recalculate health on timer ticks;
+  checking/hashing/loading never count as slow transfers.
+- **Model download elapsed: M:SS** (H:MM:SS for long waits) measures the current
+  setup attempt, including discovery, checks and reconnects. Stop ends the
+  attempt; a later Generate starts a new timer and reuses retained files.
+- During slow or stalled transfers offer **Reconnect and resume**. Cancel and
+  await the current file transfer, retain its partial file, then reopen that
+  file on a fresh connection. Keep the operation busy and continue speech setup
+  automatically; Stop cancels recovery too. Validate accepted range offsets
+  and the final size/checksum; a server that ignores Range restarts that file.
+  Reset recent speed history on reconnect, preserve elapsed time, and count
+  retained bytes once. Reconnect is user initiated, with no automatic retry loop.
 - **Next: Check downloaded files → Load model → Create speech** explains
   automatic continuation. Transfer at 100% does not mean audio is ready.
   Checking existing files, checking downloaded files, loading the model,
@@ -389,6 +430,17 @@ explain itself in the main window, including when History is selected:
   first, then a known fallback URL). See `DATA-FORMATS.md`.
 
 ### 3c. Self-hosting
+- The project mirror may redirect GET and HEAD requests to short-lived R2
+  S3 download URLs. The configured base URL remains the model's identity;
+  signed destinations are transient and must never become saved settings.
+  Resume requests obtain a fresh redirect from the original URL and retain
+  their Range semantics. Manifests and final checksum validation stay the same.
+  The download signer grants only reads of explicitly published model files,
+  emits uncached redirects, and has an emergency stop for issuing new links.
+  Previously issued links remain usable until their short expiry; an existing
+  transfer may continue. Hostname WAF rules do not revoke signed R2 links.
+  Rollout requires full-file throughput, checksum, and Stop/resume verification
+  with both native download clients; a short range benchmark is insufficient.
 - The app fetches `<base>/manifest.txt` (newline-separated relative paths)
   and downloads each `<base>/<path>`. If absent, it uses a built-in
   default file list for that runtime.
@@ -460,8 +512,20 @@ macOS source: `TTSEngine.loadReferenceAudio`, `ReferenceTranscriber.swift`.
 - Voice clone is **ICL**: it requires the reference **transcript** to align
   audio to words. An empty transcript yields gibberish that ignores the
   target text — so the transcript is effectively mandatory.
-- **Auto-transcription**: if the transcript field is blank, transcribe the
-  clip on-device and use the result (also shown to the user, editable).
+- **One Generate operation for Voice clone**: choosing a reference recording
+  does not start transcription or a model download. With text and a recording
+  selected, Generate accepts a blank transcript when automatic transcription
+  is available. That one operation performs any required transcription-model
+  download, transcription, voice-model download/load, and speech generation
+  without returning to Ready or requiring another press of Generate between
+  stages. Stop cancels the operation at any stage; completed and partial model
+  downloads remain reusable. Inputs stay locked until the operation finishes.
+- **Auto-transcription**: on Generate, if the transcript field is blank,
+  transcribe the clip on-device and use the result (also shown to the user,
+  editable after the operation). A typed or saved transcript skips this step.
+  Failed or empty transcription stops generation with an explanation to type
+  the transcript or retry; cancellation must not proceed to the next stage.
+  An explicit Listen again action may still refresh the transcript separately.
   - macOS: Speech framework (`SFSpeechRecognizer`), fed PCM buffers (not a
     file URL — the recognition daemon can't read a sandboxed file).
   - .NET (Win+Linux): Whisper (whisper.cpp), so the same words come out on

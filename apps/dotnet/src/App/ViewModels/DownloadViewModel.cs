@@ -14,6 +14,7 @@
 
 using Bunyi.Core.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 
 namespace Bunyi.App.ViewModels;
 
@@ -31,6 +32,23 @@ public sealed class DownloadViewModel : ObservableObject
     private long _receipt;
     private string _resource = "voice model";
     private string _mode = "";
+    private DateTimeOffset? _started;
+    private DateTimeOffset _fileStarted;
+    private readonly List<(DateTimeOffset Time, long Bytes)> _samples = [];
+    private bool _reconnectPending;
+    public Action? Reconnect { get; set; }
+    public IRelayCommand ReconnectCommand { get; }
+
+    public DownloadViewModel()
+    {
+        ReconnectCommand = new RelayCommand(() =>
+        {
+            if (!CanReconnect) return;
+            _reconnectPending = true;
+            OnPropertyChanged(nameof(CanReconnect));
+            Reconnect?.Invoke();
+        });
+    }
 
     public bool Visible { get; private set; }
     public string Context => string.IsNullOrEmpty(_mode) ? "Speech has not started"
@@ -41,6 +59,7 @@ public sealed class DownloadViewModel : ObservableObject
         DownloadPhase.Manifest => "Finding the model files",
         DownloadPhase.Sizing => "Calculating download size",
         DownloadPhase.Verifying => "Checking model files",
+        DownloadPhase.Reconnecting => "Reconnecting — keeping downloaded bytes",
         DownloadPhase.Done => "Model files ready",
         _ => $"Downloading {_resource}",
     };
@@ -61,6 +80,36 @@ public sealed class DownloadViewModel : ObservableObject
     public string OverallBytes => Bytes(_progress.BytesReceived + _progress.BytesReused, _progress.BytesTotal);
     public string FileBytes => Bytes(_progress.CurrentFileBytes, _progress.CurrentFileTotal);
     public string FileName => $"Current file · {_progress.CurrentFile}";
+    public string OverallLabel => "Overall model download" + (HasOverallTotal ? $" · {DownloadProgress.Bytes(_progress.BytesTotal)}" : "");
+    public string FileTotalLabel => HasFileTotal ? $"File size · {DownloadProgress.Bytes(_progress.CurrentFileTotal)}" : "File size unknown";
+    public string Elapsed => $"Model download elapsed: {Duration(Math.Max(0, (_now - (_started ?? _now)).TotalSeconds))}";
+    private static string Duration(double seconds) => seconds >= 3600
+        ? $"{(int)(seconds / 3600)}:{(int)(seconds / 60) % 60:00}:{(int)seconds % 60:00}"
+        : $"{(int)(seconds / 60)}:{(int)seconds % 60:00}";
+    public double RecentRate => Rate(10);
+    private double Rate(double window)
+    {
+        if (_samples.Count == 0) return 0;
+        var baseline = _samples[0];
+        foreach (var sample in _samples)
+        {
+            if (sample.Time > _now.AddSeconds(-window)) break;
+            baseline = sample;
+        }
+        var seconds = (_now - baseline.Time).TotalSeconds;
+        return seconds >= 1 ? Math.Max(0, _progress.BytesReceived - baseline.Bytes) / seconds : 0;
+    }
+    private void Sample()
+    {
+        if (!Transferring) return;
+        _samples.Add((_now, _progress.BytesReceived));
+        while (_samples.Count > 1 && _samples[1].Time <= _now.AddSeconds(-30)) _samples.RemoveAt(0);
+    }
+    public bool Slow => Transferring && !Stalled && (_now - _fileStarted).TotalSeconds >= 30
+        && Rate(30) < 256 * 1024
+        && (!HasFileTotal || _progress.CurrentFileTotal - _progress.CurrentFileBytes > Math.Max(1, Rate(30)) * 60);
+    public bool CanReconnect => !_reconnectPending && Reconnect is not null && (Slow || Stalled);
+    public string Health => Slow ? "Download is slow" : "";
     private double QuietSeconds => Math.Max(0, (_now - LatestActivity).TotalSeconds);
     private DateTimeOffset LatestActivity => _progress.LastReceivedAt is { } last
         && (_progress.WaitingSince is not { } start || last >= start) ? last
@@ -77,13 +126,23 @@ public sealed class DownloadViewModel : ObservableObject
     public string SpeedAndEta => !Transferring ? string.Empty
         : Stalled ? "No data arriving · Download time remaining: unavailable"
         : QuietSeconds >= 3 ? "Download time remaining: estimating…"
-        : _progress.BytesPerSecond > 0
-            ? $"{DownloadProgress.Rate(_progress.BytesPerSecond)}/s · {DownloadProgress.EtaText(_progress.Eta)} to download"
+        : RecentRate > 0
+            ? $"{DownloadProgress.Rate(RecentRate)}/s recently · {DownloadProgress.EtaText(HasOverallTotal ? TimeSpan.FromSeconds(Math.Max(0, _progress.BytesTotal - _progress.BytesReceived - _progress.BytesReused) / RecentRate) : null)} to download"
             : "Download time remaining: estimating…";
-    public string Announcement => $"{Title}. {Receipt}. Overall model download: {OverallPercent}. {LastArrival}.";
+    public string Announcement => $"{Title}. {Health}. {Receipt}. Overall model download: {OverallPercent}. {LastArrival}.";
 
     public void Update(DownloadProgress progress, DateTimeOffset now, string resource = "voice model", string mode = "")
     {
+        _started ??= now;
+        if (progress.Phase != DownloadPhase.Downloading) _reconnectPending = false;
+        if (progress.Phase == DownloadPhase.Downloading &&
+            (_progress.Phase != DownloadPhase.Downloading || progress.CurrentFile != _progress.CurrentFile
+             || progress.BytesReceived < _displayedReceived))
+        {
+            _samples.Clear();
+            _fileStarted = now;
+            _samples.Add((now, progress.BytesReceived));
+        }
         if (!Visible || progress.BytesReceived < _displayedReceived) _displayedReceived = 0;
         var change = progress.BytesReceived - _displayedReceived;
         if (change > 0) _receipt = change;
@@ -93,6 +152,7 @@ public sealed class DownloadViewModel : ObservableObject
         _resource = resource;
         _mode = mode;
         Visible = progress.Phase is not (DownloadPhase.Resolving or DownloadPhase.Done);
+        Sample();
         OnPropertyChanged(string.Empty);
     }
 
@@ -100,16 +160,17 @@ public sealed class DownloadViewModel : ObservableObject
     {
         if (!Visible) return;
         _now = now;
-        OnPropertyChanged(nameof(Receipt));
-        OnPropertyChanged(nameof(LastArrival));
-        OnPropertyChanged(nameof(SpeedAndEta));
-        OnPropertyChanged(nameof(Stalled));
+        Sample();
+        OnPropertyChanged(string.Empty);
     }
 
     public void Clear()
     {
         Visible = false;
         _displayedReceived = _receipt = 0;
+        _started = null;
+        _samples.Clear();
+        _reconnectPending = false;
         OnPropertyChanged(nameof(Visible));
     }
 

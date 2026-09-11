@@ -32,7 +32,8 @@ public sealed class RequiredFileMissingException(string file, int statusCode)
 /// Gets a model onto disk: from a Hugging Face repo, or from a base URL the
 /// user self-hosts (spec §3b, §3c).
 /// </summary>
-public sealed partial class ModelDownloader(HttpClient http, ILogSink log, TimeProvider? time = null)
+public sealed partial class ModelDownloader(HttpClient http, ILogSink log, TimeProvider? time = null,
+    Func<HttpClient>? reconnectClientFactory = null)
 {
     private const string HubHost = "https://huggingface.co";
 
@@ -40,6 +41,22 @@ public sealed partial class ModelDownloader(HttpClient http, ILogSink log, TimeP
     private readonly ILogSink _log = log ?? throw new ArgumentNullException(nameof(log));
     private readonly TimeProvider _time = time ?? TimeProvider.System;
     private readonly HttpFileDownloader _files = new(http, log);
+    private readonly object _transferGate = new();
+    private CancellationTokenSource? _activeTransfer;
+    private bool _restartRequested;
+    private bool _canReconnect;
+
+    /// <summary>Interrupt only the current transfer. Stop's outer token always wins.</summary>
+    public void RequestReconnect()
+    {
+        lock (_transferGate)
+        {
+            if (!_canReconnect || _activeTransfer is null) return;
+            _restartRequested = true;
+            _canReconnect = false;
+            _activeTransfer.Cancel();
+        }
+    }
 
     /// <summary>
     /// Ensures the model is on disk and returns its folder.
@@ -211,30 +228,63 @@ public sealed partial class ModelDownloader(HttpClient http, ILogSink log, TimeP
             fileReceived = fileReused = 0;
             fileTotal = expected;
 
-            var result = await _files.FetchAsync(
-                UriFor(source, file.RelativePath),
-                destination,
-                file.Sha256,
-                expected > 0 ? expected : null,
-                bytes =>
+            FileResult result;
+            var receivedBeforeFile = received;
+            var retry = false;
+            while (true)
+            {
+                ct.ThrowIfCancellationRequested();
+                using var attempt = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                using var freshClient = retry ? (reconnectClientFactory?.Invoke() ?? new HttpClient()) : null;
+                var transfer = freshClient is null ? _files : new HttpFileDownloader(freshClient, _log);
+                lock (_transferGate) { _activeTransfer = attempt; _restartRequested = false; }
+                try
                 {
-                    Interlocked.Add(ref received, bytes);
-                    monitor.Add(bytes);
-                    lastReceived = _time.GetUtcNow();
-                },
-                ct,
-                onProgress: p =>
+                    result = await transfer.FetchAsync(
+                        UriFor(source, file.RelativePath),
+                        destination,
+                        file.Sha256,
+                        expected > 0 ? expected : null,
+                        bytes =>
+                        {
+                            Interlocked.Add(ref received, bytes);
+                            monitor.Add(bytes);
+                            lastReceived = _time.GetUtcNow();
+                        },
+                        attempt.Token,
+                        onProgress: p =>
+                        {
+                            lock (_transferGate) _canReconnect = !_restartRequested && p.Phase == DownloadPhase.Downloading;
+                            monitor.SetActive(p.Phase == DownloadPhase.Downloading);
+                            if (p.Phase == DownloadPhase.Downloading && phase != p.Phase)
+                                waitingSince = _time.GetUtcNow();
+                            phase = p.Phase;
+                            fileReceived = p.Received;
+                            fileReused = p.Reused;
+                            fileTotal = p.Total ?? 0;
+                            if (p.Total is > 0) sizes[file.RelativePath] = p.Total.Value;
+                            Report(file.RelativePath);
+                        }).ConfigureAwait(false);
+                    break;
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested && _restartRequested)
                 {
-                    monitor.SetActive(p.Phase == DownloadPhase.Downloading);
-                    if (p.Phase == DownloadPhase.Downloading && phase != p.Phase)
-                        waitingSince = _time.GetUtcNow();
-                    phase = p.Phase;
-                    fileReceived = p.Received;
-                    fileReused = p.Reused;
-                    fileTotal = p.Total ?? 0;
-                    if (p.Total is > 0) sizes[file.RelativePath] = p.Total.Value;
+                    // These bytes are now in the partial file. The next accepted offset
+                    // counts them as reused, not a second network receipt.
+                    received = receivedBeforeFile;
+                    fileReceived = fileReused = 0;
+                    lastReceived = null;
+                    phase = DownloadPhase.Reconnecting;
+                    monitor.SetActive(false);
                     Report(file.RelativePath);
-                }).ConfigureAwait(false);
+                    _log.Log($"Reconnecting {file.RelativePath}; retaining the partial file.");
+                    retry = true;
+                }
+                finally
+                {
+                    lock (_transferGate) { _activeTransfer = null; _canReconnect = false; }
+                }
+            }
 
             switch (result.Outcome)
             {

@@ -145,6 +145,23 @@ public sealed class CommandTests
     }
 
     [Fact]
+    public void Unfinished_generation_is_a_single_actionable_error_without_an_output()
+    {
+        var request = new CommandRequest("generate.clone", [], "test-stop");
+        var stdout = new StringWriter();
+        var output = new CliOutput(stdout, new StringWriter(), false, true);
+        output.Finish(Program.Failure(request, new Bunyi.Core.Qwen.GenerationDidNotFinishException()));
+        var line = Assert.Single(stdout.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries));
+        using var json = JsonDocument.Parse(line);
+        var result = json.RootElement;
+        Assert.Equal("error", result.GetProperty("type").GetString());
+        Assert.Equal("generation_did_not_finish", result.GetProperty("error").GetProperty("code").GetString());
+        Assert.Contains("Please generate again", result.GetProperty("error").GetProperty("message").GetString());
+        Assert.Equal(10, result.GetProperty("exitCode").GetInt32());
+        Assert.False(result.TryGetProperty("outputPath", out _));
+    }
+
+    [Fact]
     public void Checking_and_finalizing_are_immediate_nonterminal_jsonl_events()
     {
         var request = CommandParser.Parse(["generate", "preset", "--text", "Hello"]);

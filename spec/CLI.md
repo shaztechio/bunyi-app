@@ -183,6 +183,13 @@ than inventing a completion percentage.
 - `5`: cancelled;
 - `10`: download, model, transcription, generation, or filesystem failure.
 
+A generation that reaches its safety frame limit without end-of-speech returns
+`generation_did_not_finish` with exit code `10`, including the same retry advice
+as the desktop app. It creates no output file or successful result. A resident
+server records the job as failed and remains available for another job. All
+CLI/server generation also uses the shared output clipping protection in
+`FEATURES.md` §2.
+
 The JSON error code is the stable programmatic reason. Exit status only groups
 reasons broadly.
 

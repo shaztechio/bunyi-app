@@ -116,6 +116,7 @@ public static class Program
             BunyiBusyException => ("bunyi_busy", 4),
             ChecksumMismatchException => ("checksum_mismatch", 10),
             RequiredFileMissingException => ("required_file_missing", 10),
+            Bunyi.Core.Qwen.GenerationDidNotFinishException => ("generation_did_not_finish", 10),
             ArgumentException => ("invalid_arguments", 2),
             FileNotFoundException or DirectoryNotFoundException => ("missing_input", 3),
             HttpRequestException => ("download_failed", 10),
