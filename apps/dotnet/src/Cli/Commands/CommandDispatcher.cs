@@ -41,10 +41,21 @@ public sealed class CommandDispatcher(ILogSink log)
         }, ("item", new { id = p.ItemId, index = p.ItemIndex, count = p.ItemCount }),
             ("bytesCompleted", p.BytesCompleted), ("bytesTotal", p.BytesTotal), ("rateBytesPerSecond", p.RateBytesPerSecond),
             ("etaSeconds", p.EtaSeconds), ("currentFile", p.CurrentFile),
-            ("itemBytesCompleted", p.ItemBytesCompleted), ("itemBytesTotal", p.ItemBytesTotal))));
+            ("itemBytesCompleted", p.ItemBytesCompleted), ("itemBytesTotal", p.ItemBytesTotal),
+            ("retryAt", p.Download?.ServiceWait?.RetryAt), ("retryAfterSeconds", p.Download?.ServiceWait?.SecondsRemaining),
+            ("retryAttempt", p.Download?.ServiceWait?.Attempt), ("host", p.Download?.ServiceWait?.Host),
+            ("detail", p.Download?.ServiceWait is null ? null : p.Download.Human()))));
         var engineProgress = new InlineProgress<EngineStatus>(status =>
         {
             if (status.State is EngineState.Idle or EngineState.Error) return;
+            if (status.Download is { ServiceWait: { } wait } download)
+            {
+                emit(CliProtocol.Event(request, "waiting", ("retryAt", wait.RetryAt),
+                    ("retryAfterSeconds", wait.SecondsRemaining), ("retryAttempt", wait.Attempt), ("host", wait.Host),
+                    ("bytesCompleted", download.BytesReceived + download.BytesReused), ("bytesTotal", download.BytesTotal),
+                    ("currentFile", download.CurrentFile), ("detail", download.Human())));
+                return;
+            }
             emit(CliProtocol.Event(request, status.State.ToString().ToLowerInvariant(),
                 ("frames", status.Frames), ("audioSeconds", status.Frames / 12.5), ("detail", status.Detail)));
         });

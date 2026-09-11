@@ -60,10 +60,13 @@ public sealed class DownloadViewModel : ObservableObject
         DownloadPhase.Sizing => "Calculating download size",
         DownloadPhase.Verifying => "Checking model files",
         DownloadPhase.Reconnecting => "Reconnecting — keeping downloaded bytes",
+        DownloadPhase.Waiting => "Waiting for download service",
         DownloadPhase.Done => "Model files ready",
         _ => $"Downloading {_resource}",
     };
-    public string Explanation => _resource == "transcription model"
+    public string Explanation => _progress.Phase == DownloadPhase.Waiting
+        ? "Bunyi will retry automatically. Downloaded bytes are kept. You can stop at any time."
+        : _resource == "transcription model"
         ? "Bunyi saves this model for reuse. Transcription starts automatically after setup."
         : "Bunyi saves this model for reuse. Speech starts automatically after setup.";
     public string Next => _resource == "transcription model"
@@ -115,7 +118,9 @@ public sealed class DownloadViewModel : ObservableObject
         && (_progress.WaitingSince is not { } start || last >= start) ? last
         : _progress.WaitingSince ?? _now;
     public bool Stalled => Transferring && QuietSeconds >= 30;
-    public string Receipt => !Transferring ? Title
+    public string Receipt => _progress.ServiceWait is { } wait
+        ? $"{wait.Host} is limiting downloads. Retrying in {Math.Max(0, (int)Math.Ceiling((wait.RetryAt - _now).TotalSeconds))}s…"
+        : !Transferring ? Title
         : Stalled ? "Download may be stalled"
         : QuietSeconds >= 3 || _progress.LastReceivedAt is null ? "Waiting for more data"
         : $"Received {_receipt:N0} {(_receipt == 1 ? "byte" : "bytes")}";

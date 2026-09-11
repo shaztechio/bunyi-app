@@ -45,7 +45,9 @@ public sealed partial class ModelDownloader
                 completed += bytes;
                 continue;
             }
-            var files = await ResolveFileListAsync(asset.Source, asset.Layout, null, ct).ConfigureAwait(false);
+            var planningProgress = new AssetProgress(p => progress?.Report(new(p.Phase,
+                asset.Id, i + 1, assets.Count, completed, null, CurrentFile: p.CurrentFile, Download: p)));
+            var files = await ResolveFileListAsync(asset.Source, asset.Layout, planningProgress, ct).ConfigureAwait(false);
             var sizes = new Dictionary<string, long>(StringComparer.Ordinal);
             long requiredSpace = 0;
             long reusableBytes = 0;
@@ -53,7 +55,9 @@ public sealed partial class ModelDownloader
             {
                 progress?.Report(new(DownloadPhase.Sizing, asset.Id, i + 1, assets.Count,
                     completed, null, CurrentFile: file.RelativePath));
-                var size = await _files.SizeOfAsync(UriFor(asset.Source, file.RelativePath), ct).ConfigureAwait(false);
+                var size = await _files.SizeOfAsync(UriFor(asset.Source, file.RelativePath), ct, wait =>
+                    planningProgress.Report(new(wait is null ? DownloadPhase.Sizing : DownloadPhase.Waiting,
+                        CurrentFile: file.RelativePath, ServiceWait: wait))).ConfigureAwait(false);
                 if (size is not { } length) continue;
                 sizes[file.RelativePath] = length;
                 // Conservatively allow a full replacement when the old file cannot be verified.

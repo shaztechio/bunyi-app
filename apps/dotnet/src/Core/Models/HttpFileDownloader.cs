@@ -61,7 +61,7 @@ public sealed record FileTransferProgress(
 /// Downloads one file, reporting bytes as they arrive and resuming a partial
 /// transfer where the server allows it.
 /// </summary>
-public sealed class HttpFileDownloader(HttpClient http, ILogSink log)
+public sealed class HttpFileDownloader(HttpClient http, ILogSink log, TimeProvider? time = null)
 {
     /// <summary>
     /// Extension for a transfer in flight.
@@ -100,7 +100,8 @@ public sealed class HttpFileDownloader(HttpClient http, ILogSink log)
         Action<long>? onReused = null,
         Action? onVerifying = null,
         bool allowResume = true,
-        Action<FileTransferProgress>? onProgress = null)
+        Action<FileTransferProgress>? onProgress = null,
+        Action<DownloadWait?>? onWait = null)
     {
         ArgumentNullException.ThrowIfNull(uri);
         ArgumentException.ThrowIfNullOrWhiteSpace(destination);
@@ -128,12 +129,12 @@ public sealed class HttpFileDownloader(HttpClient http, ILogSink log)
         }
 
         onProgress?.Invoke(new(DownloadPhase.Downloading, 0, 0, expectedSize));
-        using var request = new HttpRequestMessage(HttpMethod.Get, uri);
-        if (resumeFrom > 0) request.Headers.Range = new RangeHeaderValue(resumeFrom, null);
-
-        using var response = await _http
-            .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct)
-            .ConfigureAwait(false);
+        using var response = await DownloadHttp.SendAsync(_http, () =>
+        {
+            var request = new HttpRequestMessage(HttpMethod.Get, uri);
+            if (resumeFrom > 0) request.Headers.Range = new RangeHeaderValue(resumeFrom, null);
+            return request;
+        }, ct, onWait, time).ConfigureAwait(false);
 
         if (response.StatusCode == HttpStatusCode.NotFound)
         {
@@ -144,7 +145,7 @@ public sealed class HttpFileDownloader(HttpClient http, ILogSink log)
         {
             response.Dispose();
             return await FetchAsync(uri, destination, expectedSha256, expectedSize, onBytes, ct,
-                onReused, onVerifying, allowResume: false, onProgress: onProgress).ConfigureAwait(false);
+                onReused, onVerifying, allowResume: false, onProgress: onProgress, onWait: onWait).ConfigureAwait(false);
         }
         response.EnsureSuccessStatusCode();
 
@@ -301,12 +302,12 @@ public sealed class HttpFileDownloader(HttpClient http, ILogSink log)
     /// cases the wrong answer is worse than none — it would produce a bar that
     /// never reaches its end, or reaches it early and sits there.
     /// </remarks>
-    public async Task<long?> SizeOfAsync(Uri uri, CancellationToken ct)
+    public async Task<long?> SizeOfAsync(Uri uri, CancellationToken ct, Action<DownloadWait?>? onWait = null)
     {
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Head, uri);
-            using var response = await _http.SendAsync(request, ct).ConfigureAwait(false);
+            using var response = await DownloadHttp.SendAsync(_http,
+                () => new HttpRequestMessage(HttpMethod.Head, uri), ct, onWait, time).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode) return null;
 
             if (response.Headers.TryGetValues("x-linked-size", out var linked)

@@ -190,6 +190,17 @@ server records the job as failed and remains available for another job. All
 CLI/server generation also uses the shared output clipping protection in
 `FEATURES.md` §2.
 
+Download waits follow `FEATURES.md` service recovery: JSONL emits `waiting`
+events with `retryAt`, `retryAfterSeconds`, `retryAttempt`, and `host`, preserving
+available byte counters. Cancellation remains exit 5. A mirror pause/unavailable
+service returns `download_service_unavailable`; exhausted or excessive 429 waits
+return `download_rate_limited`, both exit 10, with retry timing when available.
+No source changes occur implicitly. For an exact built-in mirror configuration,
+the error offers the canonical upstream repository and the `config set`
+instruction for the affected mode (plus an argument array preserving the active
+configuration file). The user explicitly applies it and reruns the
+command; the server remains usable after the failed job.
+
 The JSON error code is the stable programmatic reason. Exit status only groups
 reasons broadly.
 

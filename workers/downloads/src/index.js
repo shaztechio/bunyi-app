@@ -44,14 +44,14 @@ export default {
     const key = url.pathname.slice(1);
     if (!files.has(key)) return reply(404, "Not found", request.method);
     if (env.DOWNLOADS_ENABLED !== "true")
-      return reply(503, "Model downloads are temporarily paused", request.method, { "Retry-After": "60" });
+      return reply(503, "Model downloads are temporarily paused", request.method, { "Retry-After": "60", "X-Bunyi-Download-Status": "paused" });
 
     try {
       // Reuse the existing kill switch's state, without modifying its Worker.
       // Missing, malformed or unreadable state fails closed.
       const state = await env.KILLSWITCH_STATE.get("killswitch:state", { type: "json", cacheTtl: 30 });
       if (!state || state.killed !== false)
-        return reply(503, "Model downloads are temporarily paused", request.method, { "Retry-After": "60" });
+        return reply(503, "Model downloads are temporarily paused", request.method, { "Retry-After": "60", "X-Bunyi-Download-Status": "paused" });
       if (!/^[a-f0-9]{32}$/.test(env.R2_ACCOUNT_ID ?? "") ||
           env.R2_BUCKET !== "bunyi-models" || !env.R2_ACCESS_KEY_ID || !env.R2_SECRET_ACCESS_KEY)
         return reply(503, "Download service is not configured", request.method);

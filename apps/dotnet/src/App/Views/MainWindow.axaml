@@ -468,6 +468,12 @@ limitations under the License.
     <StackPanel Grid.Row="2" Spacing="8" Margin="0,16,0,0">
       <TextBlock Text="{Binding ModelNotice}" IsVisible="{Binding NeedsModel}" TextWrapping="Wrap" FontSize="12" />
       <views:DownloadProgressView DataContext="{Binding Download}" />
+      <StackPanel IsVisible="{Binding CanUseHuggingFace}" Spacing="8" Margin="0,8">
+        <TextBlock Text="The mirror is unavailable. You can download from Hugging Face and continue generating. This saves the source for this mode and may require a separate download. Existing files are kept."
+                   TextWrapping="Wrap" />
+        <Button Name="DownloadFromHuggingFaceButton" Content="Download from Hugging Face"
+                Command="{Binding DownloadFromHuggingFaceCommand}" />
+      </StackPanel>
       <!--
         A bar only where there is something to measure. A download reports a
         fraction; loading a model and generating do not — and a bar pulsing

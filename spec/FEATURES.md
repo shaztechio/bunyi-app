@@ -287,6 +287,33 @@ A platform ships this only if its mirror publishes `manifest.sha256`
 (`DATA-FORMATS.md`). Offering a source the app itself endorses is a higher bar
 than documenting one a user picked, and unverified bytes do not clear it.
 
+**Download service recovery.** A paused/unavailable built-in mirror must stop
+the operation with a clear explanation and offer **Download from Hugging Face**.
+The action changes only the affected mode to its canonical upstream repository,
+then retries generation with the current inputs. It is never automatic. The UI
+explains that this saves the source choice and may require a separate download:
+source-specific caches remain separate; never append a partial mirror file to
+an upstream file without verified identity. Custom server configurations do not
+receive this offer. A changed mode/source invalidates an old offer. The Worker
+marks a killswitch 503 with `X-Bunyi-Download-Status: paused`; older mirror 503s
+are described as unavailable, not definitively identified as killswitch events.
+
+For HTTP 429, honor `Retry-After` (seconds or HTTP date) and the Hugging Face
+`RateLimit` reset (`t` seconds), using the later valid deadline when both exist.
+Without valid server timing, use exponential delays of 2, 4, and 8 seconds plus
+up to one second of jitter. Permit at most three retries per request. If the
+server requires more than 15 minutes, or retries are exhausted, fail clearly
+with the retry timing instead of retrying early. Show a waiting/countdown state
+with Stop available; do not report a deliberate wait as a stalled transfer.
+Preserve accepted bytes and totals. Retry the original source URL, obtaining a
+fresh redirect, and retain Range headers. Apply this policy to manifests, size
+checks, and file transfers, including transcription model preparation. HTTP
+429/503 and server failures must not become “no manifest” or “unknown size”.
+Completed models still work offline; killswitch changes do not revoke already
+issued links or guarantee that an active transfer stops immediately. Implemented
+in Windows/Linux and the .NET CLI/server; native macOS parity is tracked in
+[#225](https://github.com/shaztechio/bunyi-app/issues/225).
+
 **Both platforms ship it now**, at the prefixes below. The two weight sets live
 on one host and never share a path — the runtime family is in the URL, because
 Windows and Linux fetch byte-identical ONNX files and an OS-named layout would

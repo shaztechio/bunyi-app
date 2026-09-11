@@ -101,7 +101,25 @@ public static class Program
         CommandDispatcher dispatcher, Action<Dictionary<string, object?>> emit, CancellationToken ct)
     {
         try { return await dispatcher.ExecuteAsync(request, runtime, emit, ct); }
-        catch (Exception ex) { return Failure(request, ex); }
+        catch (Exception ex)
+        {
+            var result = Failure(request, ex);
+            if (ex is DownloadServiceException service)
+            {
+                foreach (var mode in Enum.GetValues<Bunyi.Core.TtsMode>())
+                {
+                    if (!runtime.CanUseHuggingFace(mode, service)) continue;
+                    var repo = BunyiRuntime.DefaultSourceFor(mode);
+                    string[] arguments = ["config", "set", $"modelSource.{CommandParser.ModeName(mode)}", repo,
+                        "--config", runtime.Settings.Path];
+                    var command = "bunyi " + string.Join(" ", arguments.Select(ShellArgument));
+                    result["recovery"] = new { repository = repo, command, arguments,
+                        message = "To switch this mode to Hugging Face, run the config command, then retry. This saves your source choice and may require a separate download. Existing files are kept." };
+                    break;
+                }
+            }
+            return result;
+        }
     }
 
     public static Dictionary<string, object?> Failure(CommandRequest request, Exception ex)
@@ -116,6 +134,7 @@ public static class Program
             BunyiBusyException => ("bunyi_busy", 4),
             ChecksumMismatchException => ("checksum_mismatch", 10),
             RequiredFileMissingException => ("required_file_missing", 10),
+            DownloadServiceException error => (error.Code, 10),
             Bunyi.Core.Qwen.GenerationDidNotFinishException => ("generation_did_not_finish", 10),
             ArgumentException => ("invalid_arguments", 2),
             FileNotFoundException or DirectoryNotFoundException => ("missing_input", 3),
@@ -124,8 +143,18 @@ public static class Program
             _ => ("operation_failed", 10)
         };
         var result = CliProtocol.Error(request, code, CliLog.Redact(ex.Message), exit);
+        if (ex is DownloadServiceException service)
+        {
+            result["host"] = service.SourceUri.Host;
+            result["retryAt"] = service.RetryAt;
+            result["retryAfterSeconds"] = service.RetryAt is { } at
+                ? Math.Max(0, (at - DateTimeOffset.UtcNow).TotalSeconds) : (double?)null;
+        }
         if (ex is PreflightFailedException preflight)
             result["report"] = preflight.Report with { Findings = preflight.Report.Findings.Select(f => f with { Detail = CliLog.Redact(f.Detail) }).ToArray() };
         return result;
     }
+
+    private static string ShellArgument(string value) => "'" + value.Replace("'",
+        OperatingSystem.IsWindows() ? "''" : "'\"'\"'", StringComparison.Ordinal) + "'";
 }

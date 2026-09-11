@@ -107,6 +107,8 @@ for (const state of [null, {}, [], { killed: true }, { killed: "false" }]) {
   test("fail closed for missing, killed or malformed state: " + JSON.stringify(state), async () => {
     const response = await worker.fetch(request(), environment({ KILLSWITCH_STATE: { get: async () => state } }));
     assert.equal(response.status, 503);
+    assert.equal(response.headers.get("x-bunyi-download-status"), "paused");
+    assert.equal(response.headers.get("retry-after"), "60");
     assert.equal(response.headers.get("location"), null);
   });
 }
@@ -131,6 +133,7 @@ test("local emergency pause does not depend on KV", async () => {
       DOWNLOADS_ENABLED: enabled, KILLSWITCH_STATE: { get: () => assert.fail("must not read") },
     }));
     assert.equal(response.status, 503);
+    assert.equal(response.headers.get("x-bunyi-download-status"), "paused");
   }
 });
 test("credentials, configuration and KV failures give generic errors", async () => {
@@ -141,6 +144,7 @@ test("credentials, configuration and KV failures give generic errors", async () 
     assert.equal(response.status, 503);
     assert.equal(response.headers.get("location"), null);
     assert.ok(!(await response.text()).includes("private exception"));
+    assert.equal(response.headers.get("x-bunyi-download-status"), null);
   }
 });
 test("all published paths are canonical and cover the six model roots", async () => {
