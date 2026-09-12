@@ -56,7 +56,7 @@ public sealed class DownloadRecoveryTests : IDisposable
             Assert.Equal("config.set", parsed.Operation);
             Assert.Equal(store.Path, parsed.Get("config"));
             Assert.Contains("modelSource.clone", command);
-            Assert.Contains(BunyiRuntime.DefaultSourceFor(TtsMode.VoiceClone), command);
+            Assert.Contains(BunyiRuntime.HuggingFaceSourceFor(TtsMode.VoiceClone), command);
         }
         else Assert.False(json.RootElement.TryGetProperty("recovery", out _));
         // The failed operation releases its lease and the resident runtime stays usable.

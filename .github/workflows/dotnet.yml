@@ -116,6 +116,12 @@ jobs:
           rid=$([ "$RUNNER_OS" = "Windows" ] && echo win-x64 || echo linux-x64)
           dotnet publish src/App -c Release -r "$rid" --self-contained -o "artifacts/$rid"
 
+      - name: Verify packaged desktop defaults
+        shell: pwsh
+        run: |
+          $rid = if ($IsWindows) { 'win-x64' } else { 'linux-x64' }
+          ./packaging/test-defaults.ps1 -Path "artifacts/$rid"
+
       - name: Package Windows MSIX
         if: runner.os == 'Windows'
         shell: pwsh

@@ -19,6 +19,7 @@ param([Parameter(Mandatory)][string] $PublishDirectory)
 
 $ErrorActionPreference = 'Stop'
 $publishPath = (Resolve-Path -LiteralPath $PublishDirectory).Path
+& (Join-Path $PSScriptRoot 'test-defaults.ps1') -Path $publishPath
 $executable = Join-Path $publishPath $(if ($IsWindows) { 'bunyi.exe' } else { 'bunyi' })
 if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) { throw "CLI executable is missing: $executable" }
 if (Get-ChildItem -LiteralPath $publishPath -Filter 'Avalonia*.dll' -Recurse) { throw 'The CLI contains Avalonia dependencies.' }

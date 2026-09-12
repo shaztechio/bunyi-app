@@ -209,6 +209,27 @@ jobs:
           -p:BunyiCuda=${{ matrix.cuda }}
           -o publish/${{ matrix.rid }}
 
+      - name: Verify desktop defaults
+        shell: pwsh
+        working-directory: apps/dotnet
+        run: ./packaging/test-defaults.ps1 -Path publish/${{ matrix.rid }}
+
+      - name: Prepare unsigned MSIX
+        if: matrix.rid == 'win-x64' && matrix.cuda == false
+        shell: pwsh
+        working-directory: apps/dotnet
+        run: ./packaging/windows/build-msix.ps1 -PublishDirectory publish/win-x64
+
+      - name: Upload MSIX for submission testing
+        if: matrix.rid == 'win-x64' && matrix.cuda == false
+        uses: actions/upload-artifact@v7
+        with:
+          name: Bunyi-MSIX-${{ needs.version.outputs.version }}
+          path: |
+            apps/dotnet/artifacts/msix/*.msix
+            apps/dotnet/artifacts/msix/*.sha256
+          if-no-files-found: error
+
       - name: Publish CLI
         working-directory: apps/dotnet
         run: >
@@ -233,6 +254,7 @@ jobs:
           $name = "Bunyi-${{ needs.version.outputs.version }}-${{ matrix.rid }}${{ matrix.suffix }}"
           New-Item -ItemType Directory -Force dist | Out-Null
           Compress-Archive -Path "publish/${{ matrix.rid }}/*" -DestinationPath "dist/$name.zip"
+          ./packaging/test-defaults.ps1 -Path "dist/$name.zip"
           (Get-FileHash "dist/$name.zip" -Algorithm SHA256).Hash.ToLower() + "  $name.zip" |
             Out-File -Encoding ascii "dist/$name.zip.sha256"
           $cliName = "Bunyi-CLI-${{ needs.version.outputs.version }}-${{ matrix.rid }}${{ matrix.suffix }}"
@@ -253,6 +275,9 @@ jobs:
           # why this one is a tarball.
           chmod +x "publish/${{ matrix.rid }}/Bunyi.App"
           tar -czf "dist/$name.tar.gz" -C "publish/${{ matrix.rid }}" .
+          mkdir -p publish/app-extracted
+          tar -xzf "dist/$name.tar.gz" -C publish/app-extracted
+          pwsh -File packaging/test-defaults.ps1 -Path publish/app-extracted
           sha256sum "dist/$name.tar.gz" | sed "s|dist/||" > "dist/$name.tar.gz.sha256"
           cli_name="Bunyi-CLI-${{ needs.version.outputs.version }}-${{ matrix.rid }}${{ matrix.suffix }}"
           chmod +x "publish/cli-${{ matrix.rid }}/bunyi"

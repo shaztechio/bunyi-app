@@ -81,6 +81,13 @@ limitations under the License.
       <ScrollViewer>
         <StackPanel Margin="12" Spacing="12">
           <TextBlock Text="WHERE EACH MODE GETS ITS MODEL" Classes="eyebrow" />
+          <CheckBox Name="UseBunyiMirrorCheckBox" IsChecked="{Binding UseBunyiMirror}"
+                    Content="Use Bunyi mirror for all three modes"
+                    AutomationProperties.HelpText="{Binding #MirrorChoiceHelp.Text}" />
+          <TextBlock Name="MirrorChoiceHelp" TextWrapping="Wrap" FontSize="12" Opacity="0.8"
+                     Text="Turn on to use the Bunyi mirror, or off to use Hugging Face. Changing this replaces all three sources below and saves your choice for future launches. Existing downloads are kept; switching sources may require a separate download." />
+          <TextBlock Text="{Binding SourceStatus}" TextWrapping="Wrap" FontSize="12"
+                     AutomationProperties.LiveSetting="Polite" />
           <Border Classes="callout">
             <TextBlock Name="SourceHelp" TextWrapping="Wrap" FontSize="12" Opacity="0.8"
                        Text="Either a Hugging Face repository name, or a web address starting with https:// if you host the files yourself. Bunyi decides which you meant from what you type. Clear a box to go back to the built-in default for that mode." />
@@ -134,7 +141,7 @@ limitations under the License.
           -->
           <Border Classes="callout">
             <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.8"
-                       Text="The Bunyi mirror serves the same Hugging Face models (Apache-2.0) from models.bunyi.app, with checksums the app verifies as it downloads. Useful where Hugging Face is slow or unreachable. Hugging Face stays the default — it is where the models come from." />
+                       Text="The Bunyi mirror serves the same Hugging Face models (Apache-2.0) from models.bunyi.app, with checksums the app verifies as it downloads. Useful where Hugging Face is slow or unreachable. The defaults shown above come with this build; your saved choices take priority." />
           </Border>
 
           <ItemsControl ItemsSource="{Binding Configs}" AutomationProperties.Name="Saved configurations">

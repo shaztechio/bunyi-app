@@ -345,6 +345,34 @@ Stored in a `Voices` subfolder of app data, alongside copied audio clips.
   or near the root; merges per `<org>/<repo>` (or `self-hosted/<slug>`),
   **skipping repos already present**.
 
+## Packaged model-download defaults (.NET)
+
+`bunyi.defaults.json` is an immutable distribution file beside the executable,
+resolved from `AppContext.BaseDirectory`. It is separate from per-user settings
+and backups, contains no secrets, and is read once per app/server startup:
+
+```json
+{
+  "schemaVersion": 1,
+  "modelDownloadSource": "huggingFace"
+}
+```
+
+`modelDownloadSource` accepts exactly `huggingFace` or `mirror`; `schemaVersion`
+must be the integer 1. Missing/unreadable/invalid files use Hugging Face and log
+the fallback. Unknown fields may be ignored. Runtime fallback keeps older builds
+usable; distribution validation rejects missing or invalid files. MSIX packaging
+must stage and verify `mirror` before packing, without changing the caller's
+portable publish folder. Portable desktop/CLI archives explicitly carry
+`huggingFace`.
+
+User overrides continue using the existing `modelRepo` dictionary, with no new
+user-setting key. Turning the mirror off writes explicit upstream repositories
+for all three modes; absence means packaged default, never an explicit off.
+Explicit sources survive distribution changes. An unset source follows the
+current package on the next launch. Reset clears the three overrides. Neither
+changing source nor switching distributions deletes or migrates model caches.
+
 ## Output WAV
 
 - **Embedded metadata**: a RIFF `LIST`/`INFO` chunk appended to the file,

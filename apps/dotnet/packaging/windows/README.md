@@ -5,6 +5,13 @@ is submission preparation for [#215](https://github.com/shaztechio/bunyi-app/iss
 not a claim of Store certification or installed-package compatibility.
 The portable Windows and Linux release artifacts are unchanged.
 
+The MSIX stages `bunyi.defaults.json` with `modelDownloadSource: "mirror"`.
+This changes only the default for unset sources. Saved user choices still win;
+turning the mirror off in Settings saves Hugging Face explicitly across restarts.
+Portable desktop/CLI builds carry `huggingFace`. Packaging verifies the staged
+file and the file inside the finished MSIX, and leaves a supplied portable
+publish folder unchanged. See [the schema](../../../../spec/DATA-FORMATS.md#packaged-model-download-defaults-net).
+
 ## Identity
 
 The manifest uses the product identity supplied from Partner Center on

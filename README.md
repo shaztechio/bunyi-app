@@ -36,11 +36,11 @@ code signing policy below for first-launch instructions.
 
 **For agents and terminals:** the [Windows/Linux CLI guide](apps/dotnet/CLI.md)
 covers one-shot generation, an optional resident server, and observable model
-downloads. The CLI is not yet released; its standalone archives are built by
-the next Windows/Linux release. Native macOS CLI work is tracked in
+downloads. The CLI is prepared for Windows/Linux **1.3.0**, not yet published;
+that release builds standalone archives. Native macOS CLI work is tracked in
 [#217](https://github.com/shaztechio/bunyi-app/issues/217).
 
-**Long text (on `main`, not yet released):** Windows/Linux estimate speech
+**Long text (prepared for 1.3.0, not yet published):** Windows/Linux estimate speech
 duration and automatically generate requests above 20 estimated seconds in
 shorter sections, in all three modes. Overlong attempts retry as smaller
 sections. The desktop app saves one complete WAV, then plays it; Stop cancels
@@ -49,6 +49,12 @@ clone model to carry the designed voice through the remaining sections. Native
 macOS parity is tracked in
 [#224](https://github.com/shaztechio/bunyi-app/issues/224); see the
 [long-text plan](spec/LONG-TEXT-PLAN.md) for validation and remaining work.
+
+**Model download defaults:** portable Windows/Linux desktop and CLI builds use
+Hugging Face. The Windows MSIX prepared for 1.3.0 uses the Bunyi mirror. Saved
+sources take priority: turning the mirror off in Settings → Models keeps
+Hugging Face selected across restarts and upgrades. Reset restores the defaults
+packaged with the build. See the [packaged-defaults contract](spec/PACKAGED-DEFAULTS.md).
 
 ## How it's structured
 
