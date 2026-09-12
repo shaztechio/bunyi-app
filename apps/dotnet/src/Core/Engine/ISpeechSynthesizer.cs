@@ -20,6 +20,7 @@ namespace Bunyi.Core.Engine;
 /// <param name="Frames">Codec frames generated — 12 per second of audio.</param>
 public sealed record SynthesisResult(short[] Samples, int SampleRate, int Frames)
 {
+    internal float[]? RawSamples { get; init; }
     public TimeSpan Duration => SampleRate > 0
         ? TimeSpan.FromSeconds((double)Samples.Length / SampleRate)
         : TimeSpan.Zero;

@@ -126,6 +126,19 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string? _lastOutputPath;
     [ObservableProperty] private bool _isPlaying;
 
+    public bool HasSpeechEstimate => !string.IsNullOrWhiteSpace(Script);
+    public string SpeechEstimateText
+    {
+        get
+        {
+            var estimate = SpeechDurationEstimate.ForText(Script, Language);
+            return $"Estimated speech: {Math.Ceiling(estimate.LowerSeconds):0}–{Math.Ceiling(estimate.UpperSeconds):0} seconds"
+                + (estimate.NeedsSections ? " · generated in shorter sections" : "")
+                + (estimate.NeedsSections && Mode == TtsMode.VoiceDesign
+                    ? " · also uses the clone model to keep the designed voice consistent" : "");
+        }
+    }
+
     /// <summary>How far through the clip playback is, from 0 to 1.</summary>
     [ObservableProperty] private double _playProgress;
 
@@ -808,6 +821,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         Missing = null;
 
+        // Freeze the submitted options before transcription or model downloads.
+        var request = CurrentRequest();
         using var cancellation = new CancellationTokenSource();
         _generateCancellation = cancellation;
         IsBusy = true;
@@ -817,12 +832,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         var engineStarted = false;
         try
         {
-            if (Mode == TtsMode.VoiceClone && string.IsNullOrWhiteSpace(ReferenceTranscript))
+            if (request.Mode == TtsMode.VoiceClone && string.IsNullOrWhiteSpace(request.ReferenceTranscript))
+            {
                 await TranscribeReferenceAsync(cancellation.Token);
+                request = request with { ReferenceTranscript = ReferenceTranscript };
+            }
 
             cancellation.Token.ThrowIfCancellationRequested();
             engineStarted = true;
-            await _engine.GenerateAsync(CurrentRequest(), null, cancellation.Token);
+            await _engine.GenerateAsync(request, null, cancellation.Token);
             var path = _engine.LastOutputPath;
             LastOutputPath = path;
 
@@ -1116,6 +1134,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(IsIndeterminate));
         OnPropertyChanged(nameof(ShowSpinner));
         OnPropertyChanged(nameof(ShowProgressBar));
+        OnPropertyChanged(nameof(HasSpeechEstimate));
+        OnPropertyChanged(nameof(SpeechEstimateText));
     }
 
     // Everything CurrentRequest reads has to refresh the button, or Generate

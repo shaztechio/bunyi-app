@@ -374,3 +374,19 @@ Stored in a `Voices` subfolder of app data, alongside copied audio clips.
   container).
 - Filename: `<Mode>-<ISO8601-basic timestamp>.wav`
   (e.g. `Voice-clone-20260725T2312.wav`).
+
+### Long-text generation
+
+Long-text generation saves one WAV with the full original text. An optional
+`continuationModelRepo` string identifies the clone model used after a designed
+opening; absent means no secondary model. Strip credentials/query/fragment as
+for `modelRepo`. Older readers may ignore this field. A designed opening used as
+a temporary clone reference lives only for the generation, is never a saved voice
+or separate History entry, and is deleted on success, Stop or failure.
+
+Partial output is private working data. Write an app-owned temporary file, add
+metadata and atomically rename it only after every section has succeeded.
+Cancellation or failure before that commit discards the partial recording.
+Preserve raw samples for one uniform clipping-protection gain across the whole
+recording. Section boundaries contain only the specified short pauses; generation
+waits are not part of the audio. Playback begins after the completed WAV is saved.

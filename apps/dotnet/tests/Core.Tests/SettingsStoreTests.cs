@@ -39,6 +39,18 @@ public class SettingsStoreTests : IDisposable
     }
 
     [Fact]
+    public void Obsolete_playback_preference_is_ignored_and_not_saved_again()
+    {
+        Directory.CreateDirectory(_folder);
+        File.WriteAllText(SettingsPath, "{\"appearance\":\"dark\",\"streamingEnabled\":true}");
+        var (store, _) = NewStore();
+        var settings = store.Load();
+        Assert.Equal(Appearance.Dark, settings.Appearance);
+        store.Save(settings);
+        Assert.DoesNotContain("streamingEnabled", File.ReadAllText(SettingsPath));
+    }
+
+    [Fact]
     public void A_first_run_gets_defaults_and_says_nothing()
     {
         var (store, log) = NewStore();

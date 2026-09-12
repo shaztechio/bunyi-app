@@ -1,0 +1,17 @@
+{
+  "mode": "clone",
+  "script": "The morning light filled the room as we prepared to leave for the station. Outside, a gentle breeze moved through the trees and carried the sound of birds across the garden. We checked our bags once more, made sure the windows were closed, and left a note on the kitchen table. There was still plenty of time before the train arrived, so we decided to walk along the river. At the bridge, we stopped for a moment to watch the sunlight dancing on the water before continuing our journey.",
+  "audioSeconds": 28.76,
+  "synthesisSeconds": 68.0997558,
+  "metadata": {
+    "mode": "Voice clone",
+    "text": "The morning light filled the room as we prepared to leave for the station. Outside, a gentle breeze moved through the trees and carried the sound of birds across the garden. We checked our bags once more, made sure the windows were closed, and left a note on the kitchen table. There was still plenty of time before the train arrived, so we decided to walk along the river. At the bridge, we stopped for a moment to watch the sunlight dancing on the water before continuing our journey.",
+    "language": "english",
+    "referenceTranscript": "Hello! We'll begin in just a few minutes.",
+    "modelRepo": "https://models.bunyi.app/onnx/voiceclone",
+    "appVersion": "0.1.0",
+    "platform": "Windows",
+    "created": "2026-09-12T14:33:43.0580887+08:00"
+  },
+  "peakWorkingSetBytes": 3331084288
+}

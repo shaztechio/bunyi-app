@@ -42,7 +42,11 @@ Both bars also show their total size in MB or GB. **Model download elapsed** sho
 
 If no data arrives, the message changes to **Waiting for more data**. After 30 seconds it says the download may be stalled. Incoming data clears that warning. **Checking model files**, **Loading model**, **Creating your speech**, and **Preparing your audio file** identify the work that follows. Only **Your audio is ready** means speech has finished and been saved.
 
-When generation finishes the audio plays automatically. **Play** repeats it, and the folder button opens the folder where the file was saved.
+The audio plays automatically when the complete recording is saved. **Play** repeats it, and the folder button opens the folder where the file was saved.
+
+**Long text.** Bunyi generates longer scripts in shorter sections and joins them into one recording. If a section fails to finish, Bunyi retries it as smaller pieces, with a limited number of attempts. Playback starts after every section has finished and the complete recording is saved. Preset voice keeps its speaker, and Voice clone keeps its reference. Voice design creates a short opening, then uses that opening with the clone model to keep the voice consistent for the rest; the clone model downloads if needed. Your opening appears only once in the recording.
+
+**Stop** cancels generation. A cancelled or failed take is not saved.
 
 If the download is a lot to ask for before hearing anything, the **Storage** tab in Settings gives you a command per mode to fetch a model in advance instead.
 
@@ -150,6 +154,7 @@ Both show progress and can be stopped part way.
 ### Appearance
 
 Light, dark, or follow the system. It applies to every Bunyi window straight away.
+
 
 **Free memory when switching modes** decides *when* Bunyi lets go of a model, not whether it does. Each mode uses its own model, and a model can be several gigabytes.
 

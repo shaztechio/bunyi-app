@@ -136,18 +136,21 @@ public sealed class CloneSpeechSynthesizer(
             new CloneRequest(request.Text, request.ReferenceTranscript, request.Language),
             reference,
             progress: frames,
+            maxFrames: request.SectionFrameLimit,
             ct: ct);
 
         return Task.FromResult(new SynthesisResult(
-            DesignSpeechSynthesizer.ToPcm16(result.Samples, _log), 24_000, result.Frames));
+            request.KeepRawSamples ? [] : DesignSpeechSynthesizer.ToPcm16(result.Samples, _log), 24_000, result.Frames)
+            { RawSamples = request.KeepRawSamples ? result.Samples : null });
     }
 
     /// <inheritdoc />
     /// <remarks>
-    /// Nothing to do, as with design mode: no cache is held between runs.
+    /// Release reference features cached across sections of this generation.
     /// </remarks>
     public void ReleaseWorkingMemory()
     {
+        _pipeline?.ClearReferenceCache();
     }
 
     private void Release()

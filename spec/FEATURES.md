@@ -100,9 +100,36 @@ A segmented picker selects one of three modes. macOS source:
 ## 2. Generation output
 
 - Sample rate **24 kHz**, mono, WAV.
-- **Generation ends on the model's end-of-speech token or the user's Stop.**
+- **Long text is generated in recoverable sections.** When the frozen upper
+  speech estimate exceeds 20 seconds, split at sentence boundaries into sections
+  of at most 20 estimated seconds (typically 15–20). Split oversized sentences
+  at clauses, then whitespace or Unicode text-element boundaries; preserve all
+  text in order. This applies in all three modes. Playback starts only after the complete WAV is saved.
+  Keep models loaded between sections and reset generation state each time.
+  A section gets at most max(20, twice its upper estimate + 5) seconds of codec
+  frames to reach EOS. A limit is failure, never a successful truncated recording.
+  Discard the failed section and bisect it, with at most two subdivision levels
+  (seven attempts per original section). Exhaustion fails visibly; Stop remains
+  available throughout. Only accepted sections enter the final recording. Progress separates
+  completed audio from the current attempt and explicitly describes retries.
+  Join successful sections in order, with a short 120 ms pause and 5 ms edge fades;
+  apply one uniform clipping-protection gain to the combined recording. Save one
+  WAV and one History entry with the original full text, only after all sections
+  finish. This bounds per-section inference state, not total recording length.
+  Preset retains its speaker/style; Clone reuses its original reference features.
+  Voice Design creates a short opening (at most 8 estimated seconds, capped at
+  10 actual seconds) then uses that complete opening and its exact text as the
+  reference for subsequent sections through the configured clone model. Never
+  truncate the reference transcript or repeatedly redesign the voice. Explain
+  this additional model dependency in the UI. Unload design before loading clone.
+  The opening is part of the output exactly once; its temporary reference is
+  removed on every exit. Record the continuation model in optional metadata.
+  Windows/.NET demonstration implements this; macOS parity and listening/long
+  passage acceptance remain tracked in LONG-TEXT-PLAN.md.
+- **Short generation ends on the model's end-of-speech token or the user's Stop.**
   Do not impose a text-length-derived frame budget or apply the export's
-  `max_new_tokens` default as an automatic app cutoff. Frame and elapsed counters
+  `max_new_tokens` default as an automatic app cutoff for short requests. The
+  bounded retry policy above is the explicit exception for long text. Frame and elapsed counters
   remain visible while waiting for the model to finish; Stop remains available.
   Removing a cutoff is not a fix for a model that rambles or never emits EOS.
   ONNX logs periodic EOS sampling probability and the actual termination reason

@@ -80,7 +80,12 @@ public sealed record GenerateRequest(
     string? Instruct = null,
 
     string? ReferenceAudioPath = null,
-    string? ReferenceTranscript = null);
+    string? ReferenceTranscript = null)
+{
+    // Internal section orchestration, not user settings or CLI parameters.
+    internal int? SectionFrameLimit { get; init; }
+    internal bool KeepRawSamples { get; init; }
+}
 
 /// <summary>The audio a run produced.</summary>
 public sealed record GenerateResult(

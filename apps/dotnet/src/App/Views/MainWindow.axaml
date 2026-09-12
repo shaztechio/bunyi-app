@@ -218,7 +218,7 @@ limitations under the License.
               As a DockPanel the examples had to be declared before the box they
               are drawn under, and Tab reached them first.
             -->
-            <Grid RowDefinitions="Auto,*,Auto,Auto">
+            <Grid RowDefinitions="Auto,*,Auto,Auto,Auto">
               <TextBlock Grid.Row="0" Name="ScriptLabel" Text="SCRIPT" Classes="eyebrow" />
 
 
@@ -246,7 +246,10 @@ limitations under the License.
                 belongs to a window that has not been used yet, not beside audio the
                 user just made.
               -->
-              <StackPanel Grid.Row="3" Name="Examples" IsVisible="{Binding ShowExamples}"
+              <TextBlock Grid.Row="3" Name="SpeechEstimate" Text="{Binding SpeechEstimateText}"
+                         IsVisible="{Binding HasSpeechEstimate}" FontSize="11" Opacity="0.7"
+                         TextWrapping="Wrap" Margin="0,6,0,0" />
+              <StackPanel Grid.Row="4" Name="Examples" IsVisible="{Binding ShowExamples}"
                           Margin="0,8,0,0" Spacing="4">
                 <TextBlock Text="{Binding ExamplePrompt}" FontSize="11" Opacity="0.7" />
                 <ItemsControl ItemsSource="{Binding Examples}"
