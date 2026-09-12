@@ -1,6 +1,23 @@
 # Windows streaming demonstration — 12 September 2026
 
-## Adaptive-buffer update
+## Corrected streaming startup
+
+First playback now starts automatically once **10 seconds of playable PCM**
+are ready, regardless of estimated recording length. Later refills adapt between
+10 and 20 seconds. The UI labels the playback target separately and offers
+**Play now** during refills once 10 seconds are available, with a pause warning.
+The earlier whole-recording deficit policy below is historical and superseded.
+
+The corrected real CPU clone probe started device consumption at **40.78 s**,
+while synthesis finished at **73.47 s**. It generated 19.44 seconds of audio and
+drained at 79.19 s with no device error. It did pause to refill, as expected for
+generation slower than playback. See `results/clone-early-metrics.json`.
+All 398 App tests passed, with the subsequently extended 12 streaming tests and
+nine Core buffer tests also passing. Tests pin first startup to 10 seconds even
+with a 97-second estimate, cap refills at 20, and verify Play now affects one
+refill only and never bypasses the minimum.
+
+## Earlier adaptive-buffer update (superseded)
 
 The latest demo uses generated speech progress and conservative measured PCM
 production rates to choose a buffer target, with a 10-second minimum. Slow

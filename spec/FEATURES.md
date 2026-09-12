@@ -293,7 +293,8 @@ completed before this feature is marked implemented.
   equivalent implementation, especially for Voice Design. Codec progress
   events alone do not count as audio streaming.
 - **Play as audio becomes available.** Queue chunks on one audio device and
-  start or resume only after an adaptive amount of playable audio is queued,
+  start automatically after 10 seconds of playable audio is queued. After a
+  pause, resume after an adaptive 10–20 seconds is queued,
   or when generation completes with less audio remaining. Show when generation and playback are
   active and when playback is buffering. If generation is slower than
   playback, pause for more audio and resume in order. Do not repeat or skip
@@ -309,19 +310,22 @@ completed before this feature is marked implemented.
   or total generation progress. Update the panel promptly on pause/resume.
   Keep status changes available to assistive technology without announcing
   every buffer tick. A normal pause must not look like completion or an error.
-- **Adapt buffering to generation speed.** Keep a minimum 10-second head start.
-  Use generated speech seconds, elapsed generation/decoding time, and the frozen
-  upper duration estimate to increase the target when generation is slower than
-  playback. Use conservative recent and overall rates plus a chunk-arrival
-  allowance; extend the forecast when generation outlasts the text estimate.
-  Recalculate before starting or resuming, including while no chunks arrive.
-  Normal completion releases any shorter remainder. This predicts the buffer
-  needed to finish without interruption; it cannot guarantee against an unknown
-  future stall or output length. For slow runs it may wait until most or all
-  speech is ready. Show that the target adjusts to generation speed. Keep audio
+- **Adapt refills, not the first playback.** First playback always uses 10
+  seconds; the estimated total recording duration must never become a playback
+  target. After an underrun, use generated speech progress and conservative
+  overall/recent PCM delivery rates to choose a refill target between 10 and 20
+  seconds. Recalculate during a wait, including when chunks stop arriving.
+  Normal completion releases any shorter remainder. Slower-than-playback
+  generation can still pause; do not try to eliminate every pause by waiting
+  for most or all of the recording. Show when the refill target adjusts. Keep audio
   memory bounded: longer previews may spool to a private temporary PCM file,
   with disk reads/writes kept off the audio callback and UI thread. Remove that
   cache on completion, cancellation or disposal; never expose it as a recording.
+- **Keep the buffer goal distinct from recording length.** Label it as
+  **N seconds ready · playback target M seconds**. During a wait,
+  once at least 10 seconds are ready, offer **Play now** with **May pause if
+  generation cannot keep up.** This bypasses only the current adaptive wait;
+  any later refill uses adaptive buffering again. Disable it on failure or Stop.
 - **Live audio is a preview of an unfinished take.** Stop it and clear queued
   audio if generation fails, reaches a known safety limit, or is cancelled.
   Earlier preview audio may already have been heard; do not save or offer

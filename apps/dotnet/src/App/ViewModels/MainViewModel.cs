@@ -140,7 +140,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PreviewBufferText))]
     private double _previewBufferTarget = StreamingAudioPlayer.MinimumBufferSeconds;
-    public string PreviewBufferText => $"{Math.Floor(PreviewBufferSeconds):0} of {PreviewBufferTarget} seconds of audio ready";
+    public string PreviewBufferText => $"{Math.Floor(PreviewBufferSeconds):0} seconds ready · playback target {PreviewBufferTarget:0} seconds";
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(StartPreviewNowCommand))]
+    private bool _canStartPreviewNow;
 
     public bool HasSpeechEstimate => !string.IsNullOrWhiteSpace(Script);
     public string SpeechEstimateText
@@ -938,6 +941,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             PreviewStatus = string.Empty;
             PreviewDetail = string.Empty;
             ShowPreviewBuffer = false;
+            CanStartPreviewNow = false;
             _generateCancellation = null;
             lock (_downloadGate) { _pendingDownload = null; _downloadPumpActive = false; }
             _downloadTicker?.Stop();
@@ -1054,6 +1058,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         PreviewBufferTarget = preview.BufferTargetSeconds;
         PreviewBufferSeconds = Math.Max(0, preview.BufferedSeconds);
         ShowPreviewBuffer = false;
+        CanStartPreviewNow = preview.IsBuffering && preview.BufferedSeconds >= StreamingAudioPlayer.MinimumBufferSeconds
+            && preview.Failure is null && LastOutputPath is null
+            && _generateCancellation?.IsCancellationRequested != true && _engine.Status.State != EngineState.Stopping;
         if (_generateCancellation?.IsCancellationRequested == true || _engine.Status.State == EngineState.Stopping)
         {
             PreviewStatus = "Stopping playback";
@@ -1088,7 +1095,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             PreviewStatus = preview.HasStarted ? "Waiting for more audio" : "Preparing playback";
             PreviewDetail = preview.HasStarted
                 ? "Bunyi is still generating. Playback will resume automatically. The target adjusts to generation speed."
-                : "Building a head start for smoother playback. The target adjusts to generation speed.";
+                : "Playback starts automatically after 10 seconds are ready, while generation continues.";
             ShowPreviewBuffer = true;
         }
         else
@@ -1096,6 +1103,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             PreviewStatus = "Preparing speech";
             PreviewDetail = "Playback will start automatically when enough audio is ready.";
         }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanStartPreviewNow))]
+    private void StartPreviewNow()
+    {
+        _previewPlayer?.StartPlaybackNow();
+        TickPreview();
     }
 
     [RelayCommand]

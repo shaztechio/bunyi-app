@@ -31,6 +31,7 @@ public interface IStreamingAudioPlayer : IDisposable
     double BufferTargetSeconds { get; }
     void ConfigureBuffer(double estimatedSpeechSeconds);
     void ReportGeneratedSeconds(double seconds);
+    void StartPlaybackNow();
     string? Failure { get; }
     void Add(AudioPreviewChunk chunk, CancellationToken cancellationToken);
     Task CompleteAsync(CancellationToken cancellationToken);
@@ -62,6 +63,7 @@ public sealed class StreamingAudioPlayer(ILogSink log) : IStreamingAudioPlayer
     private int _disposed;
     private int _complete;
     private int _buffering = 1;
+    private int _startNow;
     private MiniAudioEngine? _engine;
     private AudioPlaybackDevice? _device;
     private PreviewSource? _source;
@@ -83,7 +85,7 @@ public sealed class StreamingAudioPlayer(ILogSink log) : IStreamingAudioPlayer
     {
         get
         {
-            var target = _bufferPlan.TargetSeconds(ElapsedSeconds, Volatile.Read(ref _read) / (double)SampleRate);
+            var target = _bufferPlan.TargetSeconds(ElapsedSeconds, HasStarted);
             Volatile.Write(ref _prebufferSamples, (long)Math.Min(long.MaxValue / 2d, Math.Ceiling(target * SampleRate)));
             return target;
         }
@@ -97,6 +99,12 @@ public sealed class StreamingAudioPlayer(ILogSink log) : IStreamingAudioPlayer
     {
         _bufferPlan.ObserveGenerated(seconds);
         _ = BufferTargetSeconds;
+    }
+    public void StartPlaybackNow()
+    {
+        if (IsBuffering && BufferedSeconds >= MinimumBufferSeconds
+            && Failure is null && Volatile.Read(ref _stopped) == 0)
+            Interlocked.Exchange(ref _startNow, 1);
     }
     public string? Failure => Volatile.Read(ref _failure);
     /// <summary>Stopwatch timestamp of the first device callback consuming PCM; zero until then.</summary>
@@ -229,10 +237,14 @@ public sealed class StreamingAudioPlayer(ILogSink log) : IStreamingAudioPlayer
         var read = Volatile.Read(ref _read);
         var available = Volatile.Read(ref _written) - read;
         var queued = ProducedSamples - read;
-        if (IsBuffering && queued < Volatile.Read(ref _prebufferSamples) && Volatile.Read(ref _complete) == 0) return;
+        var startNow = Volatile.Read(ref _startNow) != 0 && queued >= SampleRate * MinimumBufferSeconds;
+        if (IsBuffering && !startNow && queued < Volatile.Read(ref _prebufferSamples) && Volatile.Read(ref _complete) == 0) return;
         var count = (int)Math.Min(available, buffer.Length / channels);
         if (count > 0)
+        {
+            Interlocked.Exchange(ref _startNow, 0);
             Interlocked.CompareExchange(ref _firstPlaybackTimestamp, System.Diagnostics.Stopwatch.GetTimestamp(), 0);
+        }
         for (var frame = 0; frame < count; frame++)
         {
             var value = _ring[(int)((read + frame) % _ring.Length)];

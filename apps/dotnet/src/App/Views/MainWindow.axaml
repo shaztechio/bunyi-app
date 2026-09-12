@@ -498,6 +498,11 @@ limitations under the License.
                          AutomationProperties.Name="Seconds of audio ready for playback" />
             <TextBlock Name="PreviewBufferLabel" Text="{Binding PreviewBufferText}" FontSize="12" />
           </StackPanel>
+          <StackPanel IsVisible="{Binding CanStartPreviewNow}" Orientation="Horizontal" Spacing="10">
+            <Button Name="StartPreviewNowButton" Content="Play now" Command="{Binding StartPreviewNowCommand}" />
+            <TextBlock Text="May pause if generation cannot keep up." VerticalAlignment="Center"
+                       FontSize="12" TextWrapping="Wrap" />
+          </StackPanel>
         </StackPanel>
       </Border>
       <TextBlock Text="{Binding ModelNotice}" IsVisible="{Binding NeedsModel}" TextWrapping="Wrap" FontSize="12" />

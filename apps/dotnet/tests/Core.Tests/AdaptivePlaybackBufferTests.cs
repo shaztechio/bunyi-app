@@ -23,74 +23,43 @@ public sealed class AdaptivePlaybackBufferTests
     [InlineData(.2)]
     [InlineData(.5)]
     [InlineData(1.5)]
-    public void Steady_generation_has_no_playback_underruns(double rate)
+    public void First_playback_starts_at_ten_seconds_even_for_a_long_slow_recording(double rate)
     {
         var plan = new AdaptivePlaybackBuffer();
-        plan.Configure(110);
-        double produced = 0, consumed = 0;
-        var playing = false;
-        double started = 0;
-        for (var tick = 1; tick <= 20000 && consumed < 100; tick++)
+        plan.Configure(97);
+        for (var produced = 2; produced <= 58; produced += 2)
         {
-            var elapsed = tick * .1;
-            var generated = Math.Min(100, elapsed * rate);
-            plan.ObserveGenerated(generated);
-            var delivered = Math.Floor(generated / 2) * 2;
-            if (delivered > produced)
-            {
-                produced = delivered;
-                plan.ObserveProduced(produced, elapsed);
-            }
-            var complete = produced >= 100;
-            if (!playing && (complete || produced - consumed >= plan.TargetSeconds(elapsed)))
-            {
-                playing = true;
-                started = produced;
-            }
-            if (!playing) continue;
-            if (!complete) Assert.True(produced - consumed >= .1 - 1e-8, $"Underrun at {elapsed}s, rate {rate}");
-            consumed += Math.Min(.1, produced - consumed);
+            plan.ObserveGenerated(produced + .4);
+            plan.ObserveProduced(produced, produced / rate);
+            Assert.Equal(10, plan.TargetSeconds(produced / rate, hasStarted: false));
         }
-        Assert.True(consumed >= 99.99);
-        Assert.InRange(started, 10, 100); // Very slow runs may deliberately wait for completion.
-        if (rate > 1) Assert.True(started < 20);
     }
 
     [Fact]
-    public void Slowdown_and_stalled_arrivals_increase_the_target()
+    public void Refills_adapt_to_slowdowns_but_never_exceed_twenty_seconds()
     {
         var plan = new AdaptivePlaybackBuffer();
-        plan.Configure(100);
+        plan.Configure(97);
         plan.ObserveProduced(2, 2);
         plan.ObserveProduced(4, 4);
-        var initial = plan.TargetSeconds(4);
-        plan.ObserveProduced(6, 8);
-        var slower = plan.TargetSeconds(8);
-        Assert.True(slower > initial);
-        Assert.True(plan.TargetSeconds(10) > slower);
+        Assert.Equal(10, plan.TargetSeconds(4, hasStarted: true));
+        plan.ObserveProduced(6, 14);
+        Assert.InRange(plan.TargetSeconds(14, hasStarted: true), 11, 20);
+        Assert.Equal(20, plan.TargetSeconds(100, hasStarted: true));
+        Assert.Equal(10, plan.TargetSeconds(100, hasStarted: false));
     }
 
     [Fact]
-    public void Underestimated_duration_keeps_a_future_horizon()
+    public void Recording_length_never_becomes_the_playback_target()
     {
         var plan = new AdaptivePlaybackBuffer();
-        plan.Configure(25);
-        plan.ObserveProduced(20, 50);
-        plan.ObserveProduced(22, 60);
-        plan.ObserveGenerated(40);
-        Assert.True(plan.TargetSeconds(60) > 40);
+        plan.Configure(97);
+        plan.ObserveProduced(45, 200);
+        plan.ObserveProduced(47, 215);
+        plan.ObserveGenerated(100);
+        Assert.Equal(10, plan.TargetSeconds(215, hasStarted: false));
+        Assert.Equal(20, plan.TargetSeconds(215, hasStarted: true));
     }
-
-    [Fact]
-    public void A_larger_head_start_can_use_more_than_the_device_ring()
-    {
-        var plan = new AdaptivePlaybackBuffer();
-        plan.Configure(100);
-        plan.ObserveProduced(2, 10);
-        plan.ObserveProduced(4, 20);
-        Assert.True(plan.TargetSeconds(20) > 20);
-    }
-
     [Fact]
     public void Cache_preserves_pcm_beyond_ring_capacity_and_is_removed_on_disposal()
     {
@@ -126,6 +95,33 @@ public sealed class AdaptivePlaybackBufferTests
 
     private delegate void ReadPcm(Span<float> output, int channels);
     private delegate void CachePcm(ReadOnlySpan<float> input, float gain, CancellationToken ct);
+
+    [Fact]
+    public void Play_now_bypasses_only_one_refill_and_keeps_the_ten_second_minimum()
+    {
+        using var player = new StreamingAudioPlayer(new SilentLog());
+        const System.Reflection.BindingFlags hidden = System.Reflection.BindingFlags.Instance
+            | System.Reflection.BindingFlags.NonPublic;
+        var type = typeof(StreamingAudioPlayer);
+        type.GetField("_firstPlaybackTimestamp", hidden)!.SetValue(player, 1L);
+        type.GetField("_prebufferSamples", hidden)!.SetValue(player, 20L * 24000);
+        var write = type.GetMethod("Write", hidden)!.CreateDelegate<CachePcm>(player);
+        var read = type.GetMethod("Read", hidden)!.CreateDelegate<ReadPcm>(player);
+        write(Enumerable.Repeat(.1f, 24000 * 10 - 1).ToArray(), 1, CancellationToken.None);
+        var output = new float[512];
+        player.StartPlaybackNow();
+        read(output, 1);
+        Assert.All(output, sample => Assert.Equal(0, sample));
+        write([.1f], 1, CancellationToken.None);
+        player.StartPlaybackNow();
+        read(output, 1);
+        Assert.All(output, sample => Assert.Equal(.1f, sample));
+        read(new float[240000], 1);
+        Assert.True(player.IsBuffering);
+        write(Enumerable.Repeat(.1f, 24000 * 10).ToArray(), 1, CancellationToken.None);
+        read(output, 1);
+        Assert.All(output, sample => Assert.Equal(0, sample));
+    }
 
     [Fact]
     public async Task Adaptive_target_larger_than_ring_does_not_block_production_or_completion()

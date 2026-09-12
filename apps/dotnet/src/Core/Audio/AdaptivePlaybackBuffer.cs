@@ -14,13 +14,14 @@
 
 namespace Bunyi.Core.Audio;
 
-/// <summary>Predicts the head start needed to cover slower-than-playback production.</summary>
+/// <summary>Starts after ten seconds; adapts later refills without deferring the whole recording.</summary>
 internal sealed class AdaptivePlaybackBuffer
 {
     internal const double MinimumSeconds = 10;
+    internal const double MaximumRefillSeconds = 20;
     private readonly object _gate = new();
     private readonly Queue<(double Audio, double Time)> _recent = new();
-    private double _estimate;
+    private bool _configured;
     private double _generated;
     private double _produced;
     private (double Audio, double Time)? _first;
@@ -30,7 +31,7 @@ internal sealed class AdaptivePlaybackBuffer
     {
         if (!double.IsFinite(estimatedSeconds) || estimatedSeconds <= 0)
             throw new ArgumentOutOfRangeException(nameof(estimatedSeconds));
-        lock (_gate) _estimate = estimatedSeconds;
+        lock (_gate) _configured = true;
     }
 
     internal void ObserveGenerated(double seconds)
@@ -52,29 +53,24 @@ internal sealed class AdaptivePlaybackBuffer
         }
     }
 
-    internal double TargetSeconds(double elapsed, double playedSeconds = 0)
+    internal double TargetSeconds(double elapsed, bool hasStarted = false)
     {
         lock (_gate)
         {
-            if (_estimate <= 0) return MinimumSeconds;
+            if (!hasStarted || !_configured) return MinimumSeconds;
             // Do not infer a sustained rate from model loading or one chunk.
             if (_first is not { } first || _recent.Count < 2)
-                return Math.Max(MinimumSeconds, _estimate);
+                return MinimumSeconds;
             var recent = _recent.Peek();
             var overallRate = (_produced - first.Audio) / Math.Max(.001, elapsed - first.Time);
             var recentRate = (_produced - recent.Audio) / Math.Max(.001, elapsed - recent.Time);
-            var rate = Math.Max(.001, Math.Min(overallRate, recentRate) * .8);
-            // Generation may exceed the original text estimate. Retain a horizon
-            // until completion is explicit instead of predicting zero work left.
-            var horizon = Math.Max(MinimumSeconds, _estimate * .15);
-            var expectedEnd = Math.Max(_estimate, Math.Max(_generated, _produced) + horizon);
-            var remaining = Math.Max(0, expectedEnd - _produced);
-            var deficit = remaining * Math.Max(0, 1 / rate - 1);
-            var deliveryAllowance = _lastChunkSeconds / rate + 2;
-            // If the deficit exceeds the forecast remainder, wait for that
-            // whole remainder instead of displaying an impossible larger goal.
-            var remainingToPlay = Math.Max(0, expectedEnd - playedSeconds);
-            return Math.Ceiling(Math.Max(MinimumSeconds, Math.Min(deficit + deliveryAllowance, remainingToPlay)));
+            var rate = Math.Max(.001, Math.Min(overallRate, recentRate) * .9);
+            // Cover two expected deliveries, including codec progress still
+            // waiting for PCM decoding. A hard ceiling keeps this a stream;
+            // estimating the entire future deficit postponed almost all audio.
+            var nextDelivery = Math.Max(_lastChunkSeconds, _generated - _produced);
+            return Math.Ceiling(Math.Clamp(2 * nextDelivery / rate + 2,
+                MinimumSeconds, MaximumRefillSeconds));
         }
     }
 }
