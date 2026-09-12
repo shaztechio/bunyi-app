@@ -15,17 +15,26 @@
 import assert from "node:assert/strict";
 import { createHash, createHmac } from "node:crypto";
 import test from "node:test";
-import worker, { LINK_LIFETIME_SECONDS } from "../src/index.js";
+import { readFileSync } from "node:fs";
+import { AwsClient } from "aws4fetch";
+import worker from "../src/index.js";
+import { LINK_LIFETIME_SECONDS } from "../src/permission-contract.js";
 import published from "../src/published-files.json" with { type: "json" };
 
 const key = "onnx/customvoice/vocoder.onnx.data";
 const origin = "https://bunyi-downloads.bunyi.workers.dev/";
+function binding(access = 'allowed', transform = x => x) {
+  return { fetch: async (_url, init) => {
+    const { nonce, bucket } = JSON.parse(init.body);
+    return Response.json(transform({ version: 1, access, nonce, bucket, revision: 1, authorizedAt: Date.now(), maxAgeMs: 2000 }));
+  } };
+}
 function environment(overrides = {}) {
   return {
     R2_ACCOUNT_ID: "a22215ba113580f2c0f3fe4cb775335d", R2_BUCKET: "bunyi-models",
     R2_ACCESS_KEY_ID: "test-access-key", R2_SECRET_ACCESS_KEY: "test-secret",
     DOWNLOADS_ENABLED: "true",
-    KILLSWITCH_STATE: { get: async () => ({ killed: false }) },
+    DOWNLOAD_PERMISSION: binding(),
     ...overrides,
   };
 }
@@ -103,49 +112,75 @@ test("only the production and test host over HTTPS may issue links", async () =>
   }
   assert.equal((await worker.fetch(new Request("https://models.bunyi.app/" + key), environment())).status, 307);
 });
-for (const state of [null, {}, [], { killed: true }, { killed: "false" }]) {
-  test("fail closed for missing, killed or malformed state: " + JSON.stringify(state), async () => {
-    const response = await worker.fetch(request(), environment({ KILLSWITCH_STATE: { get: async () => state } }));
+for (const state of [null, {}, [], { access: 'allowed' }, { access: 'blocked' }]) {
+  test('malformed permission returns unavailable: ' + JSON.stringify(state), async () => {
+    const response = await worker.fetch(request(), environment({ DOWNLOAD_PERMISSION: binding('allowed', () => state) }));
     assert.equal(response.status, 503);
-    assert.equal(response.headers.get("x-bunyi-download-status"), "paused");
-    assert.equal(response.headers.get("retry-after"), "60");
-    assert.equal(response.headers.get("location"), null);
+    assert.equal(response.headers.get('x-bunyi-download-status'), null);
+    assert.equal(response.headers.get('location'), null);
   });
 }
-test("kill switch is read for every request and is never written", async () => {
-  let killed = false, reads = 0;
-  const env = environment({ KILLSWITCH_STATE: {
-    get: async (name, options) => {
-      reads++;
-      assert.equal(name, "killswitch:state");
-      assert.deepEqual(options, { type: "json", cacheTtl: 30 });
-      return { killed };
-    },
-  } });
-  assert.equal((await worker.fetch(request(), env)).status, 307);
-  killed = true;
-  assert.equal((await worker.fetch(request(), env)).status, 503);
-  assert.equal(reads, 2);
-});
-test("local emergency pause does not depend on KV", async () => {
-  for (const enabled of [undefined, "", "false"]) {
-    const response = await worker.fetch(request(), environment({
-      DOWNLOADS_ENABLED: enabled, KILLSWITCH_STATE: { get: () => assert.fail("must not read") },
-    }));
-    assert.equal(response.status, 503);
-    assert.equal(response.headers.get("x-bunyi-download-status"), "paused");
+for (const host of ['models.bunyi.app', 'bunyi-downloads.bunyi.workers.dev']) {
+  for (const method of ['GET', 'HEAD']) {
+    test(host + ' ' + method + ' checks fresh permission and returns paused on block', async () => {
+      let blocked = false, reads = 0;
+      const env = environment({ DOWNLOAD_PERMISSION: { fetch: async (...args) => {
+        reads++; return binding(blocked ? 'blocked' : 'allowed').fetch(...args);
+      } }, KILLSWITCH_STATE: { get: () => assert.fail('no KV fallback') } });
+      const req = () => new Request('https://' + host + '/' + key, { method });
+      assert.equal((await worker.fetch(req(), env)).status, 307);
+      blocked = true;
+      const denied = await worker.fetch(req(), env);
+      assert.equal(denied.status, 503);
+      assert.equal(denied.headers.get('x-bunyi-download-status'), 'paused');
+      assert.equal(denied.headers.get('retry-after'), '60');
+      assert.equal(denied.headers.get('location'), null);
+      assert.equal(reads, 2);
+    });
+  }
+}
+test('emergency pause precedes permission reads', async () => {
+  for (const enabled of [undefined, '', 'false']) {
+    const res = await worker.fetch(request(), environment({ DOWNLOADS_ENABLED: enabled,
+      DOWNLOAD_PERMISSION: { fetch: () => assert.fail('must not read') } }));
+    assert.equal(res.status, 503);
+    assert.equal(res.headers.get('x-bunyi-download-status'), 'paused');
   }
 });
-test("credentials, configuration and KV failures give generic errors", async () => {
-  for (const overrides of [{ R2_ACCESS_KEY_ID: "" }, { R2_SECRET_ACCESS_KEY: "" },
-    { R2_BUCKET: "another-bucket" }, { R2_ACCOUNT_ID: "invalid" }, { KILLSWITCH_STATE: undefined },
-    { KILLSWITCH_STATE: { get: async () => { throw new Error("private exception"); } } }]) {
-    const response = await worker.fetch(request(), environment(overrides));
-    assert.equal(response.status, 503);
-    assert.equal(response.headers.get("location"), null);
-    assert.ok(!(await response.text()).includes("private exception"));
-    assert.equal(response.headers.get("x-bunyi-download-status"), null);
+test('configuration and service failures are generic and never fall back to KV', async () => {
+  for (const overrides of [{ R2_ACCESS_KEY_ID: '' }, { R2_SECRET_ACCESS_KEY: '' },
+    { R2_BUCKET: 'wrong' }, { R2_ACCOUNT_ID: 'wrong' }, { DOWNLOAD_PERMISSION: undefined },
+    { DOWNLOAD_PERMISSION: { fetch: async () => { throw new Error('private exception'); } } },
+    { DOWNLOAD_PERMISSION: { fetch: async () => new Response('unavailable', { status: 503 }) } }]) {
+    const res = await worker.fetch(request(), environment({ ...overrides,
+      KILLSWITCH_STATE: { get: () => assert.fail('no fallback') } }));
+    assert.equal(res.status, 503);
+    assert.equal(res.headers.get('location'), null);
+    assert.equal(res.headers.get('x-bunyi-download-status'), null);
+    assert.ok(!(await res.text()).includes('private exception'));
   }
+});
+test('permission timeout is bounded even when the service ignores abort', async () => {
+  const res = await worker.fetch(request(), environment({ DOWNLOAD_PERMISSION: { fetch: () => new Promise(() => {}) } }));
+  assert.equal(res.status, 503);
+  assert.equal(res.headers.get('location'), null);
+  assert.equal(res.headers.get('x-bunyi-download-status'), null);
+});
+for (const change of [g => ({ ...g, nonce: 'reused' }), g => ({ ...g, bucket: 'other' }),
+  g => ({ ...g, authorizedAt: Date.now() - 3000 }), g => ({ ...g, authorizedAt: Date.now() + 10000 }),
+  g => ({ ...g, revision: 0 }), g => ({ ...g, access: true }), g => ({ ...g, maxAgeMs: 60000 })]) {
+  test('reject invalid or expired grant ' + change.toString(), async () => {
+    const res = await worker.fetch(request(), environment({ DOWNLOAD_PERMISSION: binding('allowed', change) }));
+    assert.equal(res.status, 503);
+    assert.equal(res.headers.get('location'), null);
+  });
+}
+test('S3 expiry is anchored to permission time', async () => {
+  const authorizedAt = Date.now() - 1000;
+  const res = await worker.fetch(request(), environment({ DOWNLOAD_PERMISSION: binding('allowed', g => ({ ...g, authorizedAt })) }));
+  assert.equal(res.status, 307);
+  assert.equal(new URL(res.headers.get('location')).searchParams.get('X-Amz-Date'),
+    new Date(authorizedAt).toISOString().replace(/[:-]|\.\d{3}/g, ''));
 });
 test("all published paths are canonical and cover the six model roots", async () => {
   const roots = new Set();
@@ -157,4 +192,36 @@ test("all published paths are canonical and cover the six model roots", async ()
     assert.equal((await worker.fetch(request(key), environment())).status, 307);
   }
   assert.equal(roots.size, 6);
+});
+
+test('a delay during signing cannot produce a redirect from an expired grant', async () => {
+  const realSign = AwsClient.prototype.sign, realNow = Date.now;
+  try {
+    AwsClient.prototype.sign = async function (...args) {
+      const signed = await realSign.apply(this, args);
+      const delayed = realNow() + 3000;
+      Date.now = () => delayed;
+      return signed;
+    };
+    const res = await worker.fetch(request(), environment());
+    assert.equal(res.status, 503);
+    assert.equal(res.headers.get('location'), null);
+  } finally { AwsClient.prototype.sign = realSign; Date.now = realNow; }
+});
+
+test('production and staging deploys preserve issuance pause and isolated bindings', () => {
+  const config = name => {
+    const text = readFileSync(new URL('../' + name, import.meta.url), 'utf8');
+    return JSON.parse(text.slice(text.indexOf('{')));
+  };
+  const prod = config('wrangler.jsonc'), stage = config('wrangler.staging.jsonc');
+  for (const c of [prod, stage]) {
+    assert.equal(c.vars.DOWNLOADS_ENABLED, 'false');
+    assert.equal(c.services[0].entrypoint, 'PermissionService');
+    assert.equal(c.kv_namespaces, undefined);
+  }
+  assert.equal(stage.vars.R2_BUCKET, 'bunyi-models-staging');
+  assert.equal(stage.services[0].service, 'r2-killswitch-staging');
+  assert.deepEqual(stage.routes, []);
+  assert.equal(prod.services[0].service, 'r2-killswitch');
 });

@@ -332,31 +332,21 @@ does not generalise. **Any cutoff is one you build.**
 
 ## The kill switch
 
-**A WAF custom rule returning 403.** WAF custom rules run *before* cache and
-before the origin fetch, so a blocked request costs **no R2 operation at
-all** — which is the property that makes this the right mechanism rather than
-a Cache Rule or a Worker.
+Model requests now obtain five-minute, method-specific S3 links from the download
+Worker. WAF rules and custom-domain shutdown do not revoke those links or stop the
+workers.dev signer from issuing more. Download permission belongs to the single
+SQLite Durable Object in bunyi-app-control, consulted via a private read-only service
+binding on every valid GET/HEAD. There is no cached allow or KV fallback.
 
-Security → WAF → Custom rules:
+A kill persists blocked permission before independently attempting custom-domain
+and r2.dev shutdown. Domain failures remain pending and retry. A failed permission
+write means cutoff unconfirmed; use DOWNLOADS_ENABLED=false as the independent
+issuance pause. Already-issued URLs survive until expiry and active streams may
+continue. Only explicit, current owner rearm can permit signing again.
 
-- Expression: `http.host eq "models.bunyi.app"`
-- Action: **Block**, with a custom 403 body — the app surfaces the response,
-  so plain text saying downloads are unavailable beats a generic block page.
-
-**Create it disabled.** The point is that the emergency action is flipping one
-toggle rather than authoring a rule under pressure. Free plan allows five
-custom rules; effect is global within seconds; reversal is instant. It breaks
-everything on `models.bunyi.app` and nothing else — the S3 API, Workers
-bindings and the r2.dev URL are untouched.
-
-Two mechanisms that sound similar and are not:
-
-- **Disabling the R2 custom domain** (R2 → bucket → Settings → Custom Domains
-  → Disable) also works and breaks only that hostname, but takes minutes
-  rather than seconds. Prefer *Disable* over *Remove*: removing deletes the
-  CNAME, and re-adding means going through "Initializing" again.
-- **A Worker in front** is the wrong tool. It adds a Workers request charge on
-  top of R2 — a new billing line to police an existing one.
+See [download-worker operations](workers/downloads/README.md) and the linked control
+rollout checklist for staging, migration and rollback. Keep the Worker route and
+its fail-closed setting. Removing the route can restore public R2 delivery.
 
 ## The control you actually want day to day
 
@@ -370,25 +360,16 @@ switch it needs no decision at the moment it matters.
 
 ## Automating a cutoff
 
-Buildable, and worth it only if the reassurance is worth more than the hour —
-at these numbers it is insurance against a bill you would struggle to make
-reach $5.
+The control Worker polls bucket-wide GetObject counts every five minutes through
+r2OperationsAdaptiveGroups, including direct S3 GETs. New automatic kills require
+both trusted R2 query results and ARMED=true. Successful zero reads are valid;
+advisory 429/domain failures cannot trigger a kill. Existing blocked enforcement
+retries even when fresh metrics fail or the switch is disarmed.
 
-Reading usage: the GraphQL Analytics API dataset `r2OperationsAdaptiveGroups`
-gives per-bucket operation counts. **It exposes `actionType`, not a billing
-class**, so mapping operations to Class A/B is yours to maintain against the
-pricing page — and retention is 31 days, so month-to-date works but backfill
-does not. Storage comes from
-`GET /accounts/{account_id}/r2/buckets/{bucket}/metrics`.
-
-Flipping the switch: `PATCH /zones/{zone_id}/rulesets/{ruleset_id}/rules/
-{rule_id}` to enable the WAF rule, or `PUT /accounts/{account_id}/r2/buckets/
-{bucket}/domains/custom/{domain}` with `{"enabled": false}` for the domain.
-
-Run it from **outside** the account it watches — GitHub Actions on a cron
-rather than a Cloudflare Worker — so an account-level problem cannot disable
-the watchdog. Set the threshold well below anything you would care about:
-analytics lag by minutes, so a tight threshold is unsafe.
+The query is not total billing coverage: HEAD, Worker/service/authority requests
+and storage costs are separate. Analytics lag and the five-minute cron delay
+remain; there is no hard spend cap. Measure authorization latency and added request
+cost in staging and confirm current account-plan support before rollout.
 
 ## What this does not protect against
 
@@ -400,18 +381,18 @@ analytics lag by minutes, so a tight threshold is unsafe.
   the scenario to actually plan for, and it got more likely when the app
   started shipping a built-in option pointing here. Checksums help: a failing
   digest makes a retry loop loud rather than silent.
-- **Anything between checks.** An hourly cron has an hour of blind spot, plus
-  analytics lag on top.
+- **Anything between checks.** The five-minute cron and analytics lag delay
+  detection, and already-issued URLs remain valid until their expiry.
 - **Deliberate mirroring.** Someone pointing a scraper at these URLs costs you
   operations and gets free bandwidth. Cheap at this scale, but the kill switch
-  is all-or-nothing and takes real users down with them. Signed URLs are the
-  answer if it ever matters.
+  blocks new authorization for every user. Already-issued signed links
+  remain reusable until expiry; signatures alone do not impose a spend cap.
 - **Forgetting to re-arm.** If the kill switch trips, the app stays broken
-  until you disable the rule. Nothing resets it at the start of a billing
+  until the owner explicitly rearms the authority and enables issuance. Nothing resets it at the start of a billing
   cycle.
 - **Products added later.** Cache Reserve in particular is separately billed
-  at real rates and would change this analysis. So would putting a Worker in
-  the path.
+  at real rates and would change this analysis. The signer and permission authority already add
+  request costs outside the R2 GetObject threshold.
 - **A leaked API token** with R2 write access, which generates Class A
   operations and storage without touching `models.bunyi.app` at all. Nothing
   above sees it; the budget alert is the only backstop, and it fires once.

@@ -15,7 +15,7 @@
 import { AwsClient } from "aws4fetch";
 import published from "./published-files.json" with { type: "json" };
 
-export const LINK_LIFETIME_SECONDS = 300;
+import { LINK_LIFETIME_SECONDS, PERMISSION_TIMEOUT_MS, GRANT_MAX_AGE_MS } from './permission-contract.js';
 const files = new Set(Object.keys(published));
 const hosts = new Set(["bunyi-downloads.bunyi.workers.dev", "models.bunyi.app"]);
 const commonHeaders = {
@@ -31,10 +31,32 @@ function reply(status, message, method, extra = {}) {
   });
 }
 
+async function permission(env, nonce) {
+  const abort = new AbortController();
+  let timer;
+  try {
+    return await Promise.race([
+      (async () => {
+        const res = await env.DOWNLOAD_PERMISSION.fetch('https://authority/permission', {
+          method: 'POST', signal: abort.signal,
+          body: JSON.stringify({ bucket: env.R2_BUCKET, nonce }),
+        });
+        if (!res.ok) throw new Error('authority unavailable');
+        return res.json();
+      })(),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => { abort.abort(); reject(new Error('authority timeout')); }, PERMISSION_TIMEOUT_MS);
+      }),
+    ]);
+  } finally { clearTimeout(timer); }
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (url.protocol !== "https:" || !hosts.has(url.hostname))
+    const stagingHost = env.R2_BUCKET === 'bunyi-models-staging' &&
+      ['bunyi-downloads-staging.bunyi.workers.dev', 'models-staging.bunyi.app'].includes(url.hostname);
+    if (url.protocol !== "https:" || (!hosts.has(url.hostname) && !stagingHost))
       return reply(404, "Not found", request.method);
     if (request.method !== "GET" && request.method !== "HEAD")
       return reply(405, "Only GET and HEAD are supported", request.method, { Allow: "GET, HEAD" });
@@ -47,25 +69,35 @@ export default {
       return reply(503, "Model downloads are temporarily paused", request.method, { "Retry-After": "60", "X-Bunyi-Download-Status": "paused" });
 
     try {
-      // Reuse the existing kill switch's state, without modifying its Worker.
-      // Missing, malformed or unreadable state fails closed.
-      const state = await env.KILLSWITCH_STATE.get("killswitch:state", { type: "json", cacheTtl: 30 });
-      if (!state || state.killed !== false)
+      const started = Date.now();
+      const nonce = crypto.randomUUID();
+      const grant = await permission(env, nonce);
+      if (!grant || grant.version !== 1 || grant.bucket !== env.R2_BUCKET || grant.nonce !== nonce ||
+          !Number.isSafeInteger(grant.revision) || grant.revision < 1 ||
+          !['allowed', 'blocked'].includes(grant.access) ||
+          !Number.isSafeInteger(grant.authorizedAt) || grant.maxAgeMs !== GRANT_MAX_AGE_MS ||
+          grant.authorizedAt < started - GRANT_MAX_AGE_MS || grant.authorizedAt > Date.now() + 250)
+        throw new Error('invalid authority response');
+      if (grant.access === 'blocked')
         return reply(503, "Model downloads are temporarily paused", request.method, { "Retry-After": "60", "X-Bunyi-Download-Status": "paused" });
       if (!/^[a-f0-9]{32}$/.test(env.R2_ACCOUNT_ID ?? "") ||
-          env.R2_BUCKET !== "bunyi-models" || !env.R2_ACCESS_KEY_ID || !env.R2_SECRET_ACCESS_KEY)
+          !['bunyi-models', 'bunyi-models-staging'].includes(env.R2_BUCKET) || !env.R2_ACCESS_KEY_ID || !env.R2_SECRET_ACCESS_KEY)
         return reply(503, "Download service is not configured", request.method);
 
       const target = new URL("https://" + env.R2_ACCOUNT_ID + ".r2.cloudflarestorage.com/");
       target.pathname = "/" + env.R2_BUCKET + "/" + key;
       target.searchParams.set("X-Amz-Expires", String(LINK_LIFETIME_SECONDS));
+      // Expiry is anchored to authorization, never to delayed signing completion.
+      const datetime = new Date(grant.authorizedAt).toISOString().replace(/[:-]|\.\d{3}/g, '');
       const signer = new AwsClient({
         accessKeyId: env.R2_ACCESS_KEY_ID, secretAccessKey: env.R2_SECRET_ACCESS_KEY,
         service: "s3", region: "auto",
       });
       // Sign only the method and destination. The client retains Range and
       // If-Range on the 307; these must not become required signed headers.
-      const signed = await signer.sign(target, { method: request.method, aws: { signQuery: true } });
+      const signed = await signer.sign(target, { method: request.method, aws: { signQuery: true, datetime } });
+      if (Date.now() - started > GRANT_MAX_AGE_MS || Date.now() - grant.authorizedAt > GRANT_MAX_AGE_MS)
+        throw new Error('authorization expired');
       return new Response(null, { status: 307, headers: { ...commonHeaders, Location: signed.url } });
     } catch {
       // Never log credentials, signed URLs, or upstream exception messages.
