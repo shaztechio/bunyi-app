@@ -347,10 +347,6 @@ Stored in a `Voices` subfolder of app data, alongside copied audio clips.
 
 ## Output WAV
 
-The planned long-speech streaming behavior is specified in
-[FEATURES.md §2b](FEATURES.md#2b-streaming-long-speech). Its completed file uses
-this same format; no per-chunk output format or metadata schema is introduced.
-
 - **Embedded metadata**: a RIFF `LIST`/`INFO` chunk appended to the file,
   carrying what produced it. Standard fields so ordinary tools show something
   useful — `INAM` (the text, truncated), `IART` (speaker or voice
@@ -379,51 +375,18 @@ this same format; no per-chunk output format or metadata schema is introduced.
 - Filename: `<Mode>-<ISO8601-basic timestamp>.wav`
   (e.g. `Voice-clone-20260725T2312.wav`).
 
-### Streaming temporary output
+### Long-text generation
 
-Long-text generation still saves one WAV with the full original text. An optional
+Long-text generation saves one WAV with the full original text. An optional
 `continuationModelRepo` string identifies the clone model used after a designed
 opening; absent means no secondary model. Strip credentials/query/fragment as
 for `modelRepo`. Older readers may ignore this field. A designed opening used as
 a temporary clone reference lives only for the generation, is never a saved voice
 or separate History entry, and is deleted on success, Stop or failure.
 
-The per-user `streamingEnabled` setting is a JSON boolean in .NET's
-`settings.json`, defaulting to `true` when absent (including existing installs).
-Persist an explicit `false` when streaming is disabled. The corresponding
-macOS preference key is `streamingEnabled`, with the same default, for the
-planned §2b implementation. This preference changes playback behavior only;
-it does not change completed audio formats or metadata.
-
-Planned for §2b; implementation status is tracked in
-[STREAMING-PLAN.md](STREAMING-PLAN.md).
-
-The Windows adaptive-preview demo additionally uses a disposable playback cache
-named `bunyi-preview-<32 hexadecimal GUID characters>.pcm` in the OS temporary
-directory. It contains 24 kHz mono native float PCM after live-preview gain,
-is opened with delete-on-close, and is excluded from History and backups.
-Separate file handles let generation append while a worker feeds the bounded
-audio-device queue. This cache is never used to create the authoritative final
-WAV, which still uses the full decoder and uniform gain. A cache failure disables
-preview with a visible message while final-file generation continues.
-
-- Partial audio is private working data, never a discoverable completed WAV
-  or History item. Use an app-owned unique temporary name and finalize with
-  an atomic rename within the destination filesystem only after successful
-  generation, output validation, WAV length finalization and best-effort
-  metadata embedding.
-- Preserve unattenuated floating-point samples until the full peak is known,
-  whether in memory for the demonstration or in a bounded disk spool for the
-  production implementation. Apply §2's single whole-recording gain when
-  writing the final PCM WAV. Live-preview gain is not persisted as a series
-  of per-chunk changes. No buffering silence or clone reference samples are
-  included in the final target speech.
-- Cancellation, safety-limit termination, inference error or write failure
-  discards the partial take after its workers and file handles settle. No
-  partial success is added to History. Cancellation before the final commit
-  point discards the temporary output; Stop after that point keeps the
-  completed recording and ends playback only.
-- Startup cleanup may remove abandoned app-owned streaming temporary files
-  using a documented naming/ownership rule. It must not delete completed
-  outputs or arbitrary user files. Temporary data is not part of a portable
-  output or backup contract.
+Partial output is private working data. Write an app-owned temporary file, add
+metadata and atomically rename it only after every section has succeeded.
+Cancellation or failure before that commit discards the partial recording.
+Preserve raw samples for one uniform clipping-protection gain across the whole
+recording. Section boundaries contain only the specified short pauses; generation
+waits are not part of the audio. Playback begins after the completed WAV is saved.

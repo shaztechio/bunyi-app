@@ -18,7 +18,7 @@ using Bunyi.Core.Qwen;
 
 namespace Bunyi.Core.Engine;
 
-/// <summary>Retryable sections, one voice, one preview sequence and one recording.</summary>
+/// <summary>Retryable sections, one voice and one completed recording.</summary>
 internal sealed class LongTextGeneration(
     Func<GenerateRequest, CancellationToken, IProgress<int>, Task<SynthesisResult>> synthesize,
     Action<EngineStatus> status,
@@ -59,7 +59,7 @@ internal sealed class LongTextGeneration(
                 ct.ThrowIfCancellationRequested();
                 temporaryReference = Path.Combine(Path.GetTempPath(), $"bunyi-designed-{Guid.NewGuid():N}.wav");
                 WavWriter.Write(temporaryReference, DesignSpeechSynthesizer.ToPcm16(voice!, log));
-                Accept(voice!, original, ct);
+                Accept(voice!, ct);
                 current = original with
                 {
                     Mode = TtsMode.VoiceClone,
@@ -72,7 +72,7 @@ internal sealed class LongTextGeneration(
 
             var sections = SpeechSections.Split(current.Text);
             for (var i = 0; i < sections.Count; i++)
-                await Section(current with { Text = sections[i] }, original,
+                await Section(current with { Text = sections[i] },
                     $"Section {i + 1} of {sections.Count}", 0, ct);
 
             ct.ThrowIfCancellationRequested();
@@ -97,7 +97,7 @@ internal sealed class LongTextGeneration(
         }
     }
 
-    private async Task Section(GenerateRequest section, GenerateRequest original, string label, int depth, CancellationToken ct)
+    private async Task Section(GenerateRequest section, string label, int depth, CancellationToken ct)
     {
         var upper = SpeechDurationEstimate.ForText(section.Text, section.Language).UpperSeconds;
         var limit = (int)Math.Ceiling(Math.Max(20, 2 * upper + 5) * TalkerLoop.FramesPerSecond);
@@ -111,10 +111,10 @@ internal sealed class LongTextGeneration(
                 throw new GenerationDidNotFinishException();
             log.Log($"{label}: did not finish. Retrying as two shorter sections (subdivision {depth + 1} of 2).");
             foreach (var text in smaller)
-                await Section(section with { Text = text }, original, label, depth + 1, ct);
+                await Section(section with { Text = text }, label, depth + 1, ct);
             return;
         }
-        Accept(audio, original, ct);
+        Accept(audio, ct);
     }
 
     private async Task<float[]> Attempt(GenerateRequest request, int limit, string label, CancellationToken ct)
@@ -126,7 +126,7 @@ internal sealed class LongTextGeneration(
         Progress(0);
         var result = await synthesize(request with
         {
-            AudioPreview = null, SectionFrameLimit = limit, KeepRawSamples = true
+            SectionFrameLimit = limit, KeepRawSamples = true
         }, ct, new InlineProgress(Progress));
         ct.ThrowIfCancellationRequested();
         var raw = result.RawSamples ?? Array.ConvertAll(result.Samples, s => s / (float)short.MaxValue);
@@ -140,7 +140,7 @@ internal sealed class LongTextGeneration(
         return raw;
     }
 
-    private void Accept(float[] audio, GenerateRequest original, CancellationToken ct)
+    private void Accept(float[] audio, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
         // Gentle edges without overlapping words. Existing model pauses remain;
@@ -158,9 +158,7 @@ internal sealed class LongTextGeneration(
         {
             ct.ThrowIfCancellationRequested();
             _accepted.Add(part);
-            var start = _samples;
             _samples += part.Length;
-            original.AudioPreview?.Invoke(new AudioPreviewChunk(part, SampleRate, start));
         }
     }
 

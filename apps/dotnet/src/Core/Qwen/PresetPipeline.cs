@@ -38,8 +38,7 @@ public interface IPresetPipeline : IDisposable
         SamplingOptions? options = null,
         IProgress<int>? progress = null,
         int? maxFrames = null,
-        CancellationToken ct = default,
-        Action<AudioPreviewChunk>? audioPreview = null);
+        CancellationToken ct = default);
 }
 
 /// <summary>
@@ -141,8 +140,7 @@ public sealed class PresetPipeline : IPresetPipeline
         SamplingOptions? options = null,
         IProgress<int>? progress = null,
         int? maxFrames = null,
-        CancellationToken ct = default,
-        Action<AudioPreviewChunk>? audioPreview = null)
+        CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(request);
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -155,7 +153,7 @@ public sealed class PresetPipeline : IPresetPipeline
             "Preset voice",
             progress,
             vocoderContext: null,
-            ct, audioPreview);
+            ct);
     }
 
     public void Dispose()

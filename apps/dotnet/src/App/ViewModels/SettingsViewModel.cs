@@ -56,7 +56,6 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     /// <summary>Spec §3e: whether leaving a mode unloads its model.</summary>
     [ObservableProperty] private bool _unloadOnModeSwitch = true;
-    [ObservableProperty] private bool _streamingEnabled = true;
     [ObservableProperty] private string _presetVoiceSource = string.Empty;
     [ObservableProperty] private string _voiceDesignSource = string.Empty;
     [ObservableProperty] private string _voiceCloneSource = string.Empty;
@@ -191,7 +190,6 @@ public sealed partial class SettingsViewModel : ObservableObject
         _settings = _store.Load();
         Appearance = _settings.Appearance;
         UnloadOnModeSwitch = _settings.UnloadOnModeSwitch;
-        StreamingEnabled = _settings.StreamingEnabled;
         PresetVoiceSource = _settings.SourceFor(TtsMode.PresetVoice);
         VoiceDesignSource = _settings.SourceFor(TtsMode.VoiceDesign);
         VoiceCloneSource = _settings.SourceFor(TtsMode.VoiceClone);
@@ -258,13 +256,6 @@ public sealed partial class SettingsViewModel : ObservableObject
         Persist(_settings with { UnloadOnModeSwitch = value });
     }
 
-    partial void OnStreamingEnabledChanged(bool value)
-    {
-        if (_loading) return;
-        // This preference changes the next UI request, never the running model.
-        Persist(_store.Load() with { StreamingEnabled = value }, requiresModelLease: false);
-    }
-
     partial void OnPresetVoiceSourceChanged(string value) => PersistSource(TtsMode.PresetVoice, value);
     partial void OnVoiceDesignSourceChanged(string value) => PersistSource(TtsMode.VoiceDesign, value);
     partial void OnVoiceCloneSourceChanged(string value) => PersistSource(TtsMode.VoiceClone, value);
@@ -276,11 +267,11 @@ public sealed partial class SettingsViewModel : ObservableObject
         RefreshStorage();
     }
 
-    private void Persist(AppSettings settings, bool requiresModelLease = true)
+    private void Persist(AppSettings settings)
     {
         try
         {
-            using var lease = requiresModelLease ? AcquireOperation?.Invoke("config.set") : null;
+            using var lease = AcquireOperation?.Invoke("config.set");
             _store.SaveStrict(settings);
             _settings = settings;
         }

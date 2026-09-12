@@ -3,23 +3,6 @@
   "script": "The morning light filled the room as we prepared to leave for the station. Outside, a gentle breeze moved through the trees and carried the sound of birds across the garden. We checked our bags once more, made sure the windows were closed, and left a note on the kitchen table. There was still plenty of time before the train arrived, so we decided to walk along the river. At the bridge, we stopped for a moment to watch the sunlight dancing on the water before continuing our journey.",
   "audioSeconds": 29.76,
   "synthesisSeconds": 204.1482872,
-  "sectionArrivalSeconds": [
-    17.0250436,
-    167.1715983,
-    180.1685212,
-    191.3918807,
-    204.1207036
-  ],
-  "acceptedSeconds": [
-    5.68,
-    11.16,
-    17.92,
-    23.24,
-    29.76
-  ],
-  "firstDeviceReadSeconds": 167.1877832,
-  "playerFailure": null,
-  "output": "Voice-design-20260912T143746.wav",
   "metadata": {
     "mode": "Voice design",
     "text": "The morning light filled the room as we prepared to leave for the station. Outside, a gentle breeze moved through the trees and carried the sound of birds across the garden. We checked our bags once more, made sure the windows were closed, and left a note on the kitchen table. There was still plenty of time before the train arrived, so we decided to walk along the river. At the bridge, we stopped for a moment to watch the sunlight dancing on the water before continuing our journey.",

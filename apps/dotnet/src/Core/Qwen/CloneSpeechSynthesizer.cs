@@ -137,7 +137,7 @@ public sealed class CloneSpeechSynthesizer(
             reference,
             progress: frames,
             maxFrames: request.SectionFrameLimit,
-            ct: ct, audioPreview: request.AudioPreview);
+            ct: ct);
 
         return Task.FromResult(new SynthesisResult(
             request.KeepRawSamples ? [] : DesignSpeechSynthesizer.ToPcm16(result.Samples, _log), 24_000, result.Frames)

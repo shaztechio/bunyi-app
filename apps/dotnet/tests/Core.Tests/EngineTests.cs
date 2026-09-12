@@ -195,24 +195,6 @@ public sealed class EngineTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task A_preview_failure_is_signalled_before_model_memory_is_released()
-    {
-        var synth = new FakeSynthesizer { Throw = new InvalidDataException("Invalid audio") };
-        await using var engine = NewEngine(synth);
-        var signalled = false;
-        var request = Request() with { AudioPreview = chunk =>
-        {
-            Assert.NotNull(chunk.Failure);
-            Assert.Equal(0, synth.Releases);
-            signalled = true;
-        }};
-        await Assert.ThrowsAsync<InvalidDataException>(() => engine.GenerateAsync(request, null, default));
-        Assert.True(signalled);
-        Assert.Equal(1, synth.Releases);
-        Assert.Null(engine.LastOutputPath);
-    }
-
-    [Fact]
     public async Task Successful_output_commits_one_final_file_and_cleans_its_temporary_file()
     {
         await using var engine = NewEngine(new FakeSynthesizer());
@@ -700,7 +682,7 @@ public sealed class EngineTests : IAsyncLifetime
     [InlineData(TtsMode.PresetVoice)]
     [InlineData(TtsMode.VoiceClone)]
     [InlineData(TtsMode.VoiceDesign)]
-    public async Task Long_generation_without_streaming_saves_one_complete_recording(TtsMode mode)
+    public async Task Long_generation_saves_one_complete_recording(TtsMode mode)
     {
         var synth = new FakeSynthesizer();
         await using var engine = NewEngine(synth);
@@ -708,7 +690,6 @@ public sealed class EngineTests : IAsyncLifetime
         var result = await engine.GenerateAsync(new(mode, text, Instruct: "warm voice"), null, default);
         Assert.True(synth.Requests.Count > 1);
         Assert.Equal(text, string.Concat(synth.Requests.Select(r => r.Text)));
-        Assert.All(synth.Requests, r => Assert.Null(r.AudioPreview));
         Assert.Single(Directory.GetFiles(Path.Combine(_root, "Outputs")));
         var metadata = WavMetadata.TryRead(result.OutputPath)!;
         Assert.Equal(text, metadata.Text);
@@ -724,16 +705,14 @@ public sealed class EngineTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Exhausted_section_retries_fail_without_a_history_file_and_end_preview()
+    public async Task Exhausted_section_retries_fail_without_a_history_file()
     {
         var synth = new FakeSynthesizer { Throw = new Bunyi.Core.Qwen.GenerationDidNotFinishException() };
         await using var engine = NewEngine(synth);
-        var preview = new List<AudioPreviewChunk>();
         var text = string.Concat(Enumerable.Repeat("The train arrived at the station just before the morning rain began. ", 6));
         await Assert.ThrowsAsync<Bunyi.Core.Qwen.GenerationDidNotFinishException>(() => engine.GenerateAsync(
-            new(TtsMode.PresetVoice, text, AudioPreview: preview.Add), null, default));
+            new(TtsMode.PresetVoice, text), null, default));
         Assert.Equal(3, synth.Requests.Count);
-        Assert.NotNull(Assert.Single(preview).Failure);
         Assert.Null(engine.LastOutputPath);
         Assert.Equal(EngineState.Error, engine.Status.State);
         Assert.False(Directory.Exists(Path.Combine(_root, "Outputs")));

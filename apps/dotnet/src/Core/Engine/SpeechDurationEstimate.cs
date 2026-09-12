@@ -20,7 +20,7 @@ namespace Bunyi.Core.Engine;
 /// <summary>A text-only speech duration range, never an inference-time prediction.</summary>
 public sealed record SpeechDurationEstimate(double LowerSeconds, double UpperSeconds)
 {
-    public bool ShouldStream => UpperSeconds > 20.0;
+    public bool NeedsSections => UpperSeconds > 20.0;
 
     /// <summary>
     /// Deterministic heuristic: space-delimited words at 120–180 per minute;

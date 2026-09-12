@@ -42,18 +42,11 @@ Both bars also show their total size in MB or GB. **Model download elapsed** sho
 
 If no data arrives, the message changes to **Waiting for more data**. After 30 seconds it says the download may be stalled. Incoming data clears that warning. **Checking model files**, **Loading model**, **Creating your speech**, and **Preparing your audio file** identify the work that follows. Only **Your audio is ready** means speech has finished and been saved.
 
-For shorter text, the audio plays automatically when generation finishes. **Play** repeats it, and the folder button opens the folder where the file was saved.
+The audio plays automatically when the complete recording is saved. **Play** repeats it, and the folder button opens the folder where the file was saved.
 
-**Streaming preview.** Streaming is enabled by default in **Settings → General**. All three modes show an estimated speech length. With Streaming on, when the upper estimate is more than 20 seconds, you hear a preview while the rest is being generated. This is the estimated recording length, not the time your computer will spend making it. Exactly 20 seconds or less uses ordinary playback after generation. Turn Streaming off to use playback after generation for every recording; changes apply to the next run.
+**Long text.** Bunyi generates longer scripts in shorter sections and joins them into one recording. If a section fails to finish, Bunyi retries it as smaller pieces, with a limited number of attempts. Playback starts after every section has finished and the complete recording is saved. Preset voice keeps its speaker, and Voice clone keeps its reference. Voice design creates a short opening, then uses that opening with the clone model to keep the voice consistent for the rest; the clone model downloads if needed. Your opening appears only once in the recording.
 
-**Long text.** Bunyi generates longer scripts in shorter sections and joins them into one recording. If a section fails to finish, Bunyi retries it as smaller pieces, with a limited number of attempts. Only completed sections are played. This also works with Streaming off. Preset voice keeps its speaker, and Voice clone keeps its reference. Voice design creates a short opening, then uses that opening with the clone model to keep the voice consistent for the rest; the clone model downloads if needed. Your opening appears only once in the recording.
-
-**Buffering audio** means the next part is still being made. Playback starts automatically once 10 seconds of completed audio are ready, while generation continues. After a pause, Bunyi adjusts the refill target between 10 and 20 seconds based on generation speed. When generation finishes, any shorter remainder plays immediately. A slower computer may still pause; the completed recording contains none of these waiting gaps. During a refill, **Play now** lets you start once 10 seconds are ready, with a reminder that playback may pause again.
-The playback panel says **Preparing playback** before the first sound, **Playing audio** while you listen, and **Waiting for more audio** when playback pauses. The waiting message confirms that Bunyi is still generating and will resume automatically. Its progress bar shows seconds of speech ready toward the current buffer target, not how many seconds you must wait. The target can change as Bunyi measures generation speed. **Finishing your recording** means Bunyi is preparing the saved file.
-
-**Seconds played** stays visible beside the playback status. It shows how much of the recording has played, separately from how much audio is buffered. The counter pauses while playback waits for more audio and continues from the same position when playback resumes.
-
-**Stop** silences the preview immediately and asks generation to stop. A cancelled or failed take is not saved. If the audio file has already been saved and only preview playback remains, Stop keeps that file. If the audio device cannot play the preview, generation continues and you can play the completed file afterwards.
+**Stop** cancels generation. A cancelled or failed take is not saved.
 
 If the download is a lot to ask for before hearing anything, the **Storage** tab in Settings gives you a command per mode to fetch a model in advance instead.
 
@@ -162,7 +155,6 @@ Both show progress and can be stopped part way.
 
 Light, dark, or follow the system. It applies to every Bunyi window straight away.
 
-**Streaming**, also under **General**, is on by default. It lets long recordings play while they are generated in all three voice modes. Turn it off to wait for the completed recording. The preference is remembered, and changes apply to the next generation.
 
 **Free memory when switching modes** decides *when* Bunyi lets go of a model, not whether it does. Each mode uses its own model, and a model can be several gigabytes.
 

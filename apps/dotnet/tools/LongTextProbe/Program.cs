@@ -22,10 +22,16 @@ using Bunyi.Core.Engine;
 using Bunyi.Core.Models;
 using Bunyi.Core.Qwen;
 
-internal static class SectionProbe
+internal static class Program
 {
-    public static async Task<int> Run(string mode, string modelParent, string output, bool play, ILogSink log)
+    public static async Task<int> Main(string[] args)
     {
+        if (args.Length != 3) { Console.Error.WriteLine("Usage: LongTextProbe preset|design|clone MODELS_PARENT OUTPUT_FOLDER"); return 2; }
+        var mode = args[0];
+        var modelParent = Path.GetFullPath(args[1]);
+        var output = Path.GetFullPath(args[2]);
+        Directory.CreateDirectory(output);
+        var log = new LogStore(e => Console.WriteLine(e.Message));
         const string script = "The morning light filled the room as we prepared to leave for the station. " +
             "Outside, a gentle breeze moved through the trees and carried the sound of birds across the garden. " +
             "We checked our bags once more, made sure the windows were closed, and left a note on the kitchen table. " +
@@ -47,13 +53,6 @@ internal static class SectionProbe
             m => m == TtsMode.PresetVoice ? ModelLayout.PresetVoice : m == TtsMode.VoiceDesign ? ModelLayout.VoiceDesign : ModelLayout.VoiceClone,
             () => root, () => output);
         using var cancel = new CancellationTokenSource(TimeSpan.FromMinutes(12));
-        using var player = play ? new StreamingAudioPlayer(log) : null;
-        player?.ConfigureBuffer(SpeechDurationEstimate.ForText(script).UpperSeconds);
-        var clock = Stopwatch.StartNew();
-        var started = Stopwatch.GetTimestamp();
-        long offset = 0;
-        var arrivals = new List<double>();
-        var acceptedSeconds = new List<double>();
         var referencePath = Path.Combine(output, "reference.wav");
         if (selected == TtsMode.VoiceClone)
         {
@@ -64,34 +63,15 @@ internal static class SectionProbe
         {
             var request = new GenerateRequest(selected, script, "english", "ryan",
                 "A calm male narrator with a warm, clear voice.", referencePath,
-                "Hello! We'll begin in just a few minutes.", chunk =>
-                {
-                    if (chunk.Failure is not null) { player?.Stop(); return; }
-                    if (chunk.SampleOffset != offset) throw new InvalidDataException("Noncontiguous section audio");
-                    offset += chunk.Samples.Length;
-                    if (chunk.Samples.Length > 2880)
-                    {
-                        arrivals.Add(clock.Elapsed.TotalSeconds);
-                        acceptedSeconds.Add(offset / 24000.0);
-                        Console.WriteLine($"SECTION ready={offset / 24000.0:F2}s elapsed={clock.Elapsed.TotalSeconds:F2}s");
-                    }
-                    player?.Add(chunk, cancel.Token);
-                    player?.ReportGeneratedSeconds(offset / 24000.0);
-                });
+                "Hello! We'll begin in just a few minutes.");
             var result = await engine.GenerateAsync(request, null, cancel.Token);
-            var completed = clock.Elapsed.TotalSeconds;
-            if (player is not null) await player.CompleteAsync(cancel.Token);
-            if (arrivals.Count < 2 || arrivals[0] >= completed || Math.Abs(offset / 24000.0 - result.Duration.TotalSeconds) > .001)
-                throw new InvalidDataException("Sections did not arrive early or final length differs");
-            var report = new { mode, script, audioSeconds = result.Duration.TotalSeconds, synthesisSeconds = completed,
-                sectionArrivalSeconds = arrivals, acceptedSeconds,
-                firstDeviceReadSeconds = player?.FirstPlaybackTimestamp > 0 ? (player.FirstPlaybackTimestamp - started) / (double)Stopwatch.Frequency : (double?)null,
-                playerFailure = player?.Failure, output = Path.GetFileName(result.OutputPath),
+            var report = new { mode, script, audioSeconds = result.Duration.TotalSeconds,
+                synthesisSeconds = result.Elapsed.TotalSeconds, output = Path.GetFileName(result.OutputPath),
                 metadata = WavMetadata.TryRead(result.OutputPath), peakWorkingSetBytes = Process.GetCurrentProcess().PeakWorkingSet64 };
             File.WriteAllText(Path.Combine(output, mode + "-sections.json"), JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));
             Console.WriteLine(JsonSerializer.Serialize(report));
-            return player?.Failure is null ? 0 : 1;
+            return 0;
         }
-        catch (Exception ex) { player?.Stop(); Console.Error.WriteLine(ex); return 1; }
+        catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
     }
 }

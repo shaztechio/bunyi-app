@@ -37,10 +37,6 @@ public sealed record AppSettings
     [JsonPropertyName("appearance")]
     public Appearance Appearance { get; init; } = Appearance.System;
 
-    /// <summary>Play eligible long takes during generation; absent on older installs means enabled.</summary>
-    [JsonPropertyName("streamingEnabled")]
-    public bool StreamingEnabled { get; init; } = true;
-
     /// <summary>
     /// Per-mode model source overrides (spec §3a), keyed
     /// <c>modelRepo.&lt;Mode&gt;</c> — the same keys macOS uses, with the mode's

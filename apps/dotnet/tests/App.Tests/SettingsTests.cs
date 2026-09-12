@@ -134,12 +134,8 @@ public sealed class SettingsTests : HeadlessWindows
         var tabs = window.FindControl<TabControl>("SettingsTabs")!;
         var appearance = window.GetVisualDescendants().OfType<ComboBox>().Single();
         Assert.StartsWith("System follows your computer.", ControlAutomationPeer.CreatePeerForElement(appearance).GetHelpText());
-        var memory = window.GetVisualDescendants().OfType<CheckBox>()
-            .Single(c => c.Content as string == "Free memory when switching modes");
+        var memory = window.GetVisualDescendants().OfType<CheckBox>().Single();
         Assert.StartsWith("Each mode uses its own model", ControlAutomationPeer.CreatePeerForElement(memory).GetHelpText());
-        var streaming = window.FindControl<CheckBox>("StreamingCheckBox")!;
-        Assert.Equal("Streaming", ControlAutomationPeer.CreatePeerForElement(streaming).GetName());
-        Assert.StartsWith("Play longer recordings", ControlAutomationPeer.CreatePeerForElement(streaming).GetHelpText());
         tabs.SelectedIndex = 3;
         window.UpdateLayout();
         var buttons = window.GetVisualDescendants().OfType<Button>()
@@ -501,58 +497,6 @@ public sealed class SettingsTests : HeadlessWindows
         NewModel().Appearance = Appearance.Light;
 
         Assert.Equal(Appearance.Light, NewModel().Appearance);
-    }
-
-    [AvaloniaFact]
-    public void Streaming_is_enabled_in_General_and_remembers_the_checkbox()
-    {
-        var model = NewModel();
-        var window = Open(new SettingsWindow { DataContext = model });
-        var checkbox = window.FindControl<CheckBox>("StreamingCheckBox")!;
-        Assert.True(checkbox.IsChecked);
-        checkbox.IsChecked = false;
-        Assert.False(model.StreamingEnabled);
-        Assert.False(NewModel().StreamingEnabled);
-        checkbox.IsChecked = true;
-        Assert.True(NewModel().StreamingEnabled);
-    }
-
-    [AvaloniaTheory]
-    [InlineData(TtsMode.PresetVoice)]
-    [InlineData(TtsMode.VoiceDesign)]
-    [InlineData(TtsMode.VoiceClone)]
-    public async Task Turning_streaming_off_uses_complete_file_playback_in_every_mode(TtsMode mode)
-    {
-        var settings = NewModel();
-        settings.StreamingEnabled = false;
-        var engine = new FakeEngine();
-        var player = new FakePlayer();
-        using var main = new MainViewModel(engine, player, _log)
-        {
-            Settings = settings, Mode = mode,
-            Script = string.Join(' ', Enumerable.Repeat("word", 50)),
-            Instruct = "A calm voice", ReferenceAudioPath = "reference.wav", ReferenceTranscript = "Hello",
-        };
-        Assert.DoesNotContain("playback starts", main.SpeechEstimateText);
-        var pending = main.GenerateCommand.ExecuteAsync(null);
-        Assert.Null(engine.LastRequest!.AudioPreview);
-        Assert.False(main.IsPreviewSession);
-        // A preference for the next run does not convert this in-flight take.
-        settings.StreamingEnabled = true;
-        Assert.Contains("playback starts", main.SpeechEstimateText);
-        Assert.Null(engine.LastRequest.AudioPreview);
-        engine.Complete("finished.wav");
-        await pending;
-        Assert.Single(player.Played);
-    }
-
-    [AvaloniaFact]
-    public void Changing_streaming_does_not_require_a_model_operation_lease()
-    {
-        var settings = NewModel();
-        settings.AcquireOperation = _ => throw new InvalidOperationException("A generation owns the model");
-        settings.StreamingEnabled = false;
-        Assert.False(NewModel().StreamingEnabled);
     }
 
     [AvaloniaFact]

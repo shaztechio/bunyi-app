@@ -396,7 +396,7 @@ public sealed class OnnxTtsEngine : ITtsEngine
 
                 var supportsInstruct = _synth.SupportsInstruct;
                 string? continuationModelRepo = null;
-                var audio = SpeechDurationEstimate.ForText(request.Text, request.Language).ShouldStream
+                var audio = SpeechDurationEstimate.ForText(request.Text, request.Language).NeedsSections
                     ? await new LongTextGeneration(Section, s => Publish(s, progress), _log)
                         .GenerateAsync(request, token).ConfigureAwait(false)
                     : await _synth.SynthesizeAsync(request, token, frames).ConfigureAwait(false);
@@ -476,15 +476,11 @@ public sealed class OnnxTtsEngine : ITtsEngine
         }
         catch (OperationCanceledException)
         {
-            EndPreview(request, "Generation was stopped.");
             await FinishStoppingAsync(progress).ConfigureAwait(false);
             throw;
         }
         catch (Exception ex)
         {
-            // Silence queued provisional audio before potentially slow runtime
-            // cleanup. A failed take must not keep playing during Release().
-            EndPreview(request, "Generation failed; this preview was not saved.");
             // The same release path as success: a run that threw allocated as
             // much as one that finished.
             _log.Log($"Generation failed: {ex}");
@@ -599,12 +595,6 @@ public sealed class OnnxTtsEngine : ITtsEngine
         }
     }
 
-    private void EndPreview(GenerateRequest request, string reason)
-    {
-        try { request.AudioPreview?.Invoke(new AudioPreviewChunk([], WavWriter.SampleRate, 0, reason)); }
-        catch (Exception ex) { _log.Log($"Could not end the streaming preview: {ex.Message}"); }
-    }
-
     private string WriteOutput(GenerateRequest request, SynthesisResult audio, string modelFolder, ModelSource source, CancellationToken ct,
         string? continuationModelRepo = null)
     {
@@ -622,7 +612,7 @@ public sealed class OnnxTtsEngine : ITtsEngine
                 _log.Log($"Could not write metadata into {Path.GetFileName(path)}; the audio is fine.");
 
             // Serialize Stop intent and commit. Once committed, the completed
-            // file survives a Stop aimed at the remaining preview playback.
+            // file survives a later Stop.
             lock (_gate)
             {
                 ct.ThrowIfCancellationRequested();

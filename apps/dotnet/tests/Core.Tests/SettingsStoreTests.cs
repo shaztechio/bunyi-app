@@ -39,6 +39,18 @@ public class SettingsStoreTests : IDisposable
     }
 
     [Fact]
+    public void Obsolete_playback_preference_is_ignored_and_not_saved_again()
+    {
+        Directory.CreateDirectory(_folder);
+        File.WriteAllText(SettingsPath, "{\"appearance\":\"dark\",\"streamingEnabled\":true}");
+        var (store, _) = NewStore();
+        var settings = store.Load();
+        Assert.Equal(Appearance.Dark, settings.Appearance);
+        store.Save(settings);
+        Assert.DoesNotContain("streamingEnabled", File.ReadAllText(SettingsPath));
+    }
+
+    [Fact]
     public void A_first_run_gets_defaults_and_says_nothing()
     {
         var (store, log) = NewStore();
@@ -46,7 +58,6 @@ public class SettingsStoreTests : IDisposable
         var settings = store.Load();
 
         Assert.Equal(Appearance.System, settings.Appearance);   // spec §7 default
-        Assert.True(settings.StreamingEnabled);
         Assert.Empty(settings.ModelRepo);
         Assert.Null(settings.ModelsFolder);
         Assert.Empty(log.Lines);   // a missing file is not a problem worth reporting
@@ -111,7 +122,6 @@ public class SettingsStoreTests : IDisposable
         var loaded = store.Load();
 
         Assert.True(loaded.UnloadOnModeSwitch);
-        Assert.True(loaded.StreamingEnabled);
         Assert.Equal(Appearance.Dark, loaded.Appearance);
     }
 
@@ -128,16 +138,6 @@ public class SettingsStoreTests : IDisposable
 
         Assert.False(document.RootElement.GetProperty("unloadOnModeSwitch").GetBoolean());
         Assert.False(store.Load().UnloadOnModeSwitch);
-    }
-
-    [Fact]
-    public void Streaming_can_be_disabled_and_persists_under_its_spec_key()
-    {
-        var (store, _) = NewStore();
-        store.Save(new AppSettings { StreamingEnabled = false });
-        using var document = JsonDocument.Parse(File.ReadAllText(SettingsPath));
-        Assert.False(document.RootElement.GetProperty("streamingEnabled").GetBoolean());
-        Assert.False(store.Load().StreamingEnabled);
     }
 
     [Theory]
