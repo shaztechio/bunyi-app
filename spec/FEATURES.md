@@ -286,6 +286,14 @@ completed before this feature is marked implemented.
   A generation that outlasts its estimate does not change paths midway. The
   estimate is approximate; it is not a hard duration limit or an ETA. The
   20-second streaming threshold itself does not introduce a confirmation.
+- **Streaming is optional.** Settings → General has a **Streaming** checkbox,
+  enabled by default, persisted as `streamingEnabled`. Missing values in older
+  settings mean enabled. It applies to Preset Voice, Voice Design and Voice
+  Clone. When disabled, all lengths use complete-file generation and playback;
+  do not create a preview session, buffer audio or show streaming controls.
+  Keep the speech-length estimate visible without promising early playback.
+  Snapshot the setting with the submitted request so changes affect the next
+  generation, not an in-progress run. Enabling it preserves the >20-second gate.
 - **All three modes use one continuous generation.** Preserve preset speaker
   and style, design description, and clone reference audio and transcript.
   Decode playable audio chunks during that run, keeping the voice and acoustic
@@ -770,6 +778,11 @@ second reading of the same information.
   Also **"Free memory when switching modes"**, a checkbox, **on** by default
   and persisted under `unloadOnModeSwitch` — see §3e for what it does
   and what turning it off costs.
+  Also **Streaming**, a checkbox **on** by default, persisted under
+  `streamingEnabled`. It enables audio playback during eligible long generations
+  in all three modes; turning it off waits for the completed recording (§2b).
+  Explain that the change applies to the next generation. Implementation follows
+  §2b's tracked platform rollout; the Windows demo exposes it now.
 - **Models**: the three per-mode source fields (repo ID or base URL) + help.
 - **Storage**: models-folder location controls + pre-download commands.
 - **Backup**: back up / restore / stop + status.

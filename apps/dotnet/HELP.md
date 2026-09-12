@@ -44,7 +44,7 @@ If no data arrives, the message changes to **Waiting for more data**. After 30 s
 
 For shorter text, the audio plays automatically when generation finishes. **Play** repeats it, and the folder button opens the folder where the file was saved.
 
-**Streaming preview.** In this demonstration build, all three modes show an estimated speech length. When the upper estimate is more than 20 seconds, you hear a preview while the rest is being generated. This is the estimated recording length, not the time your computer will spend making it. Exactly 20 seconds or less uses the ordinary playback after generation.
+**Streaming preview.** Streaming is enabled by default in **Settings → General**. All three modes show an estimated speech length. With Streaming on, when the upper estimate is more than 20 seconds, you hear a preview while the rest is being generated. This is the estimated recording length, not the time your computer will spend making it. Exactly 20 seconds or less uses ordinary playback after generation. Turn Streaming off to use playback after generation for every recording; changes apply to the next run.
 
 **Buffering audio** means the next part is still being made. Playback starts automatically once 10 seconds of audio are ready, while generation continues. After a pause, Bunyi adjusts the refill target between 10 and 20 seconds based on generation speed. When generation finishes, any shorter remainder plays immediately. A slower computer may still pause; the completed recording contains none of these waiting gaps. During a refill, **Play now** lets you start once 10 seconds are ready, with a reminder that playback may pause again.
 The playback panel says **Preparing playback** before the first sound, **Playing audio** while you listen, and **Waiting for more audio** when playback pauses. The waiting message confirms that Bunyi is still generating and will resume automatically. Its progress bar shows seconds of speech ready toward the current buffer target, not how many seconds you must wait. The target can change as Bunyi measures generation speed. **Finishing your recording** means Bunyi is preparing the saved file.
@@ -159,6 +159,8 @@ Both show progress and can be stopped part way.
 ### Appearance
 
 Light, dark, or follow the system. It applies to every Bunyi window straight away.
+
+**Streaming**, also under **General**, is on by default. It lets long recordings play while they are generated in all three voice modes. Turn it off to wait for the completed recording. The preference is remembered, and changes apply to the next generation.
 
 **Free memory when switching modes** decides *when* Bunyi lets go of a model, not whether it does. Each mode uses its own model, and a model can be several gigabytes.
 

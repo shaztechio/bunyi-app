@@ -157,7 +157,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             var estimate = SpeechDurationEstimate.ForText(Script, Language);
             return $"Estimated speech: {Math.Ceiling(estimate.LowerSeconds):0}–{Math.Ceiling(estimate.UpperSeconds):0} seconds"
-                + (estimate.ShouldStream ? " · playback starts while audio is generated" : "");
+                + (StreamingEnabled && estimate.ShouldStream ? " · playback starts while audio is generated" : "");
         }
     }
 
@@ -319,7 +319,23 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public HistoryViewModel History { get; }
 
     /// <summary>Settings (spec §7), or null when the app did not supply one.</summary>
-    public SettingsViewModel? Settings { get; init; }
+    private SettingsViewModel? _settingsViewModel;
+    public SettingsViewModel? Settings
+    {
+        get => _settingsViewModel;
+        init
+        {
+            _settingsViewModel = value;
+            if (value is not null) value.PropertyChanged += OnSettingsChanged;
+        }
+    }
+    public bool StreamingEnabled => Settings?.StreamingEnabled ?? true;
+    private void OnSettingsChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(SettingsViewModel.StreamingEnabled)) return;
+        OnPropertyChanged(nameof(StreamingEnabled));
+        OnPropertyChanged(nameof(SpeechEstimateText));
+    }
 
     /// <summary>
     /// Runs every check on demand, including the slow one (spec §11).
@@ -850,7 +866,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // or download. The duration gate belongs to this submitted request.
         var request = CurrentRequest();
         var speechEstimate = SpeechDurationEstimate.ForText(request.Text, request.Language);
-        var shouldStream = speechEstimate.ShouldStream;
+        var shouldStream = StreamingEnabled && speechEstimate.ShouldStream;
 
         using var cancellation = new CancellationTokenSource();
         _generateCancellation = cancellation;
@@ -1400,6 +1416,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _downloadTicker?.Dispose();
         _ticker?.Dispose();
         _engine.StatusChanged -= OnEngineStatusChanged;
+        if (Settings is not null) Settings.PropertyChanged -= OnSettingsChanged;
         History.Dispose();
         _player.Dispose();
     }

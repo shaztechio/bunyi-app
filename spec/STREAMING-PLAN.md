@@ -15,6 +15,11 @@ the newer CLI runtime, script layout and removal of automatic generation caps.
 
 ## Scope and routing
 
+- Settings → General → Streaming defaults on and persists as `streamingEnabled`.
+  Missing settings default on. Snapshot it at Generate: off routes every take
+  through complete-file playback; on retains the strict >20-second estimate
+  gate. Changes take effect on the next generation, across all three modes.
+
 - Preset Voice, Voice Design and Voice Clone all use one continuous inference
   run. Preserve full text, speaker/style, description and reference conditioning.
   Do not restart inference at sentence boundaries or change model families.

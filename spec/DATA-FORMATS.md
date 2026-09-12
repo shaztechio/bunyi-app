@@ -381,6 +381,13 @@ this same format; no per-chunk output format or metadata schema is introduced.
 
 ### Streaming temporary output
 
+The per-user `streamingEnabled` setting is a JSON boolean in .NET's
+`settings.json`, defaulting to `true` when absent (including existing installs).
+Persist an explicit `false` when streaming is disabled. The corresponding
+macOS preference key is `streamingEnabled`, with the same default, for the
+planned §2b implementation. This preference changes playback behavior only;
+it does not change completed audio formats or metadata.
+
 Planned for §2b; implementation status is tracked in
 [STREAMING-PLAN.md](STREAMING-PLAN.md).
 
