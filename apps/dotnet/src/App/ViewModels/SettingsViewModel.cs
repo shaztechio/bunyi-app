@@ -18,6 +18,7 @@ using Bunyi.Core.Diagnostics;
 using Bunyi.Core.Models;
 using Bunyi.Core.Platform;
 using Bunyi.Core.Settings;
+using Bunyi.Core.Runtime;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -60,6 +61,20 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private string _voiceDesignSource = string.Empty;
     [ObservableProperty] private string _voiceCloneSource = string.Empty;
     [ObservableProperty] private string _newConfigName = string.Empty;
+    [ObservableProperty] private string _sourceStatus = string.Empty;
+
+    /// <summary>Changing this explicitly saves all three sources, including when turned off.</summary>
+    public bool UseBunyiMirror
+    {
+        get => Enum.GetValues<TtsMode>().All(mode =>
+            ModelSource.Parse(_settings.SourceFor(mode), _defaultSourceFor(mode)) is ModelSource.BaseUrl source &&
+            source.Url.AbsoluteUri.TrimEnd('/') == ModelConfigLibrary.BunyiMirror.For(mode)!.TrimEnd('/'));
+        set
+        {
+            if (_loading) return;
+            SetSources(mode => value ? ModelConfigLibrary.BunyiMirror.For(mode)! : BunyiRuntime.HuggingFaceSourceFor(mode));
+        }
+    }
 
     /// <summary>
     /// What each box falls back to when it is empty — shown as its placeholder.
@@ -232,6 +247,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
 
         OnPropertyChanged(nameof(IsCustomModelsFolder));
+        OnPropertyChanged(nameof(UseBunyiMirror));
     }
 
     /// <summary>
@@ -263,28 +279,42 @@ public sealed partial class SettingsViewModel : ObservableObject
     private void PersistSource(TtsMode mode, string value)
     {
         if (_loading) return;
-        Persist(_settings.WithSourceFor(mode, value));
-        RefreshStorage();
+        if (Persist(_settings.WithSourceFor(mode, value))) RefreshStorage();
+        else Reload();
     }
 
-    private void Persist(AppSettings settings)
+    private bool Persist(AppSettings settings)
     {
         try
         {
             using var lease = AcquireOperation?.Invoke("config.set");
             _store.SaveStrict(settings);
             _settings = settings;
+            SourceStatus = string.Empty;
+            return true;
         }
         catch (IOException ex)
         {
             BackupStatus = ex.Message;
+            SourceStatus = $"Could not save settings. {ex.Message}";
             _log.Log(ex.Message);
         }
         catch (UnauthorizedAccessException ex)
         {
             BackupStatus = ex.Message;
+            SourceStatus = $"Could not save settings. {ex.Message}";
             _log.Log(ex.Message);
         }
+        return false;
+    }
+
+    private bool SetSources(Func<TtsMode, string> sourceFor)
+    {
+        var updated = _settings;
+        foreach (var mode in Enum.GetValues<TtsMode>()) updated = updated.WithSourceFor(mode, sourceFor(mode));
+        var saved = Persist(updated);
+        Reload();
+        return saved;
     }
 
     /// <summary>Saves the three sources under a name (spec §3a).</summary>
@@ -451,10 +481,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         // Set together, because they belong together: switching between the Hub
         // and a mirror means changing all three, and each must match its mode
         // or the app loads a model that runs and produces nonsense.
-        PresetVoiceSource = config.PresetVoice;
-        VoiceDesignSource = config.VoiceDesign;
-        VoiceCloneSource = config.VoiceClone;
-        _log.Log($"Using the model configuration “{config.Name}”.");
+        if (SetSources(mode => config.For(mode) ?? string.Empty))
+            _log.Log($"Using the model configuration “{config.Name}”.");
     }
 
     [RelayCommand]
@@ -469,10 +497,8 @@ public sealed partial class SettingsViewModel : ObservableObject
     [RelayCommand]
     private void ResetSources()
     {
-        PresetVoiceSource = string.Empty;
-        VoiceDesignSource = string.Empty;
-        VoiceCloneSource = string.Empty;
-        _log.Log("Reset every model source to its default.");
+        if (SetSources(_ => string.Empty))
+            _log.Log("Reset every model source to its default.");
     }
 
     /// <summary>Points the models folder somewhere else (spec §3d).</summary>

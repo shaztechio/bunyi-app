@@ -30,15 +30,17 @@ public sealed class BunyiRuntime : IAsyncDisposable
     private readonly bool _ownsHttp;
     private readonly bool _strictSettings;
     private readonly ILogSink _log;
+    private readonly PackagedModelDefaults _defaults;
     private readonly object _leaseGate = new();
     private bool _nonModelOperation;
     private readonly Dictionary<string, (ModelOperationLease Lease, int References)> _leases =
         new(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
 
     public BunyiRuntime(ILogSink? log = null, SettingsStore? settings = null,
-        HttpClient? http = null, bool strictSettings = false)
+        HttpClient? http = null, bool strictSettings = false, PackagedModelDefaults? defaults = null)
     {
         _log = log ?? LogStore.Shared;
+        _defaults = defaults ?? PackagedModelDefaults.Load(_log);
         Settings = settings ?? new SettingsStore(_log);
         _strictSettings = strictSettings;
         _ownsHttp = http is null;
@@ -78,13 +80,17 @@ public sealed class BunyiRuntime : IAsyncDisposable
         }
     }
 
-    public static string DefaultSourceFor(TtsMode mode) => mode switch
+    public static string HuggingFaceSourceFor(TtsMode mode) => mode switch
     {
         TtsMode.PresetVoice => "elbruno/Qwen3-TTS-12Hz-0.6B-CustomVoice-ONNX",
         TtsMode.VoiceDesign => "wavekat/Qwen3-TTS-1.7B-VoiceDesign-ONNX",
         TtsMode.VoiceClone => "wavekat/Qwen3-TTS-0.6B-Base-ONNX",
         _ => throw new ArgumentOutOfRangeException(nameof(mode)),
     };
+
+    public string DefaultSourceFor(TtsMode mode) => _defaults.UseMirror
+        ? ModelConfigLibrary.BunyiMirror.For(mode)!
+        : HuggingFaceSourceFor(mode);
 
     public ModelSource SourceFor(TtsMode mode) =>
         ModelSource.Parse(CurrentSettings.SourceFor(mode), DefaultSourceFor(mode));
@@ -105,7 +111,7 @@ public sealed class BunyiRuntime : IAsyncDisposable
         // Check again at invocation time: settings may have changed since the failure.
         if (!CanUseHuggingFace(mode, failure)) throw new InvalidOperationException("The model source has changed. Press Generate to try your current source.");
         using var lease = AcquireOperation("config.set");
-        Settings.SaveStrict(CurrentSettings.WithSourceFor(mode, DefaultSourceFor(mode)));
+        Settings.SaveStrict(CurrentSettings.WithSourceFor(mode, HuggingFaceSourceFor(mode)));
     }
 
     public Task<DoctorReport> DoctorAsync(TtsMode mode, bool deep, CancellationToken ct) =>

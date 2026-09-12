@@ -93,7 +93,7 @@ public sealed class RuntimeTests : IDisposable
         Assert.False(runtime.CanUseHuggingFace(TtsMode.VoiceClone,
             new("download_service_unavailable", "Down", new("https://huggingface.co/whisper/model"))));
         runtime.UseHuggingFace(TtsMode.VoiceClone, failure);
-        Assert.Equal(BunyiRuntime.DefaultSourceFor(TtsMode.VoiceClone), store.Load().SourceFor(TtsMode.VoiceClone));
+        Assert.Equal(BunyiRuntime.HuggingFaceSourceFor(TtsMode.VoiceClone), store.Load().SourceFor(TtsMode.VoiceClone));
         Assert.Equal("custom/design", store.Load().SourceFor(TtsMode.VoiceDesign));
         Assert.Equal(new byte[] { 1, 2 }, await File.ReadAllBytesAsync(partial));
         Assert.NotEqual(ModelDownloader.FolderFor(oldSource, _root), ModelDownloader.FolderFor(runtime.SourceFor(TtsMode.VoiceClone), _root));

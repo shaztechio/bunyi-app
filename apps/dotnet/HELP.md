@@ -130,10 +130,12 @@ The **gear** in the top right opens Settings, and so does **Ctrl+,** (Control an
 
 The model can come from either of two places:
 
-- A **Hugging Face repo ID**, which is the default and needs nothing from you.
+- A **Hugging Face repo ID**, used by default in portable builds.
 - A **web address** starting with `https://`, if you host the model files yourself or on a server inside your organization.
 
 Bunyi decides which one you meant from what you typed. Clear the field to go back to the built-in default.
+
+Windows MSIX builds default to the **Bunyi mirror**. In Models, **Use Bunyi mirror for all three modes** switches all three sources together: on uses the mirror, off uses Hugging Face. The choice is saved and survives restarting or upgrading. Custom sources stay as they are until you change them. Resetting all three restores the defaults that came with your build, shown in the empty fields. Switching sources keeps existing downloads but may need a separate download.
 
 ### Storage
 

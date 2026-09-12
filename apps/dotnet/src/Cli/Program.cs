@@ -109,7 +109,7 @@ public static class Program
                 foreach (var mode in Enum.GetValues<Bunyi.Core.TtsMode>())
                 {
                     if (!runtime.CanUseHuggingFace(mode, service)) continue;
-                    var repo = BunyiRuntime.DefaultSourceFor(mode);
+                    var repo = BunyiRuntime.HuggingFaceSourceFor(mode);
                     string[] arguments = ["config", "set", $"modelSource.{CommandParser.ModeName(mode)}", repo,
                         "--config", runtime.Settings.Path];
                     var command = "bunyi " + string.Join(" ", arguments.Select(ShellArgument));

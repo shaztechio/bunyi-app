@@ -80,7 +80,7 @@ public partial class App : Application
                 new ModelConfigLibrary(log),
                 log,
                 ApplyAppearance,
-                DefaultSourceFor);
+                runtime.DefaultSourceFor);
 
             var viewModel = new MainViewModel(
                 engine, new SoundFlowAudioPlayer(log), log,
@@ -175,8 +175,4 @@ public partial class App : Application
             _ => ThemeVariant.Default,   // System
         };
 
-    /// <summary>
-    /// The built-in source for a mode when Settings leaves it blank (spec §3a).
-    /// </summary>
-    private static string DefaultSourceFor(TtsMode mode) => Bunyi.Core.Runtime.BunyiRuntime.DefaultSourceFor(mode);
 }

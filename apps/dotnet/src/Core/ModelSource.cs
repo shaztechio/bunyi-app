@@ -49,7 +49,7 @@ public abstract record ModelSource
 
     /// <summary>
     /// Scheme decides: http(s):// ⇒ BaseUrl, else Repo. Blank ⇒ the mode's
-    /// default (ONNX repo — differs from macOS/MLX defaults; see AGENTS.md).
+    /// packaged default (an ONNX repository or mirror URL).
     /// </summary>
     public static ModelSource Parse(string value, string defaultRepoId)
     {

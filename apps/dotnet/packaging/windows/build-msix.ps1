@@ -108,6 +108,10 @@ if ([version]$binaryVersion -ne $packageVersion) {
     throw "Published binary version $binaryVersion does not match package version $packageVersion. Republish the app."
 }
 Get-ChildItem -LiteralPath $publish | Copy-Item -Destination $stage -Recurse
+# The caller's portable output stays on Hugging Face. Only MSIX staging changes.
+Copy-Item -LiteralPath (Join-Path $dotnetRoot 'packaging/defaults/mirror.json') `
+    -Destination (Join-Path $stage 'bunyi.defaults.json') -Force
+& (Join-Path $dotnetRoot 'packaging/test-defaults.ps1') -Path $stage -ExpectedSource mirror
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Assets') -Destination $stage -Recurse
 
 $manifest.Package.Identity.SetAttribute('Name', $PackageName)
@@ -135,6 +139,7 @@ $suffix = if ($LocalTest) { '-local-test' } else { '-store' }
 $packagePath = Join-Path $OutputDirectory "Bunyi-$packageVersion-win-x64$suffix.msix"
 & $makeAppx pack /d $stage /p $packagePath /o
 if ($LASTEXITCODE -ne 0) { throw 'MakeAppx packaging/validation failed.' }
+& (Join-Path $dotnetRoot 'packaging/test-defaults.ps1') -Path $packagePath -ExpectedSource mirror
 $hash = (Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash.ToLowerInvariant()
 "$hash  $([IO.Path]::GetFileName($packagePath))" | Set-Content -LiteralPath "$packagePath.sha256" -Encoding ascii
 Write-Host "Unsigned MSIX: $packagePath"

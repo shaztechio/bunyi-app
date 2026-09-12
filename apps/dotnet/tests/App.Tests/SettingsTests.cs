@@ -46,11 +46,59 @@ public sealed class SettingsTests : HeadlessWindows
         if (Directory.Exists(_folder)) Directory.Delete(_folder, recursive: true);
     }
 
-    private SettingsViewModel NewModel()
+    private SettingsViewModel NewModel(bool mirrorDefault = false)
     {
         var store = new SettingsStore(_log, Path.Combine(_folder, "settings.json"));
         var configs = new ModelConfigLibrary(_log, Path.Combine(_folder, "configs.json"));
-        return new SettingsViewModel(store, configs, _log, _applied.Add, DefaultFor);
+        return new SettingsViewModel(store, configs, _log, _applied.Add,
+            mode => mirrorDefault ? ModelConfigLibrary.BunyiMirror.For(mode)! : DefaultFor(mode));
+    }
+
+    [AvaloniaFact]
+    public void Turning_mirror_off_survives_restart_and_reset_restores_packaged_default()
+    {
+        var model = NewModel(mirrorDefault: true);
+        var window = Open(new SettingsWindow { DataContext = model });
+        window.FindControl<TabControl>("SettingsTabs")!.SelectedIndex = 1;
+        window.UpdateLayout();
+        var mirror = window.FindControl<CheckBox>("UseBunyiMirrorCheckBox")!;
+        Assert.True(mirror.IsChecked);
+        mirror.IsChecked = false;
+        var restarted = NewModel(mirrorDefault: true);
+        Assert.False(restarted.UseBunyiMirror);
+        Assert.Equal(DefaultFor(TtsMode.PresetVoice), restarted.PresetVoiceSource);
+        Assert.Equal(DefaultFor(TtsMode.VoiceDesign), restarted.VoiceDesignSource);
+        Assert.Equal(DefaultFor(TtsMode.VoiceClone), restarted.VoiceCloneSource);
+        restarted.ResetSourcesCommand.Execute(null);
+        var reset = NewModel(mirrorDefault: true);
+        Assert.True(reset.UseBunyiMirror);
+        Assert.Empty(reset.PresetVoiceSource);
+        Assert.Equal(ModelConfigLibrary.BunyiMirror.PresetVoice, reset.PresetVoiceDefault);
+    }
+
+    [AvaloniaFact]
+    public void Mirror_choice_survives_an_upgrade_to_a_different_packaged_default()
+    {
+        var model = NewModel();
+        model.UseBunyiMirror = true;
+        Assert.True(NewModel().UseBunyiMirror);
+        Assert.True(NewModel(mirrorDefault: true).UseBunyiMirror);
+        model.PresetVoiceSource = "custom/preset";
+        var mixed = NewModel(mirrorDefault: true);
+        Assert.False(mixed.UseBunyiMirror);
+        Assert.Equal("custom/preset", mixed.PresetVoiceSource);
+        Assert.Equal(ModelConfigLibrary.BunyiMirror.VoiceClone, mixed.VoiceCloneSource);
+    }
+
+    [AvaloniaFact]
+    public void Failed_source_switch_retains_old_choice_and_shows_an_error()
+    {
+        var model = NewModel(mirrorDefault: true);
+        model.AcquireOperation = _ => throw new IOException("A generation is running.");
+        model.UseBunyiMirror = false;
+        Assert.True(model.UseBunyiMirror);
+        Assert.True(NewModel(mirrorDefault: true).UseBunyiMirror);
+        Assert.Contains("Could not save", model.SourceStatus);
     }
 
     private static string DefaultFor(TtsMode mode) => mode switch

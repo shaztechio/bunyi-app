@@ -176,12 +176,10 @@ public sealed class ModelConfigLibrary
     /// same thing for the ONNX family.
     /// </para>
     /// <para>
-    /// <b>Not the default, deliberately.</b> Hugging Face is where the weights
-    /// actually come from, and a default pointing at project-run infrastructure
-    /// would make that infrastructure a single point of failure for every
-    /// install. Each output records the source that produced it, so it has to
-    /// be one the user chose. It is not an automatic fallback when the Hub is
-    /// slow either, for the same reason.
+    /// Portable builds default to Hugging Face; MSIX packages select this
+    /// mirror through their read-only packaged defaults. Explicit per-mode
+    /// user choices always win. It is never an automatic fallback when the
+    /// Hub is slow. Each output records its effective source.
     /// </para>
     /// <para>
     /// The <c>Guid</c> is fixed rather than generated. The row has to keep its

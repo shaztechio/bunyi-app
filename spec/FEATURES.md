@@ -321,11 +321,35 @@ brings the built-in back, which was hidden rather than gone. It exists because
 Hugging Face is unreachable on some networks, blocked outright in mainland
 China, which for a Qwen model is a substantial share of the likely audience.
 
-It is **not** the default and must not become one. Upstream is where the
-weights come from, and a default pointing at project-run infrastructure makes
-that infrastructure a single point of failure for every install. Nor is it an
-automatic fallback when the Hub is slow: the source is recorded in each
-output's metadata, so it must be one the user chose.
+**Packaged download defaults.** Windows/Linux read `bunyi.defaults.json` from
+the executable directory once at startup. Portable desktop and CLI builds
+select Hugging Face; the Windows MSIX selects the Bunyi mirror. A saved per-mode
+source always wins. Missing or invalid packaged configuration falls back to
+Hugging Face and is logged. Never read this file from the working directory or
+write user preferences into the package. The schema is in DATA-FORMATS.md.
+
+Settings → Models offers **Use Bunyi mirror for all three modes**. Turning it
+on explicitly saves the three canonical mirror URLs; turning it off explicitly
+saves the three canonical Hugging Face repositories, even in a mirror-default
+package. This choice survives restart and upgrade. Existing custom/mixed
+sources are preserved until the user changes them; the checkbox is checked only
+when all three effective sources use the built-in mirror. Explain that changing
+the checkbox replaces all three sources and may require separate downloads.
+Clearing a per-mode field uses that build's default; resetting all three clears
+their overrides and restores the packaged defaults. Show actual default sources
+in the field placeholders and make persistence failures visible in Models.
+
+Generation, Settings, Doctor, CLI/server and pre-download commands resolve the
+same sources. Recovery's **Download from Hugging Face** always saves the canonical
+upstream repository for the affected mode, independently of the packaged default.
+Keep source caches separate and preserve existing downloads. No automatic source
+switch occurs on a slow or unavailable service. Output metadata records the
+effective source. The packaged choice applies to the three TTS models; Whisper
+keeps its existing source.
+
+Native macOS retains its Hugging Face default and existing source fields/saved
+mirror configuration. Matching the convenience checkbox is a tracked follow-up
+in [PACKAGED-DEFAULTS.md](PACKAGED-DEFAULTS.md); no macOS packaging change is required.
 
 A platform ships this only if its mirror publishes `manifest.sha256`
 (`DATA-FORMATS.md`). Offering a source the app itself endorses is a higher bar
