@@ -15,6 +15,26 @@ the newer CLI runtime, script layout and removal of automatic generation caps.
 
 ## Scope and routing
 
+### Long-text recovery revision
+
+The current implementation follows FEATURES.md §2: sentence-aware sections,
+bounded subdivision retries and playback of accepted sections. The single-run
+rolling-decoder design and measurements below describe the earlier experiment,
+not the current long-text route. Streaming remains default on, gated by the
+whole request's >20-second estimate; sectioning also runs when Streaming is off.
+Design uses a short completed opening as clone conditioning for all later
+sections, with only one model resident at a time. Preset and Clone retain their
+selected voice. Completed sections feed one playback session and one final WAV.
+
+Outstanding parity/acceptance: implement this policy in macOS; validate Windows
+and Linux devices and long passages across languages, including omissions,
+repetition, voice identity and audible joins. A bounded retry is failure recovery,
+not proof that an EOS-terminated section said every word correctly. Compare the
+reported long clone failure against the export reference before claiming its
+underlying model/conditioning cause has been resolved.
+
+### Historical single-run prototype
+
 - Settings → General → Streaming defaults on and persists as `streamingEnabled`.
   Missing settings default on. Snapshot it at Generate: off routes every take
   through complete-file playback; on retains the strict >20-second estimate

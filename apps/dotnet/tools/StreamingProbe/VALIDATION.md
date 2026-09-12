@@ -1,5 +1,50 @@
 # Windows streaming demonstration — 12 September 2026
 
+## Current: recoverable long-text sections
+
+Long requests now use sentence-aware sections independently of the Streaming
+setting. Failed attempts never enter preview; up to two subdivision levels
+recover them before a visible failure. Short requests retain the existing EOS
+path. Design generates a complete short opening, unloads its model, and reuses
+that opening and its exact transcript through the configured clone model.
+
+Real CPU checks used the generic 89-word passage in `SectionProbe.cs`, seed 7,
+the installed self-hosted exports and a synthetic reference. No private voice or
+user script was used. These are single runs, not a performance benchmark.
+
+| Mode | Final audio | First device consumption | Generation finished | Accepted sections |
+|---|---:|---:|---:|---:|
+| Preset | 36.04 s | 84.25 s | 178.78 s | 4 |
+| Clone | 28.76 s | 34.83 s | 68.10 s | 4 |
+| Design → Clone | 29.76 s | 167.19 s | 204.15 s | 5 |
+
+Design's first continuation attempt failed to select EOS and reached its
+560-frame limit. It was discarded before vocoding/playback, subdivided once,
+and both smaller sections reached EOS (67 and 83 frames). The 5.68-second
+designed opening was retained exactly once. This exercised real recovery, not
+just a simulated failure. The long initial silence reflects that retry and the
+10-second playback minimum; it is not eliminated by sectioning.
+
+All runs had contiguous preview offsets, equal streamed/final durations and no
+device failure. Only accepted sections were saved as a single WAV. Metrics are
+in `results/*-sections.json`; generated WAVs stay in local artifacts. Local
+Whisper base transcriptions retained all words in Preset and Clone (punctuation
+differences only); Design retained the passage with one additional “Ah” near the
+opening. Transcription is a useful coverage check, not proof of perceptual voice
+identity or absence of audio artifacts. Broader listening/long-text/language
+acceptance and the original failure's underlying model cause remain open.
+
+Validation: 841 Core tests passed with 8 model-dependent tests skipped, 403 App
+tests and 95 CLI tests passed. Four subsequently added engine integration cases
+passed with the entire 42-test EngineTests group. The 13 new section tests cover
+lossless Unicode splitting, bounded retries, cancellation, accepted-only playback,
+voice conditioning, temporary reference cleanup and whole-recording gain. Engine
+integration checks all-mode non-streaming output, metadata and failure cleanup.
+Self-contained `streaming-demo-sections-win-x64` publish and visible app launch
+succeeded. macOS parity and Linux device checks remain tracked in the spec.
+
+## Historical rolling-decoder demonstration
+
 The playback panel now includes a persistent seconds-played counter during the
 streaming session. All 398 App tests pass, including assertions that the counter
 uses consumed PCM samples, excludes buffering silence, freezes on Stop, resumes

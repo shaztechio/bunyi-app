@@ -381,6 +381,13 @@ this same format; no per-chunk output format or metadata schema is introduced.
 
 ### Streaming temporary output
 
+Long-text generation still saves one WAV with the full original text. An optional
+`continuationModelRepo` string identifies the clone model used after a designed
+opening; absent means no secondary model. Strip credentials/query/fragment as
+for `modelRepo`. Older readers may ignore this field. A designed opening used as
+a temporary clone reference lives only for the generation, is never a saved voice
+or separate History entry, and is deleted on success, Stop or failure.
+
 The per-user `streamingEnabled` setting is a JSON boolean in .NET's
 `settings.json`, defaulting to `true` when absent (including existing installs).
 Persist an explicit `false` when streaming is disabled. The corresponding

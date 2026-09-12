@@ -1,5 +1,17 @@
 # Streaming demonstration probe
 
+## Current sectioned generation
+
+Add `--sections` to `preset`, `design` or `clone` to exercise the current engine
+route with a longer generic passage. Use the self-hosted models parent shown
+below; this route uses normal model discovery and may download missing models.
+Generate `reference` first in the same results folder for the clone test. Run
+sequentially, with `--play` for the device check. Reports are `<mode>-sections.json`.
+This checks accepted-section offsets, final length, early playback and the
+Design-to-Clone continuation path. It does not use private voices or settings.
+
+## Historical rolling-decoder comparison
+
 Runs the installed ONNX exports with one continuous generation per mode. Captures
 rolling preview PCM and the final full decode of the same codec sequence, checks
 contiguous sample offsets and equal sample counts, saves both WAVs and timing/error

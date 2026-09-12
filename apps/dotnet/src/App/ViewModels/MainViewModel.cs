@@ -157,7 +157,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             var estimate = SpeechDurationEstimate.ForText(Script, Language);
             return $"Estimated speech: {Math.Ceiling(estimate.LowerSeconds):0}–{Math.Ceiling(estimate.UpperSeconds):0} seconds"
-                + (StreamingEnabled && estimate.ShouldStream ? " · playback starts while audio is generated" : "");
+                + (StreamingEnabled && estimate.ShouldStream ? " · playback starts while audio is generated" : "")
+                + (estimate.ShouldStream ? " · generated in shorter sections" : "")
+                + (estimate.ShouldStream && Mode == TtsMode.VoiceDesign
+                    ? " · also uses the clone model to keep the designed voice consistent" : "");
         }
     }
 

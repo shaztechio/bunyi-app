@@ -115,10 +115,12 @@ public sealed class PresetSpeechSynthesizer(
                 request.Instruct,
                 request.Language),
             progress: frames,
+            maxFrames: request.SectionFrameLimit,
             ct: ct, audioPreview: request.AudioPreview);
 
         return Task.FromResult(new SynthesisResult(
-            DesignSpeechSynthesizer.ToPcm16(result.Samples, _log), 24_000, result.Frames));
+            request.KeepRawSamples ? [] : DesignSpeechSynthesizer.ToPcm16(result.Samples, _log), 24_000, result.Frames)
+            { RawSamples = request.KeepRawSamples ? result.Samples : null });
     }
 
     /// <summary>The speaker to use: the one asked for, or the default.</summary>

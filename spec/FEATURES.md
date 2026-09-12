@@ -100,9 +100,36 @@ A segmented picker selects one of three modes. macOS source:
 ## 2. Generation output
 
 - Sample rate **24 kHz**, mono, WAV.
-- **Generation ends on the model's end-of-speech token or the user's Stop.**
+- **Long text is generated in recoverable sections.** When the frozen upper
+  speech estimate exceeds 20 seconds, split at sentence boundaries into sections
+  of at most 20 estimated seconds (typically 15–20). Split oversized sentences
+  at clauses, then whitespace or Unicode text-element boundaries; preserve all
+  text in order. This applies in all three modes, independently of Streaming.
+  Keep models loaded between sections and reset generation state each time.
+  A section gets at most max(20, twice its upper estimate + 5) seconds of codec
+  frames to reach EOS. A limit is failure, never a successful truncated recording.
+  Discard the failed section and bisect it, with at most two subdivision levels
+  (seven attempts per original section). Exhaustion fails visibly; Stop remains
+  available throughout. Only accepted sections enter playback. Progress separates
+  completed audio from the current attempt and explicitly describes retries.
+  Join successful sections in order, with a short 120 ms pause and 5 ms edge fades;
+  apply one uniform clipping-protection gain to the combined recording. Save one
+  WAV and one History entry with the original full text, only after all sections
+  finish. This bounds per-section inference state, not total recording length.
+  Preset retains its speaker/style; Clone reuses its original reference features.
+  Voice Design creates a short opening (at most 8 estimated seconds, capped at
+  10 actual seconds) then uses that complete opening and its exact text as the
+  reference for subsequent sections through the configured clone model. Never
+  truncate the reference transcript or repeatedly redesign the voice. Explain
+  this additional model dependency in the UI. Unload design before loading clone.
+  The opening is part of the output exactly once; its temporary reference is
+  removed on every exit. Record the continuation model in optional metadata.
+  Windows/.NET demonstration implements this; macOS parity and listening/long
+  passage acceptance remain tracked in STREAMING-PLAN.md.
+- **Short generation ends on the model's end-of-speech token or the user's Stop.**
   Do not impose a text-length-derived frame budget or apply the export's
-  `max_new_tokens` default as an automatic app cutoff. Frame and elapsed counters
+  `max_new_tokens` default as an automatic app cutoff for short requests. The
+  bounded retry policy above is the explicit exception for long text. Frame and elapsed counters
   remain visible while waiting for the model to finish; Stop remains available.
   Removing a cutoff is not a fix for a model that rambles or never emits EOS.
   ONNX logs periodic EOS sampling probability and the actual termination reason
@@ -290,16 +317,16 @@ completed before this feature is marked implemented.
   enabled by default, persisted as `streamingEnabled`. Missing values in older
   settings mean enabled. It applies to Preset Voice, Voice Design and Voice
   Clone. When disabled, all lengths use complete-file generation and playback;
+  long-text sectioning still applies, but playback waits for the completed WAV.
   do not create a preview session, buffer audio or show streaming controls.
   Keep the speech-length estimate visible without promising early playback.
   Snapshot the setting with the submitted request so changes affect the next
   generation, not an in-progress run. Enabling it preserves the >20-second gate.
-- **All three modes use one continuous generation.** Preserve preset speaker
-  and style, design description, and clone reference audio and transcript.
-  Decode playable audio chunks during that run, keeping the voice and acoustic
-  context continuous. Restarting generation sentence by sentence is not an
-  equivalent implementation, especially for Voice Design. Codec progress
-  events alone do not count as audio streaming.
+- **All three modes use the recoverable sections in §2.** Playback consumes
+  completed sections while later sections generate. Preserve speaker/style or
+  reuse the clone reference; Design uses its first opening as a fixed voice
+  reference. Failed attempts are never streamed. This supersedes the original
+  single-inference-run demonstration. Codec progress alone is not audio streaming.
 - **Play as audio becomes available.** Queue chunks on one audio device and
   start automatically after 10 seconds of playable audio is queued. After a
   pause, resume after an adaptive 10–20 seconds is queued,

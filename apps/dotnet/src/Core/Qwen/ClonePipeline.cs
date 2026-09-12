@@ -29,6 +29,7 @@ namespace Bunyi.Core.Qwen;
 /// </remarks>
 public interface IClonePipeline : IDisposable
 {
+    void ClearReferenceCache() { }
     /// <summary>The export's own sampling defaults.</summary>
     SamplingOptions DefaultSampling { get; }
 
@@ -89,6 +90,16 @@ public sealed class ClonePipeline : IClonePipeline
     private readonly InferenceSession _codecSession;
 
     private bool _disposed;
+    private float[]? _reference;
+    private float[]? _speaker;
+    private IReadOnlyList<int[]>? _codes;
+
+    public void ClearReferenceCache()
+    {
+        _reference = null;
+        _speaker = null;
+        _codes = null;
+    }
 
     /// <param name="folder">The export's root, holding <c>config.json</c>.</param>
     /// <param name="variant">The precision subfolder, normally <c>int4</c>.</param>
@@ -188,13 +199,19 @@ public sealed class ClonePipeline : IClonePipeline
                 $"Voice clone: reference is {used.Length / (double)MelSpectrogram.SampleRate:F1}s.");
         }
 
-        var speaker = EncodeSpeaker(used);
-        ct.ThrowIfCancellationRequested();
-
-        var codes = EncodeReference(used);
-        ct.ThrowIfCancellationRequested();
-
-        _log.Log($"Voice clone: reference encoded to {codes.Count} frames.");
+        if (_reference is null || !used.SequenceEqual(_reference))
+        {
+            var encodedSpeaker = EncodeSpeaker(used);
+            ct.ThrowIfCancellationRequested();
+            var encodedCodes = EncodeReference(used);
+            ct.ThrowIfCancellationRequested();
+            _reference = used.ToArray();
+            _speaker = encodedSpeaker;
+            _codes = encodedCodes;
+            _log.Log($"Voice clone: reference encoded to {_codes.Count} frames.");
+        }
+        var speaker = _speaker!;
+        var codes = _codes!;
 
         return _talker.Generate(
             _prefill.Build(request, _tokenizer, speaker, codes),
@@ -275,6 +292,7 @@ public sealed class ClonePipeline : IClonePipeline
 
     public void Dispose()
     {
+        ClearReferenceCache();
         if (_disposed) return;
         _disposed = true;
 

@@ -106,10 +106,12 @@ public sealed class DesignSpeechSynthesizer(
         var result = _pipeline.Generate(
             new DesignRequest(request.Text, request.Instruct, request.Language),
             progress: frames,
+            maxFrames: request.SectionFrameLimit,
             ct: ct, audioPreview: request.AudioPreview);
 
         return Task.FromResult(new SynthesisResult(
-            ToPcm16(result.Samples, _log), 24_000, result.Frames));
+            request.KeepRawSamples ? [] : ToPcm16(result.Samples, _log), 24_000, result.Frames)
+            { RawSamples = request.KeepRawSamples ? result.Samples : null });
     }
 
     /// <summary>

@@ -97,6 +97,10 @@ public sealed record OutputMetadata
         : OperatingSystem.IsLinux() ? "Linux"
         : "Unknown";
 
+    [JsonPropertyName("continuationModelRepo")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ContinuationModelRepo { get; init; }
+
     [JsonPropertyName("created")]
     public required DateTimeOffset Created { get; init; }
 

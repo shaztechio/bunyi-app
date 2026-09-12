@@ -1,0 +1,33 @@
+{
+  "mode": "preset",
+  "script": "The morning light filled the room as we prepared to leave for the station. Outside, a gentle breeze moved through the trees and carried the sound of birds across the garden. We checked our bags once more, made sure the windows were closed, and left a note on the kitchen table. There was still plenty of time before the train arrived, so we decided to walk along the river. At the bridge, we stopped for a moment to watch the sunlight dancing on the water before continuing our journey.",
+  "audioSeconds": 36.04,
+  "synthesisSeconds": 178.7751829,
+  "sectionArrivalSeconds": [
+    84.1307435,
+    115.1882124,
+    145.8189706,
+    178.7410917
+  ],
+  "acceptedSeconds": [
+    15.52,
+    22.28,
+    28.88,
+    36.04
+  ],
+  "firstDeviceReadSeconds": 84.2520142,
+  "playerFailure": null,
+  "output": "Preset-voice-20260912T144128.wav",
+  "metadata": {
+    "mode": "Preset voice",
+    "text": "The morning light filled the room as we prepared to leave for the station. Outside, a gentle breeze moved through the trees and carried the sound of birds across the garden. We checked our bags once more, made sure the windows were closed, and left a note on the kitchen table. There was still plenty of time before the train arrived, so we decided to walk along the river. At the bridge, we stopped for a moment to watch the sunlight dancing on the water before continuing our journey.",
+    "language": "english",
+    "speaker": "ryan",
+    "style": "A calm male narrator with a warm, clear voice.",
+    "modelRepo": "https://models.bunyi.app/onnx/customvoice",
+    "appVersion": "0.1.0",
+    "platform": "Windows",
+    "created": "2026-09-12T14:41:28.8545672+08:00"
+  },
+  "peakWorkingSetBytes": 5940686848
+}

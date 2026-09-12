@@ -394,8 +394,43 @@ public sealed class OnnxTtsEngine : ITtsEngine
                     new EngineStatus(EngineState.Generating, Detail: FramesSoFar(n), Frames: n),
                     progress));
 
-                var audio = await _synth.SynthesizeAsync(request, token, frames).ConfigureAwait(false);
+                var supportsInstruct = _synth.SupportsInstruct;
+                string? continuationModelRepo = null;
+                var audio = SpeechDurationEstimate.ForText(request.Text, request.Language).ShouldStream
+                    ? await new LongTextGeneration(Section, s => Publish(s, progress), _log)
+                        .GenerateAsync(request, token).ConfigureAwait(false)
+                    : await _synth.SynthesizeAsync(request, token, frames).ConfigureAwait(false);
                 token.ThrowIfCancellationRequested();
+
+                async Task<SynthesisResult> Section(GenerateRequest section, CancellationToken cancellation, IProgress<int> sectionFrames)
+                {
+                    if (_loadedMode != section.Mode)
+                    {
+                        // A designed opening becomes the fixed reference. Only
+                        // one model is resident while switching to continuation.
+                        await UseSynthesizerFor(section.Mode).ConfigureAwait(false);
+                        var nextSource = _sourceFor(section.Mode);
+                        var nextLayout = _layoutFor(section.Mode);
+                        await EvictBeforeModelMutation(nextSource, nextLayout, root).ConfigureAwait(false);
+                        Publish(new EngineStatus(EngineState.Checking, Detail: "Preparing the clone model to keep your designed voice consistent"), progress);
+                        if (_doctor is not null)
+                        {
+                            var report = await _doctor(section.Mode, false, cancellation).ConfigureAwait(false);
+                            if (report.HasBlockers) throw new PreflightFailedException(report);
+                        }
+                        var nextFolder = await _downloader.EnsureModelAsync(nextSource, nextLayout, root,
+                            new InlineProgress<DownloadProgress>(p => Publish(new EngineStatus(
+                                p.Phase is DownloadPhase.Resolving or DownloadPhase.Done ? EngineState.Checking : EngineState.Downloading,
+                                p.Fraction, p.Human(), Download: p), progress)), cancellation).ConfigureAwait(false);
+                        Publish(new EngineStatus(EngineState.Loading), progress);
+                        await _synth.LoadAsync(nextFolder, cancellation).ConfigureAwait(false);
+                        _loadedFolder = nextFolder;
+                        _loadedMode = section.Mode;
+                        continuationModelRepo = SourceName(nextSource, nextFolder);
+                    }
+                    sectionFrames.Report(0);
+                    return await _synth.SynthesizeAsync(section, cancellation, sectionFrames).ConfigureAwait(false);
+                }
 
                 if (audio.Samples.Length == 0)
                 {
@@ -416,12 +451,12 @@ public sealed class OnnxTtsEngine : ITtsEngine
                 }
 
                 Publish(new EngineStatus(EngineState.Finalizing), progress);
-                var path = WriteOutput(effective, audio, folder, source, token);
+                var path = WriteOutput(effective, audio, folder, source, token, continuationModelRepo);
 
                 bool instructWasIgnored() =>
                     !string.IsNullOrWhiteSpace(request.Instruct)
                     && request.Mode != TtsMode.VoiceClone
-                    && !_synth.SupportsInstruct;
+                    && !supportsInstruct;
 
                 _log.Log(
                     $"Saved {path} — {audio.Duration.TotalSeconds:0.0}s, " +
@@ -570,7 +605,8 @@ public sealed class OnnxTtsEngine : ITtsEngine
         catch (Exception ex) { _log.Log($"Could not end the streaming preview: {ex.Message}"); }
     }
 
-    private string WriteOutput(GenerateRequest request, SynthesisResult audio, string modelFolder, ModelSource source, CancellationToken ct)
+    private string WriteOutput(GenerateRequest request, SynthesisResult audio, string modelFolder, ModelSource source, CancellationToken ct,
+        string? continuationModelRepo = null)
     {
         ct.ThrowIfCancellationRequested();
         var now = _time.GetLocalNow();
@@ -581,7 +617,7 @@ public sealed class OnnxTtsEngine : ITtsEngine
         {
             WavWriter.Write(temporary, audio.Samples, audio.SampleRate);
             ct.ThrowIfCancellationRequested();
-            var metadata = MetadataFor(request, modelFolder, now, source);
+            var metadata = MetadataFor(request, modelFolder, now, source) with { ContinuationModelRepo = continuationModelRepo };
             if (!WavMetadata.TryWrite(temporary, metadata))
                 _log.Log($"Could not write metadata into {Path.GetFileName(path)}; the audio is fine.");
 

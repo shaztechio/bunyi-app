@@ -19,6 +19,7 @@ using Bunyi.Core.Audio;
 using Bunyi.Core.Diagnostics;
 using Bunyi.Core.Engine;
 using Bunyi.Core.Qwen;
+using Bunyi.Core.Models;
 
 if (args.Length < 3)
 {
@@ -33,6 +34,8 @@ const string referenceText = "Hello! We'll begin in just a few minutes.";
 const string text = "Welcome to this demonstration of streaming speech. You can hear the opening while the next part is still being generated. The voice continues in one uninterrupted take, keeping its rhythm and expression throughout the passage. When the recording is complete, the application saves the whole result so you can listen again whenever you like.";
 var estimate = SpeechDurationEstimate.ForText(mode == "reference" ? referenceText : text, "english");
 var log = new ProbeLog();
+if (args.Contains("--sections"))
+    return await SectionProbe.Run(mode, modelRoot, output, args.Contains("--play"), log);
 using var cancellation = new CancellationTokenSource(TimeSpan.FromMinutes(8));
 using IStreamingAudioPlayer? player = args.Contains("--play") ? new StreamingAudioPlayer(log) : null;
 player?.ConfigureBuffer(estimate.UpperSeconds);

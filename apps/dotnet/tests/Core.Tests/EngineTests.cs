@@ -696,6 +696,50 @@ public sealed class EngineTests : IAsyncLifetime
         Assert.Equal("cheerful and quick", WavMetadata.TryRead(result.OutputPath)!.Style);
     }
 
+    [Theory]
+    [InlineData(TtsMode.PresetVoice)]
+    [InlineData(TtsMode.VoiceClone)]
+    [InlineData(TtsMode.VoiceDesign)]
+    public async Task Long_generation_without_streaming_saves_one_complete_recording(TtsMode mode)
+    {
+        var synth = new FakeSynthesizer();
+        await using var engine = NewEngine(synth);
+        var text = string.Concat(Enumerable.Repeat("The train arrived at the station just before the morning rain began. ", 6));
+        var result = await engine.GenerateAsync(new(mode, text, Instruct: "warm voice"), null, default);
+        Assert.True(synth.Requests.Count > 1);
+        Assert.Equal(text, string.Concat(synth.Requests.Select(r => r.Text)));
+        Assert.All(synth.Requests, r => Assert.Null(r.AudioPreview));
+        Assert.Single(Directory.GetFiles(Path.Combine(_root, "Outputs")));
+        var metadata = WavMetadata.TryRead(result.OutputPath)!;
+        Assert.Equal(text, metadata.Text);
+        Assert.Equal(mode.DisplayName(), metadata.Mode);
+        if (mode == TtsMode.VoiceDesign)
+        {
+            Assert.Equal("warm voice", metadata.VoiceDescription);
+            Assert.NotNull(metadata.ContinuationModelRepo);
+            Assert.False(File.Exists(synth.Requests[1].ReferenceAudioPath));
+        }
+        else Assert.Null(metadata.ContinuationModelRepo);
+        Assert.Equal(1, synth.Releases);
+    }
+
+    [Fact]
+    public async Task Exhausted_section_retries_fail_without_a_history_file_and_end_preview()
+    {
+        var synth = new FakeSynthesizer { Throw = new Bunyi.Core.Qwen.GenerationDidNotFinishException() };
+        await using var engine = NewEngine(synth);
+        var preview = new List<AudioPreviewChunk>();
+        var text = string.Concat(Enumerable.Repeat("The train arrived at the station just before the morning rain began. ", 6));
+        await Assert.ThrowsAsync<Bunyi.Core.Qwen.GenerationDidNotFinishException>(() => engine.GenerateAsync(
+            new(TtsMode.PresetVoice, text, AudioPreview: preview.Add), null, default));
+        Assert.Equal(3, synth.Requests.Count);
+        Assert.NotNull(Assert.Single(preview).Failure);
+        Assert.Null(engine.LastOutputPath);
+        Assert.Equal(EngineState.Error, engine.Status.State);
+        Assert.False(Directory.Exists(Path.Combine(_root, "Outputs")));
+        Assert.Equal(1, synth.Releases);
+    }
+
     /// <summary>A synthesizer that does everything except run a model.</summary>
     private sealed class FakeSynthesizer : ISpeechSynthesizer
     {
@@ -706,6 +750,7 @@ public sealed class EngineTests : IAsyncLifetime
         public int Loads { get; private set; }
         public int Releases { get; private set; }
         public int SynthesizedOnThread { get; private set; }
+        public List<GenerateRequest> Requests { get; } = [];
 
         public TaskCompletionSource Entered { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -725,6 +770,7 @@ public sealed class EngineTests : IAsyncLifetime
             GenerateRequest request, CancellationToken ct, IProgress<int>? frames = null)
         {
             SynthesizedOnThread = Environment.CurrentManagedThreadId;
+            Requests.Add(request);
             Entered.TrySetResult();
 
             foreach (var n in ReportFrames) frames?.Report(n);
