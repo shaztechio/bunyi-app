@@ -19,29 +19,33 @@ The existing Worker must have these **secrets**, entered through Cloudflare:
 credential scoped to `bunyi-models`. Never put credentials or signed URLs
 in this repository, app binaries, issue bodies, or test output.
 
-The Worker reads the existing `KILLSWITCH_STATE` KV binding's
-`killswitch:state` record. Only an explicit `killed: false` permits signing.
-Missing state, missing configuration and read errors fail closed.
-It never writes to this KV namespace. `DOWNLOADS_ENABLED=false` also
-stops new links. KV changes can take time to propagate; this is not an
-instant revocation mechanism. Previously issued links remain usable until
-expiry, and in-progress transfers may continue afterwards.
-The existing hostname WAF/domain disable alone does not revoke S3 links.
-Monitor S3 reads as well as public-domain traffic in the existing cost monitor.
+The signer binds DOWNLOAD_PERMISSION to the control worker's named
+PermissionService entrypoint. That service exposes only a private read operation
+against one SQLite Durable Object selected by bucket name; the signer cannot
+mutate permission. Every valid GET/HEAD consults it afresh. No allowed decision is
+cached, reused across requests, or obtained from legacy KV. The control worker
+persists a block before domain shutdown, so API failures cannot clear permission.
 
-Paused responses carry HTTP 503, `Retry-After: 60`, and
-`X-Bunyi-Download-Status: paused`. Configuration or KV read errors remain generic
-503s. The app handles older deployments without the marker as unavailable and
-still offers an explicit Hugging Face source switch. Deploy the Worker change
-after review to enable the more specific paused wording; this does not require
-new secrets, bindings, or routes.
+DOWNLOADS_ENABLED must equal true before the authority is consulted. Explicit
+blocked permission yields 503, Retry-After: 60 and X-Bunyi-Download-Status: paused.
+Uninitialized/malformed state, missing binding, service/storage failure, or a
+one-second timeout yields generic unavailable 503 without redirect or paused marker.
+Both hostnames enforce the same gate. Authorization checks ordered after a persisted
+block deny. A pre-block grant may finish its redirect within two seconds; a fresh
+request nonce and signing timestamp anchored to authorization prevent delayed/reused
+grants extending validity. URLs last 300 seconds; active transfers may continue.
+Never log credentials, signed URLs, or upstream exception details.
 
-`keep_vars` preserves dashboard variables during deployment, while explicitly
-configured variables are still applied. If emergency-paused in the dashboard,
-update the checked-in configuration before deploying again; the supplied
-`DOWNLOADS_ENABLED=true` would otherwise re-enable issuance. Secrets are
-preserved by Wrangler. Observability remains enabled, but the Worker never
-logs signed URLs, credentials, or exception details.
+The checked-in DOWNLOADS_ENABLED is false in both production and staging configs.
+Every deploy explicitly preserves the intended pause; keep_vars does not override
+a checked-in variable. After owner recovery, enabling issuance is deliberate:
+
+```sh
+# Owner only, after the coordinated rollout and /status verification:
+npx wrangler deploy --var DOWNLOADS_ENABLED:true
+# Emergency pause / every migration or rollback deploy:
+npx wrangler deploy --var DOWNLOADS_ENABLED:false
+```
 
 ## Published files
 
@@ -59,31 +63,43 @@ them on retry. Each retry must start at the stable original URL.
 
 ## Rollout gate
 
-Keep the production R2 custom domain unchanged until validation succeeds:
+This change requires the companion bunyi-app-control PR. Follow its
+[owner-run rollout checklist](https://github.com/shaztechio/bunyi-app-control/blob/codex/authoritative-download-permission/docs/rollout.md).
+The checklist covers live configuration inventory, quiescing old writers, preserving
+ARMED/thresholds/audit history, explicit blocked initialization, control deployment
+before signer cutover, and owner recovery. Old KV state is never permission input.
+If migrating an existing kill, leave issuance blocked until deliberate recovery.
 
-1. GET and HEAD redirect correctly, including a 206 response for Range.
-2. Download the whole affected vocoder file, verify its published SHA-256,
-   and measure sustained throughput; a fast small range is not sufficient.
-3. Interrupt a transfer, then request the remaining bytes through the
-   original Worker URL. Check Content-Range and the final combined hash.
-4. Repeat a resumed request after the first signed link expires; an expired
-   link should fail while the original Worker URL supplies a fresh one.
-5. Verify both .NET HttpClient (Windows/Linux) and URLSession (macOS).
-6. Verify the killed/error states in unit tests; do not trigger the real
-   production kill switch just to test the new Worker.
+Use wrangler.staging.jsonc with a separate bunyi-models-staging bucket, isolated
+control KV/object namespace, staging-only read credentials and test objects. It
+binds r2-killswitch-staging#PermissionService and has no production routes. For the
+second staging hostname, attach models-staging.bunyi.app only to the staging bucket
+and route models-staging.bunyi.app/* to the staging signer. Production bucket
+configuration does not authorize either staging hostname.
 
-These checks passed before production activation. Existing model paths,
-folders and source settings remain unchanged; the R2 custom domain and DNS
-remain in place underneath the Worker route. New or resumed requests use
-the redirect immediately; an already-open download requires reconnecting.
+Record kill→503, rearm→307, missing/broken binding→generic 503, GET/HEAD,
+range/resume and expiry behavior with the native probes and known fixture hashes.
+Measure added authorization p50/p95 latency, errors/timeouts and request/storage
+cost; confirm the current account plan and binding support. No live staging or
+production activation is established by unit tests or the historical measurements
+below. Stage after both PRs are reviewed; do not kill production for a test.
 
-For rollback, remove only the `models.bunyi.app/*` Worker route in the
-dashboard and remove the same route from this configuration before another
-deployment. That restores the previous R2 public delivery path. Do not
-delete the bucket custom domain or DNS record. A rollback is not an emergency
-stop: set `DOWNLOADS_ENABLED=false` or use the existing kill switch to stop
-new signed links. The Worker consults its KV state even if the old domain
-disable action alone would not intercept a Worker route.
+Rollback starts with issuance paused. Keep routes in place and preserve a blocking
+gate, authority data and migration metadata. Removing the route may restore public
+R2 delivery. Never enable an old KV-only signer while assuming the Durable Object
+block protects it. Repair forward or deploy a compatible version, verify the same
+authority, then perform explicit owner recovery before unpausing.
+
+## Native compatibility
+
+The HTTP contract and source identity remain unchanged. Existing .NET
+DownloadHttp/DownloadServiceTests distinguish paused and unavailable responses and
+retain downloaded files. On current main, macOS ModelFileTransfer accepts 200/206,
+preserves partial files on non-success and uses the original URL on retry; it
+handles 503 generically and does not yet expose the paused marker distinctly.
+That existing UI parity gap is tracked in the companion PR, not claimed solved by
+this server change. No on-disk DATA-FORMATS change is needed. Full macOS native
+verification requires the owner/CI macOS host; Windows cannot run URLSession.
 
 ## Verification tools
 
@@ -125,4 +141,4 @@ supplied a fresh 206 range response with the requested offset and length.
 
 - [R2 presigned URLs](https://developers.cloudflare.com/r2/api/s3/presigned-urls/)
 - [Cloudflare's aws4fetch example](https://developers.cloudflare.com/r2/examples/aws/aws4fetch/)
-- [KV consistency](https://developers.cloudflare.com/kv/concepts/how-kv-works/#consistency)
+- [Private service bindings](https://developers.cloudflare.com/workers/runtime-apis/bindings/service-bindings/)

@@ -13,23 +13,27 @@
 // limitations under the License.
 
 {
-  "name": "bunyi-downloads",
+  "name": "bunyi-downloads-staging",
   "main": "src/index.js",
   "account_id": "a22215ba113580f2c0f3fe4cb775335d",
   "compatibility_date": "2026-09-11",
   "workers_dev": true,
-  "routes": [
-    { "pattern": "models.bunyi.app/*", "zone_name": "bunyi.app" }
-  ],
+  "routes": [],
   "preview_urls": false,
   "keep_vars": true,
   "vars": {
     "R2_ACCOUNT_ID": "a22215ba113580f2c0f3fe4cb775335d",
-    "R2_BUCKET": "bunyi-models",
+    "R2_BUCKET": "bunyi-models-staging",
     "DOWNLOADS_ENABLED": "false"
   },
   "services": [
-    { "binding": "DOWNLOAD_PERMISSION", "service": "r2-killswitch", "entrypoint": "PermissionService" }
+    {
+      "binding": "DOWNLOAD_PERMISSION",
+      "service": "r2-killswitch-staging",
+      "entrypoint": "PermissionService"
+    }
   ],
-  "observability": { "enabled": true }
+  "observability": {
+    "enabled": true
+  }
 }

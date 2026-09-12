@@ -12,24 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-{
-  "name": "bunyi-downloads",
-  "main": "src/index.js",
-  "account_id": "a22215ba113580f2c0f3fe4cb775335d",
-  "compatibility_date": "2026-09-11",
-  "workers_dev": true,
-  "routes": [
-    { "pattern": "models.bunyi.app/*", "zone_name": "bunyi.app" }
-  ],
-  "preview_urls": false,
-  "keep_vars": true,
-  "vars": {
-    "R2_ACCOUNT_ID": "a22215ba113580f2c0f3fe4cb775335d",
-    "R2_BUCKET": "bunyi-models",
-    "DOWNLOADS_ENABLED": "false"
-  },
-  "services": [
-    { "binding": "DOWNLOAD_PERMISSION", "service": "r2-killswitch", "entrypoint": "PermissionService" }
-  ],
-  "observability": { "enabled": true }
-}
+export const LINK_LIFETIME_SECONDS = 300;
+export const PERMISSION_TIMEOUT_MS = 1_000;
+export const GRANT_MAX_AGE_MS = 2_000;

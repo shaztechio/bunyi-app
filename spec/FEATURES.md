@@ -508,6 +508,21 @@ explain itself in the main window, including when History is selected:
   their Range semantics. Manifests and final checksum validation stay the same.
   The download signer grants only reads of explicitly published model files,
   emits uncached redirects, and has an emergency stop for issuing new links.
+  On both mirror hostnames, every valid GET/HEAD first checks the local issuance
+  pause and then a private read-only service bound to the control worker's single
+  SQLite Durable Object for bunyi-models. There is no cached allow or KV fallback.
+  Explicit blocked permission returns 503, Retry-After: 60 and
+  X-Bunyi-Download-Status: paused. Uninitialized/malformed/unreachable permission,
+  storage failure or a one-second timeout returns generic unavailable 503 without
+  the paused marker or a redirect. Only explicit owner rearm permits downloads.
+  Authorization checks ordered after a persisted block deny new grants. A check
+  ordered before that transition may finish its redirect within two seconds;
+  signing uses the authorization timestamp and a request-specific nonce, so a
+  delayed/reused grant cannot extend the five-minute URL lifetime. Domain API
+  failure does not clear the permission block. Rearm restores required domains
+  while blocked and only the current operation may commit allowed permission.
+  Pause issuance through migration and rollback; never remove the Worker route
+  as an emergency stop. This leaves native response and on-disk contracts intact.
   Previously issued links remain usable until their short expiry; an existing
   transfer may continue. Hostname WAF rules do not revoke signed R2 links.
   Rollout requires full-file throughput, checksum, and Stop/resume verification
