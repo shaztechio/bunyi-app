@@ -58,9 +58,9 @@ jobs:
           dotnet-version: '10.0.x'
       - name: Verify .NET HEAD, full file, cancellation and Range redirects
         if: runner.os != 'macOS'
-        run: dotnet run --project verify/dotnet -- https://bunyi-downloads.bunyi.workers.dev onnx/customvoice/vocoder.onnx 4ee20178c7ab322891ce412d92edcfbade2e5e94a8cffe054e17b760fc764e45
+        run: dotnet run --project verify/dotnet -- https://bunyi-downloads-staging.bunyi.workers.dev onnx/customvoice/vocoder.onnx 4b640d85ab3ba30fd02c9fc9db4a8928f416322ad27022ea58a65aaee68a4df2 --expiry
       - name: Verify URLSession HEAD, full file and Range redirects
         if: runner.os == 'macOS'
         run: |
-          swift verify/urlsession.swift https://bunyi-downloads.bunyi.workers.dev onnx/customvoice/vocoder.onnx.data f4cd93d2b48b833a6aaca7d5a3c95dd99853baba565514cb91777e3ce3c4cc8d
-          swift verify/urlsession.swift https://bunyi-downloads.bunyi.workers.dev onnx/voiceclone/int4/vocoder.onnx.data d29e56c20bc6ff8d996daaae914d5d1ec1cd8170be578dc792b44978208a9575
+          swift verify/urlsession.swift https://bunyi-downloads-staging.bunyi.workers.dev onnx/customvoice/vocoder.onnx 4b640d85ab3ba30fd02c9fc9db4a8928f416322ad27022ea58a65aaee68a4df2
+          swift verify/urlsession.swift https://models-staging.bunyi.app onnx/customvoice/vocoder.onnx 4b640d85ab3ba30fd02c9fc9db4a8928f416322ad27022ea58a65aaee68a4df2
