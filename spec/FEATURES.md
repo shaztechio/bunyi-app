@@ -124,7 +124,7 @@ A segmented picker selects one of three modes. macOS source:
   this additional model dependency in the UI. Unload design before loading clone.
   The opening is part of the output exactly once; its temporary reference is
   removed on every exit. Record the continuation model in optional metadata.
-  Implemented on `main` for Windows/Linux, not yet released. Native macOS
+  Released in [Windows/Linux 1.3.0](https://github.com/shaztechio/bunyi-app/releases/tag/dotnet-v1.3.0). Native macOS
   parity is tracked in [#224](https://github.com/shaztechio/bunyi-app/issues/224);
   listening and long-passage acceptance remain tracked in
   [LONG-TEXT-PLAN.md](LONG-TEXT-PLAN.md).
