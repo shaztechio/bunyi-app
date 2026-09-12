@@ -40,6 +40,16 @@ downloads. The CLI is not yet released; its standalone archives are built by
 the next Windows/Linux release. Native macOS CLI work is tracked in
 [#217](https://github.com/shaztechio/bunyi-app/issues/217).
 
+**Long text (on `main`, not yet released):** Windows/Linux estimate speech
+duration and automatically generate requests above 20 estimated seconds in
+shorter sections, in all three modes. Overlong attempts retry as smaller
+sections. The desktop app saves one complete WAV, then plays it; Stop cancels
+the unfinished recording. Long Voice Design requests also use the configured
+clone model to carry the designed voice through the remaining sections. Native
+macOS parity is tracked in
+[#224](https://github.com/shaztechio/bunyi-app/issues/224); see the
+[long-text plan](spec/LONG-TEXT-PLAN.md) for validation and remaining work.
+
 ## How it's structured
 
 Qwen3-TTS has no single cross-platform runtime — MLX is Apple-Silicon only —

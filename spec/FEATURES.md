@@ -124,8 +124,10 @@ A segmented picker selects one of three modes. macOS source:
   this additional model dependency in the UI. Unload design before loading clone.
   The opening is part of the output exactly once; its temporary reference is
   removed on every exit. Record the continuation model in optional metadata.
-  Windows/.NET demonstration implements this; macOS parity and listening/long
-  passage acceptance remain tracked in LONG-TEXT-PLAN.md.
+  Implemented on `main` for Windows/Linux, not yet released. Native macOS
+  parity is tracked in [#224](https://github.com/shaztechio/bunyi-app/issues/224);
+  listening and long-passage acceptance remain tracked in
+  [LONG-TEXT-PLAN.md](LONG-TEXT-PLAN.md).
 - **Short generation ends on the model's end-of-speech token or the user's Stop.**
   Do not impose a text-length-derived frame budget or apply the export's
   `max_new_tokens` default as an automatic app cutoff for short requests. The
@@ -957,11 +959,13 @@ chords differ and only the requirement is pinned.
   the safe default. §9's busy-close prompt already pins *Keep Working* as that
   default.
 
-> **Neither app satisfies all of this today, and this section is written as the
-> target rather than a description.**
+> **The macOS audit remains open. Windows and Linux completed their recorded
+> reader checks; this section remains the contract for future changes.**
 > [#157](https://github.com/shaztechio/bunyi-app/issues/157),
-> [#158](https://github.com/shaztechio/bunyi-app/issues/158) and
-> [#159](https://github.com/shaztechio/bunyi-app/issues/159) are the audits.
+> [#164](https://github.com/shaztechio/bunyi-app/issues/164) and
+> [#158](https://github.com/shaztechio/bunyi-app/issues/158) track the remaining
+> macOS work. [#159](https://github.com/shaztechio/bunyi-app/issues/159) is closed
+> after the Windows Narrator and Linux Orca checks.
 >
 > It is recorded here first for the reason the parity rule exists: both apps
 > reached the same gap independently — a list of user content with no
@@ -983,8 +987,11 @@ chords differ and only the requirement is pinned.
 > names from toolkit class names. A collapsed picker must expose its selected
 > item and emit a selection event when arrow keys change it, so Orca can read
 > the displayed value. Verification must test fresh-tree Tab events through
-> AT-SPI; a passing peer test or pre-walked tree is insufficient. Orca speech
-> and the remaining Linux audit still require the real-desktop check.
+> AT-SPI; a passing peer test or pre-walked tree is insufficient. The user
+> manually verified the remaining Orca checks after #206 on 6 Sep 2026,
+> completing the Linux audit
+> ([verification record](https://github.com/shaztechio/bunyi-app/issues/159#issuecomment-5557241182)).
+> Future bridge changes still need a real-desktop reader check.
 >
 > **Windows** has the rest of this, verified on the real
 > accessibility tree rather than on the toolkit's own objects
