@@ -310,6 +310,14 @@ completed before this feature is marked implemented.
   or total generation progress. Update the panel promptly on pause/resume.
   Keep status changes available to assistive technology without announcing
   every buffer tick. A normal pause must not look like completion or an error.
+- **Show playback position throughout streaming.** Keep **N seconds played**
+  prominently visible beside the playback status, including while buffering
+  and while the saved recording's remaining audio drains. Count actual speech
+  samples consumed by the audio device, not wall-clock time, generated duration
+  or the estimate. The counter freezes during buffer silence and after Stop,
+  advances from the same position on resume, and resets for a new take.
+  Keep it distinct from seconds buffered. Expose it to assistive technology
+  without announcing every counter tick.
 - **Adapt refills, not the first playback.** First playback always uses 10
   seconds; the estimated total recording duration must never become a playback
   target. After an underrun, use generated speech progress and conservative

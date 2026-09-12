@@ -488,8 +488,12 @@ limitations under the License.
       <Border Name="PlaybackStatusPanel" Classes="card" IsVisible="{Binding IsPreviewSession}"
               Padding="14,10">
         <StackPanel Spacing="5">
-          <TextBlock Name="PreviewStatus" Text="{Binding PreviewStatus}"
-                     FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" />
+          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+            <TextBlock Name="PreviewStatus" Text="{Binding PreviewStatus}"
+                       FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Name="PreviewPlayed" Text="{Binding PreviewPlayedText}"
+                       FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
+          </Grid>
           <TextBlock Name="PreviewDetail" Text="{Binding PreviewDetail}"
                      FontSize="12" TextWrapping="Wrap" />
           <StackPanel IsVisible="{Binding ShowPreviewBuffer}" Spacing="4" Margin="0,3,0,0">

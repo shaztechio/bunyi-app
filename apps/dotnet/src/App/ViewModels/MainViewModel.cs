@@ -144,6 +144,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartPreviewNowCommand))]
     private bool _canStartPreviewNow;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PreviewPlayedText))]
+    private double _previewPlayedSeconds;
+    public string PreviewPlayedText => Math.Floor(PreviewPlayedSeconds) == 1
+        ? "1 second played" : $"{Math.Floor(PreviewPlayedSeconds):0} seconds played";
 
     public bool HasSpeechEstimate => !string.IsNullOrWhiteSpace(Script);
     public string SpeechEstimateText
@@ -861,6 +866,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         PreviewDetail = shouldStream ? "Playback will start automatically when enough audio is ready." : string.Empty;
         ShowPreviewBuffer = false;
         PreviewBufferSeconds = 0;
+        PreviewPlayedSeconds = 0;
         try
         {
             if (request.Mode == TtsMode.VoiceClone && string.IsNullOrWhiteSpace(request.ReferenceTranscript))
@@ -934,6 +940,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             if (_previewPlayer is { } preview)
             {
                 preview.Stop();
+                PreviewPlayedSeconds = preview.PlayedSeconds;
                 await Task.Run(preview.Dispose);
             }
             _previewPlayer = null;
@@ -1049,12 +1056,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             _announcedAt = now;
             _lastAnnouncedPreviewStatus = PreviewStatus;
-            Announcement = $"{PreviewStatus}. {PreviewDetail}";
+            Announcement = $"{PreviewStatus}. {PreviewPlayedText}. {PreviewDetail}";
         }
     }
 
     private void UpdatePreviewStatus(IStreamingAudioPlayer preview)
     {
+        PreviewPlayedSeconds = preview.PlayedSeconds;
         PreviewBufferTarget = preview.BufferTargetSeconds;
         PreviewBufferSeconds = Math.Max(0, preview.BufferedSeconds);
         ShowPreviewBuffer = false;
@@ -1238,7 +1246,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _announcedState = state;
         _announcedAt = now;
         Announcement = Download.Visible ? Download.Announcement
-            : IsPreviewSession ? $"{Status}. {PreviewStatus}. {PreviewDetail}" : Status;
+            : IsPreviewSession ? $"{Status}. {PreviewStatus}. {PreviewPlayedText}. {PreviewDetail}" : Status;
         if (IsPreviewSession && !Download.Visible) _lastAnnouncedPreviewStatus = PreviewStatus;
     }
 

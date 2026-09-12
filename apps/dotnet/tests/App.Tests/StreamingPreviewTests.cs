@@ -49,6 +49,7 @@ public sealed class StreamingPreviewTests : HeadlessWindows
         read(output, 1);
         Assert.All(output, value => Assert.Equal(0f, value));
         Assert.Equal(0, player.FirstPlaybackTimestamp);
+        Assert.Equal(0, player.PlayedSeconds);
 
         queue([.1f], 1f, CancellationToken.None);
         read(output, 1);
@@ -57,9 +58,11 @@ public sealed class StreamingPreviewTests : HeadlessWindows
         var timestamp = player.FirstPlaybackTimestamp;
         Assert.True(timestamp > 0);
         Assert.True(player.HasStarted);
+        Assert.Equal(512d / 24000, player.PlayedSeconds);
         Assert.Equal((240000d - 512) / 24000, player.BufferedSeconds);
         read(output, 1);
         Assert.Equal(timestamp, player.FirstPlaybackTimestamp);
+        Assert.Equal(1024d / 24000, player.PlayedSeconds);
     }
 
     [Fact]
@@ -73,16 +76,22 @@ public sealed class StreamingPreviewTests : HeadlessWindows
         queue(Enumerable.Repeat(.1f, 240000).ToArray(), 1f, CancellationToken.None);
         read(new float[240001], 1);
         Assert.True(player.IsBuffering);
+        Assert.Equal(10, player.PlayedSeconds);
 
         queue(Enumerable.Repeat(.2f, 239999).ToArray(), 1f, CancellationToken.None);
         var output = new float[512];
         read(output, 1);
         Assert.All(output, value => Assert.Equal(0f, value));
         Assert.True(player.IsBuffering);
+        Assert.Equal(10, player.PlayedSeconds);
         queue([.2f], 1f, CancellationToken.None);
         read(output, 1);
         Assert.All(output, value => Assert.Equal(.2f, value));
         Assert.False(player.IsBuffering);
+        Assert.Equal(10 + 512d / 24000, player.PlayedSeconds);
+        player.Stop();
+        read(output, 1);
+        Assert.Equal(10 + 512d / 24000, player.PlayedSeconds);
     }
 
     [Fact]
@@ -108,6 +117,7 @@ public sealed class StreamingPreviewTests : HeadlessWindows
         public bool IsBuffering { get; set; } = true;
         public bool HasStarted { get; set; }
         public double BufferedSeconds { get; set; }
+        public double PlayedSeconds { get; set; }
         public double BufferTargetSeconds { get; set; } = 10;
         public double EstimatedSeconds { get; private set; }
         public double GeneratedSeconds { get; private set; }
@@ -240,17 +250,22 @@ public sealed class StreamingPreviewTests : HeadlessWindows
         Assert.Contains("after 10 seconds", model.PreviewDetail);
         Assert.True(window.FindControl<Border>("PlaybackStatusPanel")!.IsVisible);
         Assert.True(model.ShowPreviewBuffer);
+        Assert.Equal("0 seconds played", window.FindControl<TextBlock>("PreviewPlayed")!.Text);
 
         preview.IsBuffering = false;
         preview.HasStarted = true;
+        preview.PlayedSeconds = 12.5;
         model.TickPreview();
         Assert.Equal("Playing audio", model.PreviewStatus);
+        Assert.Equal("12 seconds played", window.FindControl<TextBlock>("PreviewPlayed")!.Text);
         Assert.False(model.ShowPreviewBuffer);
 
         preview.IsBuffering = true;
         preview.BufferedSeconds = 4.8;
         model.TickPreview();
         Assert.Equal("Waiting for more audio", window.FindControl<TextBlock>("PreviewStatus")!.Text);
+        Assert.Equal("12 seconds played", window.FindControl<TextBlock>("PreviewPlayed")!.Text);
+        Assert.True(window.FindControl<TextBlock>("PreviewPlayed")!.IsVisible);
         Assert.Contains("resume automatically", window.FindControl<TextBlock>("PreviewDetail")!.Text);
         Assert.Equal("4 seconds ready · playback target 10 seconds", model.PreviewBufferText);
         Assert.Equal(4.8, window.FindControl<ProgressBar>("PreviewBufferProgress")!.Value);
@@ -265,7 +280,10 @@ public sealed class StreamingPreviewTests : HeadlessWindows
         model.TickPreview();
         Assert.True(model.CanStartPreviewNow);
         model.StartPreviewNowCommand.Execute(null);
+        preview.PlayedSeconds = 13.5;
+        model.TickPreview();
         Assert.Equal("Playing audio", model.PreviewStatus);
+        Assert.Equal("13 seconds played", window.FindControl<TextBlock>("PreviewPlayed")!.Text);
         Assert.False(model.CanStartPreviewNow);
 
         preview.IsBuffering = false;
@@ -277,6 +295,9 @@ public sealed class StreamingPreviewTests : HeadlessWindows
         Assert.False(model.ShowPreviewBuffer);
         engine.Complete("finished.wav");
         Assert.Equal("Finishing playback", model.PreviewStatus);
+        preview.PlayedSeconds = 14.5;
+        model.TickPreview();
+        Assert.Equal("14 seconds played", window.FindControl<TextBlock>("PreviewPlayed")!.Text);
         Assert.Contains("saved", model.PreviewDetail);
         preview.Drained.TrySetResult();
         await pending;

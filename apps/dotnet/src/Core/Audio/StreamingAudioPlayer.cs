@@ -28,6 +28,7 @@ public interface IStreamingAudioPlayer : IDisposable
     bool IsBuffering { get; }
     bool HasStarted { get; }
     double BufferedSeconds { get; }
+    double PlayedSeconds { get; }
     double BufferTargetSeconds { get; }
     void ConfigureBuffer(double estimatedSpeechSeconds);
     void ReportGeneratedSeconds(double seconds);
@@ -80,6 +81,8 @@ public sealed class StreamingAudioPlayer(ILogSink log) : IStreamingAudioPlayer
     public bool HasStarted => FirstPlaybackTimestamp != 0;
     private long ProducedSamples => Math.Max(_spool?.SamplesWritten ?? 0, Volatile.Read(ref _written));
     public double BufferedSeconds => Math.Max(0, ProducedSamples - Volatile.Read(ref _read)) / (double)SampleRate;
+    /// <summary>PCM consumed by the device callback; excludes buffering silence.</summary>
+    public double PlayedSeconds => Volatile.Read(ref _read) / (double)SampleRate;
     private double ElapsedSeconds => System.Diagnostics.Stopwatch.GetElapsedTime(_createdAt).TotalSeconds;
     public double BufferTargetSeconds
     {

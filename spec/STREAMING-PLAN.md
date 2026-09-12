@@ -99,6 +99,9 @@ Use a prominent playback-status panel with explicit preparing/playing/waiting/
 finishing messages. Silent refills show playable seconds ready toward the
 adaptive target and promise automatic resumption, not an estimated wait time.
 Coalesce accessible status announcements while updating visible state promptly.
+Keep a prominent seconds-played counter beside the status throughout playback,
+refills and final drain. Derive it from consumed PCM samples, exclude buffering
+silence, and reset only for a new take. Keep buffered seconds separate.
 
 Stop existing result/History audio before preview; prevent competing playback
 during its session. Keep inputs disabled through initial queue drain, while

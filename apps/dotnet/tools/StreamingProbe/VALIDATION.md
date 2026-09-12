@@ -1,5 +1,10 @@
 # Windows streaming demonstration — 12 September 2026
 
+The playback panel now includes a persistent seconds-played counter during the
+streaming session. All 398 App tests pass, including assertions that the counter
+uses consumed PCM samples, excludes buffering silence, freezes on Stop, resumes
+from the same position and stays visible during refills and final playback drain.
+
 ## Corrected streaming startup
 
 First playback now starts automatically once **10 seconds of playable PCM**
