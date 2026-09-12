@@ -1,6 +1,8 @@
 # Long-text generation
 
 Observable behavior is defined in [FEATURES.md §2](FEATURES.md#2-generation-output).
+Implemented on `main` for Windows/Linux in
+[PR #230](https://github.com/shaztechio/bunyi-app/pull/230), not yet released.
 The .NET app splits requests with an upper speech estimate above 20 seconds into
 sentence-aware sections. An overlong attempt is discarded and subdivided, with
 at most two subdivision levels per original section. Only completed sections
@@ -18,8 +20,10 @@ it does not prove that every EOS-terminated section is word-perfect.
 
 Tracked follow-ups:
 
-- Implement sectioning, retry limits, designed-voice conditioning and matching
-  progress in macOS; retain existing completed-file playback on both apps.
+- [#224](https://github.com/shaztechio/bunyi-app/issues/224): implement sectioning,
+  retry limits and designed-voice conditioning in macOS; retain existing
+  completed-file playback on both apps. Native progress already shows frames
+  and seconds through #221; section/attempt/retry progress remains to be added.
 - Broader long-passage and multilingual listening checks for omissions,
   repetitions, voice continuity and audible joins on Windows and Linux.
 - Compare the reported long clone failure with the export reference before
