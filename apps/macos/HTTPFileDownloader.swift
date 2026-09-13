@@ -98,11 +98,15 @@ final class HTTPFileDownloader: NSObject, URLSessionDownloadDelegate, @unchecked
     /// Chunked because the weights are gigabytes: `Data(contentsOf:)` would
     /// map the whole 3.86 GB file to hash it. 1 MB is large enough that the
     /// read syscalls disappear against the hashing itself.
-    static func sha256Hex(of url: URL) throws -> String {
+    static func sha256Hex(
+        of url: URL,
+        shouldContinue: @Sendable () -> Bool = { true }
+    ) throws -> String {
         let handle = try FileHandle(forReadingFrom: url)
         defer { try? handle.close() }
         var hasher = SHA256()
         while let chunk = try handle.read(upToCount: 1 << 20), !chunk.isEmpty {
+            guard shouldContinue() else { throw CancellationError() }
             hasher.update(data: chunk)
         }
         return hasher.finalize().map { String(format: "%02x", $0) }.joined()

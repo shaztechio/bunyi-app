@@ -186,7 +186,15 @@ enum GenerationCommand {
                     request, type: "downloading",
                     ["detail": "Downloading model files"])
             }
-            return CLIProtocol.event(request, type: "downloading", [
+            let type: String
+            switch progress.phase {
+            case .checking: type = "checking"
+            case .sizing: type = "sizing"
+            case .verifying: type = "verifying"
+            case .waiting: type = "waiting"
+            case .downloading, .reconnecting: type = "downloading"
+            }
+            var fields: CLIMessage = [
                 "bytesCompleted": progress.available,
                 "bytesTotal": progress.total > 0 ? progress.total : NSNull(),
                 "rateBytesPerSecond": progress.rate > 0 ? progress.rate : NSNull(),
@@ -195,7 +203,16 @@ enum GenerationCommand {
                     : NSNull(),
                 "currentFile": progress.file ?? NSNull(),
                 "detail": progress.title,
-            ])
+            ]
+            if progress.phase == .waiting {
+                fields["retryAt"] = progress.retryAt.map(CLIProtocol.timestamp) ?? NSNull()
+                fields["retryAfterSeconds"] = progress.retryAt.map {
+                    max(0, Int(ceil($0.timeIntervalSinceNow)))
+                } ?? NSNull()
+                fields["retryAttempt"] = progress.retryAttempt
+                fields["host"] = progress.retryHost ?? NSNull()
+            }
+            return CLIProtocol.event(request, type: type, fields)
         }
     }
 

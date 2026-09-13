@@ -60,6 +60,12 @@ extension DownloadProgressChecks {
             precondition(!FileManager.default.fileExists(atPath: partial.path))
         }
 
+        do {
+            _ = try HTTPFileDownloader.sha256Hex(
+                of: dest, shouldContinue: { false })
+            preconditionFailure("A cancelled integrity check completed")
+        } catch is CancellationError {}
+
         try FileManager.default.removeItem(at: dest)
         try payload.prefix(123).write(to: partial)
         let limited = try await ModelFileTransfer(

@@ -35,6 +35,7 @@ struct ModelDownloadProgress: Sendable, Equatable {
     var slow = false
     var retryAt: Date?
     var retryHost: String?
+    var retryAttempt = 0
     func elapsedText(at now: Date) -> String {
         let seconds = max(0, Int(elapsed + max(0, now.timeIntervalSince(sampledAt))))
         let time = seconds >= 3600
@@ -172,11 +173,12 @@ final class DownloadReceiptMailbox: @unchecked Sendable {
         lock.lock(); defer { lock.unlock() }
         value.phase = .reconnecting
     }
-    func waiting(until: Date, host: String) {
+    func waiting(until: Date, host: String, attempt: Int = 0) {
         lock.lock(); defer { lock.unlock() }
         value.phase = .waiting
         value.retryAt = until
         value.retryHost = host
+        value.retryAttempt = attempt
         value.slow = false
         value.rate = 0
     }
