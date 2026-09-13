@@ -62,6 +62,8 @@ Choose a speaker from the list that comes with the model, and Bunyi reads your t
 
 You can also add a **style instruction** — a short phrase describing how it should be said, such as "cheerful and quick" or "calm, like a bedtime story". Leave it blank for a neutral reading.
 
+The instruction is a nudge rather than a command: the preset voice stays who it is, and the instruction changes how that voice delivers the line. Expect a clear difference from a short, concrete phrase and a subtler one from a vague mood. If you want a different *voice* rather than a different delivery, that is what **Voice design** is for.
+
 ### Voice design
 
 Instead of picking a speaker, describe the voice you want: "a warm older man with a slight rasp", or "a bright, energetic presenter". Bunyi builds a voice to match the description.
