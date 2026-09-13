@@ -29,7 +29,7 @@ import Qwen3TTS
 
 // MARK: - Modes
 
-enum TTSMode: String, CaseIterable, Identifiable {
+enum TTSMode: String, CaseIterable, Identifiable, Sendable {
     case presetVoice = "Preset voice"
     case voiceDesign = "Voice design"
     case voiceClone = "Voice clone"
@@ -83,6 +83,22 @@ enum EngineStatus: Equatable {
     }
 }
 
+struct GenerationSummary: Sendable {
+    let outputURL: URL
+    let mode: TTSMode
+    let durationSeconds: Double
+    let frames: Int
+    let elapsedSeconds: Double
+    let modelSource: String
+    let metadata: OutputMetadata
+}
+
+struct RuntimeFailure: Sendable {
+    let code: String
+    let message: String
+    let exitCode: Int32
+}
+
 // MARK: - Engine
 
 @MainActor
@@ -93,6 +109,8 @@ final class TTSEngine {
     /// the aggregate frame count used by existing callers.
     var generationDetail: String?
     var lastOutputURL: URL?
+    private(set) var lastGenerationSummary: GenerationSummary?
+    private(set) var lastFailure: RuntimeFailure?
 
     /// Forgets the previous run's file so the UI stops offering it. Called when
     /// a new run starts: the old audio is still on disk and still reachable in
@@ -158,6 +176,9 @@ final class TTSEngine {
     /// and a self-hosted base URL.
     private var loadedDir: URL?
     private var model: Qwen3TTSModel?
+    /// Retained for as long as a model is resident. The kernel releases this
+    /// lease if the process crashes, while a clean unload releases it eagerly.
+    private var modelLease: ModelOperationLease?
 
     private let log = LogStore.shared
 
@@ -292,6 +313,7 @@ final class TTSEngine {
         model = nil
         loadedRepo = nil
         loadedDir = nil
+        modelLease = nil
 
         guard wasLoaded else { return }
         log.log("Unloading \(what) — \(reason)")
@@ -312,22 +334,33 @@ final class TTSEngine {
         // backstop for any caller that did neither.
         releaseModel(unlessNeededFor: mode)
 
-        log.log("Preparing \(mode.rawValue) — \(repoID)")
-        let source = mode.effectiveSource
-        status = .checking
-        let localDir = try await download(mode: mode, source: source)
-        try await ensureTokenizerJSON(in: localDir, source: source)
+        let acquiredLease = modelLease == nil
+        if acquiredLease {
+            modelLease = try ModelOperationLease(
+                modelsRoot: ModelsLocation.current(), operation: "model")
+        }
 
-        status = .loading
-        log.log("Loading model into memory…")
-        let loadStart = Date()
-        let loaded = try await Qwen3TTSModel.fromPretrained(localDir.path)
-        log.log(String(format: "Model loaded in %.1f s",
-                       Date().timeIntervalSince(loadStart)))
-        self.model = loaded
-        self.loadedRepo = repoID
-        self.loadedDir = localDir
-        return loaded
+        do {
+            log.log("Preparing \(mode.rawValue) — \(repoID)")
+            let source = mode.effectiveSource
+            status = .checking
+            let localDir = try await download(mode: mode, source: source)
+            try await ensureTokenizerJSON(in: localDir, source: source)
+
+            status = .loading
+            log.log("Loading model into memory…")
+            let loadStart = Date()
+            let loaded = try await Qwen3TTSModel.fromPretrained(localDir.path)
+            log.log(String(format: "Model loaded in %.1f s",
+                           Date().timeIntervalSince(loadStart)))
+            self.model = loaded
+            self.loadedRepo = repoID
+            self.loadedDir = localDir
+            return loaded
+        } catch {
+            if acquiredLease { modelLease = nil }
+            throw error
+        }
     }
 
     private func download(mode: TTSMode, source: ModelSource) async throws -> URL {
@@ -1221,7 +1254,7 @@ final class TTSEngine {
         language: String,
         referenceText: String?,
         continuationModelRepo: String?
-    ) async throws -> (url: URL, gain: Double) {
+    ) async throws -> (url: URL, gain: Double, metadata: OutputMetadata) {
         try Task.checkCancellation()
         let url = outputDir.appendingPathComponent(Self.fileName(for: mode))
         let temporary = outputDir.appendingPathComponent(
@@ -1256,7 +1289,7 @@ final class TTSEngine {
         }.value
         try Task.checkCancellation()
         try FileManager.default.moveItem(at: temporary, to: url)
-        return (url, result)
+        return (url, result, metadata)
     }
 
     // MARK: Generation
@@ -1278,24 +1311,29 @@ final class TTSEngine {
             log.log("Ignoring Generate — the previous job has not finished")
             return
         }
+        lastGenerationSummary = nil
+        lastFailure = nil
         downloadRecovery = nil
         generationDetail = nil
         do {
             let model = try await prepare(mode: mode)
             try Task.checkCancellation()
             let generateStart = Date()
+            let effectiveSpeaker = mode == .presetVoice
+                ? speaker ?? model.supportedSpeakers.first ?? "Ryan"
+                : speaker
 
             if SpeechDurationEstimate.forText(
                 text, language: language).needsSections {
                 log.log("Generating long text in recoverable sections")
                 let completed = try await generateLongText(
                     initialModel: model, mode: mode, text: text,
-                    speaker: speaker, instruct: instruct, language: language,
+                    speaker: effectiveSpeaker, instruct: instruct, language: language,
                     referenceAudioURL: referenceAudioURL,
                     referenceText: referenceText)
                 let saved = try await saveLongText(
                     completed.samples, mode: mode, text: text,
-                    speaker: speaker, instruct: instruct, language: language,
+                    speaker: effectiveSpeaker, instruct: instruct, language: language,
                     referenceText: referenceText,
                     continuationModelRepo: completed.continuationModelRepo)
                 if saved.gain < 1 {
@@ -1312,6 +1350,13 @@ final class TTSEngine {
                 releaseGenerationMemory()
                 generationDetail = nil
                 lastOutputURL = saved.url
+                lastGenerationSummary = GenerationSummary(
+                    outputURL: saved.url, mode: mode,
+                    durationSeconds: Double(completed.samples.count) / 24_000,
+                    frames: completed.frames,
+                    elapsedSeconds: Date().timeIntervalSince(generateStart),
+                    modelSource: Self.metadataSource(mode.effectiveRepoID),
+                    metadata: saved.metadata)
                 status = .idle
                 return
             }
@@ -1319,6 +1364,7 @@ final class TTSEngine {
             status = .generating(0)
 
             let audio: MLXArray
+            var generatedFrames = 0
             switch mode {
             case .voiceClone:
                 guard let refURL = referenceAudioURL else {
@@ -1392,6 +1438,7 @@ final class TTSEngine {
                     try Task.checkCancellation()
                 }
                 audio = try await cloneTask.value.value
+                generatedFrames = cloneFrames
                 try Task.checkCancellation()
                 guard termination.value == .endOfSpeech else {
                     throw TTSError.missingTermination
@@ -1412,7 +1459,7 @@ final class TTSEngine {
                 let control = GenerationControl()
                 let stream = model.generateStream(
                     text: text,
-                    speaker: mode == .presetVoice ? speaker : nil,
+                    speaker: mode == .presetVoice ? effectiveSpeaker : nil,
                     instruct: (instruct?.isEmpty == false) ? instruct : nil,
                     language: language,
                     maxTokens: nil,
@@ -1461,6 +1508,7 @@ final class TTSEngine {
                 log.log("Generation ended at EOS after \(tokenCount) frames")
                 guard let wav = final else { throw TTSError.noAudio }
                 audio = wav
+                generatedFrames = tokenCount
             }
 
             let url = outputDir.appendingPathComponent(Self.fileName(for: mode))
@@ -1490,7 +1538,7 @@ final class TTSEngine {
                 mode: mode.rawValue,
                 text: text,
                 language: language,
-                speaker: mode == .presetVoice ? nonEmpty(speaker) : nil,
+                speaker: mode == .presetVoice ? nonEmpty(effectiveSpeaker) : nil,
                 style: mode == .presetVoice ? nonEmpty(instruct) : nil,
                 voiceDescription: mode == .voiceDesign ? nonEmpty(instruct) : nil,
                 referenceTranscript: mode == .voiceClone
@@ -1500,7 +1548,7 @@ final class TTSEngine {
                 appVersion: Self.appVersion,
                 created: Date()
             )
-            let outputGain = try await Task.detached(priority: .userInitiated) {
+            let savedOutput = try await Task.detached(priority: .userInitiated) {
                 // Proves the offload rather than trusting it: this traps if the
                 // evaluation is ever back on the main thread.
                 dispatchPrecondition(condition: .notOnQueue(.main))
@@ -1510,22 +1558,38 @@ final class TTSEngine {
                 // metadata is a far better outcome than losing the audio
                 // because a chunk could not be appended.
                 try? WAVMetadata.embed(metadata, in: url)
-                return prepared.gain
+                return (gain: prepared.gain, samples: prepared.samples.count)
             }.value
-            if outputGain < 1 {
+            if savedOutput.gain < 1 {
                 log.log(String(format: "Output level: reduced by %.1f dB to prevent clipping.",
-                               -20 * log10(outputGain)))
+                               -20 * log10(savedOutput.gain)))
             }
             log.log(String(format: "Saved %@ (%.1f s total)", url.path,
                            Date().timeIntervalSince(generateStart)))
             releaseGenerationMemory()
             lastOutputURL = url
+            lastGenerationSummary = GenerationSummary(
+                outputURL: url, mode: mode,
+                durationSeconds: Double(savedOutput.samples) / rate,
+                frames: generatedFrames,
+                elapsedSeconds: Date().timeIntervalSince(generateStart),
+                modelSource: Self.metadataSource(mode.effectiveRepoID),
+                metadata: metadata)
             status = .idle
         } catch is CancellationError {
+            if model == nil { modelLease = nil }
+            lastFailure = RuntimeFailure(
+                code: "cancelled", message: "Speech generation was cancelled.",
+                exitCode: 5)
             await finishStopping()
         } catch let urlError as URLError where urlError.code == .cancelled {
+            if model == nil { modelLease = nil }
+            lastFailure = RuntimeFailure(
+                code: "cancelled", message: "Speech generation was cancelled.",
+                exitCode: 5)
             await finishStopping()
         } catch let error as DownloadServiceError {
+            if model == nil { modelLease = nil }
             log.log("Error: \(String(describing: error))")
             releaseGenerationMemory()
             generationDetail = nil
@@ -1535,8 +1599,17 @@ final class TTSEngine {
                 downloadRecovery = DownloadRecoveryOffer(
                     mode: mode, sourceURL: source, paused: paused)
             }
+            let code: String
+            switch error {
+            case .unavailable: code = "download_service_unavailable"
+            case .rateLimited: code = "download_rate_limited"
+            case .httpStatus: code = "download_failed"
+            }
+            lastFailure = RuntimeFailure(
+                code: code, message: error.localizedDescription, exitCode: 10)
             status = .error("Model download failed. \(error.localizedDescription)")
         } catch {
+            if model == nil { modelLease = nil }
             log.log("Error: \(String(describing: error))")
             // A run that threw allocated just as much as one that succeeded.
             // Releasing only on success left the cache held by exactly the runs
@@ -1552,6 +1625,30 @@ final class TTSEngine {
             case .finalizing: stage = "Preparing the audio file failed"
             default: stage = "Speech generation failed"
             }
+            let code: String
+            let exitCode: Int32
+            if error is BunyiBusyError {
+                code = "bunyi_busy"
+                exitCode = 4
+            } else if let ttsError = error as? TTSError {
+                switch ttsError {
+                case .missingReference:
+                    code = "missing_input"
+                    exitCode = 3
+                case .generationDidNotFinish, .missingTermination:
+                    code = "generation_did_not_finish"
+                    exitCode = 10
+                default:
+                    code = "generation_failed"
+                    exitCode = 10
+                }
+            } else {
+                code = "generation_failed"
+                exitCode = 10
+            }
+            lastFailure = RuntimeFailure(
+                code: code, message: error.localizedDescription,
+                exitCode: exitCode)
             status = .error("\(stage). \(error.localizedDescription)")
         }
     }
@@ -1639,7 +1736,7 @@ final class TTSEngine {
     }
 
     /// Speech-recognition locale for the UI's language choice.
-    private static func locale(for language: String) -> Locale {
+    static func locale(for language: String) -> Locale {
         let map = [
             "english": "en-US", "chinese": "zh-CN", "japanese": "ja-JP",
             "korean": "ko-KR", "german": "de-DE", "french": "fr-FR",

@@ -17,25 +17,6 @@ import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// One generated WAV on disk. `id` is the URL: the folder is the record, so a
-/// file that disappears from the folder disappears from History.
-struct GeneratedOutput: Identifiable, Hashable {
-    let url: URL
-    let created: Date
-    let byteCount: Int64
-
-    var id: URL { url }
-    var name: String { url.deletingPathExtension().lastPathComponent }
-
-    /// Filenames are `<Mode>-<ISO8601 timestamp>.wav`, so the mode is the part
-    /// before the first dash. Falls back to the whole name for anything the
-    /// user dropped in the folder themselves.
-    var mode: String {
-        let parts = name.split(separator: "-", maxSplits: 1)
-        return parts.count == 2 ? String(parts[0]) : name
-    }
-}
-
 /// Everything generated so far: play it back, or save a copy somewhere else.
 ///
 /// Reads the Outputs folder on appear rather than keeping a list in memory, so

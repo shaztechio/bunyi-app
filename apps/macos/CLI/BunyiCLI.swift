@@ -57,6 +57,9 @@ struct BunyiCLI {
             case "play":
                 result = try await PlaybackCommand.run(
                     request, output: output, cancelled: cancellation)
+            case "generate.preset", "generate.design", "generate.clone":
+                result = try await GenerationCommand.run(
+                    request, output: output, cancelled: cancellation)
             default:
                 throw CLIError(
                     "not_implemented",

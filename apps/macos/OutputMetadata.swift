@@ -20,7 +20,7 @@ import Foundation
 /// actually determined the audio — the text, the voice, the model — was lost
 /// the moment the file left the app. Embedding it means a WAV found later, or
 /// sent to someone else, still says how to make it again.
-struct OutputMetadata: Codable, Hashable {
+struct OutputMetadata: Codable, Hashable, Sendable {
     var mode: String
     var text: String
     var language: String

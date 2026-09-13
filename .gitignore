@@ -16,6 +16,7 @@ apps/macos/Bunyi.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/*
 # Also generated from project.yml
 apps/macos/Info.plist
 apps/macos/Bunyi.entitlements
+apps/macos/BunyiCLI.entitlements
 
 # Xcode
 DerivedData/

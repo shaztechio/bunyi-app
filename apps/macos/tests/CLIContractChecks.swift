@@ -29,6 +29,14 @@ enum CLIContractChecks {
         try expect("missing_input", ["generate", "design", "--voice", "warm"])
         try expect("invalid_arguments", ["play", "missing.wav", "--require-server"])
         try expect("invalid_arguments", ["server", "status", "--one-shot"])
+        try expect("invalid_arguments", [
+            "generate", "clone", "--text", "Hello", "--saved-voice",
+            UUID().uuidString, "--reference", "voice.wav",
+        ])
+        try expect("missing_input", [
+            "generate", "clone", "--text", "Hello", "--reference",
+            "/definitely/missing.wav", "--transcript", "Hello",
+        ])
 
         let request = try CLICommandParser.parse(["version", "--json"])
         let result = CLIProtocol.result(request, ["version": "1.2.0"])

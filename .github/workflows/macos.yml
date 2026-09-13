@@ -72,6 +72,10 @@ jobs:
         run: |
           swiftc -parse-as-library CLI/CLIProtocol.swift CLI/CLICommandParser.swift tests/CLIContractChecks.swift -o /tmp/bunyi-cli-contract-checks
           /tmp/bunyi-cli-contract-checks
+      - name: Check cross-process model lease
+        run: |
+          swiftc -parse-as-library ModelOperationLease.swift tests/ModelOperationLeaseChecks.swift -o /tmp/bunyi-lease-checks
+          /tmp/bunyi-lease-checks
       - name: Build app
         run: |
           xcodebuild -project Bunyi.xcodeproj \

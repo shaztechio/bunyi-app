@@ -27,6 +27,27 @@ targets:
     platform: macOS
     sources:
       - CLI
+      - TTSEngine.swift
+      - LogStore.swift
+      - HTTPFileDownloader.swift
+      - ModelFileTransfer.swift
+      - ModelDownloadProgress.swift
+      - SpeechSections.swift
+      - DownloadedModels.swift
+      - GeneratedOutput.swift
+      - OutputMetadata.swift
+      - OutputLevel.swift
+      - ModelSettings.swift
+      - ModelOperationLease.swift
+      - ReferenceTranscriber.swift
+      - VoiceLibrary.swift
+    dependencies:
+      - package: swift-qwen3-tts
+        product: Qwen3TTS
+    entitlements:
+      path: BunyiCLI.entitlements
+      properties:
+        com.apple.security.device.speech-recognition: true
     settings:
       base:
         ARCHS: arm64
@@ -50,6 +71,7 @@ targets:
       - StartupTimeline.swift
       - LogsView.swift
       - HistoryView.swift
+      - GeneratedOutput.swift
       - HTTPFileDownloader.swift
       - ModelFileTransfer.swift
       - ModelDownloadProgress.swift
@@ -62,6 +84,7 @@ targets:
       - OutputMetadata.swift
       - OutputLevel.swift
       - ModelSettings.swift
+      - ModelOperationLease.swift
       - SettingsView.swift
       - BackupManager.swift
       - ReferenceTranscriber.swift
