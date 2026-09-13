@@ -4,7 +4,9 @@ Observable behavior is defined in [FEATURES.md §2](FEATURES.md#2-generation-out
 Implemented for Windows/Linux in
 [PR #230](https://github.com/shaztechio/bunyi-app/pull/230) and for native
 macOS by the implementation tracked in
-[#224](https://github.com/shaztechio/bunyi-app/issues/224).
+[#224](https://github.com/shaztechio/bunyi-app/issues/224). The Windows/Linux
+implementation shipped in
+[1.3.0](https://github.com/shaztechio/bunyi-app/releases/tag/dotnet-v1.3.0).
 The .NET app splits requests with an upper speech estimate above 20 seconds into
 sentence-aware sections. An overlong attempt is discarded and subdivided, with
 at most two subdivision levels per original section. Only completed sections
