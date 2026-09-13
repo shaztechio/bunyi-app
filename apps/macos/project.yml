@@ -48,6 +48,16 @@ targets:
       path: BunyiCLI.entitlements
       properties:
         com.apple.security.device.speech-recognition: true
+    info:
+      path: BunyiCLI-Info.plist
+      properties:
+        CFBundleDisplayName: bunyi
+        CFBundleExecutable: $(EXECUTABLE_NAME)
+        CFBundleIdentifier: $(PRODUCT_BUNDLE_IDENTIFIER)
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSSpeechRecognitionUsageDescription: >-
+          Used to transcribe local audio on-device for Bunyi voice cloning.
     settings:
       base:
         ARCHS: arm64
@@ -58,6 +68,7 @@ targets:
         SWIFT_VERSION: "6.0"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_IDENTITY: "-"
+        CREATE_INFOPLIST_SECTION_IN_BINARY: YES
         ENABLE_HARDENED_RUNTIME: NO
   Bunyi:
     type: application

@@ -60,6 +60,16 @@ struct BunyiCLI {
             case "generate.preset", "generate.design", "generate.clone":
                 result = try await GenerationCommand.run(
                     request, output: output, cancelled: cancellation)
+            case "models.list", "models.status", "models.download",
+                 "models.verify", "models.remove":
+                result = try await ModelCommand.run(
+                    request, output: output, cancelled: cancellation)
+            case "transcribe":
+                result = try await TranscriptionCommand.run(
+                    request, output: output, cancelled: cancellation)
+            case "speakers":
+                result = try await SpeakersCommand.run(
+                    request, output: output, cancelled: cancellation)
             default:
                 throw CLIError(
                     "not_implemented",

@@ -74,12 +74,12 @@ enum ModelStore {
     /// Trash rather than `removeItem`: this is gigabytes that take many minutes
     /// to fetch again, and a mis-click should be recoverable.
     static func delete(_ model: DownloadedModel) throws {
-        let lease = try ModelOperationLease(
-            modelsRoot: ModelsLocation.current(), operation: "models.remove")
         // Evict first. Deleting the files under a loaded model leaves the app
         // generating happily from memory while its folder is gone — and the
         // next launch silently re-downloads with no explanation.
         NotificationCenter.default.post(name: didDeleteModel, object: model.url)
+        let lease = try ModelOperationLease(
+            modelsRoot: ModelsLocation.current(), operation: "models.remove")
         try FileManager.default.trashItem(at: model.url, resultingItemURL: nil)
         withExtendedLifetime(lease) {}
     }
@@ -102,6 +102,24 @@ enum ModelStore {
         for case let url as URL in files {
             let values = try? url.resourceValues(forKeys: Set(keys))
             total += Int64(values?.totalFileAllocatedSize ?? values?.fileSize ?? 0)
+        }
+        return total
+    }
+
+    /// Logical file coverage for byte-progress accounting. Unlike allocated
+    /// size, this matches HTTP Content-Length and never adds filesystem block
+    /// padding when a batch advances to its next model.
+    nonisolated static func logicalSize(of dir: URL) -> Int64 {
+        let keys: Set<URLResourceKey> = [.fileSizeKey, .isRegularFileKey]
+        guard let files = FileManager.default.enumerator(
+            at: dir, includingPropertiesForKeys: Array(keys)
+        ) else { return 0 }
+        var total: Int64 = 0
+        for case let url as URL in files {
+            let values = try? url.resourceValues(forKeys: keys)
+            if values?.isRegularFile == true {
+                total += Int64(values?.fileSize ?? 0)
+            }
         }
         return total
     }

@@ -99,6 +99,13 @@ struct RuntimeFailure: Sendable {
     let exitCode: Int32
 }
 
+struct ModelDownloadPlan: Sendable {
+    let mode: TTSMode
+    let totalBytes: Int64?
+    let downloadedBytes: Int64
+    let complete: Bool
+}
+
 // MARK: - Engine
 
 @MainActor
@@ -159,6 +166,11 @@ final class TTSEngine {
     var downloadDetail: String?
     var downloadFeedback: ModelDownloadProgress?
     var downloadRecovery: DownloadRecoveryOffer?
+    /// Batch-download context consumed by the CLI's aggregate progress stream.
+    private(set) var downloadMode: TTSMode?
+    private(set) var downloadItemIndex = 0
+    private(set) var downloadItemCount = 0
+    private(set) var aggregateDownloadCompleted: Int64 = 0
     private var activeModelTransfer: ModelFileTransfer?
     func reconnectDownload() {
         guard downloadFeedback?.phase == .downloading else { return }
@@ -363,6 +375,115 @@ final class TTSEngine {
         }
     }
 
+    /// Downloads and validates one or more models without loading them.
+    ///
+    /// One lease covers the whole batch so another Bunyi process cannot start
+    /// inference or mutate the shared folder in the gaps between assets.
+    func downloadModels(_ modes: [TTSMode]) async throws -> [URL] {
+        guard !status.isBusy else {
+            throw BunyiBusyError(modelsRoot: ModelsLocation.current())
+        }
+        let lease = try ModelOperationLease(
+            modelsRoot: ModelsLocation.current(), operation: "models.download")
+        downloadItemCount = modes.count
+        downloadItemIndex = 0
+        aggregateDownloadCompleted = 0
+        downloadMode = nil
+        defer {
+            downloadFeedback = nil
+            downloadDetail = nil
+            downloadMode = nil
+            downloadItemIndex = 0
+            downloadItemCount = 0
+            status = .idle
+            withExtendedLifetime(lease) {}
+        }
+
+        var downloaded: [URL] = []
+        for (offset, mode) in modes.enumerated() {
+            try Task.checkCancellation()
+            downloadMode = mode
+            downloadItemIndex = offset + 1
+            status = .checking
+            let source = mode.effectiveSource
+            let directory = try await download(mode: mode, source: source)
+            try await ensureTokenizerJSON(in: directory, source: source)
+            guard Self.hasCompleteModel(at: directory) else {
+                throw TTSError.selfHostIncomplete
+            }
+            downloaded.append(directory)
+            aggregateDownloadCompleted += await Task.detached(priority: .utility) {
+                ModelStore.logicalSize(of: directory)
+            }.value
+        }
+        return downloaded
+    }
+
+    /// Resolves every requested asset and asks each source for file sizes
+    /// before a batch starts. A missing size keeps the aggregate total unknown
+    /// rather than turning a known subtotal into a misleading total.
+    func planModelDownloads(_ modes: [TTSMode]) async throws -> [ModelDownloadPlan] {
+        var plans: [ModelDownloadPlan] = []
+        defer {
+            downloadFeedback = nil
+            downloadMode = nil
+            downloadItemIndex = 0
+            downloadItemCount = 0
+            status = .idle
+        }
+        for (offset, mode) in modes.enumerated() {
+            try Task.checkCancellation()
+            downloadMode = mode
+            downloadItemIndex = offset + 1
+            downloadItemCount = modes.count
+            status = .checking
+            let directory = Self.modelDirectory(for: mode)
+            let downloaded = await Task.detached(priority: .utility) {
+                ModelStore.logicalSize(of: directory)
+            }.value
+            if Self.hasCompleteModel(at: directory) {
+                plans.append(ModelDownloadPlan(
+                    mode: mode, totalBytes: downloaded,
+                    downloadedBytes: downloaded, complete: true))
+                continue
+            }
+
+            let files: [ManifestEntry]
+            let base: URL
+            switch mode.effectiveSource {
+            case .repo(let repoID):
+                (files, base) = try await hubFiles(repoID: repoID)
+            case .baseURL(let source):
+                base = source
+                files = try await fileList(base: source)
+            }
+            status = .downloading(0)
+            downloadFeedback = ModelDownloadProgress(phase: .sizing)
+            var total: Int64 = 0
+            var allKnown = true
+            for entry in files {
+                try Task.checkCancellation()
+                if let size = try await remoteSize(
+                    of: base.appendingPathComponent(entry.path)) {
+                    total += size
+                } else {
+                    allKnown = false
+                }
+            }
+            let tokenizer = directory.appendingPathComponent("tokenizer.json")
+            if !FileManager.default.fileExists(atPath: tokenizer.path),
+               !files.contains(where: { $0.path == "tokenizer.json" }) {
+                // The shared fallback is resolved after the model source. Its
+                // size is deliberately unknown at this phase rather than omitted.
+                allKnown = false
+            }
+            plans.append(ModelDownloadPlan(
+                mode: mode, totalBytes: allKnown ? total : nil,
+                downloadedBytes: downloaded, complete: false))
+        }
+        return plans
+    }
+
     private func download(mode: TTSMode, source: ModelSource) async throws -> URL {
         switch source {
         case .repo(let repoID):
@@ -414,6 +535,14 @@ final class TTSEngine {
             return localDir
         }
         status = .checking
+        let (files, base) = try await hubFiles(repoID: repoID)
+        try await downloadEntries(files, base: base, into: localDir, allRequired: true)
+        guard Self.hasCompleteModel(at: localDir) else { throw TTSError.selfHostIncomplete }
+        return localDir
+    }
+
+    private func hubFiles(repoID: String) async throws
+        -> (files: [ManifestEntry], base: URL) {
         // Discover through the public tree endpoint so its 429 response and
         // reset headers go through the same bounded policy as every file.
         var tree = URLComponents(string:
@@ -442,9 +571,7 @@ final class TTSEngine {
         guard !files.isEmpty else { throw TTSError.selfHostIncomplete }
         let base = URL(string: "https://huggingface.co")!
             .appendingPathComponent(repoID).appendingPathComponent("resolve/main")
-        try await downloadEntries(files, base: base, into: localDir, allRequired: true)
-        guard Self.hasCompleteModel(at: localDir) else { throw TTSError.selfHostIncomplete }
-        return localDir
+        return (files, base)
     }
 
     // MARK: Self-hosted download
@@ -586,7 +713,8 @@ final class TTSEngine {
                     }
                     rateLimitRetries += 1
                     mailbox.waiting(until: retryAt,
-                                    host: source.host ?? "The server")
+                                    host: source.host ?? "The server",
+                                    attempt: rateLimitRetries)
                     downloadFeedback = mailbox.snapshot()
                     log.log("Download limited by \(source.host ?? "the server"); retrying in \(Int(ceil(delay))) s")
                     try await DownloadRetryPolicy.wait(until: retryAt)
@@ -759,6 +887,7 @@ final class TTSEngine {
                 waiting.phase = .waiting
                 waiting.retryAt = retryAt
                 waiting.retryHost = source.host
+                waiting.retryAttempt = retries
                 waiting.slow = false
                 waiting.rate = 0
                 downloadFeedback = waiting
@@ -774,6 +903,7 @@ final class TTSEngine {
                     restored.phase = phase
                     restored.retryAt = nil
                     restored.retryHost = nil
+                    restored.retryAttempt = 0
                     return restored
                 }
                 continue

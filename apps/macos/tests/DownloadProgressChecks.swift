@@ -65,11 +65,13 @@ struct DownloadProgressChecks {
         mailbox.receive(1, total: 400)
         let mixed = mailbox.snapshot()
         precondition(mixed.total == 0 && mixed.fileTotal == 400)
-        mailbox.waiting(until: epoch.addingTimeInterval(12), host: "example.test")
+        mailbox.waiting(
+            until: epoch.addingTimeInterval(12), host: "example.test", attempt: 2)
         let waiting = mailbox.snapshot(at: epoch.addingTimeInterval(10))
         precondition(waiting.receiptText(at: epoch.addingTimeInterval(10))
                      == "Retrying in 2 seconds")
         precondition(waiting.arrivalText(at: epoch) == "example.test asked Bunyi to wait")
+        precondition(waiting.retryAttempt == 2)
         precondition(!waiting.isSlow(at: epoch) && !waiting.stalled(at: epoch))
 
         let seconds = HTTPResponseInfo(

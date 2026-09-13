@@ -37,6 +37,18 @@ enum CLIContractChecks {
             "generate", "clone", "--text", "Hello", "--reference",
             "/definitely/missing.wav", "--transcript", "Hello",
         ])
+        let allModels = try CLICommandParser.parse([
+            "models", "download", "--all", "--jsonl",
+        ])
+        precondition(allModels.operation == "models.download")
+        precondition(allModels.has("all") && allModels.has("jsonl"))
+        let oneModel = try CLICommandParser.parse([
+            "models", "download", "--mode", "clone", "--one-shot",
+        ])
+        precondition(oneModel.value("mode") == "clone")
+        try expect("invalid_arguments", [
+            "models", "verify", "--mode", "unknown",
+        ])
 
         let request = try CLICommandParser.parse(["version", "--json"])
         let result = CLIProtocol.result(request, ["version": "1.2.0"])
