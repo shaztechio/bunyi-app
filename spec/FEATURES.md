@@ -31,6 +31,11 @@ A segmented picker selects one of three modes. macOS source:
 | **Voice design** | VoiceDesign | text, voice description | yes (`instruct`) |
 | **Voice clone** | Base | text, reference audio clip, reference transcript | **no** — Base model ignores `instruct` |
 
+- A preset voice's style instruction is a nudge rather than a command. It
+  changes how the chosen voice delivers the line without replacing that
+  voice. Short, concrete phrases should make a clearer difference than a
+  vague mood; changing who is speaking belongs in Voice design.
+
 - **Script layout**: in every generation mode, the heading stays above the
   editor and the editor's scrollbar stays inside its border, with space
   between the text and the scrollbar. Long scripts
