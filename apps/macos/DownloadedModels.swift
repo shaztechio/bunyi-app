@@ -74,11 +74,14 @@ enum ModelStore {
     /// Trash rather than `removeItem`: this is gigabytes that take many minutes
     /// to fetch again, and a mis-click should be recoverable.
     static func delete(_ model: DownloadedModel) throws {
+        let lease = try ModelOperationLease(
+            modelsRoot: ModelsLocation.current(), operation: "models.remove")
         // Evict first. Deleting the files under a loaded model leaves the app
         // generating happily from memory while its folder is gone — and the
         // next launch silently re-downloads with no explanation.
         NotificationCenter.default.post(name: didDeleteModel, object: model.url)
         try FileManager.default.trashItem(at: model.url, resultingItemURL: nil)
+        withExtendedLifetime(lease) {}
     }
 
     // MARK: Helpers

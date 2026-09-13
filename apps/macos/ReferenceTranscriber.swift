@@ -59,6 +59,20 @@ enum ReferenceTranscriber {
         return try await recognize(buffer, with: recognizer, onDevice: false)
     }
 
+    /// Headless transcription never sends audio to Apple's recognition
+    /// service and never tries to raise a permission prompt from a server.
+    static func transcribeOnDevice(url: URL, locale: Locale) async throws -> String {
+        guard SFSpeechRecognizer.authorizationStatus() == .authorized else {
+            throw TTSError.transcriptionNotAuthorized
+        }
+        guard let recognizer = SFSpeechRecognizer(locale: locale),
+              recognizer.isAvailable, recognizer.supportsOnDeviceRecognition else {
+            throw TTSError.transcriptionUnavailable
+        }
+        return try await recognize(
+            decodeMono(from: url), with: recognizer, onDevice: true)
+    }
+
     private static func log(_ message: String) async {
         await MainActor.run { LogStore.shared.log(message) }
     }
@@ -72,17 +86,23 @@ enum ReferenceTranscriber {
         request.addsPunctuation = true
         request.requiresOnDeviceRecognition = onDevice
 
-        let text: String = try await withCheckedThrowingContinuation { continuation in
-            let once = ResumeOnce(continuation)
-            recognizer.recognitionTask(with: request) { result, error in
-                if let error {
-                    once.resume(throwing: error)
-                } else if let result, result.isFinal {
-                    once.resume(returning: result.bestTranscription.formattedString)
+        let holder = RecognitionTaskHolder()
+        let text: String = try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                let once = ResumeOnce(continuation)
+                let task = recognizer.recognitionTask(with: request) { result, error in
+                    if let error {
+                        once.resume(throwing: error)
+                    } else if let result, result.isFinal {
+                        once.resume(returning: result.bestTranscription.formattedString)
+                    }
                 }
+                holder.install(task, continuation: once)
+                request.append(buffer)
+                request.endAudio()
             }
-            request.append(buffer)
-            request.endAudio()
+        } onCancel: {
+            holder.cancel()
         }
 
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -140,6 +160,34 @@ enum ReferenceTranscriber {
                 continuation.resume(returning: status == .authorized)
             }
         }
+    }
+}
+
+private final class RecognitionTaskHolder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var task: SFSpeechRecognitionTask?
+    private var continuation: ResumeOnce?
+    private var cancelled = false
+
+    func install(_ task: SFSpeechRecognitionTask, continuation: ResumeOnce) {
+        let stop = lock.withLock {
+            self.task = task
+            self.continuation = continuation
+            return cancelled
+        }
+        if stop {
+            task.cancel()
+            continuation.resume(throwing: CancellationError())
+        }
+    }
+
+    func cancel() {
+        let current = lock.withLock {
+            cancelled = true
+            return (task, continuation)
+        }
+        current.0?.cancel()
+        current.1?.resume(throwing: CancellationError())
     }
 }
 
