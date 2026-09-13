@@ -30,6 +30,12 @@ enum ModelSource: Equatable {
     case baseURL(URL)
 }
 
+struct DownloadRecoveryOffer: Equatable {
+    let mode: TTSMode
+    let sourceURL: URL
+    let paused: Bool
+}
+
 extension TTSMode {
     var repoDefaultsKey: String { "modelRepo.\(rawValue)" }
 
@@ -52,6 +58,28 @@ extension TTSMode {
             return .baseURL(url)
         }
         return .repo(value)
+    }
+
+    /// The exact MLX mirror endpoint shipped for this mode. Recovery is
+    /// offered only for these values; a custom server returning the same status
+    /// remains the user's configured server and is never changed silently.
+    var bunyiMirrorURL: URL {
+        let path = switch self {
+        case .presetVoice: "customvoice"
+        case .voiceDesign: "voicedesign"
+        case .voiceClone: "voiceclone"
+        }
+        return URL(string: "https://models.bunyi.app/\(path)")!
+    }
+
+    func isUsingBuiltInMirror(_ source: URL) -> Bool {
+        source.absoluteString == bunyiMirrorURL.absoluteString
+            && effectiveRepoID == source.absoluteString
+    }
+
+    /// Recovery is an explicit persisted choice, not a one-run override.
+    func useCanonicalHuggingFaceSource() {
+        UserDefaults.standard.set(repoID, forKey: repoDefaultsKey)
     }
 }
 

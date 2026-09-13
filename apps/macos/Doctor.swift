@@ -340,7 +340,16 @@ enum Doctor {
     private static func integrityFinding(mode: TTSMode,
                                          engine: TTSEngine,
                                          dir: URL) async -> DoctorFinding {
-        guard let entries = await engine.publishedDigests(for: mode) else {
+        let entries: [TTSEngine.ManifestEntry]?
+        do {
+            entries = try await engine.publishedDigests(for: mode)
+        } catch {
+            return DoctorFinding(
+                title: "Model files",
+                detail: "The checksum manifest could not be retrieved: \(error.localizedDescription)",
+                severity: .warning)
+        }
+        guard let entries else {
             return DoctorFinding(
                 title: "Model files",
                 detail: """
@@ -446,6 +455,10 @@ enum Doctor {
         request.timeoutInterval = 10
         guard let (_, response) = try? await URLSession.shared.data(for: request),
               let http = response as? HTTPURLResponse else { return false }
-        return (200..<400).contains(http.statusCode)
+        // Any HTTP response proves the host is reachable. Rate limits and
+        // temporary server failures are handled by the downloader, which can
+        // wait or offer mirror recovery; treating them as "no connection"
+        // here would prevent that path from ever running.
+        return http.statusCode > 0
     }
 }

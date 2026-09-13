@@ -57,6 +57,19 @@ struct ContentView: View {
         return lastGenerateMode
     }
 
+    /// A recovery prompt is valid only for the mode and exact built-in mirror
+    /// which produced it. Settings can change in another window, so validate
+    /// against UserDefaults each time the view redraws rather than trusting a
+    /// stale captured source.
+    private var validDownloadRecovery: DownloadRecoveryOffer? {
+        guard let offer = engine.downloadRecovery,
+              offer.mode == mode,
+              case .baseURL(let current) = mode.effectiveSource,
+              current == offer.sourceURL,
+              mode.isUsingBuiltInMirror(current) else { return nil }
+        return offer
+    }
+
     @State private var lastGenerateMode: TTSMode = .presetVoice
 
     /// Spec §3e. Read here rather than passed in, because the setting is
@@ -274,13 +287,23 @@ struct ContentView: View {
         .onChange(of: availableSpeakers) { _, new in
             reconcileSpeaker(with: new)
         }
+        .onReceive(NotificationCenter.default.publisher(
+            for: UserDefaults.didChangeNotification)) { _ in
+            if engine.downloadRecovery != nil,
+               validDownloadRecovery == nil {
+                engine.clearDownloadRecovery()
+            }
+        }
         .onChange(of: tab) { _, new in
             guard case .generate(let mode) = new else { return }
             // Compared against the mode being left rather than the previous
             // tab, so that going Preset → History → Design still counts
             // as leaving preset voice. History is not a mode and never holds a
             // model of its own.
-            if mode != lastGenerateMode { releaseModelOfModeBeingLeft() }
+            if mode != lastGenerateMode {
+                releaseModelOfModeBeingLeft()
+                engine.clearDownloadRecovery()
+            }
             lastGenerateMode = mode
         }
         .onReceive(playbackTimer) { _ in
@@ -769,6 +792,22 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: Space.row) {
             if let progress = engine.downloadFeedback {
                 DownloadProgressView(progress: progress, mode: mode.rawValue, reconnect: engine.reconnectDownload)
+            } else if let offer = validDownloadRecovery {
+                VStack(alignment: .leading, spacing: Space.tight) {
+                    Text(offer.paused
+                         ? "Bunyi's model mirror has paused downloads."
+                         : "Bunyi's model mirror is temporarily unavailable.")
+                        .font(.headline)
+                    Text("You can download from Hugging Face and continue generating. This saves the source for this mode and may require a separate download. Existing files are kept.")
+                        .font(.caption)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button("Download from Hugging Face") {
+                        recoverDownloadFromHuggingFace(offer)
+                    }
+                }
+                .padding(12)
+                .background(Color.orange.opacity(0.10),
+                            in: RoundedRectangle(cornerRadius: 10))
             } else if !engine.status.isBusy, tab != .history, !TTSEngine.isModelComplete(for: mode) {
                 Text("\(mode.rawValue) needs a voice-model download. Bunyi downloads the files, then creates your speech automatically. Downloaded models are saved for reuse.")
                     .font(.caption).fixedSize(horizontal: false, vertical: true)
@@ -1047,6 +1086,7 @@ struct ContentView: View {
         // cancelled run leaves nothing to play, rather than quietly falling
         // back to the file from before.
         engine.clearLastOutput()
+        engine.clearDownloadRecovery()
         genTask = Task {
             // §3e: before the preflight, not merely before the download.
             // Doctor's memory check is a prediction about the run that is about
@@ -1092,6 +1132,16 @@ struct ContentView: View {
             guard !Task.isCancelled, engine.lastOutputURL != nil else { return }
             startPlayback()
         }
+    }
+
+    private func recoverDownloadFromHuggingFace(_ offer: DownloadRecoveryOffer) {
+        guard validDownloadRecovery == offer else {
+            engine.clearDownloadRecovery()
+            return
+        }
+        offer.mode.useCanonicalHuggingFaceSource()
+        engine.clearDownloadRecovery()
+        generate()
     }
 
     /// Stops in-flight work when the window is closed mid-operation. Cancels

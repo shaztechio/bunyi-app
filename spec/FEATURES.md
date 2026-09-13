@@ -386,8 +386,7 @@ checks, and file transfers, including transcription model preparation. HTTP
 429/503 and server failures must not become “no manifest” or “unknown size”.
 Completed models still work offline; killswitch changes do not revoke already
 issued links or guarantee that an active transfer stops immediately. Implemented
-in Windows/Linux and the .NET CLI/server; native macOS parity is tracked in
-[#225](https://github.com/shaztechio/bunyi-app/issues/225).
+in both native apps and the .NET CLI/server.
 
 **Both platforms ship it now**, at the prefixes below. The two weight sets live
 on one host and never share a path — the runtime family is in the URL, because

@@ -28,10 +28,10 @@ final class ModelFileTransfer: NSObject, URLSessionDataDelegate, @unchecked Send
     private var offset: Int64 = 0
     private var written: Int64 = 0
     private var total: Int64 = 0
-    private var code = 0
+    private var response = HTTPResponseInfo(statusCode: 0)
     private var failure: Error?
     private let lock = NSLock()
-    private var continuation: CheckedContinuation<Int, Error>?
+    private var continuation: CheckedContinuation<HTTPResponseInfo, Error>?
     private var activeTask: URLSessionDataTask?
     private var reconnect = false
     var reconnectRequested: Bool { lock.withLock { reconnect } }
@@ -52,7 +52,7 @@ final class ModelFileTransfer: NSObject, URLSessionDataDelegate, @unchecked Send
         self.mailbox = mailbox
     }
 
-    func run(from url: URL, configuration: URLSessionConfiguration = .default) async throws -> Int {
+    func run(from url: URL, configuration: URLSessionConfiguration = .default) async throws -> HTTPResponseInfo {
         try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
         offset = (try? partial.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init) ?? 0
         if let expected, offset >= expected { offset = 0 }
@@ -78,10 +78,15 @@ final class ModelFileTransfer: NSObject, URLSessionDataDelegate, @unchecked Send
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask,
                     didReceive response: URLResponse,
                     completionHandler: @escaping @Sendable (URLSession.ResponseDisposition) -> Void) {
-        code = (response as? HTTPURLResponse)?.statusCode ?? 0
-        guard code == 200 || code == 206 else { completionHandler(.cancel); return }
+        guard let http = response as? HTTPURLResponse else {
+            failure = URLError(.badServerResponse)
+            completionHandler(.cancel)
+            return
+        }
+        self.response = HTTPResponseInfo(http)
+        guard self.response.isSuccess else { completionHandler(.cancel); return }
         do {
-            if code == 206 {
+            if self.response.statusCode == 206 {
                 guard offset > 0, let range = (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Range"),
                       range.hasPrefix("bytes \(offset)-") else { throw URLError(.badServerResponse) }
             } else { offset = 0 }
@@ -122,7 +127,10 @@ final class ModelFileTransfer: NSObject, URLSessionDataDelegate, @unchecked Send
         do {
             try handle?.close(); handle = nil
             if let failure { throw failure }
-            if code != 0 && code != 200 && code != 206 { continuation.resume(returning: code); return }
+            if response.statusCode != 0 && !response.isSuccess {
+                continuation.resume(returning: response)
+                return
+            }
             if let error { throw error }
             mailbox.verifying()
             if total > 0 && offset + written != total { throw URLError(.networkConnectionLost) }
@@ -135,7 +143,7 @@ final class ModelFileTransfer: NSObject, URLSessionDataDelegate, @unchecked Send
             }
             if FileManager.default.fileExists(atPath: destination.path) { try FileManager.default.removeItem(at: destination) }
             try FileManager.default.moveItem(at: partial, to: destination)
-            continuation.resume(returning: 200)
+            continuation.resume(returning: response)
         } catch { continuation.resume(throwing: error) }
     }
 }

@@ -16,7 +16,9 @@ import Foundation
 
 /// Exact counters are independent of rounded percentages. No inferred network activity.
 struct ModelDownloadProgress: Sendable, Equatable {
-    enum Phase: String, Sendable { case checking, sizing, downloading, verifying, reconnecting }
+    enum Phase: String, Sendable {
+        case checking, sizing, downloading, verifying, reconnecting, waiting
+    }
     var phase: Phase = .checking
     var available: Int64 = 0
     var total: Int64 = 0
@@ -31,6 +33,8 @@ struct ModelDownloadProgress: Sendable, Equatable {
     var elapsed: TimeInterval = 0
     var sampledAt = Date()
     var slow = false
+    var retryAt: Date?
+    var retryHost: String?
     func elapsedText(at now: Date) -> String {
         let seconds = max(0, Int(elapsed + max(0, now.timeIntervalSince(sampledAt))))
         let time = seconds >= 3600
@@ -47,6 +51,7 @@ struct ModelDownloadProgress: Sendable, Equatable {
         case .downloading: "Downloading voice model"
         case .verifying: "Checking model files"
         case .reconnecting: "Reconnecting — keeping downloaded bytes"
+        case .waiting: "Waiting to retry download"
         }
     }
     var fraction: Double { total > 0 ? min(1, Double(available) / Double(total)) : 0 }
@@ -56,12 +61,19 @@ struct ModelDownloadProgress: Sendable, Equatable {
     }
     func stalled(at now: Date) -> Bool { phase == .downloading && quietSeconds(at: now) >= 30 }
     func receiptText(at now: Date) -> String {
+        if phase == .waiting {
+            let seconds = max(0, Int(ceil((retryAt ?? now).timeIntervalSince(now))))
+            return "Retrying in \(seconds) \(seconds == 1 ? "second" : "seconds")"
+        }
         guard phase == .downloading else { return title }
         if stalled(at: now) { return "Download may be stalled" }
         if quietSeconds(at: now) >= 3 || lastReceived == nil { return "Waiting for more data" }
         return "Received \(receipt.formatted()) \(receipt == 1 ? "byte" : "bytes")"
     }
     func arrivalText(at now: Date) -> String {
+        if phase == .waiting {
+            return "\(retryHost ?? "The server") asked Bunyi to wait"
+        }
         guard phase == .downloading else { return "Speech has not started" }
         guard let lastReceived else { return "Waiting for the first download bytes" }
         let seconds = max(0, Int(now.timeIntervalSince(lastReceived)))
@@ -160,6 +172,14 @@ final class DownloadReceiptMailbox: @unchecked Sendable {
         lock.lock(); defer { lock.unlock() }
         value.phase = .reconnecting
     }
+    func waiting(until: Date, host: String) {
+        lock.lock(); defer { lock.unlock() }
+        value.phase = .waiting
+        value.retryAt = until
+        value.retryHost = host
+        value.slow = false
+        value.rate = 0
+    }
     func snapshot(at now: Date = Date()) -> ModelDownloadProgress {
         lock.lock(); defer { lock.unlock() }
         let delta = value.received - displayedReceived
@@ -175,5 +195,149 @@ final class DownloadReceiptMailbox: @unchecked Sendable {
                 && (value.fileTotal <= 0 || Double(value.fileTotal - value.fileBytes) > max(1, sustained) * 60)
         } else { value.slow = false; value.rate = 0 }
         return value
+    }
+}
+
+/// The response facts needed after URLSession releases its response object.
+struct HTTPResponseInfo: Sendable, Equatable {
+    let statusCode: Int
+    let headers: [String: String]
+    let expectedContentLength: Int64
+
+    init(_ response: HTTPURLResponse) {
+        statusCode = response.statusCode
+        expectedContentLength = response.expectedContentLength
+        var normalized: [String: String] = [:]
+        for (name, value) in response.allHeaderFields {
+            normalized[String(describing: name).lowercased()] = String(describing: value)
+        }
+        headers = normalized
+    }
+
+    init(statusCode: Int, headers: [String: String] = [:],
+         expectedContentLength: Int64 = -1) {
+        self.statusCode = statusCode
+        self.expectedContentLength = expectedContentLength
+        var normalized: [String: String] = [:]
+        for (name, value) in headers { normalized[name.lowercased()] = value }
+        self.headers = normalized
+    }
+
+    func header(_ name: String) -> String? {
+        headers[name.lowercased()]
+    }
+
+    var isSuccess: Bool { statusCode == 200 || statusCode == 206 }
+
+    var bunyiDownloadsPaused: Bool {
+        header("X-Bunyi-Download-Status")?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .caseInsensitiveCompare("paused") == .orderedSame
+    }
+
+    func unavailableError(source: URL,
+                          now: Date = Date()) -> DownloadServiceError {
+        let delay = DownloadRetryPolicy.serverDelay(for: self, now: now)
+        return .unavailable(
+            source: source,
+            paused: bunyiDownloadsPaused,
+            retryAt: delay.map { now.addingTimeInterval($0) })
+    }
+}
+
+/// HTTP failures remain errors through optional manifest and size probes.
+enum DownloadServiceError: LocalizedError {
+    case unavailable(source: URL, paused: Bool, retryAt: Date?)
+    case rateLimited(source: URL, retryAt: Date)
+    case httpStatus(source: URL, status: Int)
+
+    var source: URL {
+        switch self {
+        case .unavailable(let source, _, _),
+             .rateLimited(let source, _),
+             .httpStatus(let source, _):
+            source
+        }
+    }
+
+    var errorDescription: String? {
+        switch self {
+        case .unavailable(_, let paused, _):
+            if paused {
+                return "Model downloads are temporarily paused. Your downloaded files have been kept."
+            }
+            return "\(source.host ?? source.absoluteString) is temporarily unavailable. "
+                + "Your downloaded files have been kept. Try again later."
+        case .rateLimited(_, let retryAt):
+            return "\(source.host ?? source.absoluteString) is limiting downloads. "
+                + "Try again after \(retryAt.formatted(date: .abbreviated, time: .standard)). "
+                + "Your downloaded files have been kept."
+        case .httpStatus(_, let status):
+            return "\(source.host ?? source.absoluteString) returned HTTP \(status)."
+        }
+    }
+}
+
+/// One bounded policy for manifest, size and file requests.
+enum DownloadRetryPolicy {
+    static let maximumRetries = 3
+    static let maximumDelay: TimeInterval = 15 * 60
+
+    /// Retry-After may be seconds or an HTTP date. Hugging Face's RateLimit
+    /// header carries t=seconds. When both exist, waiting for the later reset
+    /// is the only choice that does not retry early.
+    static func delay(for response: HTTPResponseInfo, now: Date,
+                      retryNumber: Int, jitter: Double) -> TimeInterval {
+        let fallback = pow(2, Double(retryNumber)) + min(1, max(0, jitter))
+        return max(0, serverDelay(for: response, now: now) ?? fallback)
+    }
+
+    static func serverDelay(for response: HTTPResponseInfo,
+                            now: Date) -> TimeInterval? {
+        var result: TimeInterval?
+        if let value = response.header("Retry-After") {
+            if let seconds = TimeInterval(value.trimmingCharacters(
+                in: .whitespacesAndNewlines)), seconds.isFinite, seconds >= 0 {
+                result = seconds
+            } else if let date = httpDate(value) {
+                result = max(0, date.timeIntervalSince(now))
+            }
+        }
+        if let value = response.header("RateLimit") {
+            for part in value.components(separatedBy:
+                CharacterSet(charactersIn: ";,")) {
+                let fields = part.split(separator: "=", maxSplits: 1)
+                guard fields.count == 2,
+                      fields[0].trimmingCharacters(in: .whitespaces) == "t",
+                      let seconds = TimeInterval(fields[1].trimmingCharacters(
+                        in: .whitespacesAndNewlines)),
+                      seconds.isFinite, seconds >= 0 else { continue }
+                result = max(result ?? 0, seconds)
+            }
+        }
+        return result
+    }
+
+    /// Kept here so cancellation during a deliberate wait is covered without
+    /// issuing another request. Task.sleep is cancellation-aware.
+    static func wait(until deadline: Date, now: Date = Date()) async throws {
+        let seconds = max(0, deadline.timeIntervalSince(now))
+        try await Task.sleep(for: .seconds(seconds))
+    }
+
+    private static func httpDate(_ value: String) -> Date? {
+        let formats = [
+            "EEE',' dd MMM yyyy HH':'mm':'ss z",
+            "EEEE',' dd-MMM-yy HH':'mm':'ss z",
+            "EEE MMM d HH':'mm':'ss yyyy",
+        ]
+        for format in formats {
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.timeZone = TimeZone(secondsFromGMT: 0)
+            formatter.dateFormat = format
+            if let date = formatter.date(from: value) { return date }
+        }
+        return nil
     }
 }

@@ -73,9 +73,9 @@ final class ModelConfigLibrary {
     static let bunyiMirror = ModelConfig(
         id: UUID(uuidString: "B0000000-0000-4000-A000-000000000001")!,
         name: "Bunyi mirror",
-        presetVoice: "https://models.bunyi.app/customvoice",
-        voiceDesign: "https://models.bunyi.app/voicedesign",
-        voiceClone: "https://models.bunyi.app/voiceclone",
+        presetVoice: TTSMode.presetVoice.bunyiMirrorURL.absoluteString,
+        voiceDesign: TTSMode.voiceDesign.bunyiMirrorURL.absoluteString,
+        voiceClone: TTSMode.voiceClone.bunyiMirrorURL.absoluteString,
         savedAt: .distantPast
     )
 

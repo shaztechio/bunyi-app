@@ -40,6 +40,8 @@ Both bars also show their total size in MB or GB. **Model download elapsed** sho
 
 **Download is slow** means data has been arriving slowly for at least 30 seconds and substantial downloading remains. **Reconnect and resume** opens a fresh connection for the current file while keeping downloaded data. It can help a poor connection, but does not guarantee a faster server. **Stop** also keeps partial files; the next Generate resumes when the server supports it. If the server ignores resume requests, that file starts again.
 
+If a server asks Bunyi to slow down, the progress panel counts down before retrying. **Stop** remains available, and no downloaded bytes are discarded. If the built-in Bunyi mirror pauses downloads or becomes unavailable, Bunyi offers **Download from Hugging Face**. Choosing it saves the official Hugging Face source for only the current mode and continues the generation; the mirror's files stay separate and are kept.
+
 If no data arrives, the message changes to **Waiting for more data**. After 30 seconds it says the download may be stalled. Incoming data clears that warning. **Checking model files**, **Loading model**, **Creating your speech**, and **Preparing your audio file** identify the work that follows. Only **Your audio is ready** means speech has finished and been saved.
 
 When generation finishes the audio plays automatically. **Play** repeats it, and the reveal button opens the folder where the file was saved.
