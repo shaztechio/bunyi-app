@@ -44,6 +44,12 @@ If no data arrives, the message changes to **Waiting for more data**. After 30 s
 
 When generation finishes the audio plays automatically. **Play** repeats it, and the reveal button opens the folder where the file was saved.
 
+## Keyboard
+
+Press **Tab** and **Shift-Tab** to move forward and back through the form. When the mode picker is focused, the arrow keys immediately switch between Preset voice, Voice design, Voice clone, and History.
+
+Press **⌘Return** to generate and **Escape** to stop. **⌘,** opens Settings, **⇧⌘D** runs Doctor, **⌘L** opens Logs, and **⌘?** opens this help.
+
 ## The three modes
 
 ### Preset voice
@@ -93,14 +99,15 @@ The **History** tab lists everything you have generated, newest first.
 
 Each row shows what was said, the voice it used, and when it was made. Hover over a row to see the whole thing — the full text, the language, the voice or reference, and which model produced it.
 
-Every row has four things you can do:
+Every row has five things you can do:
 
 - **Play** — a ring around the button fills as the audio plays. Press it again to stop.
+- **Copy details** — put everything Bunyi knows about the clip on the clipboard, ready to paste into a note or a message.
 - **Download** — save a copy wherever you like.
 - **Show in Finder** — reveal the original file.
 - **Trash** — move it to the Trash, after confirming. It goes to the Trash rather than vanishing, so you can still get it back.
 
-**Copy details** puts everything Bunyi knows about a clip on the clipboard, ready to paste into a note or a message.
+From the keyboard, Tab to the first recording's Play control. It names the recording as well as the action. **Up** and **Down** move one recording, **Home** and **End** go to the first and last, and **Page Up** and **Page Down** move by a page. The outlined recording follows you and scrolls into view. Press Tab again to reach its Copy details, Download, Finder, and Trash buttons.
 
 History reads the folder each time you open it, so a file you delete in the Finder disappears from the list too.
 
@@ -150,7 +157,7 @@ Both show progress and can be stopped part way.
 
 ## Doctor
 
-The **stethoscope** in the toolbar checks whether this Mac can finish a generation, and tells you what it found.
+The **stethoscope** in the toolbar, or **⇧⌘D**, checks whether this Mac can finish a generation, and tells you what it found.
 
 It looks at whether the model for the current mode is downloaded, whether there is room on the disk for it, whether there is memory to load it, whether the server it comes from is answering, and whether Bunyi can write into the folder it saves to. Ask it directly and it also checks the files you have already downloaded against the checksums your server publishes — this is what catches a model that arrived incomplete and would otherwise load and produce nonsense.
 

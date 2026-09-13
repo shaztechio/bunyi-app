@@ -29,6 +29,10 @@ enum MainTab: Hashable {
     case history
 }
 
+private enum MainFocusTarget {
+    case mode, lastOption, action
+}
+
 struct ContentView: View {
     /// Opens the `Window(id: "logs")` scene declared in BunyiApp. Focuses the
     /// existing window if it is already open rather than making a second one.
@@ -86,6 +90,16 @@ struct ContentView: View {
     /// still receiving keystrokes — hit testing is about the mouse, and the
     /// keyboard goes to whatever is first responder regardless.
     @FocusState private var scriptFocused: Bool
+    /// SwiftUI does not put a segmented picker or a custom-styled action button
+    /// in the macOS key-view loop reliably. Explicit focus participation keeps
+    /// the visible first and last controls in the same loop as the form.
+    @FocusState private var modePickerFocused: Bool
+    @FocusState private var lastOptionFocused: Bool
+    @FocusState private var actionButtonFocused: Bool
+
+    private static let modeNavigationKeys: Set<KeyEquivalent> = [
+        .leftArrow, .rightArrow, .upArrow, .downArrow,
+    ]
 
     private let languages = [
         "auto", "english", "chinese", "japanese", "korean", "german",
@@ -318,6 +332,29 @@ struct ContentView: View {
             .pickerStyle(.segmented)
             .labelsHidden()
             .controlSize(.large)
+            .focused($modePickerFocused)
+            // A segmented picker moves keyboard focus with an arrow but does
+            // not commit that radio button until Space. Match ordinary picker
+            // navigation by selecting the newly focused segment immediately;
+            // leave the event unhandled so AppKit still moves the focus ring.
+            .onKeyPress(keys: Self.modeNavigationKeys) { press in
+                guard !press.modifiers.contains(.command),
+                      !press.modifiers.contains(.control),
+                      !press.modifiers.contains(.option) else {
+                    return .ignored
+                }
+                moveModeSelection(for: press.key)
+                return .ignored
+            }
+            .onKeyPress(.tab, phases: .down) { press in
+                guard tab != .history,
+                      isPlainTab(press),
+                      press.modifiers.contains(.shift) else {
+                    return .ignored
+                }
+                focusAfterKeyEvent(canGenerate ? .action : .lastOption)
+                return .handled
+            }
             // History stays reachable mid-run — it only reads the folder, and
             // wanting to hear the previous result while waiting is reasonable.
             // The generation modes do not, because switching one evicts the
@@ -372,13 +409,23 @@ struct ContentView: View {
                 Label("Settings", systemImage: "gearshape")
             }
             .help("Settings (⌘,)")
+            // Title-bar toolbar items do not expose AX keyboard focus even
+            // when AppKit puts them in the key-view loop. Keep that broken,
+            // unnamed loop out of ordinary Tab traversal; each action has a
+            // keyboard shortcut, including Doctor below.
+            .focusable(false)
 
             Button {
                 runDoctorOnDemand()
             } label: {
                 Label("Doctor", systemImage: "stethoscope")
             }
-            .help("Check whether this Mac can generate audio")
+            // Settings, Logs and Help already have standard menu shortcuts.
+            // Doctor had no keyboard route at all, so its toolbar-only action
+            // was unreachable to somebody who does not use a pointer.
+            .keyboardShortcut("d", modifiers: [.command, .shift])
+            .help("Check whether this Mac can generate audio (⇧⌘D)")
+            .focusable(false)
             .disabled(doctorRunning)
 
             // Window → Logs (⌘L) already opens this. The button is here for
@@ -393,6 +440,7 @@ struct ContentView: View {
                 Label("Logs", systemImage: "list.bullet.rectangle")
             }
             .help("Open Logs (⌘L)")
+            .focusable(false)
 
             // The Help menu already opens this book; the button is here
             // because the audience for this app does not go looking in menus.
@@ -402,7 +450,24 @@ struct ContentView: View {
                 Label("Help", systemImage: "questionmark.circle")
             }
             .help("Open Bunyi Help")
+            .focusable(false)
         }
+    }
+
+    /// Keep the segmented control's selection aligned with the radio button
+    /// its native arrow-key behavior is about to focus.
+    private func moveModeSelection(for key: KeyEquivalent) {
+        let tabs = TTSMode.allCases.map(MainTab.generate) + [.history]
+        guard let current = tabs.firstIndex(of: tab) else { return }
+
+        let delta: Int
+        switch key {
+        case .leftArrow, .upArrow: delta = -1
+        case .rightArrow, .downArrow: delta = 1
+        default: return
+        }
+        let destination = min(tabs.count - 1, max(0, current + delta))
+        tab = tabs[destination]
     }
 
     // MARK: Text input
@@ -410,6 +475,20 @@ struct ContentView: View {
     private var textCard: some View {
         TextEditor(text: $text)
             .focused($scriptFocused)
+            // NSTextView normally inserts a tab character. In this app that
+            // trapped focus in the editor on launch; the next visible control
+            // could only be reached with the little-known Control-Tab chord.
+            // Move through the window's key-view loop instead, in both
+            // directions, so Tab behaves like it does in the rest of the form.
+            .onKeyPress(.tab, phases: .down) { press in
+                guard !press.modifiers.contains(.command),
+                      !press.modifiers.contains(.control),
+                      !press.modifiers.contains(.option) else {
+                    return .ignored
+                }
+                moveFocusFromScript(backward: press.modifiers.contains(.shift))
+                return .handled
+            }
             // Otherwise it announces itself as "text entry area" — the role,
             // not the field. This is the thing the whole window is for, and a
             // screen reader had no way to say which of the two text inputs it
@@ -563,6 +642,8 @@ struct ContentView: View {
                         // about what the field is with it.
                         .accessibilityLabel("Style")
                         .textFieldStyle(.roundedBorder)
+                        .focused($lastOptionFocused)
+                        .onKeyPress(.tab, phases: .down, action: movePastForm)
                 }
 
             case .voiceDesign:
@@ -571,6 +652,8 @@ struct ContentView: View {
                     TextField("Describe it — e.g. deep gravelly narrator in his 60s",
                               text: $instruct)
                         .textFieldStyle(.roundedBorder)
+                        .focused($lastOptionFocused)
+                        .onKeyPress(.tab, phases: .down, action: movePastForm)
                 }
 
             case .voiceClone:
@@ -609,6 +692,8 @@ struct ContentView: View {
                 optionRow(icon: "text.quote", label: "Transcript") {
                     TextField("Leave blank to transcribe when you press Generate", text: $referenceText)
                         .textFieldStyle(.roundedBorder)
+                        .focused($lastOptionFocused)
+                        .onKeyPress(.tab, phases: .down, action: movePastForm)
                 }
                 if let voiceError {
                     Text(voiceError)
@@ -722,6 +807,8 @@ struct ContentView: View {
                 // Escape is what people press to abandon something.
                 .keyboardShortcut(.cancelAction)
                 .buttonStyle(ActionButtonStyle(role: .destructive))
+                .focused($actionButtonFocused)
+                .onKeyPress(.tab, phases: .down, action: movePastAction)
                 .help("Stop the current operation")
                 // A custom ButtonStyle does not carry the Label's text into the
                 // accessibility tree, so both action buttons announce nothing
@@ -735,6 +822,8 @@ struct ContentView: View {
                 }
                 .keyboardShortcut(.return, modifiers: .command)
                 .buttonStyle(ActionButtonStyle(role: .primary))
+                .focused($actionButtonFocused)
+                .onKeyPress(.tab, phases: .down, action: movePastAction)
                 .disabled(!canGenerate)
                 // Still on hover, deliberately. `spec/FEATURES.md` §1 pins
                 // "says why on hover" — surfacing this inline is a behaviour
@@ -752,6 +841,66 @@ struct ContentView: View {
         .padding(.vertical, Space.row)
         .frame(minHeight: 72)
         .background(.bar)
+    }
+
+    /// Advance from the script using AppKit's key-view loop. Dispatching to the
+    /// next turn lets NSTextView finish the key event before first responder is
+    /// changed; doing it synchronously can leave the editor focused anyway.
+    private func moveFocusFromScript(backward: Bool) {
+        DispatchQueue.main.async {
+            guard let window = NSApp.keyWindow else { return }
+            if backward {
+                window.selectPreviousKeyView(nil)
+            } else {
+                window.selectNextKeyView(nil)
+            }
+        }
+    }
+
+    /// Route focus from the last control in each mode to the action, or past a
+    /// disabled action back to Mode. Native traversal left first responder nil
+    /// at exactly this boundary.
+    private func movePastForm(_ press: KeyPress) -> KeyPress.Result {
+        guard isPlainTab(press), !press.modifiers.contains(.shift) else {
+            return .ignored
+        }
+        if canGenerate {
+            // The enabled action is the next native key view and already has
+            // a name; let AppKit move there normally.
+            return .ignored
+        } else {
+            focusAfterKeyEvent(.mode)
+        }
+        return .handled
+    }
+
+    /// The toolbar actions have shortcuts and are excluded from the broken
+    /// title-bar key loop above, so the visible bottom action wraps to Mode.
+    private func movePastAction(_ press: KeyPress) -> KeyPress.Result {
+        guard isPlainTab(press), !press.modifiers.contains(.shift) else {
+            return .ignored
+        }
+        focusAfterKeyEvent(.mode)
+        return .handled
+    }
+
+    /// Focus changes made synchronously from a key handler are discarded while
+    /// AppKit is still finishing that event. Schedule the requested target for
+    /// the next main-loop turn, as the NSTextView escape above does.
+    private func focusAfterKeyEvent(_ target: MainFocusTarget) {
+        DispatchQueue.main.async {
+            switch target {
+            case .mode: modePickerFocused = true
+            case .lastOption: lastOptionFocused = true
+            case .action: actionButtonFocused = true
+            }
+        }
+    }
+
+    private func isPlainTab(_ press: KeyPress) -> Bool {
+        !press.modifiers.contains(.command)
+            && !press.modifiers.contains(.control)
+            && !press.modifiers.contains(.option)
     }
 
     /// Play/pause toggle with a live progress bar and elapsed/total time.
