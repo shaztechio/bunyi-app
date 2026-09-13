@@ -790,6 +790,13 @@ struct ContentView: View {
 
     private var bottomBar: some View {
         VStack(alignment: .leading, spacing: Space.row) {
+            if !engine.status.isBusy, tab != .history,
+               mode == .voiceDesign,
+               SpeechDurationEstimate.forText(text, language: language).needsSections {
+                Text("Long Voice Design scripts create one short designed opening, then use the Voice clone model to keep that voice consistent. The clone model may need a separate download.")
+                    .font(.caption)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if let progress = engine.downloadFeedback {
                 DownloadProgressView(progress: progress, mode: mode.rawValue, reconnect: engine.reconnectDownload)
             } else if let offer = validDownloadRecovery {
@@ -1028,17 +1035,17 @@ struct ContentView: View {
                 }
             }
         case .loading:
-            busyLine("Loading model…")
+            busyLine(engine.generationDetail ?? "Loading model…")
         case .checking:
-            busyLine("Checking the voice model…")
+            busyLine(engine.generationDetail ?? "Checking the voice model…")
         case .finalizing:
-            busyLine("Preparing your audio file…")
+            busyLine(engine.generationDetail ?? "Preparing your audio file…")
         case .transcribing:
             busyLine("Transcribing the reference clip…")
         case .generating(let tokens):
-            busyLine(tokens > 0
+            busyLine(engine.generationDetail ?? (tokens > 0
                 ? "Creating your speech… \(tokens) frames · \(String(format: "%.1f", Double(tokens) / 12.5))s of speech so far"
-                : "Creating your speech…")
+                : "Creating your speech…"))
         case .stopping:
             // Says why it is still busy. The alternative — going idle while the
             // model is still generating — reads as finished and invites a

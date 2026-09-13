@@ -1,0 +1,88 @@
+// Copyright 2026 Shazron Abdullah and Bunyi contributors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+import Foundation
+
+@main
+struct SpeechSectionsChecks {
+    @MainActor
+    static func main() async throws {
+        precondition(!SpeechDurationEstimate.forText(
+            String(repeating: "word ", count: 40)).needsSections)
+        precondition(SpeechDurationEstimate.forText(
+            String(repeating: "word ", count: 41)).needsSections)
+        precondition(SpeechDurationEstimate.forText(" ... ")
+            == SpeechDurationEstimate(lowerSeconds: 0, upperSeconds: 0))
+
+        let sentence = "Dr. Rivera counted one, two, and three. Then she stopped. "
+        let text = String(repeating: sentence, count: 12)
+        let sections = SpeechSections.split(text)
+        precondition(sections.count > 1)
+        precondition(sections.joined() == text)
+        precondition(sections.allSatisfy {
+            SpeechDurationEstimate.forText($0).upperSeconds <= 20
+        })
+        precondition(sections[0].contains("Dr."), "Abbreviation was split as a sentence")
+        let quoted = SpeechSections.split(
+            "Dr. Smith paid 3.14 dollars. “Really?” she asked. " + sentence,
+            maximumSeconds: 6)
+        precondition(quoted[0] == "Dr. Smith paid 3.14 dollars. “Really?” ")
+
+        let oversized = String(repeating: "extraordinary ", count: 100)
+        let words = SpeechSections.split(oversized)
+        precondition(words.count > 1 && words.joined() == oversized)
+
+        let scripts = String(repeating: "你好，世界。こんにちは世界。안녕하세요 세계。", count: 12)
+        let scriptSections = SpeechSections.split(scripts)
+        precondition(scriptSections.count > 1 && scriptSections.joined() == scripts)
+
+        let graphemes = String(repeating: "family 👨‍👩‍👧‍👦 speaks clearly, ", count: 30)
+        precondition(SpeechSections.split(graphemes).joined() == graphemes)
+        let halves = SpeechSections.bisect(text)
+        precondition(halves.count == 2 && halves.joined() == text)
+
+        var joined: [Float] = []
+        SectionAudioJoiner.append(Array(repeating: 1, count: 480), to: &joined)
+        SectionAudioJoiner.append(Array(repeating: 1, count: 480), to: &joined)
+        precondition(joined.count == 480 + 2_880 + 480)
+        precondition(joined[0] == 0 && joined[479] == 0)
+        precondition(joined[480..<3_360].allSatisfy { $0 == 0 })
+        precondition(joined[3_360] == 0 && joined.last == 0)
+
+        var recovered: [String] = []
+        var attempts = 0
+        try await SpeechSections.recover(text) { candidate, depth in
+            attempts += 1
+            if depth == 0 { return false }
+            recovered.append(candidate)
+            return true
+        }
+        precondition(attempts == 3 && recovered.joined() == text)
+
+        attempts = 0
+        var leaves = 0
+        do {
+            try await SpeechSections.recover(text) { _, depth in
+                attempts += 1
+                guard depth == 2 else { return false }
+                leaves += 1
+                return leaves < 4
+            }
+            preconditionFailure("An exhausted section recovery succeeded")
+        } catch SpeechSectionRecoveryError.exhausted {}
+        precondition(attempts == 7)
+
+        print("Speech section checks passed: lossless boundaries, bounded recovery, estimates, bisection, fades and pauses.")
+    }
+}

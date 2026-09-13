@@ -64,6 +64,10 @@ jobs:
         run: |
           swiftc -parse-as-library OutputLevel.swift tests/OutputLevelChecks.swift -o /tmp/bunyi-output-level-checks
           /tmp/bunyi-output-level-checks
+      - name: Check long-text sections
+        run: |
+          swiftc -parse-as-library SpeechSections.swift tests/SpeechSectionsChecks.swift -o /tmp/bunyi-speech-section-checks
+          /tmp/bunyi-speech-section-checks
       - name: Build app
         run: |
           xcodebuild -project Bunyi.xcodeproj \

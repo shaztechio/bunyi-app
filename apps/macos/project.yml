@@ -19,8 +19,8 @@ options:
     macOS: "15.0"
 packages:
   swift-qwen3-tts:
-    url: https://github.com/AtomGradient/swift-qwen3-tts.git
-    branch: main
+    url: https://github.com/shaztechio/swift-qwen3-tts.git
+    revision: c0806fbf383fbfdc4a3ad2945f31d7087dcc477d
 targets:
   Bunyi:
     type: application
@@ -37,6 +37,7 @@ targets:
       - HTTPFileDownloader.swift
       - ModelFileTransfer.swift
       - ModelDownloadProgress.swift
+      - SpeechSections.swift
       - DownloadProgressView.swift
       - DownloadedModels.swift
       - Doctor.swift

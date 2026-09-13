@@ -40,6 +40,9 @@ struct OutputMetadata: Codable, Hashable {
     var referenceTranscript: String?
 
     var modelRepo: String
+    /// Voice Design long text continues through the clone model after one
+    /// fixed designed opening. Nil for every other recording.
+    var continuationModelRepo: String? = nil
     var appVersion: String
     var created: Date
 

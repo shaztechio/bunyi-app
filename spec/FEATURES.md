@@ -124,8 +124,7 @@ A segmented picker selects one of three modes. macOS source:
   this additional model dependency in the UI. Unload design before loading clone.
   The opening is part of the output exactly once; its temporary reference is
   removed on every exit. Record the continuation model in optional metadata.
-  Implemented on `main` for Windows/Linux, not yet released. Native macOS
-  parity is tracked in [#224](https://github.com/shaztechio/bunyi-app/issues/224);
+  Implemented in both native apps and the .NET CLI/server. Cross-platform
   listening and long-passage acceptance remain tracked in
   [LONG-TEXT-PLAN.md](LONG-TEXT-PLAN.md).
 - **Short generation ends on the model's end-of-speech token or the user's Stop.**
@@ -135,8 +134,8 @@ A segmented picker selects one of three modes. macOS source:
   remain visible while waiting for the model to finish; Stop remains available.
   Removing a cutoff is not a fix for a model that rambles or never emits EOS.
   ONNX logs periodic EOS sampling probability and the actual termination reason
-  without logging the user's input text. macOS's upstream-enforced cap cannot
-  currently be disabled by its caller; the parity work is tracked in #224.
+  without logging the user's input text. MLX records its explicit EOS
+  termination and uses a cancellation-aware unbounded request for short text.
 - **An explicitly requested diagnostic limit is not successful completion.**
   Low-level inference tools/tests may still supply a frame cap. When the runtime knows that
   generation exhausted that explicit budget without an end-of-speech token, fail
@@ -145,8 +144,7 @@ A segmented picker selects one of three modes. macOS source:
   cleanup working, and allow another Generate. Do not guess an endpoint from
   text length or low volume and silently trim valid speech. This guard does
   not detect every unwanted word in a take that eventually ends normally.
-  ONNX implements this; reliable MLX termination reporting and the matching
-  guard are tracked in [#224](https://github.com/shaztechio/bunyi-app/issues/224).
+  Implemented in both native apps.
 - **Sampling follows the model reference.** ONNX repetition penalties apply
   once per distinct generated token at each step, not once per occurrence;
   otherwise repeated sound codes receive an unintended compounded penalty.
