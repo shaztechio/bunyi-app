@@ -24,7 +24,6 @@
 
 import AVFoundation
 import Foundation
-import Hub
 import MLX
 import Qwen3TTS
 
@@ -140,12 +139,14 @@ final class TTSEngine {
     /// Human-readable download detail ("42% — about 3.1 MB/s, ~6 min left").
     var downloadDetail: String?
     var downloadFeedback: ModelDownloadProgress?
+    var downloadRecovery: DownloadRecoveryOffer?
     private var activeModelTransfer: ModelFileTransfer?
     func reconnectDownload() {
         guard downloadFeedback?.phase == .downloading else { return }
         activeModelTransfer?.requestReconnect()
         downloadFeedback?.phase = .reconnecting
     }
+    func clearDownloadRecovery() { downloadRecovery = nil }
     /// Transcript produced by auto-transcription, so the UI can show it and
     /// save it with the voice instead of storing an empty string.
     var lastReferenceTranscript: String?
@@ -158,6 +159,11 @@ final class TTSEngine {
     private var model: Qwen3TTSModel?
 
     private let log = LogStore.shared
+
+    private struct HubTreeEntry: Decodable {
+        let type: String
+        let path: String
+    }
 
     /// Output lives in the app's own Application Support folder: the sandbox
     /// grants it without extra entitlements (unlike ~/Music), and "Show in
@@ -370,9 +376,9 @@ final class TTSEngine {
     /// manifest rather than a copy of the parser — the format has enough edge
     /// cases (tabs, `*` markers, unsafe paths) that a second reader of it would
     /// be a second set of bugs.
-    func publishedDigests(for mode: TTSMode) async -> [ManifestEntry]? {
+    func publishedDigests(for mode: TTSMode) async throws -> [ManifestEntry]? {
         guard case .baseURL(let base) = mode.effectiveSource else { return nil }
-        return await manifest(at: base.appendingPathComponent("manifest.sha256"))
+        return try await manifest(at: base.appendingPathComponent("manifest.sha256"))
     }
 
     private func downloadFromHub(mode: TTSMode, repoID: String) async throws -> URL {
@@ -382,12 +388,28 @@ final class TTSEngine {
             return localDir
         }
         status = .checking
-        // Keep Hub's repository discovery and glob semantics, but receive files
-        // through our byte-reporting transport. Snapshot reports file-weighted
-        // fractions and cannot identify a one-byte receipt or the active file.
-        let paths = try await HubApi(downloadBase: ModelsLocation.current()).getFilenames(
-            from: Hub.Repo(id: repoID), matching: ["*.safetensors", "*.json", "*.model", "*.txt"])
-        let files = paths.compactMap { path -> ManifestEntry? in
+        // Discover through the public tree endpoint so its 429 response and
+        // reset headers go through the same bounded policy as every file.
+        var tree = URLComponents(string:
+            "https://huggingface.co/api/models/\(repoID)/tree/main")!
+        tree.queryItems = [
+            URLQueryItem(name: "recursive", value: "true"),
+            URLQueryItem(name: "expand", value: "false"),
+        ]
+        let treeURL = tree.url!
+        let (treeData, treeResponse) = try await requestData(from: treeURL,
+                                                             phase: .checking)
+        guard treeResponse.statusCode == 200 else {
+            throw DownloadServiceError.httpStatus(
+                source: treeURL, status: treeResponse.statusCode)
+        }
+        let entries = try JSONDecoder().decode([HubTreeEntry].self, from: treeData)
+        let extensions = Set(["safetensors", "json", "model", "txt"])
+        let files = entries.compactMap { entry -> ManifestEntry? in
+            guard entry.type == "file",
+                  extensions.contains((entry.path as NSString).pathExtension.lowercased())
+            else { return nil }
+            let path = entry.path
             guard let safe = Self.safeRelativePath(path) else { return nil }
             return ManifestEntry(path: safe, sha256: nil)
         }.sorted { $0.path < $1.path }
@@ -442,7 +464,8 @@ final class TTSEngine {
         var present = Set(files.map(\.path))
         for entry in files {
             try Task.checkCancellation()
-            sizes[entry.path] = await Self.remoteSize(of: base.appendingPathComponent(entry.path))
+            sizes[entry.path] = try await remoteSize(
+                of: base.appendingPathComponent(entry.path))
         }
         func total() -> Int64 { present.allSatisfy { sizes[$0] != nil } ? sizes.values.reduce(0, +) : 0 }
         var completed: Int64 = 0
@@ -470,7 +493,8 @@ final class TTSEngine {
             let otherPaths = present.filter { $0 != entry.path }
             let otherTotal: Int64? = otherPaths.allSatisfy { sizes[$0] != nil }
                 ? otherPaths.reduce(Int64(0)) { $0 + (sizes[$1] ?? 0) } : nil
-            var code = 0
+            var response = HTTPResponseInfo(statusCode: 0)
+            var rateLimitRetries = 0
             while true {
                 try Task.checkCancellation()
                 mailbox.begin(file: entry.path, completed: completed, total: total(),
@@ -491,7 +515,8 @@ final class TTSEngine {
                             self.log.log("No new data for 30 s — the connection may be stalled")
                             warned = true
                         } else if !value.stalled(at: now) { warned = false }
-                        if now.timeIntervalSince(loggedAt) >= 10 {
+                        if value.phase == .downloading,
+                           now.timeIntervalSince(loggedAt) >= 10 {
                             self.log.log("Download: \(value.received.formatted()) bytes received; \(value.file ?? "model files")")
                             loggedAt = now
                         }
@@ -501,7 +526,8 @@ final class TTSEngine {
                     expected: expected, mailbox: mailbox)
                 activeModelTransfer = transfer
                 do {
-                    code = try await transfer.run(from: base.appendingPathComponent(entry.path))
+                    response = try await transfer.run(
+                        from: base.appendingPathComponent(entry.path))
                 } catch {
                     activeModelTransfer = nil
                     ticker.cancel()
@@ -518,11 +544,39 @@ final class TTSEngine {
                 ticker.cancel()
                 try Task.checkCancellation()
                 downloadFeedback = mailbox.snapshot()
+                if response.statusCode == 429 {
+                    let source = base.appendingPathComponent(entry.path)
+                    let retryNumber = min(rateLimitRetries + 1,
+                                          DownloadRetryPolicy.maximumRetries)
+                    let delay = DownloadRetryPolicy.delay(
+                        for: response, now: Date(),
+                        retryNumber: retryNumber,
+                        jitter: Double.random(in: 0...1))
+                    let retryAt = Date().addingTimeInterval(delay)
+                    guard rateLimitRetries < DownloadRetryPolicy.maximumRetries,
+                          delay <= DownloadRetryPolicy.maximumDelay else {
+                        throw DownloadServiceError.rateLimited(
+                            source: source, retryAt: retryAt)
+                    }
+                    rateLimitRetries += 1
+                    mailbox.waiting(until: retryAt,
+                                    host: source.host ?? "The server")
+                    downloadFeedback = mailbox.snapshot()
+                    log.log("Download limited by \(source.host ?? "the server"); retrying in \(Int(ceil(delay))) s")
+                    try await DownloadRetryPolicy.wait(until: retryAt)
+                    continue
+                }
                 break
                 }
-            if code != 200 {
-                guard code == 404 && !allRequired && !Self.requiredModelFiles.contains(entry.path) else {
-                    throw TTSError.selfHostFileMissing(entry.path, code)
+            if !response.isSuccess {
+                let source = base.appendingPathComponent(entry.path)
+                if (500...599).contains(response.statusCode) {
+                    throw response.unavailableError(source: source)
+                }
+                guard response.statusCode == 404 && !allRequired
+                        && !Self.requiredModelFiles.contains(entry.path) else {
+                    throw TTSError.selfHostFileMissing(entry.path,
+                                                        response.statusCode)
                 }
                 present.remove(entry.path); sizes.removeValue(forKey: entry.path)
                 continue
@@ -562,13 +616,13 @@ final class TTSEngine {
     /// ask for `manifest.sha256`, so a server can publish it whenever it likes
     /// and nothing in the field breaks.
     private func fileList(base: URL) async throws -> [ManifestEntry] {
-        if let entries = await manifest(at: base.appendingPathComponent("manifest.sha256")),
+        if let entries = try await manifest(at: base.appendingPathComponent("manifest.sha256")),
            !entries.isEmpty {
             let digests = entries.filter { $0.sha256 != nil }.count
             log.log("Using manifest.sha256 (\(entries.count) files, \(digests) with checksums)")
             return entries
         }
-        if let entries = await manifest(at: base.appendingPathComponent("manifest.txt")),
+        if let entries = try await manifest(at: base.appendingPathComponent("manifest.txt")),
            !entries.isEmpty {
             log.log("Using manifest.txt (\(entries.count) files, no checksums)")
             return entries
@@ -584,10 +638,16 @@ final class TTSEngine {
     /// a file `shasum -c` can verify — or a bare path. Anything that does not
     /// start with a digest is treated as a path, which is what makes one parser
     /// enough for both files.
-    private func manifest(at url: URL) async -> [ManifestEntry]? {
-        guard let (data, response) = try? await URLSession.shared.data(from: url),
-              (response as? HTTPURLResponse)?.statusCode == 200,
-              let text = String(data: data, encoding: .utf8) else { return nil }
+    private func manifest(at url: URL) async throws -> [ManifestEntry]? {
+        let (data, response) = try await requestData(from: url, phase: .checking)
+        if response.statusCode == 404 { return nil }
+        guard response.statusCode == 200 else {
+            throw DownloadServiceError.httpStatus(
+                source: url, status: response.statusCode)
+        }
+        guard let text = String(data: data, encoding: .utf8) else {
+            throw URLError(.cannotDecodeContentData)
+        }
         return text.split(whereSeparator: \.isNewline)
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty && !$0.hasPrefix("#") }
@@ -629,6 +689,74 @@ final class TTSEngine {
 
     private static func isSHA256Hex(_ s: Substring) -> Bool {
         s.count == 64 && s.allSatisfy(\.isHexDigit)
+    }
+
+    /// Executes one metadata request under the same bounded rate-limit policy
+    /// as file transfers. The original request is recreated on each attempt,
+    /// so a Hugging Face resolve URL obtains a fresh signed redirect.
+    private func requestData(from url: URL,
+                             phase: ModelDownloadProgress.Phase) async throws
+        -> (Data, HTTPResponseInfo) {
+        try await requestData(URLRequest(url: url), phase: phase)
+    }
+
+    private func requestData(_ originalRequest: URLRequest,
+                             phase: ModelDownloadProgress.Phase) async throws
+        -> (Data, HTTPResponseInfo) {
+        guard let source = originalRequest.url else {
+            throw URLError(.badURL)
+        }
+        var retries = 0
+        while true {
+            try Task.checkCancellation()
+            let (data, rawResponse) = try await URLSession.shared.data(
+                for: originalRequest)
+            guard let http = rawResponse as? HTTPURLResponse else {
+                throw URLError(.badServerResponse)
+            }
+            let response = HTTPResponseInfo(http)
+            if response.statusCode == 429 {
+                let retryNumber = min(retries + 1,
+                                      DownloadRetryPolicy.maximumRetries)
+                let delay = DownloadRetryPolicy.delay(
+                    for: response, now: Date(), retryNumber: retryNumber,
+                    jitter: Double.random(in: 0...1))
+                let retryAt = Date().addingTimeInterval(delay)
+                guard retries < DownloadRetryPolicy.maximumRetries,
+                      delay <= DownloadRetryPolicy.maximumDelay else {
+                    throw DownloadServiceError.rateLimited(
+                        source: source, retryAt: retryAt)
+                }
+                retries += 1
+                let previous = downloadFeedback
+                var waiting = previous ?? ModelDownloadProgress(phase: phase)
+                waiting.phase = .waiting
+                waiting.retryAt = retryAt
+                waiting.retryHost = source.host
+                waiting.slow = false
+                waiting.rate = 0
+                downloadFeedback = waiting
+                log.log("Request limited by \(source.host ?? "the server"); retrying in \(Int(ceil(delay))) s")
+                do {
+                    try await DownloadRetryPolicy.wait(until: retryAt)
+                } catch {
+                    downloadFeedback = previous
+                    throw error
+                }
+                downloadFeedback = previous.map { saved in
+                    var restored = saved
+                    restored.phase = phase
+                    restored.retryAt = nil
+                    restored.retryHost = nil
+                    return restored
+                }
+                continue
+            }
+            if (500...599).contains(response.statusCode) {
+                throw response.unavailableError(source: source)
+            }
+            return (data, response)
+        }
     }
 
     /// A manifest path, or nil if it would escape the model's folder.
@@ -679,15 +807,18 @@ final class TTSEngine {
     /// simply fetched again — they are a few kilobytes. The multi-gigabyte
     /// weights are served as octet-stream, uncompressed, and do report a
     /// usable length, which is the case that matters.
-    nonisolated private static func remoteSize(of url: URL) async -> Int64? {
+    private func remoteSize(of url: URL) async throws -> Int64? {
         var request = URLRequest(url: url)
         request.httpMethod = "HEAD"
         request.setValue("identity", forHTTPHeaderField: "Accept-Encoding")
-        guard let (_, response) = try? await URLSession.shared.data(for: request),
-              let http = response as? HTTPURLResponse,
-              http.statusCode == 200,
-              response.expectedContentLength > 0 else { return nil }
-        return response.expectedContentLength
+        let (_, response) = try await requestData(request, phase: .sizing)
+        if response.statusCode == 404 { return nil }
+        guard response.statusCode == 200 else {
+            throw DownloadServiceError.httpStatus(
+                source: url, status: response.statusCode)
+        }
+        return response.expectedContentLength > 0
+            ? response.expectedContentLength : nil
     }
 
     /// Filesystem-safe folder name derived from a base URL.
@@ -724,6 +855,7 @@ final class TTSEngine {
         }
         candidates.append(Self.tokenizerJSONURL)
 
+        var serviceFailure: DownloadServiceError?
         for url in candidates {
             do {
                 try await downloadEntries([ManifestEntry(path: "tokenizer.json", sha256: nil)],
@@ -732,10 +864,15 @@ final class TTSEngine {
                 return
             } catch is CancellationError { throw CancellationError() }
             catch let error as URLError where error.code == .cancelled { throw error }
+            catch let error as DownloadServiceError {
+                serviceFailure = serviceFailure ?? error
+                log.log("Tokenizer source failed: \(error.localizedDescription)")
+            }
             catch {
                 log.log("Tokenizer source failed: \(error.localizedDescription)")
             }
         }
+        if let serviceFailure { throw serviceFailure }
         throw TTSError.tokenizerDownloadFailed
     }
 
@@ -802,6 +939,7 @@ final class TTSEngine {
             log.log("Ignoring Generate — the previous job has not finished")
             return
         }
+        downloadRecovery = nil
         do {
             let model = try await prepare(mode: mode)
             try Task.checkCancellation()
@@ -1013,6 +1151,16 @@ final class TTSEngine {
             await finishStopping()
         } catch let urlError as URLError where urlError.code == .cancelled {
             await finishStopping()
+        } catch let error as DownloadServiceError {
+            log.log("Error: \(String(describing: error))")
+            releaseGenerationMemory()
+            if case .unavailable(_, let paused, _) = error,
+               case .baseURL(let source) = mode.effectiveSource,
+               mode.isUsingBuiltInMirror(source) {
+                downloadRecovery = DownloadRecoveryOffer(
+                    mode: mode, sourceURL: source, paused: paused)
+            }
+            status = .error("Model download failed. \(error.localizedDescription)")
         } catch {
             log.log("Error: \(String(describing: error))")
             // A run that threw allocated just as much as one that succeeded.

@@ -50,15 +50,39 @@ extension DownloadProgressChecks {
             let mailbox = DownloadReceiptMailbox()
             mailbox.begin(file: "weights", completed: 0, total: 4096, fileTotal: 4096)
             let route = ignored ? "ignore-range" : "resume"
-            let code = try await ModelFileTransfer(destination: dest, digest: digest, expected: 4096, mailbox: mailbox)
+            let response = try await ModelFileTransfer(destination: dest, digest: digest, expected: 4096, mailbox: mailbox)
                 .run(from: URL(string: "\(base)/\(route)")!, configuration: configuration)
-            precondition(code == 200)
+            precondition(response.isSuccess)
             let contents = try Data(contentsOf: dest)
             precondition(contents == payload)
             precondition(mailbox.snapshot().received == (ignored ? 4096 : 4096 - 123))
             precondition(mailbox.snapshot().fileBytes == 4096)
             precondition(!FileManager.default.fileExists(atPath: partial.path))
         }
-        print("Model transfer checks passed: first-byte delivery, cancellation, accepted and ignored resume, checksum and file contents.")
+
+        try FileManager.default.removeItem(at: dest)
+        try payload.prefix(123).write(to: partial)
+        let limited = try await ModelFileTransfer(
+            destination: dest, digest: digest, expected: 4096,
+            mailbox: DownloadReceiptMailbox())
+            .run(from: URL(string: "\(base)/limited")!,
+                 configuration: configuration)
+        precondition(limited.statusCode == 429)
+        precondition(limited.header("Retry-After") == "7")
+        precondition(limited.header("RateLimit") == "\"resolvers\";r=0;t=9")
+        let limitedPartial = try Data(contentsOf: partial)
+        precondition(limitedPartial == payload.prefix(123))
+        precondition(!FileManager.default.fileExists(atPath: dest.path))
+
+        let paused = try await ModelFileTransfer(
+            destination: dest, digest: digest, expected: 4096,
+            mailbox: DownloadReceiptMailbox())
+            .run(from: URL(string: "\(base)/paused")!,
+                 configuration: configuration)
+        precondition(paused.statusCode == 503)
+        precondition(paused.header("X-Bunyi-Download-Status") == "paused")
+        let pausedPartial = try Data(contentsOf: partial)
+        precondition(pausedPartial == payload.prefix(123))
+        print("Model transfer checks passed: first-byte delivery, cancellation, accepted and ignored resume, response metadata, checksum and file contents.")
     }
 }

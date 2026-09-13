@@ -65,7 +65,51 @@ struct DownloadProgressChecks {
         mailbox.receive(1, total: 400)
         let mixed = mailbox.snapshot()
         precondition(mixed.total == 0 && mixed.fileTotal == 400)
-        print("Download progress checks passed: one-byte receipts, resume offsets, unknown totals, file transitions and stalls.")
+        mailbox.waiting(until: epoch.addingTimeInterval(12), host: "example.test")
+        let waiting = mailbox.snapshot(at: epoch.addingTimeInterval(10))
+        precondition(waiting.receiptText(at: epoch.addingTimeInterval(10))
+                     == "Retrying in 2 seconds")
+        precondition(waiting.arrivalText(at: epoch) == "example.test asked Bunyi to wait")
+        precondition(!waiting.isSlow(at: epoch) && !waiting.stalled(at: epoch))
+
+        let seconds = HTTPResponseInfo(
+            statusCode: 429,
+            headers: ["Retry-After": "5", "RateLimit": "\"api\";r=0;t=9"])
+        precondition(DownloadRetryPolicy.delay(
+            for: seconds, now: epoch, retryNumber: 1, jitter: 0.5) == 9)
+        let httpDate = HTTPResponseInfo(
+            statusCode: 429,
+            headers: ["retry-after": "Thu, 01 Jan 1970 00:00:12 GMT"])
+        precondition(DownloadRetryPolicy.delay(
+            for: httpDate, now: epoch, retryNumber: 1, jitter: 0) == 12)
+        let fallback = HTTPResponseInfo(statusCode: 429)
+        precondition(DownloadRetryPolicy.delay(
+            for: fallback, now: epoch, retryNumber: 1, jitter: 0.5) == 2.5)
+        precondition(DownloadRetryPolicy.delay(
+            for: fallback, now: epoch, retryNumber: 2, jitter: 0.5) == 4.5)
+        precondition(DownloadRetryPolicy.delay(
+            for: fallback, now: epoch, retryNumber: 3, jitter: 0.5) == 8.5)
+        let paused = HTTPResponseInfo(
+            statusCode: 503,
+            headers: ["x-bunyi-download-status": " PAUSED "])
+        guard case .unavailable(_, let isPaused, _) = paused.unavailableError(
+            source: URL(string: "https://models.bunyi.app/customvoice")!,
+            now: epoch) else {
+            preconditionFailure("A 503 did not produce an unavailable error")
+        }
+        precondition(isPaused)
+
+        let deliberateWait = Task {
+            try await DownloadRetryPolicy.wait(
+                until: Date().addingTimeInterval(10))
+        }
+        deliberateWait.cancel()
+        do {
+            try await deliberateWait.value
+            preconditionFailure("A cancelled retry wait completed")
+        } catch is CancellationError {}
+
+        print("Download progress checks passed: receipts, resume offsets, unknown totals, waits, retry timing and cancellation.")
         try await checkTransfers()
     }
 }

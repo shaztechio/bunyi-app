@@ -34,6 +34,19 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", "0")
             self.end_headers()
             return
+        if self.path == "/limited":
+            self.send_response(429)
+            self.send_header("Retry-After", "7")
+            self.send_header("RateLimit", '"resolvers";r=0;t=9')
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        if self.path == "/paused":
+            self.send_response(503)
+            self.send_header("X-Bunyi-Download-Status", "paused")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
         start = 0
         if self.path != "/ignore-range" and self.headers.get("Range"):
             start = int(self.headers["Range"].removeprefix("bytes=").removesuffix("-"))
