@@ -278,6 +278,13 @@ reveal-in-file-manager.
   Hover is for looking; a tooltip cannot be pasted into a note, a bug report,
   or back into the app to reproduce a result. The button acknowledges the
   copy, because one that appears to do nothing gets pressed again.
+- **Keyboard navigation enters each row on its named Play control before the
+  remaining row actions.** That control announces which recording it belongs
+  to. Up and Down move one recording, Home and End move to the first and last,
+  and Page Up and Page Down move by a page. The active row stays visibly
+  outlined and scrolls into view. Tab then continues through that row's Copy
+  details, Download, reveal and Trash buttons; making rows navigable must not
+  merge or hide those controls from assistive technology.
 - **Trash** moves a file to the system Trash after confirming, not an
   unrecoverable delete: the row label is truncated, so the wrong icon is easy
   to hit, and the audio may be the only copy. Every platform has a recoverable
@@ -998,21 +1005,26 @@ chords differ and only the requirement is pinned.
   the safe default. §9's busy-close prompt already pins *Keep Working* as that
   default.
 
-> **The macOS audit remains open. Windows and Linux completed their recorded
-> reader checks; this section remains the contract for future changes.**
-> [#157](https://github.com/shaztechio/bunyi-app/issues/157),
-> [#164](https://github.com/shaztechio/bunyi-app/issues/164) and
-> [#158](https://github.com/shaztechio/bunyi-app/issues/158) track the remaining
-> macOS work. [#159](https://github.com/shaztechio/bunyi-app/issues/159) is closed
-> after the Windows Narrator and Linux Orca checks.
+> **The macOS spoken audit remains open. Windows and Linux completed their
+> recorded reader checks; this section remains the contract for future
+> changes.** [#158](https://github.com/shaztechio/bunyi-app/issues/158) tracks
+> the remaining manual VoiceOver work. The keyboard gaps tracked by
+> [#157](https://github.com/shaztechio/bunyi-app/issues/157) and
+> [#164](https://github.com/shaztechio/bunyi-app/issues/164) are implemented.
+> [#159](https://github.com/shaztechio/bunyi-app/issues/159) is closed after the
+> Windows Narrator and Linux Orca checks.
 >
 > It is recorded here first for the reason the parity rule exists: both apps
 > reached the same gap independently — a list of user content with no
 > selectable row — because nothing said they had to do otherwise. A fix in one
 > app that is not written down here becomes a divergence in the other.
 >
-> **macOS** still cannot scroll History from the keyboard at all (#157), and its
-> mode picker, Generate and toolbar cannot be reached from the keyboard (#164).
+> **macOS** has one named Tab loop through the mode picker, script, options and
+> main action. Arrow keys select modes immediately. Toolbar actions use
+> shortcuts rather than the title bar's unnamed key-view stops: Settings
+> **⌘,**, Doctor **⇧⌘D**, Logs **⌘L** and Help **⌘?**. History has a visible
+> list cursor for arrows, Home, End, Page Up and Page Down, followed by its
+> separately named row actions.
 >
 > **Linux focus events must work before a reader has explored the tree.**
 > In the 5 Sep 2026 Fedora Orca check (#159), Tab moved focus but Orca spoke

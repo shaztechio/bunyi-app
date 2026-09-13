@@ -52,6 +52,15 @@ struct HistoryView: View {
     @State private var progress: Double = 0
     @State private var copiedID: URL?
     @State private var copyResetTask: Task<Void, Never>?
+    /// The primary Play control is also the row's keyboard focus target. Unlike
+    /// native List selection, it remains a real AX button and leaves all four
+    /// controls after it in the Tab order.
+    @FocusState private var focusedRowID: URL?
+
+    private static let rowNavigationKeys: Set<KeyEquivalent> = [
+        .upArrow, .downArrow, .home, .end, .pageUp, .pageDown,
+    ]
+    private static let pageStride = 10
 
     /// Drives the ring, and notices a clip that reached its end — the player
     /// stops on its own and tells the view nothing. AVAudioPlayer has a
@@ -67,17 +76,17 @@ struct HistoryView: View {
             if items.isEmpty {
                 empty
             } else {
-                List(items) { item in
-                    row(item)
-                        // One rule for row height. Insets plus a vertical
-                        // padding inside the row were two mechanisms setting
-                        // the same rhythm, so changing either half-worked.
-                        .listRowInsets(EdgeInsets(top: 0, leading: 8,
-                                                  bottom: 0, trailing: 8))
-                        .frame(minHeight: 44)
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(spacing: 0) {
+                            ForEach(Array(items.enumerated()),
+                                    id: \.element.id) { index, item in
+                                navigableRow(item, at: index, in: proxy)
+                            }
+                        }
+                    }
+                    .accessibilityLabel("History recordings")
                 }
-                .listStyle(.inset)
-                .alternatingRowBackgrounds()
             }
         }
         .onAppear(perform: reload)
@@ -172,80 +181,42 @@ struct HistoryView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func row(_ item: GeneratedOutput) -> some View {
+    /// Kept out of the lazy-stack builder so the Swift type checker does not
+    /// have to infer the row's drawing, accessibility and focus as one deeply
+    /// nested expression.
+    private func navigableRow(_ item: GeneratedOutput, at index: Int,
+                              in proxy: ScrollViewProxy) -> some View {
+        row(item, in: proxy)
+            .id(item.id)
+            .padding(.horizontal, 8)
+            .background {
+                if !index.isMultiple(of: 2) {
+                    Color(nsColor: .alternatingContentBackgroundColors[1])
+                }
+            }
+            .frame(minHeight: 44)
+    }
+
+    private func row(_ item: GeneratedOutput,
+                     in proxy: ScrollViewProxy) -> some View {
         HStack(spacing: 12) {
             Button {
                 toggle(item)
             } label: {
-                // The ring is the progress bar, so a playing row needs no
-                // separate track taking up width — the control and its
-                // progress are the same object.
-                ZStack {
-                    if playingID == item.url {
-                        Circle()
-                            .stroke(.quaternary, lineWidth: 2)
-                        Circle()
-                            .trim(from: 0, to: progress)
-                            .stroke(Color.accentColor,
-                                    style: StrokeStyle(lineWidth: 2, lineCap: .round))
-                            // Trim starts at 3 o'clock; sweeping from the top
-                            // is what reads as progress.
-                            .rotationEffect(.degrees(-90))
-                            // Matched to the tick, so the ring sweeps instead
-                            // of stepping.
-                            .animation(.linear(duration: 0.2), value: progress)
-                    }
-                    Image(systemName: playingID == item.url ? "stop.fill" : "play.fill")
-                        .font(.system(size: 9))
+                HStack(spacing: 12) {
+                    playbackIndicator(for: item)
+                    recordSummary(for: item)
                 }
-                .frame(width: 22, height: 22)
-                .contentShape(Circle())
+                .contentShape(Rectangle())
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .buttonStyle(RowIconButtonStyle())
-            .help(playingID == item.url ? "Stop" : "Play")
-            .accessibilityLabel(playingID == item.url ? "Stop" : "Play")
-
-            // The record tooltip covers the text and the empty middle, not
-            // the buttons. On the whole row it won every hover, so each
-            // button's own tooltip never appeared — the one exception being
-            // Copy, whose label changes state and re-registers its help.
-            HStack(spacing: 0) {
-                VStack(alignment: .leading, spacing: 2) {
-                    // The prompt when the file carries one, the mode otherwise
-                    // — "what did it say" identifies a clip far better than
-                    // "Preset voice" repeated down the list. A prompt can be
-                    // paragraphs long, so the row shows one line and the whole
-                    // thing is on hover.
-                    Text(metadata[item.url]?.title ?? item.mode)
-                        .fontWeight(.medium)
-                        .lineLimit(1)
-                    HStack(spacing: 6) {
-                        // The mode as a pill, ported from `.tag` on
-                        // bunyi.app. It is the one value in this line that is
-                        // a category rather than a detail, so it earns a shape
-                        // instead of a share of a run-on string.
-                        let name = metadata[item.url]?.mode ?? item.mode
-                        let tint = Self.mode(named: name)?.pillColor
-                            ?? Color.secondary
-                        Text(name.uppercased())
-                            .font(.system(size: 9, weight: .bold))
-                            .tracking(0.6)
-                            .foregroundStyle(tint)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 1)
-                            .background(tint.opacity(0.14), in: Capsule())
-
-                        Text(Self.subtitle(for: item, metadata: metadata[item.url]))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                }
-
-                Spacer(minLength: 8)
+            .buttonStyle(.plain)
+            .focused($focusedRowID, equals: item.id)
+            .onKeyPress(keys: Self.rowNavigationKeys) { press in
+                navigateFocus(from: item.id, with: press.key, in: proxy)
             }
-            .contentShape(Rectangle())
             .help(Self.tooltip(for: item, metadata: metadata[item.url]))
+            .accessibilityLabel(rowAccessibilityLabel(for: item))
 
             // Copying beats hover for anything you want to keep: a tooltip
             // cannot be pasted into a note, a bug report, or back into the app
@@ -298,6 +269,76 @@ struct HistoryView: View {
             .accessibilityLabel("Move to Trash")
         }
         .contentShape(Rectangle())
+        // Keep the row grouped without merging its five controls into one
+        // accessibility element, as a selectable SwiftUI List does on macOS.
+        .accessibilityElement(children: .contain)
+    }
+
+    private func playbackIndicator(for item: GeneratedOutput) -> some View {
+        // The ring is the progress bar, so a playing row needs no separate
+        // track taking up width — the control and its progress are the same
+        // object.
+        ZStack {
+            if playingID == item.url {
+                Circle()
+                    .stroke(.quaternary, lineWidth: 2)
+                Circle()
+                    .trim(from: 0, to: progress)
+                    .stroke(
+                        Color.accentColor,
+                        style: StrokeStyle(lineWidth: 2, lineCap: .round)
+                    )
+                    // Trim starts at 3 o'clock; sweeping from the top is what
+                    // reads as progress.
+                    .rotationEffect(.degrees(-90))
+                    // Matched to the tick, so the ring sweeps instead of
+                    // stepping.
+                    .animation(.linear(duration: 0.2), value: progress)
+            }
+            Image(systemName: playingID == item.url ? "stop.fill" : "play.fill")
+                .font(.system(size: 9))
+        }
+        .frame(width: 22, height: 22)
+        .contentShape(Circle())
+    }
+
+    private func recordSummary(for item: GeneratedOutput) -> some View {
+        HStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 2) {
+                // The prompt when the file carries one, the mode otherwise —
+                // "what did it say" identifies a clip far better than "Preset
+                // voice" repeated down the list. A prompt can be paragraphs
+                // long, so the row shows one line and the whole thing is on
+                // hover.
+                Text(metadata[item.url]?.title ?? item.mode)
+                    .fontWeight(.medium)
+                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    // The mode as a pill, ported from .tag on bunyi.app. It is
+                    // the one value in this line that is a category rather
+                    // than a detail, so it earns a shape instead of a share of
+                    // a run-on string.
+                    let name = metadata[item.url]?.mode ?? item.mode
+                    let tint = Self.mode(named: name)?.pillColor
+                        ?? Color.secondary
+                    Text(name.uppercased())
+                        .font(.system(size: 9, weight: .bold))
+                        .tracking(0.6)
+                        .foregroundStyle(tint)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(tint.opacity(0.14), in: Capsule())
+
+                    Text(Self.subtitle(for: item,
+                                       metadata: metadata[item.url]))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer(minLength: 8)
+        }
     }
 
     // MARK: Behaviour
@@ -315,6 +356,62 @@ struct HistoryView: View {
         if let playingID, !items.contains(where: { $0.url == playingID }) {
             stop()
         }
+    }
+
+    /// Move focus between the rows' real Play buttons, rather than onto a
+    /// focus-only container that VoiceOver cannot follow. The destination is
+    /// scrolled into view before it receives focus.
+    private func navigateFocus(from currentID: URL, with key: KeyEquivalent,
+                               in proxy: ScrollViewProxy) -> KeyPress.Result {
+        guard let current = items.firstIndex(where: { $0.id == currentID })
+        else { return .ignored }
+        let destination: Int
+        let anchor: UnitPoint?
+        switch key {
+        case .upArrow:
+            destination = max(0, current - 1)
+            anchor = nil
+        case .downArrow:
+            destination = min(items.count - 1, current + 1)
+            anchor = nil
+        case .home:
+            destination = 0
+            anchor = .top
+        case .end:
+            destination = items.count - 1
+            anchor = .bottom
+        case .pageUp:
+            destination = max(0, current - Self.pageStride)
+            anchor = .top
+        case .pageDown:
+            destination = min(items.count - 1, current + Self.pageStride)
+            anchor = .bottom
+        default:
+            return .ignored
+        }
+
+        let destinationID = items[destination].id
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            proxy.scrollTo(destinationID, anchor: anchor)
+        }
+        // Scrolling instantiates an offscreen destination lazily. Focus it on
+        // the next turn, once that button exists in the view hierarchy.
+        DispatchQueue.main.async {
+            focusedRowID = destinationID
+        }
+        return .handled
+    }
+
+    /// The Play button doubles as the row target, so its spoken name carries
+    /// both the action and the recording that action will affect.
+    private func rowAccessibilityLabel(for item: GeneratedOutput) -> String {
+        let action = playingID == item.url ? "Stop" : "Play"
+        let title = metadata[item.url]?.title ?? item.mode
+        let mode = metadata[item.url]?.mode ?? item.mode
+        let detail = Self.subtitle(for: item, metadata: metadata[item.url])
+        return "\(action). \(title). \(mode), \(detail)"
     }
 
     /// Play, or stop what is playing. No resume: these are short clips, and a
