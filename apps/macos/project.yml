@@ -22,6 +22,22 @@ packages:
     url: https://github.com/shaztechio/swift-qwen3-tts.git
     revision: c0806fbf383fbfdc4a3ad2945f31d7087dcc477d
 targets:
+  BunyiCLI:
+    type: tool
+    platform: macOS
+    sources:
+      - CLI
+    settings:
+      base:
+        ARCHS: arm64
+        PRODUCT_NAME: bunyi
+        PRODUCT_BUNDLE_IDENTIFIER: app.bunyi.cli
+        MARKETING_VERSION: 0.1.0
+        CURRENT_PROJECT_VERSION: 1
+        SWIFT_VERSION: "6.0"
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: "-"
+        ENABLE_HARDENED_RUNTIME: NO
   Bunyi:
     type: application
     platform: macOS
@@ -118,6 +134,12 @@ targets:
         CODE_SIGN_IDENTITY: "-"
         ENABLE_HARDENED_RUNTIME: NO
 schemes:
+  BunyiCLI:
+    build:
+      targets:
+        BunyiCLI: all
+    run:
+      config: Debug
   Bunyi:
     build:
       targets:

@@ -68,8 +68,17 @@ jobs:
         run: |
           swiftc -parse-as-library SpeechSections.swift tests/SpeechSectionsChecks.swift -o /tmp/bunyi-speech-section-checks
           /tmp/bunyi-speech-section-checks
+      - name: Check CLI contract
+        run: |
+          swiftc -parse-as-library CLI/CLIProtocol.swift CLI/CLICommandParser.swift tests/CLIContractChecks.swift -o /tmp/bunyi-cli-contract-checks
+          /tmp/bunyi-cli-contract-checks
       - name: Build app
         run: |
           xcodebuild -project Bunyi.xcodeproj \
             -scheme "Bunyi" \
+            -destination 'platform=macOS' build
+      - name: Build CLI preview
+        run: |
+          xcodebuild -project Bunyi.xcodeproj \
+            -scheme "BunyiCLI" \
             -destination 'platform=macOS' build
