@@ -1,5 +1,5 @@
 {
-  "originHash" : "0ba291125375fc35bded1a7aa4a62cfff37dbd392e98d8a5a171209543a025ad",
+  "originHash" : "f814ccf338d16fda9cefb67f5bd6ac9ab2430ac7b202fe36cc66bde79e05b3e5",
   "pins" : [
     {
       "identity" : "gzipswift",
@@ -58,10 +58,9 @@
     {
       "identity" : "swift-qwen3-tts",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/AtomGradient/swift-qwen3-tts.git",
+      "location" : "https://github.com/shaztechio/swift-qwen3-tts.git",
       "state" : {
-        "branch" : "main",
-        "revision" : "27a5b5b2c5d55258bead2c6e851208987e1ca225"
+        "revision" : "c0806fbf383fbfdc4a3ad2945f31d7087dcc477d"
       }
     },
     {

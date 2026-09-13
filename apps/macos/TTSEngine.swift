@@ -69,11 +69,9 @@ enum EngineStatus: Equatable {
     case loading
     case transcribing             // auto-transcribing the clone reference
     case generating(Int)          // codec tokens emitted so far
-    /// Cancelled, but the inference engine is still computing. Cancellation is
-    /// cooperative and only the consumer stops: the package generates on a
-    /// thread of its own that runs to completion. Reporting idle here would be
-    /// a lie the UI acts on — it re-enables Generate, and a second job would
-    /// then touch the same model as the first.
+    /// Cancelled, but the inference worker has not reached its next frame
+    /// boundary yet. Reporting idle here would re-enable Generate while the
+    /// previous worker can still touch the shared model.
     case stopping
     case error(String)
 
@@ -91,6 +89,9 @@ enum EngineStatus: Equatable {
 @Observable
 final class TTSEngine {
     var status: EngineStatus = .idle
+    /// Section/attempt context for long generation. The status enum retains
+    /// the aggregate frame count used by existing callers.
+    var generationDetail: String?
     var lastOutputURL: URL?
 
     /// Forgets the previous run's file so the UI stops offering it. Called when
@@ -168,14 +169,6 @@ final class TTSEngine {
     /// Output lives in the app's own Application Support folder: the sandbox
     /// grants it without extra entitlements (unlike ~/Music), and "Show in
     /// Finder" still surfaces the files.
-    /// The floor in swift-qwen3-tts's runaway guard, `max(75, textTokens * 6)`.
-    ///
-    /// Hard-coded because the package exposes neither the multiplier nor the
-    /// floor, and the value only matters for recognising that it bound. If
-    /// upstream changes it this stops reporting rather than misreporting, which
-    /// is the right way round for a diagnostic.
-    private static let upstreamFrameFloor = 75
-
     private let outputDir: URL = {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory,
                                            in: .userDomainMask)[0]
@@ -920,6 +913,352 @@ final class TTSEngine {
         return true
     }
 
+    // MARK: Long-text generation
+
+    private struct SynthesisRequest {
+        let mode: TTSMode
+        let text: String
+        let speaker: String?
+        let instruct: String?
+        let language: String
+        let referenceAudio: MLXArray?
+        let referenceText: String?
+    }
+
+    private struct SectionTake: Sendable {
+        let samples: [Float]
+        let frames: Int
+        let termination: Qwen3TTSTermination
+    }
+
+    private final class SectionAccumulator {
+        var samples: [Float] = []
+        var frames = 0
+
+        func accept(_ take: SectionTake, sampleRate: Int) {
+            SectionAudioJoiner.append(take.samples, to: &samples,
+                                      sampleRate: sampleRate)
+            frames += take.frames
+        }
+    }
+
+    /// One bounded attempt. The dependency resets its KV cache on every call;
+    /// only EOS-terminated audio is returned to the section accumulator.
+    private func synthesize(
+        model: Qwen3TTSModel,
+        request: SynthesisRequest,
+        maximumFrames: Int?,
+        progressLabel: String?,
+        readySamples: Int
+    ) async throws -> SectionTake {
+        let control = GenerationControl()
+        let termination = TerminationReceipt()
+        let boxed = Unchecked(value: (model, request))
+        let (tokens, continuation) = AsyncStream.makeStream(of: Int.self)
+        status = .generating(0)
+        if let progressLabel {
+            generationDetail = String(
+                format: "%@ · 0.0s in this attempt · %.1fs ready",
+                progressLabel,
+                Double(readySamples) / Double(model.sampleRate))
+        }
+        let worker = Task.detached(priority: .userInitiated) {
+            defer { continuation.finish() }
+            let (model, request) = boxed.value
+            var count = 0
+            let onToken: (Int) -> Void = { _ in
+                count += 1
+                continuation.yield(count)
+            }
+            let onTermination: @Sendable (Qwen3TTSTermination) -> Void = {
+                termination.set($0)
+            }
+            let wav: MLXArray
+            switch request.mode {
+            case .presetVoice:
+                guard let speaker = request.speaker else {
+                    throw TTSError.noAudio
+                }
+                wav = try model.generateCustomVoice(
+                    text: request.text, speaker: speaker,
+                    language: request.language, instruct: request.instruct,
+                    maxTokens: maximumFrames, useTextLengthLimit: false,
+                    shouldContinue: control.shouldContinue,
+                    onTermination: onTermination, onToken: onToken)
+            case .voiceDesign:
+                wav = try model.generateVoiceDesign(
+                    text: request.text, language: request.language,
+                    instruct: request.instruct, maxTokens: maximumFrames,
+                    useTextLengthLimit: false,
+                    shouldContinue: control.shouldContinue,
+                    onTermination: onTermination, onToken: onToken)
+            case .voiceClone:
+                guard let referenceAudio = request.referenceAudio,
+                      let referenceText = request.referenceText else {
+                    throw TTSError.missingReference
+                }
+                wav = try model.generateVoiceClone(
+                    text: request.text, referenceAudio: referenceAudio,
+                    referenceText: referenceText, language: request.language,
+                    maxTokens: maximumFrames, useTextLengthLimit: false,
+                    shouldContinue: control.shouldContinue,
+                    onTermination: onTermination, onToken: onToken)
+            }
+            let samples = wav.asArray(Float.self)
+            guard let reason = termination.value else {
+                throw TTSError.missingTermination
+            }
+            return SectionTake(samples: samples, frames: count,
+                               termination: reason)
+        }
+
+        do {
+            for await count in tokens {
+                try Task.checkCancellation()
+                status = .generating(count)
+                if let progressLabel {
+                    generationDetail = String(
+                        format: "%@ · %.1fs in this attempt · %.1fs ready",
+                        progressLabel, Double(count) / 12.5,
+                        Double(readySamples) / Double(model.sampleRate))
+                }
+                if count % 100 == 0 {
+                    log.log("\(progressLabel ?? "Generation"): \(count) frames in this attempt")
+                }
+            }
+            try Task.checkCancellation()
+            let take = try await worker.value
+            guard !take.samples.isEmpty,
+                  take.samples.allSatisfy(\.isFinite) else {
+                throw TTSError.invalidSectionAudio
+            }
+            return take
+        } catch {
+            control.cancel()
+            if Task.isCancelled || error is CancellationError {
+                pendingWork = Task.detached { _ = try? await worker.value }
+            }
+            throw error
+        }
+    }
+
+    private func generateSection(
+        model: Qwen3TTSModel,
+        request: SynthesisRequest,
+        label: String,
+        depth: Int,
+        accumulator: SectionAccumulator
+    ) async throws {
+        do {
+            try await SpeechSections.recover(request.text, depth: depth) {
+                text, attemptDepth in
+                let upper = SpeechDurationEstimate.forText(
+                    text, language: request.language).upperSeconds
+                let limit = Int(ceil(max(20, 2 * upper + 5) * 12.5))
+                let progress = attemptDepth > 0
+                    ? "Retrying \(label.lowercased()) with shorter text" : label
+                let take = try await synthesize(
+                    model: model,
+                    request: SynthesisRequest(
+                        mode: request.mode, text: text,
+                        speaker: request.speaker, instruct: request.instruct,
+                        language: request.language,
+                        referenceAudio: request.referenceAudio,
+                        referenceText: request.referenceText),
+                    maximumFrames: limit, progressLabel: progress,
+                    readySamples: accumulator.samples.count)
+                guard take.termination == .endOfSpeech else {
+                    if attemptDepth < 2 {
+                        log.log("\(label): reached the \(limit)-frame limit. Retrying with shorter text (subdivision \(attemptDepth + 1) of 2).")
+                    } else {
+                        log.log("\(label): reached the \(limit)-frame limit at the final subdivision.")
+                    }
+                    return false
+                }
+                accumulator.accept(take, sampleRate: model.sampleRate)
+                log.log("\(label): accepted \(take.frames) frames at EOS")
+                return true
+            }
+        } catch SpeechSectionRecoveryError.exhausted {
+            throw TTSError.generationDidNotFinish
+        }
+    }
+
+    private func generateSections(
+        model: Qwen3TTSModel,
+        request: SynthesisRequest,
+        accumulator: SectionAccumulator
+    ) async throws {
+        let sections = SpeechSections.split(request.text)
+        for (index, text) in sections.enumerated() {
+            try await generateSection(
+                model: model,
+                request: SynthesisRequest(
+                    mode: request.mode, text: text, speaker: request.speaker,
+                    instruct: request.instruct, language: request.language,
+                    referenceAudio: request.referenceAudio,
+                    referenceText: request.referenceText),
+                label: "Section \(index + 1) of \(sections.count)", depth: 0,
+                accumulator: accumulator)
+        }
+    }
+
+    private func preparedCloneReference(
+        url: URL,
+        transcript: String?,
+        language: String,
+        sampleRate: Double
+    ) async throws -> (audio: MLXArray, text: String) {
+        let typed = transcript?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let text: String
+        if let typed, !typed.isEmpty {
+            text = typed
+        } else {
+            status = .transcribing
+            log.log("No transcript given — transcribing the reference clip on-device")
+            text = try await ReferenceTranscriber.transcribe(
+                url: url, locale: Self.locale(for: language))
+            lastReferenceTranscript = text
+            log.log("Reference transcript: \"\(text)\"")
+        }
+        log.log("Preparing reference audio — resampling to \(Int(sampleRate / 1000)) kHz mono")
+        return (try Self.loadReferenceAudio(from: url,
+                                            targetSampleRate: sampleRate), text)
+    }
+
+    private func generateLongText(
+        initialModel: Qwen3TTSModel,
+        mode: TTSMode,
+        text: String,
+        speaker: String?,
+        instruct: String?,
+        language: String,
+        referenceAudioURL: URL?,
+        referenceText: String?
+    ) async throws -> (samples: [Float], frames: Int,
+                       continuationModelRepo: String?) {
+        let accumulator = SectionAccumulator()
+        var continuationRepo: String?
+
+        if mode == .voiceDesign {
+            var opening = SpeechSections.split(text, maximumSeconds: 8)[0]
+            var accepted: SectionTake?
+            for attempt in 0..<3 {
+                let take = try await synthesize(
+                    model: initialModel,
+                    request: SynthesisRequest(
+                        mode: .voiceDesign, text: opening, speaker: nil,
+                        instruct: instruct, language: language,
+                        referenceAudio: nil, referenceText: nil),
+                    maximumFrames: 125,
+                    progressLabel: attempt == 0
+                        ? "Creating your designed voice"
+                        : "Retrying a shorter voice opening",
+                    readySamples: 0)
+                if take.termination == .endOfSpeech {
+                    accepted = take
+                    break
+                }
+                guard attempt < 2 else {
+                    throw TTSError.generationDidNotFinish
+                }
+                let halves = SpeechSections.bisect(opening)
+                guard halves.count == 2 else {
+                    throw TTSError.generationDidNotFinish
+                }
+                opening = halves[0]
+            }
+            guard let accepted else { throw TTSError.generationDidNotFinish }
+            accumulator.accept(accepted, sampleRate: initialModel.sampleRate)
+
+            generationDetail = "Preparing the clone model to keep your designed voice consistent"
+            unload(reason: "continuing a long designed voice through Voice clone")
+            let cloneModel = try await prepare(mode: .voiceClone)
+            continuationRepo = TTSMode.voiceClone.effectiveRepoID
+            let remaining = String(text.dropFirst(opening.count))
+            if !remaining.isEmpty {
+                try await generateSections(
+                    model: cloneModel,
+                    request: SynthesisRequest(
+                        mode: .voiceClone, text: remaining, speaker: nil,
+                        instruct: nil, language: language,
+                        referenceAudio: MLXArray(accepted.samples),
+                        referenceText: opening),
+                    accumulator: accumulator)
+            }
+        } else {
+            var reference: (audio: MLXArray, text: String)?
+            var gotAccess = false
+            if mode == .voiceClone {
+                guard let url = referenceAudioURL else {
+                    throw TTSError.missingReference
+                }
+                log.log("Cloning voice from \(url.lastPathComponent)")
+                gotAccess = url.startAccessingSecurityScopedResource()
+                defer { if gotAccess { url.stopAccessingSecurityScopedResource() } }
+                reference = try await preparedCloneReference(
+                    url: url, transcript: referenceText, language: language,
+                    sampleRate: Double(initialModel.sampleRate))
+            }
+            try await generateSections(
+                model: initialModel,
+                request: SynthesisRequest(
+                    mode: mode, text: text, speaker: speaker,
+                    instruct: instruct, language: language,
+                    referenceAudio: reference?.audio,
+                    referenceText: reference?.text),
+                accumulator: accumulator)
+        }
+        return (accumulator.samples, accumulator.frames, continuationRepo)
+    }
+
+    private func saveLongText(
+        _ samples: [Float],
+        mode: TTSMode,
+        text: String,
+        speaker: String?,
+        instruct: String?,
+        language: String,
+        referenceText: String?,
+        continuationModelRepo: String?
+    ) async throws -> (url: URL, gain: Double) {
+        try Task.checkCancellation()
+        let url = outputDir.appendingPathComponent(Self.fileName(for: mode))
+        let temporary = outputDir.appendingPathComponent(
+            ".bunyi-output-\(UUID().uuidString).partial.wav")
+        defer { try? FileManager.default.removeItem(at: temporary) }
+        let nonEmpty: (String?) -> String? = { value in
+            let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed?.isEmpty == false ? trimmed : nil
+        }
+        let metadata = OutputMetadata(
+            mode: mode.rawValue, text: text, language: language,
+            speaker: mode == .presetVoice ? nonEmpty(speaker) : nil,
+            style: mode == .presetVoice ? nonEmpty(instruct) : nil,
+            voiceDescription: mode == .voiceDesign ? nonEmpty(instruct) : nil,
+            referenceTranscript: mode == .voiceClone
+                ? nonEmpty(referenceText) ?? nonEmpty(lastReferenceTranscript)
+                : nil,
+            modelRepo: Self.metadataSource(mode.effectiveRepoID),
+            continuationModelRepo: continuationModelRepo.map(
+                Self.metadataSource),
+            appVersion: Self.appVersion, created: Date())
+
+        status = .finalizing
+        generationDetail = "Preparing your complete audio file…"
+        let result = try await Task.detached(priority: .userInitiated) {
+            dispatchPrecondition(condition: .notOnQueue(.main))
+            let prepared = try OutputLevel.prepare(samples)
+            try saveAudioArray(MLXArray(prepared.samples),
+                               sampleRate: 24_000, to: temporary)
+            try? WAVMetadata.embed(metadata, in: temporary)
+            return prepared.gain
+        }.value
+        try Task.checkCancellation()
+        try FileManager.default.moveItem(at: temporary, to: url)
+        return (url, result)
+    }
+
     // MARK: Generation
 
     func generate(
@@ -940,11 +1279,44 @@ final class TTSEngine {
             return
         }
         downloadRecovery = nil
+        generationDetail = nil
         do {
             let model = try await prepare(mode: mode)
             try Task.checkCancellation()
-            status = .generating(0)
             let generateStart = Date()
+
+            if SpeechDurationEstimate.forText(
+                text, language: language).needsSections {
+                log.log("Generating long text in recoverable sections")
+                let completed = try await generateLongText(
+                    initialModel: model, mode: mode, text: text,
+                    speaker: speaker, instruct: instruct, language: language,
+                    referenceAudioURL: referenceAudioURL,
+                    referenceText: referenceText)
+                let saved = try await saveLongText(
+                    completed.samples, mode: mode, text: text,
+                    speaker: speaker, instruct: instruct, language: language,
+                    referenceText: referenceText,
+                    continuationModelRepo: completed.continuationModelRepo)
+                if saved.gain < 1 {
+                    log.log(String(
+                        format: "Output level: reduced by %.1f dB to prevent clipping.",
+                        -20 * log10(saved.gain)))
+                }
+                log.log(String(
+                    format: "Saved %@ — %.1f s accepted audio, %d frames, %.1f s total",
+                    saved.url.path,
+                    Double(completed.samples.count) / 24_000,
+                    completed.frames,
+                    Date().timeIntervalSince(generateStart)))
+                releaseGenerationMemory()
+                generationDetail = nil
+                lastOutputURL = saved.url
+                status = .idle
+                return
+            }
+
+            status = .generating(0)
 
             let audio: MLXArray
             switch mode {
@@ -984,7 +1356,10 @@ final class TTSEngine {
                 // and MLXArray aren't Sendable, so cross the boundary in an
                 // unchecked box — safe because only one generation runs at once.
                 let inputs = Unchecked(value: (model, refAudio))
+                let control = GenerationControl()
+                let termination = TerminationReceipt()
                 let (tokens, continuation) = AsyncStream.makeStream(of: Int.self)
+                var cloneFrames = 0
                 let cloneTask = Task.detached(priority: .userInitiated) {
                     defer { continuation.finish() }
                     var count = 0
@@ -994,6 +1369,10 @@ final class TTSEngine {
                         referenceAudio: ref,
                         referenceText: refText,
                         language: language,
+                        maxTokens: nil,
+                        useTextLengthLimit: false,
+                        shouldContinue: control.shouldContinue,
+                        onTermination: termination.set,
                         onToken: { _ in
                             count += 1
                             continuation.yield(count)
@@ -1002,20 +1381,22 @@ final class TTSEngine {
                     return Unchecked(value: wav)
                 }
                 for await count in tokens {
+                    cloneFrames = count
                     if Task.isCancelled { break }
                     if count % 5 == 0 { status = .generating(count) }
                     if count % 100 == 0 { log.log("Generated \(count) tokens…") }
                 }
-                // generateVoiceClone is synchronous and ignores cancellation,
-                // so the detached task runs to completion whatever we do here.
-                // Register it before checking, so `stop()` can wait for the
-                // model to be free instead of declaring victory early.
                 if Task.isCancelled {
+                    control.cancel()
                     pendingWork = Task.detached { _ = try? await cloneTask.value }
                     try Task.checkCancellation()
                 }
                 audio = try await cloneTask.value.value
                 try Task.checkCancellation()
+                guard termination.value == .endOfSpeech else {
+                    throw TTSError.missingTermination
+                }
+                log.log("Generation ended at EOS after \(cloneFrames) frames")
 
             case .presetVoice, .voiceDesign:
                 if mode == .presetVoice {
@@ -1028,14 +1409,19 @@ final class TTSEngine {
                 // the package generates on its own thread, and abandoning the
                 // stream would leave that thread running against the model
                 // with nothing tracking it.
+                let control = GenerationControl()
                 let stream = model.generateStream(
                     text: text,
                     speaker: mode == .presetVoice ? speaker : nil,
                     instruct: (instruct?.isEmpty == false) ? instruct : nil,
-                    language: language
+                    language: language,
+                    maxTokens: nil,
+                    useTextLengthLimit: false,
+                    shouldContinue: control.shouldContinue
                 )
                 var final: MLXArray?
                 var tokenCount = 0
+                var streamTermination: Qwen3TTSTermination?
                 do {
                     for try await event in stream {
                         try Task.checkCancellation()
@@ -1046,13 +1432,14 @@ final class TTSEngine {
                             if tokenCount % 100 == 0 {
                                 log.log("Generated \(tokenCount) tokens…")
                             }
-                        case .info:
-                            break
+                        case .info(let info):
+                            streamTermination = info.termination
                         case .audio(let wav):
                             final = wav
                         }
                     }
                 } catch {
+                    control.cancel()
                     // Cancelled mid-generation. Keep consuming in the
                     // background so the producer thread reaches its end and
                     // lets go of the model; `stop()` waits on this before it
@@ -1068,23 +1455,10 @@ final class TTSEngine {
                     }
                     throw error
                 }
-                // swift-qwen3-tts stops a run at `max(75, textTokens * 6)` codec
-                // frames as a runaway guard (Qwen3.swift:616). For short text the
-                // floor binds, and the model is cut off whether or not it has
-                // finished the sentence — measured at roughly one run in seven
-                // ending mid-word on the app's own first example prompt.
-                //
-                // Nothing upstream says when this happens, and `min(maxTokens, …)`
-                // means a caller cannot raise it. So the least we can do is stop
-                // it being silent: landing on exactly the floor is the signature,
-                // since the model finishing of its own accord on that precise
-                // count, repeatedly, is not what the length distribution looks
-                // like. See issue #145.
-                if tokenCount == Self.upstreamFrameFloor {
-                    log.log("The clip stopped at the \(tokenCount)-frame limit, so it "
-                          + "may be cut off mid-word. Generating again usually "
-                          + "produces a take that fits.")
+                guard streamTermination == .endOfSpeech else {
+                    throw TTSError.missingTermination
                 }
+                log.log("Generation ended at EOS after \(tokenCount) frames")
                 guard let wav = final else { throw TTSError.noAudio }
                 audio = wav
             }
@@ -1122,7 +1496,7 @@ final class TTSEngine {
                 referenceTranscript: mode == .voiceClone
                     ? nonEmpty(referenceText) ?? nonEmpty(lastReferenceTranscript)
                     : nil,
-                modelRepo: mode.effectiveRepoID,
+                modelRepo: Self.metadataSource(mode.effectiveRepoID),
                 appVersion: Self.appVersion,
                 created: Date()
             )
@@ -1154,6 +1528,7 @@ final class TTSEngine {
         } catch let error as DownloadServiceError {
             log.log("Error: \(String(describing: error))")
             releaseGenerationMemory()
+            generationDetail = nil
             if case .unavailable(_, let paused, _) = error,
                case .baseURL(let source) = mode.effectiveSource,
                mode.isUsingBuiltInMirror(source) {
@@ -1168,6 +1543,7 @@ final class TTSEngine {
             // most likely to have been killed by memory pressure in the first
             // place.
             releaseGenerationMemory()
+            generationDetail = nil
             let stage: String
             switch status {
             case .downloading: stage = "Model download failed"
@@ -1183,21 +1559,18 @@ final class TTSEngine {
     /// Cancels the visible work. The generation Task is cancelled by the
     /// caller; downloads and streaming then stop at their next checkpoint.
     ///
-    /// Does NOT report idle straight away. Cancelling stops the consumer, not
-    /// the inference engine: for preset and design the package is generating on
-    /// a `Thread.detachNewThread` it owns, and for clone a detached task is
-    /// still inside `generateVoiceClone`. Both keep using the loaded model.
-    /// Going idle here would re-enable Generate, and a second job would then be
-    /// running against the same non-Sendable model as the first — which is the
-    /// exact invariant `Unchecked<T>` is justified by. Worse, switching mode
-    /// first makes `prepare` release that model and call `MLX.GPU.clearCache()`
-    /// out from under the thread still computing on it.
+    /// Does NOT report idle straight away. Generation cancellation is
+    /// cooperative at codec-frame boundaries, so the detached inference worker
+    /// can still be inside the shared non-Sendable model for a short interval.
+    /// Going idle here would allow a second job, or a mode switch that releases
+    /// the model and clears MLX buffers, before the first worker lets go.
     ///
     /// So the app stays busy, showing "Stopping…", until the abandoned work is
     /// actually finished. The wait is real work, not an artificial delay.
     func stop() {
         downloadDetail = nil
         downloadFeedback = nil
+        generationDetail = nil
         // Only shows the intent. `generate` always runs its cancellation path
         // afterwards, and that is what decides when idle is true — doing the
         // wait here instead would race with it, because the work to wait on is
@@ -1215,6 +1588,7 @@ final class TTSEngine {
     /// second job impossible rather than merely unlikely.
     private func finishStopping() async {
         downloadDetail = nil
+        generationDetail = nil
         if let pending = pendingWork {
             status = .stopping
             log.log("Stopping — the model is still generating; waiting for it")
@@ -1222,10 +1596,9 @@ final class TTSEngine {
             pendingWork = nil
         }
         // After the abandoned work has actually finished, never before it.
-        // Cancellation is cooperative and the model keeps computing on its own
-        // thread (see `EngineStatus.stopping`); clearing the cache while it is
-        // still allocating would hand back buffers it is about to ask for
-        // again, which is churn rather than a saving.
+        // Cancellation is cooperative (see `EngineStatus.stopping`); clearing
+        // the cache before the worker reaches a frame boundary could hand back
+        // buffers it is still using.
         //
         // A nil `pendingWork` is not a gap in that. Only two other points can
         // throw cancellation, and neither leaves MLX working: the check before
@@ -1244,6 +1617,25 @@ final class TTSEngine {
     /// because generation is serialized — one job touches it at a time.
     private struct Unchecked<T>: @unchecked Sendable {
         let value: T
+    }
+
+    /// Cross-thread cancellation checked by the dependency once per codec
+    /// frame. This makes Stop end inference instead of merely abandoning its
+    /// consumer while the model continues indefinitely.
+    private final class GenerationControl: @unchecked Sendable {
+        private let lock = NSLock()
+        private var running = true
+        func cancel() { lock.withLock { running = false } }
+        func shouldContinue() -> Bool { lock.withLock { running } }
+    }
+
+    private final class TerminationReceipt: @unchecked Sendable {
+        private let lock = NSLock()
+        private var stored: Qwen3TTSTermination?
+        func set(_ value: Qwen3TTSTermination) {
+            lock.withLock { stored = value }
+        }
+        var value: Qwen3TTSTermination? { lock.withLock { stored } }
     }
 
     /// Speech-recognition locale for the UI's language choice.
@@ -1322,6 +1714,19 @@ final class TTSEngine {
         return "\(mode.rawValue.replacingOccurrences(of: " ", with: "-"))-\(stamp).wav"
     }
 
+    /// Output metadata identifies a source without persisting URL credentials,
+    /// signed queries or fragments.
+    private static func metadataSource(_ value: String) -> String {
+        guard var parts = URLComponents(string: value), parts.scheme != nil else {
+            return value
+        }
+        parts.user = nil
+        parts.password = nil
+        parts.query = nil
+        parts.fragment = nil
+        return parts.url?.absoluteString ?? value
+    }
+
     func revealLastOutput() {
         guard let url = lastOutputURL else { return }
         NSWorkspace.shared.activateFileViewerSelecting([url])
@@ -1339,6 +1744,9 @@ enum TTSError: LocalizedError {
     case transcriptionEmpty
     case selfHostFileMissing(String, Int)
     case selfHostIncomplete
+    case generationDidNotFinish
+    case missingTermination
+    case invalidSectionAudio
 
     var errorDescription: String? {
         switch self {
@@ -1360,6 +1768,12 @@ enum TTSError: LocalizedError {
             "Your server is missing a required model file: \(name) (HTTP \(code)). Check the URL and that the file is published."
         case .selfHostIncomplete:
             "The download from your server didn't produce a complete model (needs config.json and a .safetensors file). Check the files or add a manifest.txt."
+        case .generationDidNotFinish:
+            "The model did not finish speaking before the safety limit. Please generate again. If it happens repeatedly, try a shorter passage."
+        case .missingTermination:
+            "The model did not report whether it finished speaking. Please generate again."
+        case .invalidSectionAudio:
+            "The model produced invalid section audio. Please generate again."
         }
     }
 }

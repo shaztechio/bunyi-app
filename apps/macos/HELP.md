@@ -32,6 +32,8 @@ The word is Malay and Indonesian for **sound**.
 
 The first time you use each mode, Bunyi downloads that mode's voice model — between about 1.5 GB and 4.5 GB — and shows a progress bar with an estimate of the time remaining. This happens once per mode. Every generation after that is offline and much faster.
 
+Long scripts are generated in shorter, recoverable sections and saved as one recording only after every section succeeds. The status separates audio already accepted from the current attempt. If a section reaches its safety limit, Bunyi discards that attempt and retries smaller sections; **Stop** leaves no partial recording. Long Voice Design scripts use one completed designed opening as the fixed reference for the rest, which may require a separate Voice clone model download.
+
 **Downloading is setup for speech.** Bunyi keeps the stage name visible and says when speech has not started yet. After setup, it creates your speech automatically. Downloaded models are saved for reuse; changing or deleting a model can require another download.
 
 Two progress bars show **Overall model download** and **Current file**. Each has its own percentage and exact byte count. A large file can receive data without its rounded percentage changing, so a **Received … bytes** message and the time since the last data arrived show that the download is moving—even one byte counts. Download time estimates refer to downloading only.
