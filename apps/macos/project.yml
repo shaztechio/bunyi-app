@@ -33,6 +33,7 @@ targets:
       - MLXTtsRuntime.swift
       - TTSEngine.swift
       - LogStore.swift
+      - PrivacyRedactor.swift
       - HTTPFileDownloader.swift
       - ModelFileTransfer.swift
       - ModelDownloadProgress.swift
@@ -43,14 +44,21 @@ targets:
       - OutputLevel.swift
       - ModelSettings.swift
       - ModelOperationLease.swift
+      - ReferenceClipPolicy.swift
       - ReferenceTranscriber.swift
+      - LocalWhisperTranscriber.swift
       - WhisperModelStore.swift
+      - SavedVoice.swift
       - VoiceLibrary.swift
+      - ModelsFolderBookmarkStore.swift
       - Doctor.swift
+      - BackupFileTree.swift
       - BackupManager.swift
     dependencies:
       - package: swift-qwen3-tts
         product: Qwen3TTS
+      - package: whisper-spm
+        product: whisper
     settings:
       base:
         ARCHS: arm64
@@ -95,7 +103,10 @@ targets:
     platform: macOS
     sources:
       - Assets.xcassets
+      - path: ../../spec/CREDITS.json
+        buildPhase: resources
       - BunyiApp.swift
+      - AboutCredits.swift
       - ContentView.swift
       - AccessibilityAnnouncementCenter.swift
       - AccessibilityAnnouncementPacer.swift
@@ -123,9 +134,8 @@ targets:
       properties:
         CFBundleDisplayName: Bunyi
         LSApplicationCategoryType: public.app-category.utilities
-        # The copyright line in the standard About panel. The panel itself is
-        # left alone deliberately — AppKit already fills in the name, icon, and
-        # version from this plist, and a hand-built one would only drift.
+        # The copyright line in the standard About panel. BunyiApp supplies its
+        # platform/version and the shared spec/CREDITS.json content.
         NSHumanReadableCopyright: Copyright 2026 Shazron Abdullah and Bunyi contributors
         # Without these, XcodeGen writes a literal 1.0 / 1 and the build
         # settings below are ignored — so the app shipped as 1.0 no matter

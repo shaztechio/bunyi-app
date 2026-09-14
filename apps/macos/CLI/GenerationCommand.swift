@@ -42,6 +42,7 @@ enum GenerationCommand {
         let language = request.value("language") ?? "auto"
         var referenceURL = request.value("reference").map(URL.init(fileURLWithPath:))
         var transcript = request.value("transcript")
+        var referenceTranscriptAudioSeconds: TimeInterval?
 
         if let idText = request.value("saved-voice"),
            let id = UUID(uuidString: idText) {
@@ -61,6 +62,7 @@ enum GenerationCommand {
                     exitCode: 3)
             }
             transcript = voice.transcript
+            referenceTranscriptAudioSeconds = voice.transcriptAudioSeconds
             guard transcript?.trimmingCharacters(
                 in: .whitespacesAndNewlines).isEmpty == false else {
                 throw CLIError(
@@ -80,6 +82,8 @@ enum GenerationCommand {
             transcript = try await CLIWhisperTranscriber.transcribe(
                 referenceURL, language: language, trimReference: true,
                 request: request, output: output, cancelled: cancelled)
+            referenceTranscriptAudioSeconds =
+                ReferenceClipPolicy.automaticTranscriptSeconds
         }
 
         if cancelled.value {
@@ -97,7 +101,9 @@ enum GenerationCommand {
                 instruct: style,
                 language: language,
                 referenceAudioURL: referenceURL,
-                referenceText: transcript)
+                referenceText: transcript,
+                referenceTranscriptAudioSeconds:
+                    referenceTranscriptAudioSeconds)
         }
         let monitor = Task { @MainActor in
             var previous = ""
@@ -218,6 +224,7 @@ enum GenerationCommand {
             "language": metadata.language,
             "text": metadata.text,
             "appVersion": metadata.appVersion,
+            "platform": metadata.platform ?? "macOS",
             "created": CLIProtocol.timestamp(metadata.created),
         ]
         let optional: [(String, String?)] = [

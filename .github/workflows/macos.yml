@@ -64,6 +64,30 @@ jobs:
         run: |
           swiftc -parse-as-library OutputLevel.swift tests/OutputLevelChecks.swift -o /tmp/bunyi-output-level-checks
           /tmp/bunyi-output-level-checks
+      - name: Check privacy redaction
+        run: |
+          swiftc -parse-as-library PrivacyRedactor.swift tests/PrivacyRedactorChecks.swift -o /tmp/bunyi-privacy-redactor-checks
+          /tmp/bunyi-privacy-redactor-checks
+      - name: Check voice-clone reference alignment
+        run: |
+          swiftc -parse-as-library ReferenceClipPolicy.swift tests/ReferenceClipPolicyChecks.swift -o /tmp/bunyi-reference-clip-checks
+          /tmp/bunyi-reference-clip-checks
+      - name: Check saved-voice data format
+        run: |
+          swiftc -parse-as-library SavedVoice.swift tests/SavedVoiceFormatChecks.swift -o /tmp/bunyi-saved-voice-checks
+          /tmp/bunyi-saved-voice-checks
+      - name: Check models-folder bookmark migration
+        run: |
+          swiftc -parse-as-library ModelsFolderBookmarkStore.swift tests/ModelsFolderBookmarkChecks.swift -o /tmp/bunyi-models-folder-checks
+          /tmp/bunyi-models-folder-checks
+      - name: Check WAV output metadata
+        run: |
+          swiftc -parse-as-library OutputMetadata.swift tests/OutputMetadataChecks.swift -o /tmp/bunyi-output-metadata-checks
+          /tmp/bunyi-output-metadata-checks
+      - name: Check cancellable custom-folder backup copy
+        run: |
+          swiftc -parse-as-library BackupFileTree.swift tests/BackupFileTreeChecks.swift -o /tmp/bunyi-backup-tree-checks
+          /tmp/bunyi-backup-tree-checks
       - name: Check accessibility announcement pacing
         run: |
           swiftc -parse-as-library AccessibilityAnnouncementPacer.swift tests/AccessibilityAnnouncementPacerChecks.swift -o /tmp/bunyi-accessibility-announcement-checks

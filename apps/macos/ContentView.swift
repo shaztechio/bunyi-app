@@ -34,6 +34,20 @@ private enum MainFocusTarget {
     case mode, lastOption, action
 }
 
+private enum GenerationInputIssue: Equatable {
+    case script
+    case voiceDescription
+    case referenceClip
+
+    var message: String {
+        switch self {
+        case .script: "Enter some text to speak."
+        case .voiceDescription: "Describe the voice you want."
+        case .referenceClip: "Choose a reference clip, or pick a saved voice."
+        }
+    }
+}
+
 struct ContentView: View {
     /// Opens the `Window(id: "logs")` scene declared in BunyiApp. Focuses the
     /// existing window if it is already open rather than making a second one.
@@ -82,7 +96,11 @@ struct ContentView: View {
     @State private var language: String = "auto"
     @State private var referenceAudioURL: URL?
     @State private var referenceText: String = ""
+    /// Nil means the transcript covers the full clip. Automatic transcription
+    /// sets this to the leading window used by both ASR and cloning.
+    @State private var referenceTranscriptAudioSeconds: TimeInterval?
     @State private var showImporter = false
+    @State private var validationIssue: GenerationInputIssue?
 
     @State private var player: AVAudioPlayer?
     /// Which file `player` was built from. Tracked separately because a player
@@ -111,6 +129,7 @@ struct ContentView: View {
     /// the visible first and last controls in the same loop as the form.
     @FocusState private var modePickerFocused: Bool
     @FocusState private var lastOptionFocused: Bool
+    @FocusState private var referenceClipFocused: Bool
     @FocusState private var actionButtonFocused: Bool
 
     private static let modeNavigationKeys: Set<KeyEquivalent> = [
@@ -136,7 +155,7 @@ struct ContentView: View {
 
     /// Whether the script is effectively empty. Whitespace counts as nothing.
     ///
-    /// Defined once because it was not: `canGenerate` and
+    /// Defined once because it was not: input validation and
     /// `generateBlockedReason` trimmed, while `showExamples` used a plain
     /// `isEmpty`. A single typed space therefore hid the examples and left
     /// Generate disabled — restoring, with one keystroke, exactly the dead end
@@ -145,24 +164,16 @@ struct ContentView: View {
         text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    /// Whether the current mode has everything it needs.
-    ///
-    /// Checked before the button is pressed rather than inside the engine: the
-    /// engine already rejects a clone with no reference clip, but only after
-    /// preparing the model — which on a first run means waiting out a 3.4 GB
-    /// download to be told a file is missing. Voice design had no check at all
-    /// and would generate some arbitrary voice from an empty description.
-    private var canGenerate: Bool {
-        guard !scriptIsBlank else {
-            return false
-        }
+    private var currentGenerationInputIssue: GenerationInputIssue? {
+        if scriptIsBlank { return .script }
         switch mode {
         case .presetVoice:
-            return true     // a speaker is always selected
+            return nil
         case .voiceDesign:
-            return !instruct.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            return instruct.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? .voiceDescription : nil
         case .voiceClone:
-            return referenceAudioURL != nil
+            return referenceAudioURL == nil ? .referenceClip : nil
         }
     }
 
@@ -266,6 +277,8 @@ struct ContentView: View {
             if case .success(let url) = result {
                 referenceAudioURL = url
                 selectedVoiceID = nil   // a fresh clip is no longer a saved voice
+                referenceText = ""
+                referenceTranscriptAudioSeconds = nil
             }
         }
         // A real binding, matching History's: dismissing with Escape clears the
@@ -296,6 +309,22 @@ struct ContentView: View {
             // back: a disabled view cannot take focus.
             if busy { scriptFocused = false }
         }
+        .onChange(of: text) { _, _ in
+            if validationIssue == .script, !scriptIsBlank {
+                validationIssue = nil
+            }
+        }
+        .onChange(of: instruct) { _, value in
+            if validationIssue == .voiceDescription,
+               !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                validationIssue = nil
+            }
+        }
+        .onChange(of: referenceAudioURL) { _, value in
+            if validationIssue == .referenceClip, value != nil {
+                validationIssue = nil
+            }
+        }
         .onChange(of: availableSpeakers) { _, new in
             reconcileSpeaker(with: new)
         }
@@ -307,6 +336,7 @@ struct ContentView: View {
             }
         }
         .onChange(of: tab) { _, new in
+            validationIssue = nil
             guard case .generate(let mode) = new else { return }
             // Compared against the mode being left rather than the previous
             // tab, so that going Preset → History → Design still counts
@@ -360,7 +390,7 @@ struct ContentView: View {
             // discards the image, so the systemImage: these used to carry was
             // never drawn. The per-mode SF Symbol that fed it had no other
             // caller and went with it.
-            Picker("Mode", selection: $tab) {
+            Picker("Mode", selection: busyAwareTabSelection) {
                 ForEach(TTSMode.allCases) { mode in
                     Text(mode.rawValue).tag(MainTab.generate(mode))
                 }
@@ -389,15 +419,9 @@ struct ContentView: View {
                       press.modifiers.contains(.shift) else {
                     return .ignored
                 }
-                focusAfterKeyEvent(canGenerate ? .action : .lastOption)
+                focusAfterKeyEvent(.action)
                 return .handled
             }
-            // History stays reachable mid-run — it only reads the folder, and
-            // wanting to hear the previous result while waiting is reasonable.
-            // The generation modes do not, because switching one evicts the
-            // model the running job is using.
-            .disabled(engine.status.isBusy && tab != .history)
-
             // One line, not two. A heading here was tried and removed: the
             // segmented control directly above already names the mode, so
             // "Voice clone" / "Clone a voice from a clip" / "Copy a voice
@@ -494,6 +518,13 @@ struct ContentView: View {
     /// Keep the segmented control's selection aligned with the radio button
     /// its native arrow-key behavior is about to focus.
     private func moveModeSelection(for key: KeyEquivalent) {
+        if engine.status.isBusy {
+            if tab != .history,
+               key == .rightArrow || key == .downArrow {
+                tab = .history
+            }
+            return
+        }
         let tabs = TTSMode.allCases.map(MainTab.generate) + [.history]
         guard let current = tabs.firstIndex(of: tab) else { return }
 
@@ -505,6 +536,18 @@ struct ContentView: View {
         }
         let destination = min(tabs.count - 1, max(0, current + delta))
         tab = tabs[destination]
+    }
+
+    /// History remains selectable while the running generation mode stays
+    /// locked. A single `.disabled` on the segmented picker made History
+    /// unreachable, so selection—not the whole control—enforces the lock.
+    private var busyAwareTabSelection: Binding<MainTab> {
+        Binding(
+            get: { tab },
+            set: { destination in
+                if engine.status.isBusy, destination != .history { return }
+                tab = destination
+            })
     }
 
     // MARK: Text input
@@ -541,7 +584,8 @@ struct ContentView: View {
             .background(Color(nsColor: .textBackgroundColor),
                         in: RoundedRectangle(cornerRadius: Radius.card))
             .overlay(RoundedRectangle(cornerRadius: Radius.card)
-                .strokeBorder(Color.primary.opacity(0.08)))
+                .strokeBorder(validationIssue == .script
+                    ? Color.red : Color.primary.opacity(0.08)))
             .overlay(alignment: .topLeading) {
                 if text.isEmpty {
                     // Derived, not hand-tuned. The old 16/13 were eyeballed
@@ -690,15 +734,21 @@ struct ContentView: View {
                     TextField("Describe it — e.g. deep gravelly narrator in his 60s",
                               text: $instruct)
                         .textFieldStyle(.roundedBorder)
+                        .overlay(RoundedRectangle(cornerRadius: Radius.control)
+                            .stroke(validationIssue == .voiceDescription
+                                ? Color.red : Color.clear))
                         .focused($lastOptionFocused)
                         .onKeyPress(keys: Self.tabNavigationKeys,
                                     phases: .down, action: movePastForm)
+                }
+                if validationIssue == .voiceDescription {
+                    validationMessage(GenerationInputIssue.voiceDescription.message)
                 }
 
             case .voiceClone:
                 rowDivider
                 optionRow(icon: "bookmark", label: "Voice") {
-                    Picker("Saved voice", selection: $selectedVoiceID) {
+                    Picker("Saved voice", selection: savedVoiceSelection) {
                         Text("Custom").tag(UUID?.none)
                         ForEach(library.voices) { voice in
                             Text(voice.name).tag(UUID?.some(voice.id))
@@ -706,7 +756,6 @@ struct ContentView: View {
                     }
                     .labelsHidden()
                     .fixedSize()
-                    .onChange(of: selectedVoiceID) { _, id in applySavedVoice(id) }
 
                     Button("Save this voice…") {
                         newVoiceName = ""
@@ -722,6 +771,10 @@ struct ContentView: View {
                 rowDivider
                 optionRow(icon: "music.note", label: "Clip") {
                     Button("Choose…") { showImporter = true }
+                        .focused($referenceClipFocused)
+                        .overlay(RoundedRectangle(cornerRadius: Radius.control)
+                            .stroke(validationIssue == .referenceClip
+                                ? Color.red : Color.clear))
                     Text(referenceDescription)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -741,6 +794,9 @@ struct ContentView: View {
                         .foregroundStyle(.red)
                         .padding(.horizontal, Space.row).padding(.bottom, Space.tight)
                 }
+                if validationIssue == .referenceClip {
+                    validationMessage(GenerationInputIssue.referenceClip.message)
+                }
             }
         }
         // The border, not the fill, is what makes this read as a card.
@@ -755,6 +811,14 @@ struct ContentView: View {
 
     private var rowDivider: some View {
         Divider().padding(.leading, OptionRow.labelInset)
+    }
+
+    private func validationMessage(_ message: String) -> some View {
+        Label(message, systemImage: "exclamationmark.triangle.fill")
+            .font(.caption)
+            .foregroundStyle(.red)
+            .padding(.horizontal, Space.row)
+            .padding(.bottom, Space.tight)
     }
 
     /// One labeled row inside the options card: icon + fixed-width label +
@@ -795,6 +859,9 @@ struct ContentView: View {
     private var editableForm: some View {
         VStack(alignment: .leading, spacing: Space.tight) {
             textCard
+            if validationIssue == .script {
+                validationMessage(GenerationInputIssue.script.message)
+            }
             exampleStrip
         }
         .disabled(engine.status.isBusy)
@@ -815,7 +882,10 @@ struct ContentView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             if let progress = engine.downloadFeedback {
-                DownloadProgressView(progress: progress, mode: mode.rawValue, reconnect: engine.reconnectDownload)
+                DownloadProgressView(
+                    progress: progress, mode: mode.rawValue,
+                    purpose: engine.downloadPurpose,
+                    reconnect: engine.reconnectDownload)
             } else if let offer = validDownloadRecovery {
                 VStack(alignment: .leading, spacing: Space.tight) {
                     Text(offer.paused
@@ -889,10 +959,6 @@ struct ContentView: View {
                 .focused($actionButtonFocused)
                 .onKeyPress(keys: Self.tabNavigationKeys,
                             phases: .down, action: movePastAction)
-                .disabled(!canGenerate)
-                // Still on hover, deliberately. `spec/FEATURES.md` §1 pins
-                // "says why on hover" — surfacing this inline is a behaviour
-                // change and needs the spec edited first, not a visual PR.
                 .help(generateBlockedReason ?? "Generate audio (⌘↩)")
                 // Redundant, and kept: the Label already names this, as an
                 // AX client reading what VoiceOver reads confirmed (#162).
@@ -929,14 +995,8 @@ struct ContentView: View {
         guard isPlainTab(press), !press.modifiers.contains(.shift) else {
             return .ignored
         }
-        if canGenerate {
-            // The enabled action is the next native key view and already has
-            // a name; let AppKit move there normally.
-            return .ignored
-        } else {
-            focusAfterKeyEvent(.mode)
-        }
-        return .handled
+        // Generate is always enabled so it can explain missing input.
+        return .ignored
     }
 
     /// The toolbar actions have shortcuts and are excluded from the broken
@@ -1032,7 +1092,12 @@ struct ContentView: View {
 
     @ViewBuilder
     private var statusView: some View {
-        switch engine.status {
+        if let validationIssue, !engine.status.isBusy {
+            Label(validationIssue.message,
+                  systemImage: "exclamationmark.triangle.fill")
+                .foregroundStyle(.red)
+                .font(.callout)
+        } else { switch engine.status {
         case .idle:
             // .secondary, not .tertiary. This bar is the app's only feedback
             // channel, and the faintest style SwiftUI offers is the wrong
@@ -1075,6 +1140,7 @@ struct ContentView: View {
                 .foregroundStyle(.red)
                 .font(.callout)
                 .lineLimit(2)
+        }
         }
     }
 
@@ -1144,6 +1210,19 @@ struct ContentView: View {
     }
 
     private func generate() {
+        if let issue = currentGenerationInputIssue {
+            validationIssue = issue
+            DispatchQueue.main.async {
+                switch issue {
+                case .script: scriptFocused = true
+                case .voiceDescription: lastOptionFocused = true
+                case .referenceClip: referenceClipFocused = true
+                }
+            }
+            AccessibilityAnnouncementCenter.post(issue.message)
+            return
+        }
+        validationIssue = nil
         player?.stop()
         isPlaying = false
         playbackTime = 0
@@ -1189,13 +1268,27 @@ struct ContentView: View {
                 instruct: instruct,
                 language: language,
                 referenceAudioURL: referenceAudioURL,
-                referenceText: referenceText
+                referenceText: referenceText,
+                referenceTranscriptAudioSeconds: referenceTranscriptAudioSeconds
             )
             // Show what auto-transcription heard, so it's visible and gets
             // stored if the user then saves this voice.
             if referenceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                let auto = engine.lastReferenceTranscript {
                 referenceText = auto
+                referenceTranscriptAudioSeconds =
+                    engine.lastReferenceTranscriptAudioSeconds
+                if let selectedVoiceID {
+                    do {
+                        try library.updateTranscript(
+                            auto,
+                            audioSeconds: referenceTranscriptAudioSeconds,
+                            for: selectedVoiceID)
+                    } catch {
+                        voiceError = "The transcript was regenerated, but couldn't be saved: "
+                            + error.localizedDescription
+                    }
+                }
             }
             guard !Task.isCancelled, engine.lastOutputURL != nil else { return }
             startPlayback()
@@ -1326,6 +1419,15 @@ struct ContentView: View {
 
     // MARK: Saved voices
 
+    private var savedVoiceSelection: Binding<UUID?> {
+        Binding(
+            get: { selectedVoiceID },
+            set: { id in
+                selectedVoiceID = id
+                applySavedVoice(id)
+            })
+    }
+
     private var referenceDescription: String {
         if let voice = library.voice(with: selectedVoiceID) { return voice.name }
         return referenceAudioURL?.lastPathComponent
@@ -1336,6 +1438,7 @@ struct ContentView: View {
         guard let voice = library.voice(with: id) else { return }
         referenceAudioURL = library.audioURL(for: voice)
         referenceText = voice.transcript
+        referenceTranscriptAudioSeconds = voice.transcriptAudioSeconds
         voiceError = nil
     }
 
@@ -1345,7 +1448,9 @@ struct ContentView: View {
         guard !name.isEmpty else { return }
         do {
             let voice = try library.save(name: name, audioURL: url,
-                                         transcript: referenceText)
+                                         transcript: referenceText,
+                                         transcriptAudioSeconds:
+                                            referenceTranscriptAudioSeconds)
             referenceAudioURL = library.audioURL(for: voice)
             selectedVoiceID = voice.id
             voiceError = nil
@@ -1359,6 +1464,7 @@ struct ContentView: View {
         selectedVoiceID = nil
         referenceAudioURL = nil
         referenceText = ""
+        referenceTranscriptAudioSeconds = nil
     }
 }
 

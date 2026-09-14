@@ -120,10 +120,13 @@ Voice clone is an in-context-learning (ICL) path: the model needs the
 reference audio **and its transcript** to align audio to words before it
 can speak your text in that voice. A missing transcript produces gibberish
 that ignores your text, so if the transcript field is left blank the app
-auto-transcribes the clip on-device with Apple's Speech framework
-(`SFSpeechRecognizer`). Reference audio is also resampled to 24 kHz mono
-first — the model asserts that rate, and feeding a 44.1/48 kHz clip
-unchanged is what causes distorted, wrong-pitch clones.
+auto-transcribes on-device: Auto uses local multilingual Whisper, while an
+explicit language tries Apple's on-device Speech framework first. Automatic
+transcription samples up to the first 10 seconds and cloning uses that exact
+same audio window; a longer source file is accepted rather than rejected.
+Reference audio is also resampled to 24 kHz mono first — the model asserts
+that rate, and feeding a 44.1/48 kHz clip unchanged is what causes distorted,
+wrong-pitch clones.
 
 ### Emotion / style control (not available for clones today)
 
@@ -164,13 +167,12 @@ needed:
 | On-device recognition (`supportsOnDeviceRecognition` / `requiresOnDeviceRecognition`) | macOS 10.15 |
 | `addsPunctuation` | macOS 13 |
 
-On-device recognition is preferred (kept fully local); when a language
-isn't available on-device it falls back to Apple's server recognizer,
-which is why the app keeps the network entitlement. On-device *language*
-coverage widens with newer macOS releases and is checked at runtime, so
-behavior degrades gracefully on older systems rather than failing. Needs
-`NSSpeechRecognitionUsageDescription` (set in `project.yml`) and a one-time
-authorization prompt. On macOS 26+ the newer `SpeechTranscriber` /
+Recognition stays fully local. An explicitly selected language starts with
+Apple's on-device Speech recognizer; Auto and any unavailable or empty Speech
+result use Bunyi's local multilingual Whisper model, downloaded once through
+the regular resumable model flow. Reference recordings are never sent to
+Apple's service. Speech needs `NSSpeechRecognitionUsageDescription` (set in
+`project.yml`) and a one-time authorization prompt. On macOS 26+ the newer `SpeechTranscriber` /
 `SpeechAnalyzer` API is a reasonable upgrade if you raise the deployment
 target, but `SFSpeechRecognizer` was chosen to cover the whole 15+ range.
 

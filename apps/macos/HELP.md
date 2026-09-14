@@ -76,7 +76,7 @@ Give Bunyi a short recording of a voice and it reads your text in that voice.
 
 Two things matter for a good clone:
 
-- **The transcript.** Cloning works by lining up the recording with its words. Leave this box blank and press **Generate**: Bunyi prepares the voice model, transcribes the recording on your Mac, and creates your speech in one run. Selecting a recording does not start a download. Whatever you type yourself is used instead. **Stop** cancels the current run and keeps downloaded files for reuse. You can edit the transcript afterwards and generate again.
+- **The transcript.** Cloning works by lining up the recording with its words. Leave this box blank and press **Generate**: Bunyi transcribes up to the first 10 seconds on your Mac, uses that exact same audio sample for cloning, and creates your speech in one run. A longer source file is fine. Selecting a recording does not start a download. Whatever you type yourself is used instead. **Stop** cancels the current run and keeps downloaded files for reuse. You can edit the transcript afterwards and generate again.
 - **The recording.** A few clean seconds of a single person speaking, without music or background noise, beats a long noisy clip. Bunyi converts the audio to the rate the model needs, so you do not have to prepare the file.
 
 There is no style instruction in this mode. The model behind cloning cannot take one, so the emotion of a cloned voice comes from the delivery in the reference clip. If you want the same cloned voice in different moods, save one voice per mood.
@@ -187,7 +187,7 @@ Doctor stays available while Bunyi is working, which is usually when you want it
 
 **A cloned voice sounds wrong, or says the wrong words.** Almost always the transcript does not match the recording. Check that it is what the clip actually says, then generate again.
 
-**The app asks for permission to recognize speech.** That prompt appears the first time Bunyi transcribes a reference clip. Recognition prefers to run on your Mac; if a language is not available offline, macOS may use Apple's service for that step.
+**The app asks for permission to recognize speech.** That prompt may appear when Bunyi transcribes a reference clip with an explicitly selected language. Recognition runs on your Mac. Auto uses a local multilingual transcription model, which Bunyi downloads once if needed; the recording is never sent to Apple's service.
 
 **A model will not download from your own server.** Use `https://` rather than `http://` — plain HTTP is blocked unless the app was built to allow it. The Logs window names the exact file and status code that failed.
 
