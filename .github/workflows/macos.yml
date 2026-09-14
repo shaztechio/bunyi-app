@@ -75,6 +75,11 @@ jobs:
         run: |
           swiftc -parse-as-library PrivacyRedactor.swift tests/PrivacyRedactorChecks.swift -o /tmp/bunyi-privacy-redactor-checks
           /tmp/bunyi-privacy-redactor-checks
+      - name: Check packaged model defaults
+        run: |
+          swiftc -parse-as-library PackagedModelDefaults.swift tests/PackagedModelDefaultsChecks.swift -o /tmp/bunyi-packaged-defaults-checks
+          /tmp/bunyi-packaged-defaults-checks
+          ./tools/packaging/test-defaults.sh ../../spec/bunyi.defaults.json
       - name: Check voice-clone reference alignment
         run: |
           swiftc -parse-as-library ReferenceClipPolicy.swift tests/ReferenceClipPolicyChecks.swift -o /tmp/bunyi-reference-clip-checks
@@ -130,6 +135,7 @@ jobs:
           ditto -x -k "$archive" "$extract"
           cli="$(find "$extract" -maxdepth 2 -type f -name bunyi | head -1)"
           test -x "$cli"
+          ./tools/packaging/test-defaults.sh "$(dirname "$cli")/bunyi.defaults.json"
           echo "BUNYI_CI_CLI_BIN=$cli" >> "$GITHUB_ENV"
       - name: Check bounded CLI command surface
         run: |
@@ -141,6 +147,7 @@ jobs:
           commands = [
               ["version", "--json"],
               ["config", "list", "--json", "--one-shot"],
+              ["models", "status", "--json", "--one-shot"],
               ["voices", "list", "--json", "--one-shot"],
               ["history", "list", "--json", "--one-shot"],
               ["logs", "path", "--json", "--one-shot"],
@@ -155,6 +162,14 @@ jobs:
               value = json.loads(lines[0])
               assert value["schemaVersion"] == 1 and value["ok"] is True
               assert value["type"] == "result" and value["operationId"]
+              if command[:2] == ["models", "status"]:
+                  expected = {
+                      "https://models.bunyi.app/customvoice",
+                      "https://models.bunyi.app/voicedesign",
+                      "https://models.bunyi.app/voiceclone",
+                  }
+                  assert {model["source"] for model in value["models"]} == expected
+                  assert value["transcriptionModels"][0]["source"] == "ggerganov/whisper.cpp"
           PY
       - name: Check CLI server lifecycle
         run: |
@@ -167,17 +182,31 @@ jobs:
           cleanup() {
             env BUNYI_SERVER_SCOPE="$SERVER_SCOPE" "$CLI_BIN" server stop --json >/dev/null 2>&1 || true
           }
+          wait_for_ready() {
+            local pid="$1"
+            local stream="$2"
+            for ATTEMPT in {1..300}; do
+              if grep -q '"type":"ready"' "$stream" 2>/dev/null; then
+                return 0
+              fi
+              if ! kill -0 "$pid" 2>/dev/null; then
+                wait "$pid" || true
+                echo "Bunyi server exited before reporting ready:" >&2
+                cat "$stream" >&2
+                return 1
+              fi
+              sleep 0.05
+            done
+            echo "Bunyi server did not report ready within 15 seconds:" >&2
+            cat "$stream" >&2
+            return 1
+          }
           trap cleanup EXIT
 
           env BUNYI_SERVER_SCOPE="$SERVER_SCOPE" "$CLI_BIN" server run --jsonl >"$SERVER_STREAM" &
           SERVER_PID=$!
-          for ATTEMPT in {1..100}; do
-            if env BUNYI_SERVER_SCOPE="$SERVER_SCOPE" "$CLI_BIN" server status --json >"$STATUS_JSON" 2>/dev/null; then
-              break
-            fi
-            sleep 0.05
-          done
-          kill -0 "$SERVER_PID"
+          wait_for_ready "$SERVER_PID" "$SERVER_STREAM"
+          env BUNYI_SERVER_SCOPE="$SERVER_SCOPE" "$CLI_BIN" server status --json >"$STATUS_JSON"
           python3 - "$STATUS_JSON" <<'PY'
           import json, os, stat, sys
           status = json.load(open(sys.argv[1]))
@@ -227,12 +256,7 @@ jobs:
           SIGNAL_STREAM="$RUNNER_TEMP/bunyi-server-signal.jsonl"
           env BUNYI_SERVER_SCOPE="$SERVER_SCOPE-signal" "$CLI_BIN" server run --jsonl >"$SIGNAL_STREAM" &
           SIGNAL_PID=$!
-          for ATTEMPT in {1..100}; do
-            if env BUNYI_SERVER_SCOPE="$SERVER_SCOPE-signal" "$CLI_BIN" server status --json >/dev/null 2>&1; then
-              break
-            fi
-            sleep 0.05
-          done
+          wait_for_ready "$SIGNAL_PID" "$SIGNAL_STREAM"
           kill -INT "$SIGNAL_PID"
           wait "$SIGNAL_PID"
           python3 - "$SIGNAL_STREAM" <<'PY'

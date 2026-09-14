@@ -306,11 +306,12 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
                     .calloutBlock()
 
-                Text("The Bunyi mirror serves the same Hugging Face models "
+                Text("The Bunyi mirror is the packaged default and serves the "
+                    + "same Hugging Face models "
                     + "(Apache-2.0) from models.bunyi.app, with checksums the "
-                    + "app verifies as it downloads. Useful where Hugging Face "
-                    + "is slow or unreachable. Hugging Face stays the default — "
-                    + "it is where the models come from.")
+                    + "app verifies as it downloads. Restore a saved "
+                    + "configuration or enter a Hugging Face repo ID to use "
+                    + "another source.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .calloutBlock()
@@ -383,7 +384,7 @@ struct SettingsView: View {
     }
 
     /// Clearing the fields is what "default" means here — each mode falls back
-    /// to its built-in repo, which is also what the placeholder text shows.
+    /// to the packaged source, which is also what the placeholder text shows.
     private func resetModelFields() {
         presetRepo = ""
         designRepo = ""
@@ -688,7 +689,7 @@ struct SettingsView: View {
 
     private func repoField(_ label: String, text: Binding<String>,
                            mode: TTSMode) -> some View {
-        TextField(label, text: text, prompt: Text(mode.repoID))
+        TextField(label, text: text, prompt: Text(mode.packagedDefaultSource))
             .textFieldStyle(.roundedBorder)
             .autocorrectionDisabled()
     }

@@ -16,7 +16,7 @@
 <Project>
 
   <ItemGroup Condition="'$(MSBuildProjectName)' == 'Bunyi.App' or '$(MSBuildProjectName)' == 'Bunyi.Cli'">
-    <None Include="$(MSBuildThisFileDirectory)packaging/defaults/huggingFace.json"
+    <None Include="$(MSBuildThisFileDirectory)../../spec/bunyi.defaults.json"
           Link="bunyi.defaults.json" CopyToOutputDirectory="PreserveNewest"
           CopyToPublishDirectory="Always" />
   </ItemGroup>

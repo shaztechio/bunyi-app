@@ -42,6 +42,7 @@ targets:
       - GeneratedOutput.swift
       - OutputMetadata.swift
       - OutputLevel.swift
+      - PackagedModelDefaults.swift
       - ModelSettings.swift
       - ModelOperationLease.swift
       - ReferenceClipPolicy.swift
@@ -83,6 +84,18 @@ targets:
         CFBundleIdentifier: $(PRODUCT_BUNDLE_IDENTIFIER)
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+    postBuildScripts:
+      # Command-line tools have no Resources directory. Xcode's resource build
+      # phase therefore has nowhere to put this file, so copy it beside the
+      # executable — the same relocatable layout used by the release archive.
+      - name: Copy packaged model defaults
+        script: >-
+          /usr/bin/ditto "$PROJECT_DIR/../../spec/bunyi.defaults.json"
+          "$TARGET_BUILD_DIR/bunyi.defaults.json"
+        inputFiles:
+          - $(PROJECT_DIR)/../../spec/bunyi.defaults.json
+        outputFiles:
+          - $(TARGET_BUILD_DIR)/bunyi.defaults.json
     settings:
       base:
         ARCHS: arm64
@@ -104,6 +117,8 @@ targets:
     sources:
       - Assets.xcassets
       - path: ../../spec/CREDITS.json
+        buildPhase: resources
+      - path: ../../spec/bunyi.defaults.json
         buildPhase: resources
       - BunyiApp.swift
       - AboutCredits.swift

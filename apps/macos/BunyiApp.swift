@@ -47,6 +47,7 @@ struct BunyiApp: App {
         // starting — is the `before main` phase, and on a cold launch it is
         // the bulk of the wait.
         StartupTimeline.shared.begin()
+        LogStore.shared.log(PackagedModelDefaults.current.diagnostic)
     }
 
     var body: some Scene {

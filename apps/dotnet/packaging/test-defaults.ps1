@@ -16,7 +16,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][string] $Path,
-    [ValidateSet('huggingFace', 'mirror')][string] $ExpectedSource = 'huggingFace'
+    [ValidateSet('huggingFace', 'mirror')][string] $ExpectedSource = 'mirror'
 )
 $ErrorActionPreference = 'Stop'
 if (Test-Path -LiteralPath $Path -PathType Container) {

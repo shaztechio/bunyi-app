@@ -72,8 +72,9 @@ at runtime, that step is the fix.
 
 
 Each mode's field in **Settings → Models** accepts either a Hugging Face
-repo ID (default) **or** an `https://` base URL you control — the app
-decides by scheme. With a base URL it downloads the model files directly
+repo ID **or** an `https://` base URL you control — the app decides by scheme.
+Packaged builds default to the Bunyi mirror; an explicit saved source always
+wins. With a base URL the app downloads the model files directly
 from your server (no Hugging Face API involved), so you can serve them from
 your own host, an internal mirror, or your own HF "fork" (point the URL at
 its `.../resolve/main` directory).

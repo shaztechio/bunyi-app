@@ -108,8 +108,9 @@ if ([version]$binaryVersion -ne $packageVersion) {
     throw "Published binary version $binaryVersion does not match package version $packageVersion. Republish the app."
 }
 Get-ChildItem -LiteralPath $publish | Copy-Item -Destination $stage -Recurse
-# The caller's portable output stays on Hugging Face. Only MSIX staging changes.
-Copy-Item -LiteralPath (Join-Path $dotnetRoot 'packaging/defaults/mirror.json') `
+# Stage the shared distribution default explicitly so a caller cannot supply a
+# stale publish folder with a different value. The caller's folder is unchanged.
+Copy-Item -LiteralPath (Join-Path $dotnetRoot '../../spec/bunyi.defaults.json') `
     -Destination (Join-Path $stage 'bunyi.defaults.json') -Force
 & (Join-Path $dotnetRoot 'packaging/test-defaults.ps1') -Path $stage -ExpectedSource mirror
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Assets') -Destination $stage -Recurse
@@ -145,4 +146,3 @@ $hash = (Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash.ToLowerI
 Write-Host "Unsigned MSIX: $packagePath"
 Write-Host "Staged manifest: $manifestPath"
 if ($LocalTest) { Write-Warning 'Local-test identity: not a Store submission. Sign and trust a test certificate before installing.' }
-
