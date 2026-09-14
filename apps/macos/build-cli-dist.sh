@@ -44,6 +44,7 @@ xcodebuild -project "$script_dir/Bunyi.xcodeproj" \
 product="$derived/Build/Products/$configuration"
 binary="$product/bunyi"
 core_framework="$product/BunyiMLXCore.framework"
+embedded_frameworks="$product/Frameworks"
 metal_bundle="$product/mlx-swift_Cmlx.bundle"
 if [ ! -x "$binary" ]; then
   printf 'error: CLI build did not produce an executable at %s.\n' "$binary" >&2
@@ -56,6 +57,12 @@ fi
 if [ ! -f "$core_framework/Versions/A/BunyiMLXCore" ]; then
   printf 'error: shared runtime framework is missing from %s.\n' \
     "$core_framework" >&2
+  exit 1
+fi
+whisper_frameworks=("$embedded_frameworks"/whisper_*.framework(N))
+if [ "${#whisper_frameworks[@]}" -ne 1 ]; then
+  printf 'error: expected one packaged Whisper framework in %s; found %s.\n' \
+    "$embedded_frameworks" "${#whisper_frameworks[@]}" >&2
   exit 1
 fi
 
@@ -71,6 +78,9 @@ mkdir -p "$package/Frameworks" "$package/completions/bash" "$package/completions
 
 ditto "$binary" "$package/bunyi"
 ditto "$core_framework" "$package/Frameworks/BunyiMLXCore.framework"
+for framework in "$embedded_frameworks"/*.framework(N); do
+  ditto "$framework" "$package/Frameworks/${framework:t}"
+done
 ditto "$metal_bundle" "$package/mlx-swift_Cmlx.bundle"
 ditto "$root/LICENSE" "$package/LICENSE"
 ditto "$root/spec/CREDITS.json" "$package/CREDITS.json"
@@ -83,27 +93,49 @@ ditto "$script_dir/tools/completions/bunyi.fish" \
   "$package/completions/fish/bunyi.fish"
 chmod 0755 "$package/bunyi"
 
-# The tool and its shared runtime must carry the same local signature before
+# The tool and its bundled frameworks must carry the same local signature before
 # the smoke test. Ad-hoc signatures have no Team ID, so library validation
 # cannot establish that relationship; the release step replaces these with
 # matching hardened-runtime Developer ID signatures before publication.
-codesign --force --deep --sign - \
-  "$package/Frameworks/BunyiMLXCore.framework"
+for framework in "$package/Frameworks"/*.framework(N); do
+  codesign --force --deep --sign - "$framework"
+done
 codesign --force --sign - "$package/bunyi"
 
 test "$(file -b "$package/bunyi")" = "Mach-O 64-bit executable arm64"
 core_binary="$package/Frameworks/BunyiMLXCore.framework/Versions/A/BunyiMLXCore"
 test "$(file -b "$core_binary")" = "Mach-O 64-bit dynamically linked shared library arm64"
 otool -l "$package/bunyi" | grep -q '@executable_path/Frameworks'
-unexpected_dependencies() {
-  otool -L "$1" | tail -n +2 | awk '{print $1}' \
-    | grep -Ev '^(/usr/lib/|/System/Library/|@rpath/BunyiMLXCore\.framework/)' || true
+unpackaged_dependencies() {
+  otool -L "$1" \
+    | sed -n 's/^[[:space:]]\([^[:space:]]*\).*/\1/p' \
+    | while IFS= read -r dependency; do
+    case "$dependency" in
+      /usr/lib/*|/System/Library/*) ;;
+      @rpath/*)
+        relative="${dependency#@rpath/}"
+        packaged="${relative%%/*}"
+        [ -e "$package/Frameworks/$packaged" ] || printf '%s\n' "$dependency"
+        ;;
+      *) printf '%s\n' "$dependency" ;;
+    esac
+  done
 }
-for executable in "$package/bunyi" "$core_binary"; do
-  unexpected="$(unexpected_dependencies "$executable")"
-  if [ -n "$unexpected" ]; then
+executables=("$package/bunyi")
+for framework in "$package/Frameworks"/*.framework(N); do
+  framework_binary="$framework/${framework:t:r}"
+  if [ ! -f "$framework_binary" ]; then
+    printf 'error: packaged framework executable is missing: %s.\n' \
+      "$framework_binary" >&2
+    exit 1
+  fi
+  executables+=("$framework_binary")
+done
+for executable in "${executables[@]}"; do
+  unpackaged="$(unpackaged_dependencies "$executable")"
+  if [ -n "$unpackaged" ]; then
     printf 'error: %s has an unpackaged dynamic dependency:\n%s\n' \
-      "$executable" "$unexpected" >&2
+      "$executable" "$unpackaged" >&2
     exit 1
   fi
 done

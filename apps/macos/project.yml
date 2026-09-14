@@ -88,8 +88,8 @@ targets:
         ARCHS: arm64
         PRODUCT_NAME: bunyi
         PRODUCT_BUNDLE_IDENTIFIER: app.bunyi.cli
-        MARKETING_VERSION: 0.1.0
-        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: 1.3.0
+        CURRENT_PROJECT_VERSION: 5
         SWIFT_VERSION: "6.0"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_IDENTITY: "-"
@@ -176,8 +176,8 @@ targets:
         # another app's container, so this cannot be migrated in code — see
         # AGENTS.md for what to tell anyone who had the old build.
         PRODUCT_BUNDLE_IDENTIFIER: app.bunyi.Bunyi
-        MARKETING_VERSION: 1.2.0
-        CURRENT_PROJECT_VERSION: 4
+        MARKETING_VERSION: 1.3.0
+        CURRENT_PROJECT_VERSION: 5
         SWIFT_VERSION: "6.0"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_IDENTITY: "-"
