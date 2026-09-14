@@ -93,5 +93,8 @@ notarize() {
 
 printf 'Submitting the CLI archive for notarization…\n'
 notarize "$archive"
-spctl --assess --type execute --verbose=4 "$binary"
+# `spctl --assess --type execute` only accepts app-style bundles. It reports a
+# correctly signed and notarized standalone Mach-O tool as "does not seem to be
+# an app", so the authoritative CLI checks are notarytool's accepted result
+# above plus the strict hardened-runtime signature checks performed before it.
 printf 'Signed and notarized: %s\n' "$archive"
