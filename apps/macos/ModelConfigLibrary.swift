@@ -61,12 +61,10 @@ final class ModelConfigLibrary {
     /// Ono_Anna. For those users this is not a faster download, it is the
     /// difference between the app working and not.
     ///
-    /// Not the default, deliberately. Hugging Face is where the weights
-    /// actually come from, and a default pointing at one person's bucket makes
-    /// that bucket a single point of failure for every install. This is an
-    /// alternative someone chooses, and switching is a Restore away rather than
-    /// three long URLs typed by hand — which is the mistake this whole type
-    /// exists to prevent.
+    /// Also selected by the read-only distribution defaults. Keeping it as a
+    /// named configuration makes the effective source visible and lets a user
+    /// restore it after choosing Hugging Face or a custom server, without
+    /// typing three long URLs by hand.
     ///
     /// Fixed UUID: the row must keep its identity across launches without being
     /// written to disk, and a fresh UUID each time would make SwiftUI treat it

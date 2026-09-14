@@ -75,6 +75,11 @@ jobs:
         run: |
           swiftc -parse-as-library PrivacyRedactor.swift tests/PrivacyRedactorChecks.swift -o /tmp/bunyi-privacy-redactor-checks
           /tmp/bunyi-privacy-redactor-checks
+      - name: Check packaged model defaults
+        run: |
+          swiftc -parse-as-library PackagedModelDefaults.swift tests/PackagedModelDefaultsChecks.swift -o /tmp/bunyi-packaged-defaults-checks
+          /tmp/bunyi-packaged-defaults-checks
+          ./tools/packaging/test-defaults.sh ../../spec/bunyi.defaults.json
       - name: Check voice-clone reference alignment
         run: |
           swiftc -parse-as-library ReferenceClipPolicy.swift tests/ReferenceClipPolicyChecks.swift -o /tmp/bunyi-reference-clip-checks
@@ -130,6 +135,7 @@ jobs:
           ditto -x -k "$archive" "$extract"
           cli="$(find "$extract" -maxdepth 2 -type f -name bunyi | head -1)"
           test -x "$cli"
+          ./tools/packaging/test-defaults.sh "$(dirname "$cli")/bunyi.defaults.json"
           echo "BUNYI_CI_CLI_BIN=$cli" >> "$GITHUB_ENV"
       - name: Check bounded CLI command surface
         run: |
@@ -141,6 +147,7 @@ jobs:
           commands = [
               ["version", "--json"],
               ["config", "list", "--json", "--one-shot"],
+              ["models", "status", "--json", "--one-shot"],
               ["voices", "list", "--json", "--one-shot"],
               ["history", "list", "--json", "--one-shot"],
               ["logs", "path", "--json", "--one-shot"],
@@ -155,6 +162,14 @@ jobs:
               value = json.loads(lines[0])
               assert value["schemaVersion"] == 1 and value["ok"] is True
               assert value["type"] == "result" and value["operationId"]
+              if command[:2] == ["models", "status"]:
+                  expected = {
+                      "https://models.bunyi.app/customvoice",
+                      "https://models.bunyi.app/voicedesign",
+                      "https://models.bunyi.app/voiceclone",
+                  }
+                  assert {model["source"] for model in value["models"]} == expected
+                  assert value["transcriptionModels"][0]["source"] == "ggerganov/whisper.cpp"
           PY
       - name: Check CLI server lifecycle
         run: |

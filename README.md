@@ -50,12 +50,11 @@ clone model to carry the designed voice through the remaining sections. Native
 macOS has the same behavior; see the
 [long-text plan](spec/LONG-TEXT-PLAN.md) for validation and remaining work.
 
-**Model download defaults:** portable Windows/Linux desktop and CLI builds use
-Hugging Face. The unsigned Windows MSIX supplied with 1.3.0 uses the Bunyi mirror;
-it is a submission/testing artifact, not a published Microsoft Store app. Saved
-sources take priority: turning the mirror off in Settings → Models keeps
-Hugging Face selected across restarts and upgrades. Reset restores the defaults
-packaged with the build. See the [packaged-defaults contract](spec/PACKAGED-DEFAULTS.md).
+**Model download defaults:** macOS, Windows and Linux desktop/CLI packages use
+the Bunyi mirror for the three TTS models. Whisper keeps its existing source.
+Saved sources take priority: choosing Hugging Face or a custom source keeps that
+choice across restarts and upgrades. Reset restores the default packaged with
+the build. See the [packaged-defaults contract](spec/PACKAGED-DEFAULTS.md).
 
 ## How it's structured
 

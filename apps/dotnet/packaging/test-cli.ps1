@@ -79,7 +79,16 @@ try {
     if (-not $version.ok) { throw 'Version command failed.' }
     $invalid = Invoke-BunyiJson -CommandArgs @('generate', 'preset') -ExpectedExit 3
     if ($invalid.ok -or -not $invalid.error.code) { throw 'Invalid input did not produce a structured error.' }
-    $null = Invoke-BunyiJson -CommandArgs @('models', 'status', '--one-shot')
+    $modelStatus = Invoke-BunyiJson -CommandArgs @('models', 'status', '--one-shot')
+    $expectedSources = @(
+        'https://models.bunyi.app/onnx/customvoice',
+        'https://models.bunyi.app/onnx/voiceclone',
+        'https://models.bunyi.app/onnx/voicedesign'
+    )
+    $actualSources = @($modelStatus.models | ForEach-Object source | Sort-Object)
+    if (@(Compare-Object $expectedSources $actualSources).Count -ne 0) {
+        throw "Packaged CLI did not resolve every unset TTS source to the Bunyi mirror: $($actualSources -join ', ')"
+    }
     $missingAudio = Join-Path $smokeRoot 'missing.wav'
     $invalid = Invoke-BunyiJson -CommandArgs @('play', $missingAudio) -ExpectedExit 3
     if ($invalid.error.code -ne 'missing_input') { throw 'Playback must reject missing audio without loading a model.' }

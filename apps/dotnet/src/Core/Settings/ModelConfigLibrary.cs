@@ -176,10 +176,10 @@ public sealed class ModelConfigLibrary
     /// same thing for the ONNX family.
     /// </para>
     /// <para>
-    /// Portable builds default to Hugging Face; MSIX packages select this
-    /// mirror through their read-only packaged defaults. Explicit per-mode
-    /// user choices always win. It is never an automatic fallback when the
-    /// Hub is slow. Each output records its effective source.
+    /// Every distribution selects this mirror through its read-only packaged
+    /// defaults. Explicit per-mode user choices always win. It is never an
+    /// automatic fallback when the Hub is slow. Each output records its
+    /// effective source.
     /// </para>
     /// <para>
     /// The <c>Guid</c> is fixed rather than generated. The row has to keep its

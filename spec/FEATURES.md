@@ -332,12 +332,14 @@ brings the built-in back, which was hidden rather than gone. It exists because
 Hugging Face is unreachable on some networks, blocked outright in mainland
 China, which for a Qwen model is a substantial share of the likely audience.
 
-**Packaged download defaults.** Windows/Linux read `bunyi.defaults.json` from
-the executable directory once at startup. Portable desktop and CLI builds
-select Hugging Face; the Windows MSIX selects the Bunyi mirror. A saved per-mode
-source always wins. Missing or invalid packaged configuration falls back to
-Hugging Face and is logged. Never read this file from the working directory or
-write user preferences into the package. The schema is in DATA-FORMATS.md.
+**Packaged download defaults.** Every desktop and CLI distribution reads the
+immutable `bunyi.defaults.json` once at startup. Windows/Linux and the native
+macOS CLI read it beside the executable; the native macOS app reads it from its
+bundle resources. Every shipped package selects the Bunyi mirror. A saved
+per-mode source always wins. Missing or invalid packaged configuration falls
+back to Hugging Face and is logged. Never read this file from the working
+directory or write user preferences into the package. The schema is in
+DATA-FORMATS.md.
 
 Settings → Models offers **Use Bunyi mirror for all three modes**. Turning it
 on explicitly saves the three canonical mirror URLs; turning it off explicitly
@@ -358,9 +360,10 @@ switch occurs on a slow or unavailable service. Output metadata records the
 effective source. The packaged choice applies to the three TTS models; Whisper
 keeps its existing source.
 
-Native macOS retains its Hugging Face default and existing source fields/saved
-mirror configuration. Matching the convenience checkbox is a tracked follow-up
-in [PACKAGED-DEFAULTS.md](PACKAGED-DEFAULTS.md); no macOS packaging change is required.
+Native macOS retains its existing source fields and saved mirror configuration.
+Matching the convenience checkbox is a tracked follow-up in
+[PACKAGED-DEFAULTS.md](PACKAGED-DEFAULTS.md); the packaged default and source
+resolution already follow the shared contract above.
 
 A platform ships this only if its mirror publishes `manifest.sha256`
 (`DATA-FORMATS.md`). Offering a source the app itself endorses is a higher bar

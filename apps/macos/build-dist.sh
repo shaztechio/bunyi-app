@@ -38,7 +38,11 @@ xcodebuild -project Bunyi.xcodeproj \
     -derivedDataPath "$DERIVED" \
     build
 
+BUILT_APP="$DERIVED/Build/Products/$CONFIG/$APP_NAME"
+./tools/packaging/test-defaults.sh \
+    "$BUILT_APP/Contents/Resources/bunyi.defaults.json"
+
 rm -rf "$DIST"
 mkdir -p "$DIST"
-ditto "$DERIVED/Build/Products/$CONFIG/$APP_NAME" "$DIST/$APP_NAME"
+ditto "$BUILT_APP" "$DIST/$APP_NAME"
 echo "Built $DIST/$APP_NAME"

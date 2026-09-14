@@ -46,6 +46,7 @@ binary="$product/bunyi"
 core_framework="$product/BunyiMLXCore.framework"
 embedded_frameworks="$product/Frameworks"
 metal_bundle="$product/mlx-swift_Cmlx.bundle"
+packaged_defaults="$product/bunyi.defaults.json"
 if [ ! -x "$binary" ]; then
   printf 'error: CLI build did not produce an executable at %s.\n' "$binary" >&2
   exit 1
@@ -59,6 +60,7 @@ if [ ! -f "$core_framework/Versions/A/BunyiMLXCore" ]; then
     "$core_framework" >&2
   exit 1
 fi
+"$script_dir/tools/packaging/test-defaults.sh" "$packaged_defaults"
 whisper_frameworks=("$embedded_frameworks"/whisper_*.framework(N))
 if [ "${#whisper_frameworks[@]}" -ne 1 ]; then
   printf 'error: expected one packaged Whisper framework in %s; found %s.\n' \
@@ -84,6 +86,7 @@ done
 ditto "$metal_bundle" "$package/mlx-swift_Cmlx.bundle"
 ditto "$root/LICENSE" "$package/LICENSE"
 ditto "$root/spec/CREDITS.json" "$package/CREDITS.json"
+ditto "$packaged_defaults" "$package/bunyi.defaults.json"
 ditto "$script_dir/CLI.md" "$package/README.md"
 ditto "$script_dir/tools/completions/bunyi.bash" \
   "$package/completions/bash/bunyi"
@@ -92,6 +95,8 @@ ditto "$script_dir/tools/completions/_bunyi" \
 ditto "$script_dir/tools/completions/bunyi.fish" \
   "$package/completions/fish/bunyi.fish"
 chmod 0755 "$package/bunyi"
+"$script_dir/tools/packaging/test-defaults.sh" \
+  "$package/bunyi.defaults.json"
 
 # The tool and its bundled frameworks must carry the same local signature before
 # the smoke test. Ad-hoc signatures have no Team ID, so library validation

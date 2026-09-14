@@ -23,8 +23,8 @@ import Foundation
 
 // MARK: - Model source
 
-/// Where a mode's model comes from. A Hugging Face repo (default, via the
-/// Hub API) or a plain base URL the user self-hosts (files fetched directly).
+/// Where a mode's model comes from. A Hugging Face repo (via the Hub API) or a
+/// plain base URL the user self-hosts (files fetched directly).
 public enum ModelSource: Equatable {
     case repo(String)
     case baseURL(URL)
@@ -39,8 +39,8 @@ public struct DownloadRecoveryOffer: Equatable {
 public extension TTSMode {
     var repoDefaultsKey: String { "modelRepo.\(rawValue)" }
 
-    /// The configured value: the Settings override when set, else the default
-    /// repo ID. May be a repo ID or an http(s) base URL.
+    /// The configured value: the Settings override when set, else the packaged
+    /// default. May be a repo ID or an http(s) base URL.
     var effectiveRepoID: String {
         if CLISettingsStore.isCLI,
            let source = CLISettingsStore.source(for: self)?
@@ -51,7 +51,13 @@ public extension TTSMode {
         let custom = UserDefaults.standard.string(forKey: repoDefaultsKey)?
             .trimmingCharacters(in: .whitespacesAndNewlines)
         if let custom, !custom.isEmpty { return custom }
-        return repoID
+        return packagedDefaultSource
+    }
+
+    /// What an empty source field means in this distribution.
+    var packagedDefaultSource: String {
+        PackagedModelDefaults.current.useMirror
+            ? bunyiMirrorURL.absoluteString : repoID
     }
 
     /// Resolved source: an http(s) value is a self-hosted base URL, anything

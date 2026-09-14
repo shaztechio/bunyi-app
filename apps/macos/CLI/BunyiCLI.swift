@@ -14,11 +14,13 @@
 
 import Darwin
 import Foundation
+import BunyiMLXCore
 
 @main
 struct BunyiCLI {
     @MainActor
     static func main() async {
+        LogStore.shared.log(PackagedModelDefaults.current.diagnostic)
         if ProcessInfo.processInfo.environment["BUNYI_SERVER_BACKGROUND"] == "1" {
             signal(SIGHUP, SIG_IGN)
         }

@@ -16,9 +16,9 @@ limitations under the License.
 
 # Hosting the models yourself
 
-Bunyi downloads each mode's model from Hugging Face by default. You can point
-it at a server you control instead — useful when the Hub is slow, when you are
-distributing to a team, or when machines need to fetch the models repeatedly.
+Bunyi packages the Bunyi mirror as the default for each TTS mode. You can point
+it at Hugging Face or a server you control instead — useful when you are
+distributing to a team or when machines need to fetch the models repeatedly.
 
 Behaviour is specified in [`spec/FEATURES.md`](spec/FEATURES.md) §3c; this is
 the practical version.

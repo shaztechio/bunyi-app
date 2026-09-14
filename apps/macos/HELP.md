@@ -142,10 +142,10 @@ Either way you never hold two models at once. The setting moves when the memory 
 
 Each mode has its own model, and each one can come from either of two places:
 
-- A **Hugging Face repo ID**, which is the default and needs nothing from you.
+- A **Hugging Face repo ID**, if you want the upstream source instead of the packaged mirror.
 - A **web address** starting with `https://`, if you host the model files yourself or on a server inside your organization.
 
-Bunyi decides which one you meant from what you typed. Clear a field to go back to the built-in default for that mode.
+Bunyi decides which one you meant from what you typed. The packaged default is the **Bunyi mirror** for all three TTS models. Clear a field to return to that default. Saved Hugging Face and custom sources keep taking priority after restarting or upgrading. Whisper keeps its existing download source.
 
 ### Storage
 
