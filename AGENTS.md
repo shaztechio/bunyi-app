@@ -157,6 +157,13 @@ gets deleted, and takes the mechanical rules with it.
 
 ### Verifying signatures locally
 
+All commands that may use the 1Password SSH agent **must run in an interactive
+TTY on the first attempt**. Never invoke them non-interactively. This includes
+SSH-signed `git commit` operations, SSH-backed `git push`/`git pull`/`git fetch`
+operations, and direct `ssh` commands. A non-interactive process cannot reliably
+surface or complete the 1Password approval prompt and may fail even when
+1Password is unlocked.
+
 Commits made locally are SSH-signed, and SSH verification needs a file naming
 the keys to trust. Point git at the one in this repo, once per clone:
 
