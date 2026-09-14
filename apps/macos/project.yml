@@ -97,6 +97,8 @@ targets:
       - Assets.xcassets
       - BunyiApp.swift
       - ContentView.swift
+      - AccessibilityAnnouncementCenter.swift
+      - AccessibilityAnnouncementPacer.swift
       - StartupTimeline.swift
       - LogsView.swift
       - HistoryView.swift

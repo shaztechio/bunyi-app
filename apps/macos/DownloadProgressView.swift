@@ -89,6 +89,9 @@ struct DownloadProgressView: View {
         announcedAt = now; announcedPhase = progress.phase
         let percent = progress.total > 0 ? progress.fraction.formatted(.percent.precision(.fractionLength(1))) : "size unknown"
         let health = progress.isSlow(at: now) ? "Download is slow. " : ""
-        AccessibilityNotification.Announcement("\(progress.title). \(health)\(progress.receiptText(at: now)). Overall model download: \(percent). \(progress.arrivalText(at: now)).").post()
+        AccessibilityAnnouncementCenter.post(
+            "\(progress.title). \(health)\(progress.receiptText(at: now)). "
+                + "Overall model download: \(percent). "
+                + "\(progress.arrivalText(at: now)).")
     }
 }

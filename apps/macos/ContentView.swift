@@ -98,6 +98,8 @@ struct ContentView: View {
     @State private var voiceError: String?
 
     @State private var genTask: Task<Void, Never>?
+    @State private var accessibilityAnnouncementPacer =
+        AccessibilityAnnouncementPacer()
 
     /// Focus has to be taken away from the script when work starts. `.disabled`
     /// and `.allowsHitTesting` both leave a TextEditor that already holds focus
@@ -113,6 +115,12 @@ struct ContentView: View {
 
     private static let modeNavigationKeys: Set<KeyEquivalent> = [
         .leftArrow, .rightArrow, .upArrow, .downArrow,
+    ]
+    /// AppKit reports Shift-Tab as the Backtab control character rather than
+    /// `.tab` with a modifier. Listen for both so reverse traversal reaches the
+    /// same handlers as forward traversal.
+    private static let tabNavigationKeys: Set<KeyEquivalent> = [
+        .tab, KeyEquivalent(Character("\u{19}")),
     ]
 
     private let languages = [
@@ -280,6 +288,9 @@ struct ContentView: View {
             Text("Keeps this reference clip and transcript so you can pick the "
                  + "voice again from the menu.")
         }
+        .onChange(of: engine.status) { _, status in
+            announceStatus(status)
+        }
         .onChange(of: engine.status.isBusy) { _, busy in
             // Resign first, then the disabled modifier keeps it from coming
             // back: a disabled view cannot take focus.
@@ -372,7 +383,7 @@ struct ContentView: View {
                 moveModeSelection(for: press.key)
                 return .ignored
             }
-            .onKeyPress(.tab, phases: .down) { press in
+            .onKeyPress(keys: Self.tabNavigationKeys, phases: .down) { press in
                 guard tab != .history,
                       isPlainTab(press),
                       press.modifiers.contains(.shift) else {
@@ -506,7 +517,7 @@ struct ContentView: View {
             // could only be reached with the little-known Control-Tab chord.
             // Move through the window's key-view loop instead, in both
             // directions, so Tab behaves like it does in the rest of the form.
-            .onKeyPress(.tab, phases: .down) { press in
+            .onKeyPress(keys: Self.tabNavigationKeys, phases: .down) { press in
                 guard !press.modifiers.contains(.command),
                       !press.modifiers.contains(.control),
                       !press.modifiers.contains(.option) else {
@@ -669,7 +680,8 @@ struct ContentView: View {
                         .accessibilityLabel("Style")
                         .textFieldStyle(.roundedBorder)
                         .focused($lastOptionFocused)
-                        .onKeyPress(.tab, phases: .down, action: movePastForm)
+                        .onKeyPress(keys: Self.tabNavigationKeys,
+                                    phases: .down, action: movePastForm)
                 }
 
             case .voiceDesign:
@@ -679,7 +691,8 @@ struct ContentView: View {
                               text: $instruct)
                         .textFieldStyle(.roundedBorder)
                         .focused($lastOptionFocused)
-                        .onKeyPress(.tab, phases: .down, action: movePastForm)
+                        .onKeyPress(keys: Self.tabNavigationKeys,
+                                    phases: .down, action: movePastForm)
                 }
 
             case .voiceClone:
@@ -719,7 +732,8 @@ struct ContentView: View {
                     TextField("Leave blank to transcribe when you press Generate", text: $referenceText)
                         .textFieldStyle(.roundedBorder)
                         .focused($lastOptionFocused)
-                        .onKeyPress(.tab, phases: .down, action: movePastForm)
+                        .onKeyPress(keys: Self.tabNavigationKeys,
+                                    phases: .down, action: movePastForm)
                 }
                 if let voiceError {
                     Text(voiceError)
@@ -857,7 +871,8 @@ struct ContentView: View {
                 .keyboardShortcut(.cancelAction)
                 .buttonStyle(ActionButtonStyle(role: .destructive))
                 .focused($actionButtonFocused)
-                .onKeyPress(.tab, phases: .down, action: movePastAction)
+                .onKeyPress(keys: Self.tabNavigationKeys,
+                            phases: .down, action: movePastAction)
                 .help("Stop the current operation")
                 // A custom ButtonStyle does not carry the Label's text into the
                 // accessibility tree, so both action buttons announce nothing
@@ -872,7 +887,8 @@ struct ContentView: View {
                 .keyboardShortcut(.return, modifiers: .command)
                 .buttonStyle(ActionButtonStyle(role: .primary))
                 .focused($actionButtonFocused)
-                .onKeyPress(.tab, phases: .down, action: movePastAction)
+                .onKeyPress(keys: Self.tabNavigationKeys,
+                            phases: .down, action: movePastAction)
                 .disabled(!canGenerate)
                 // Still on hover, deliberately. `spec/FEATURES.md` §1 pins
                 // "says why on hover" — surfacing this inline is a behaviour
@@ -1067,6 +1083,48 @@ struct ContentView: View {
             ProgressView().controlSize(.small)
             Text(message).foregroundStyle(.secondary).monospacedDigit()
         }
+    }
+
+    /// Status text can change several times a second while the model emits
+    /// frames. Posting every visible update interrupts VoiceOver before any
+    /// sentence finishes, so the pacer announces phases immediately and only
+    /// samples progress within generation. DownloadProgressView owns download
+    /// announcements because it also has receipt health and ETA context.
+    private func announceStatus(_ status: EngineStatus) {
+        let update: (AccessibilityAnnouncementPacer.Phase, String)?
+        switch status {
+        case .idle:
+            update = (.idle, engine.lastOutputURL == nil
+                ? "Ready."
+                : "Your audio is ready.")
+        case .downloading:
+            update = nil
+        case .checking:
+            update = (.checking,
+                      engine.generationDetail ?? "Checking the voice model.")
+        case .loading:
+            update = (.loading, engine.generationDetail ?? "Loading model.")
+        case .transcribing:
+            update = (.transcribing, "Transcribing the reference clip.")
+        case .generating(let frames):
+            update = (.generating, engine.generationDetail ?? (frames > 0
+                ? "Creating your speech, \(frames) frames, "
+                    + "\(String(format: "%.1f", Double(frames) / 12.5)) "
+                    + "seconds of speech so far."
+                : "Creating your speech."))
+        case .finalizing:
+            update = (.finalizing,
+                      engine.generationDetail ?? "Preparing your audio file.")
+        case .stopping:
+            update = (.stopping, "Stopping, finishing the current job.")
+        case .error(let message):
+            update = (.error, message)
+        }
+
+        guard let update,
+              let message = accessibilityAnnouncementPacer.announcement(
+                phase: update.0, message: update.1) else { return }
+        AccessibilityAnnouncementCenter.post(message)
     }
 
     // MARK: Actions
