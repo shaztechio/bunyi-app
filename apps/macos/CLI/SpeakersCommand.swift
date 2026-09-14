@@ -13,6 +13,7 @@
 // limitations under the License.
 
 import Foundation
+import BunyiMLXCore
 
 @MainActor
 enum SpeakersCommand {
@@ -45,19 +46,22 @@ enum SpeakersCommand {
                 try? await Task.sleep(for: .milliseconds(250))
             }
         }
-        defer {
-            monitor.cancel()
+        defer { monitor.cancel() }
+        func unloadOneShot() async {
             if existingEngine == nil {
-                engine.unload(reason: "one-shot speakers command finished")
+                await engine.unload(reason: "one-shot speakers command finished")
             }
         }
         do {
             try await loading.value
         } catch is CancellationError {
+            await unloadOneShot()
             throw CLIError("cancelled", "Loading speakers was cancelled.", exitCode: 5)
         } catch let error as URLError where error.code == .cancelled {
+            await unloadOneShot()
             throw CLIError("cancelled", "Loading speakers was cancelled.", exitCode: 5)
         } catch is BunyiBusyError {
+            await unloadOneShot()
             throw CLIError(
                 "bunyi_busy",
                 "Another Bunyi process is using this models folder.",
@@ -69,14 +73,18 @@ enum SpeakersCommand {
             case .rateLimited: code = "download_rate_limited"
             case .httpStatus: code = "download_failed"
             }
+            await unloadOneShot()
             throw CLIError(code, error.localizedDescription, exitCode: 10)
         } catch {
+            await unloadOneShot()
             throw CLIError("model_load_failed", error.localizedDescription, exitCode: 10)
         }
-        return CLIProtocol.result(request, [
+        let response = CLIProtocol.result(request, [
             "speakers": engine.speakers,
             "modelSource": TTSMode.presetVoice.effectiveRepoID,
         ])
+        await unloadOneShot()
+        return response
     }
 
     private static func progress(_ engine: TTSEngine,

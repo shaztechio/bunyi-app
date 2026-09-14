@@ -13,6 +13,7 @@
 // limitations under the License.
 
 import Foundation
+import BunyiMLXCore
 
 @MainActor
 enum TranscriptionCommand {
@@ -29,42 +30,9 @@ enum TranscriptionCommand {
         }
         let language = request.value("language") ?? "auto"
         let url = URL(fileURLWithPath: path)
-        output.event(CLIProtocol.event(request, type: "transcribing", [
-            "detail": "Transcribing the audio on-device",
-            "inputPath": url.path,
-        ]))
-
-        let transcription = Task { @MainActor in
-            try await ReferenceTranscriber.transcribeOnDevice(
-                url: url, locale: TTSEngine.locale(for: language))
-        }
-        let cancellationMonitor = Task {
-            while !Task.isCancelled, !cancelled.value {
-                try? await Task.sleep(for: .milliseconds(100))
-            }
-            if cancelled.value { transcription.cancel() }
-        }
-        defer { cancellationMonitor.cancel() }
-
-        let text: String
-        do {
-            text = try await transcription.value
-        } catch is CancellationError {
-            throw CLIError("cancelled", "Transcription was cancelled.", exitCode: 5)
-        } catch TTSError.transcriptionNotAuthorized {
-            throw CLIError(
-                "speech_permission_required",
-                "Allow speech recognition for bunyi in System Settings > Privacy & Security > Speech Recognition, then try again.",
-                exitCode: 3)
-        } catch TTSError.transcriptionUnavailable {
-            throw CLIError(
-                "transcription_unavailable",
-                "On-device speech recognition is unavailable for this language.",
-                exitCode: 10)
-        } catch {
-            throw CLIError(
-                "transcription_failed", error.localizedDescription, exitCode: 10)
-        }
+        let text = try await CLIWhisperTranscriber.transcribe(
+            url, language: language, trimReference: false,
+            request: request, output: output, cancelled: cancelled)
         return CLIProtocol.result(request, [
             "inputPath": url.path,
             "transcript": text,

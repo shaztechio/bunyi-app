@@ -25,36 +25,80 @@ import os
 
 @MainActor
 @Observable
-final class LogStore {
-    static let shared = LogStore()
+public final class LogStore {
+    public static let shared = LogStore()
 
-    struct Entry: Identifiable {
-        let id = UUID()
-        let date: Date
-        let message: String
+    public struct Entry: Identifiable {
+        public let id = UUID()
+        public let date: Date
+        public let message: String
     }
 
-    private(set) var entries: [Entry] = []
+    public private(set) var entries: [Entry] = []
 
     private let osLog = Logger(
         subsystem: "app.bunyi.Bunyi", category: "app")
     private let cap = 2000
 
-    func log(_ message: String) {
+    public static var durableURL: URL {
+        CLISettingsStore.dataRoot
+            .appendingPathComponent("Logs", isDirectory: true)
+            .appendingPathComponent("bunyi.log")
+    }
+
+    public static func ensureDurableDirectory() throws {
+        let directory = durableURL.deletingLastPathComponent()
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700])
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o700], ofItemAtPath: directory.path)
+    }
+
+    public func log(_ message: String) {
         // .notice (OSLogType.default) persists to the log store, so entries
         // are retrievable via `log show` after the fact — .info is not.
         osLog.notice("\(message, privacy: .public)")
+        if CLISettingsStore.isCLI {
+            appendDurable(message)
+        }
         entries.append(Entry(date: .now, message: message))
         if entries.count > cap {
             entries.removeFirst(entries.count - cap)
         }
     }
 
-    func clear() {
+    private func appendDurable(_ message: String) {
+        do {
+            try Self.ensureDurableDirectory()
+            if !FileManager.default.fileExists(atPath: Self.durableURL.path) {
+                _ = FileManager.default.createFile(
+                    atPath: Self.durableURL.path, contents: nil,
+                    attributes: [.posixPermissions: 0o600])
+            }
+            try FileManager.default.setAttributes(
+                [.posixPermissions: 0o600],
+                ofItemAtPath: Self.durableURL.path)
+            let handle = try FileHandle(forWritingTo: Self.durableURL)
+            defer { try? handle.close() }
+            try handle.seekToEnd()
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [
+                .withInternetDateTime, .withFractionalSeconds,
+            ]
+            let line = "\(formatter.string(from: Date()))  \(message)\n"
+            try handle.write(contentsOf: Data(line.utf8))
+        } catch {
+            // Logging must never turn a completed generation into a failure.
+        }
+    }
+
+    public func clear() {
         entries.removeAll()
     }
 
-    var text: String {
+    public var text: String {
         entries.map {
             "\($0.date.formatted(date: .omitted, time: .standard))  \($0.message)"
         }.joined(separator: "\n")

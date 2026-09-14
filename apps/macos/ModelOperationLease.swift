@@ -15,10 +15,10 @@
 import Darwin
 import Foundation
 
-struct BunyiBusyError: LocalizedError, Sendable {
-    let modelsRoot: URL
+public struct BunyiBusyError: LocalizedError, Sendable {
+    public let modelsRoot: URL
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         "Another Bunyi operation owns this models folder. Unload its model "
             + "or wait for it to finish."
     }
@@ -28,10 +28,10 @@ struct BunyiBusyError: LocalizedError, Sendable {
 ///
 /// The lock file deliberately remains on disk. Removing it while another
 /// process holds its descriptor creates a second inode and allows two owners.
-final class ModelOperationLease: @unchecked Sendable {
+public final class ModelOperationLease: @unchecked Sendable {
     private let descriptor: Int32
 
-    init(modelsRoot: URL, operation: String) throws {
+    public init(modelsRoot: URL, operation: String) throws {
         try FileManager.default.createDirectory(
             at: modelsRoot, withIntermediateDirectories: true)
         let path = modelsRoot.appendingPathComponent(

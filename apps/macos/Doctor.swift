@@ -30,23 +30,23 @@ import MLX
 /// succeeded. A warning is a prediction, and the app refuses to stop a run on
 /// one, because a prediction that stops work is wrong in the expensive
 /// direction: it refuses runs that would have finished.
-enum DoctorSeverity {
+public enum DoctorSeverity {
     case ok
     case warning
     case blocker
 }
 
 /// One check's result.
-struct DoctorFinding: Identifiable {
-    let id = UUID()
+public struct DoctorFinding: Identifiable {
+    public let id = UUID()
     /// What was checked, as a noun phrase: "Disk space", "Memory".
-    let title: String
+    public let title: String
     /// What was found, and what to do about it. Per `spec/FEATURES.md` §10 this
     /// is the actionable half — "Free up 4.2 GB", not "insufficient space".
-    let detail: String
-    let severity: DoctorSeverity
+    public let detail: String
+    public let severity: DoctorSeverity
 
-    var symbolName: String {
+    public var symbolName: String {
         switch severity {
         case .ok:      "checkmark.circle.fill"
         case .warning: "exclamationmark.triangle.fill"
@@ -56,27 +56,27 @@ struct DoctorFinding: Identifiable {
 }
 
 /// Everything a run found.
-struct DoctorReport {
+public struct DoctorReport {
     /// Which mode's model this is about.
     ///
     /// Carried rather than inferred because it is not always on screen. The
     /// History tab has no mode of its own, so a run started there reports on
     /// the last one generated with — perfectly sensible, and completely opaque
     /// unless the report says so.
-    let mode: TTSMode
-    let findings: [DoctorFinding]
+    public let mode: TTSMode
+    public let findings: [DoctorFinding]
 
-    var blockers: [DoctorFinding] { findings.filter { $0.severity == .blocker } }
-    var warnings: [DoctorFinding] { findings.filter { $0.severity == .warning } }
+    public var blockers: [DoctorFinding] { findings.filter { $0.severity == .blocker } }
+    public var warnings: [DoctorFinding] { findings.filter { $0.severity == .warning } }
 
     /// Nothing stands in the way of a generation. Warnings do not count — see
     /// `DoctorSeverity`.
-    var isClear: Bool { blockers.isEmpty }
+    public var isClear: Bool { blockers.isEmpty }
 
     /// One line per finding, for the Logs. Deliberately flat text: the Logs
     /// window is what gets pasted into a bug report, and a report is only
     /// useful there if it survives being copied as plain text.
-    var logLines: [String] {
+    public var logLines: [String] {
         ["Doctor: checking \(mode.rawValue)"] + findings.map { finding in
             let mark = switch finding.severity {
             case .ok:      "ok"
@@ -94,7 +94,7 @@ struct DoctorReport {
 /// at one instant, not state the app carries around. Whoever asked holds the
 /// report for as long as they are showing it.
 @MainActor
-enum Doctor {
+public enum Doctor {
 
     /// How much room beyond the model's own size counts as comfortable.
     ///
@@ -119,9 +119,10 @@ enum Doctor {
     /// - Parameter deep: also verify downloaded files against the server's
     ///   published digests. Hashing gigabytes takes real time, so this is for
     ///   the on-demand run only — never the one before a generation.
-    static func run(mode: TTSMode,
+    public static func run(mode: TTSMode,
                     engine: TTSEngine,
-                    deep: Bool = false) async -> DoctorReport {
+                    deep: Bool = false,
+                    shouldContinue: @escaping @Sendable () -> Bool = { true }) async -> DoctorReport {
         var findings: [DoctorFinding] = []
 
         let modelDir = TTSEngine.modelDirectory(for: mode)
@@ -157,7 +158,8 @@ enum Doctor {
         if deep, isPresent {
             findings.append(await integrityFinding(mode: mode,
                                                    engine: engine,
-                                                   dir: modelDir))
+                                                   dir: modelDir,
+                                                   shouldContinue: shouldContinue))
         }
 
         return DoctorReport(mode: mode, findings: findings)
@@ -339,7 +341,9 @@ enum Doctor {
 
     private static func integrityFinding(mode: TTSMode,
                                          engine: TTSEngine,
-                                         dir: URL) async -> DoctorFinding {
+                                         dir: URL,
+                                         shouldContinue: @escaping @Sendable () -> Bool)
+        async -> DoctorFinding {
         let entries: [TTSEngine.ManifestEntry]?
         do {
             entries = try await engine.publishedDigests(for: mode)
@@ -367,17 +371,31 @@ enum Doctor {
                 severity: .ok)
         }
 
-        let bad = await Task.detached(priority: .utility) {
-            withDigests.filter { entry in
+        let bad: [String]? = await Task.detached(priority: .utility) {
+            var failures: [String] = []
+            for entry in withDigests {
+                guard shouldContinue() else { return nil }
                 let file = dir.appendingPathComponent(entry.path)
                 // The downloader's own hash, not a second one. A file is
                 // "intact" if it would satisfy the check the download path
                 // applies, and two implementations of that could disagree.
-                guard let actual = try? HTTPFileDownloader.sha256Hex(of: file)
-                else { return true }
-                return actual != entry.sha256
-            }.map(\.path)
+                guard let actual = try? HTTPFileDownloader.sha256Hex(
+                    of: file, shouldContinue: shouldContinue) else {
+                    if !shouldContinue() { return nil }
+                    failures.append(entry.path)
+                    continue
+                }
+                if actual != entry.sha256 { failures.append(entry.path) }
+            }
+            return failures
         }.value
+
+        guard let bad else {
+            return DoctorFinding(
+                title: "Model files",
+                detail: "Checksum verification was stopped.",
+                severity: .warning)
+        }
 
         guard bad.isEmpty else {
             // This is the failure that otherwise loads and speaks nonsense, so

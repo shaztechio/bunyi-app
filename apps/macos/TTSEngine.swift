@@ -16,10 +16,9 @@
 //  TTSEngine.swift
 //  Bunyi
 //
-//  Owns model download, loading, and generation. One model resident at a
-//  time (Apple unified memory friendly). Models are fetched from Hugging
-//  Face via swift-transformers' Hub API into Application Support, so end
-//  users never touch a terminal.
+//  Observable app/CLI adapter over MLXTtsRuntime. It coordinates downloads,
+//  progress, output metadata, and UI state while the runtime actor exclusively
+//  owns and serializes access to the non-Sendable Qwen model.
 //
 
 import AVFoundation
@@ -29,18 +28,18 @@ import Qwen3TTS
 
 // MARK: - Modes
 
-enum TTSMode: String, CaseIterable, Identifiable, Sendable {
+public enum TTSMode: String, CaseIterable, Identifiable, Sendable {
     case presetVoice = "Preset voice"
     case voiceDesign = "Voice design"
     case voiceClone = "Voice clone"
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
     /// Hugging Face repo backing each mode.
     /// Swap the CustomVoice repo for
     /// "AtomGradient/Qwen3-TTS-0.6B-CustomVoice-4bit-pruned-vocab-lite"
     /// (808 MB) if download size matters more than max fidelity.
-    var repoID: String {
+    public var repoID: String {
         switch self {
         case .presetVoice: "mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-bf16"
         case .voiceDesign: "mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16"
@@ -50,7 +49,7 @@ enum TTSMode: String, CaseIterable, Identifiable, Sendable {
 
     /// Rough total download size, used only for throughput and ETA
     /// estimates in the log — the Hub API only reports a fraction.
-    var approxDownloadBytes: Double {
+    public var approxDownloadBytes: Double {
         switch self {
         case .presetVoice: 1.4e9
         case .voiceDesign: 3.4e9
@@ -61,7 +60,7 @@ enum TTSMode: String, CaseIterable, Identifiable, Sendable {
 
 // MARK: - Engine state
 
-enum EngineStatus: Equatable {
+public enum EngineStatus: Equatable {
     case idle
     case downloading(Double)      // 0...1
     case checking
@@ -75,7 +74,7 @@ enum EngineStatus: Equatable {
     case stopping
     case error(String)
 
-    var isBusy: Bool {
+    public var isBusy: Bool {
         switch self {
         case .idle, .error: false
         default: true
@@ -83,55 +82,55 @@ enum EngineStatus: Equatable {
     }
 }
 
-struct GenerationSummary: Sendable {
-    let outputURL: URL
-    let mode: TTSMode
-    let durationSeconds: Double
-    let frames: Int
-    let elapsedSeconds: Double
-    let modelSource: String
-    let metadata: OutputMetadata
+public struct GenerationSummary: Sendable {
+    public let outputURL: URL
+    public let mode: TTSMode
+    public let durationSeconds: Double
+    public let frames: Int
+    public let elapsedSeconds: Double
+    public let modelSource: String
+    public let metadata: OutputMetadata
 }
 
-struct RuntimeFailure: Sendable {
-    let code: String
-    let message: String
-    let exitCode: Int32
+public struct RuntimeFailure: Sendable {
+    public let code: String
+    public let message: String
+    public let exitCode: Int32
 }
 
-struct ModelDownloadPlan: Sendable {
-    let mode: TTSMode
-    let totalBytes: Int64?
-    let downloadedBytes: Int64
-    let complete: Bool
+public struct ModelDownloadPlan: Sendable {
+    public let mode: TTSMode
+    public let totalBytes: Int64?
+    public let downloadedBytes: Int64
+    public let complete: Bool
 }
 
 // MARK: - Engine
 
 @MainActor
 @Observable
-final class TTSEngine {
-    var status: EngineStatus = .idle
+public final class TTSEngine {
+    public var status: EngineStatus = .idle
     /// Section/attempt context for long generation. The status enum retains
     /// the aggregate frame count used by existing callers.
-    var generationDetail: String?
-    var lastOutputURL: URL?
-    private(set) var lastGenerationSummary: GenerationSummary?
-    private(set) var lastFailure: RuntimeFailure?
+    public var generationDetail: String?
+    public var lastOutputURL: URL?
+    public private(set) var lastGenerationSummary: GenerationSummary?
+    public private(set) var lastFailure: RuntimeFailure?
 
     /// Forgets the previous run's file so the UI stops offering it. Called when
     /// a new run starts: the old audio is still on disk and still reachable in
     /// the Outputs folder, but presenting Play beside a run in progress invites
     /// listening to the previous result and taking it for the new one.
-    func clearLastOutput() {
+    public func clearLastOutput() {
         lastOutputURL = nil
     }
 
     /// The Outputs folder itself, for History and "Show in Finder".
-    var outputsFolder: URL { outputDir }
+    public var outputsFolder: URL { outputDir }
 
     /// Stamped into every generated file so a WAV says which build made it.
-    static var appVersion: String {
+    public static var appVersion: String {
         let info = Bundle.main.infoDictionary
         let short = info?["CFBundleShortVersionString"] as? String ?? "0.0.0"
         let build = info?["CFBundleVersion"] as? String ?? "0"
@@ -142,7 +141,7 @@ final class TTSEngine {
     /// tracked in memory: the folder is the record, it survives relaunches, and
     /// a file deleted in Finder should disappear from History without the app
     /// needing to be told.
-    func generatedOutputs() -> [GeneratedOutput] {
+    public func generatedOutputs() -> [GeneratedOutput] {
         let keys: [URLResourceKey] = [.contentModificationDateKey, .fileSizeKey]
         let files = (try? FileManager.default.contentsOfDirectory(
             at: outputDir,
@@ -163,43 +162,44 @@ final class TTSEngine {
             .sorted { $0.created > $1.created }
     }
     /// Human-readable download detail ("42% — about 3.1 MB/s, ~6 min left").
-    var downloadDetail: String?
-    var downloadFeedback: ModelDownloadProgress?
-    var downloadRecovery: DownloadRecoveryOffer?
+    public var downloadDetail: String?
+    public var downloadFeedback: ModelDownloadProgress?
+    public var downloadRecovery: DownloadRecoveryOffer?
     /// Batch-download context consumed by the CLI's aggregate progress stream.
-    private(set) var downloadMode: TTSMode?
-    private(set) var downloadItemIndex = 0
-    private(set) var downloadItemCount = 0
-    private(set) var aggregateDownloadCompleted: Int64 = 0
+    public private(set) var downloadMode: TTSMode?
+    public private(set) var downloadItemIndex = 0
+    public private(set) var downloadItemCount = 0
+    public private(set) var aggregateDownloadCompleted: Int64 = 0
     private var activeModelTransfer: ModelFileTransfer?
-    func reconnectDownload() {
+    public func reconnectDownload() {
         guard downloadFeedback?.phase == .downloading else { return }
         activeModelTransfer?.requestReconnect()
         downloadFeedback?.phase = .reconnecting
     }
-    func clearDownloadRecovery() { downloadRecovery = nil }
+    public func clearDownloadRecovery() { downloadRecovery = nil }
     /// Transcript produced by auto-transcription, so the UI can show it and
     /// save it with the voice instead of storing an empty string.
-    var lastReferenceTranscript: String?
+    public var lastReferenceTranscript: String?
 
     private var loadedRepo: String?
     /// Where the loaded model was read from. Compared against a deletion rather
     /// than matching repo-ID strings, which differ in shape between a Hub repo
     /// and a self-hosted base URL.
     private var loadedDir: URL?
-    private var model: Qwen3TTSModel?
+    private let runtime = MLXTtsRuntime()
+    private var modelInfo: MLXTtsModelInfo?
     /// Retained for as long as a model is resident. The kernel releases this
     /// lease if the process crashes, while a clean unload releases it eagerly.
     private var modelLease: ModelOperationLease?
 
     private let log = LogStore.shared
 
-    var loadedMode: TTSMode? {
+    public var loadedMode: TTSMode? {
         guard let loadedRepo else { return nil }
         return TTSMode.allCases.first { $0.effectiveRepoID == loadedRepo }
     }
 
-    var loadedModelFolder: String? { loadedDir?.path }
+    public var loadedModelFolder: String? { loadedDir?.path }
 
     private struct HubTreeEntry: Decodable {
         let type: String
@@ -217,24 +217,27 @@ final class TTSEngine {
         return dir
     }()
 
-    var speakers: [String] { model?.supportedSpeakers ?? [] }
+    public var speakers: [String] { modelInfo?.supportedSpeakers ?? [] }
 
     /// Held so the observer can be removed. NotificationCenter keeps the token
     /// alive until it is, so dropping it on the floor leaks the registration
     /// and stacks up another unload attempt for every engine ever created.
     /// nonisolated so `deinit`, which is not main-actor isolated, can read it.
     /// Only ever written once during init and read once during deinit.
+    @ObservationIgnored
     private nonisolated(unsafe) var deletionObserver: (any NSObjectProtocol)?
 
-    init() {
+    public init() {
         // Settings can delete a model while it is loaded. Without this the app
         // keeps generating from memory with its folder gone, and the next
         // launch re-downloads with nothing having explained why.
         deletionObserver = NotificationCenter.default.addObserver(
             forName: ModelStore.didDeleteModel, object: nil, queue: .main
         ) { [weak self] note in
-            guard let deleted = note.object as? URL else { return }
-            MainActor.assumeIsolated { self?.forgetModel(at: deleted) }
+            guard let request = note.object as? ModelDeletionRequest else { return }
+            request.register { @MainActor [weak self] in
+                await self?.forgetModel(at: request.url)
+            }
         }
     }
 
@@ -265,18 +268,10 @@ final class TTSEngine {
     /// killed most often *because* the machine is short of memory, so the cache
     /// stayed held in exactly the cases that needed it back.
     ///
-    /// Synchronous on the main actor, matching the two existing calls in
-    /// `prepare` and `forgetModel`. It frees buffers rather than computing, so
-    /// it is not the inference work §2 of the spec keeps off this thread — but
-    /// the logged numbers are there partly so a pause here would be visible
-    /// rather than mysterious.
-    private func releaseGenerationMemory() {
-        let cachedBefore = MLX.GPU.cacheMemory
-        let start = Date()
-        MLX.GPU.clearCache()
-        let elapsed = Date().timeIntervalSince(start)
-        let freed = cachedBefore - MLX.GPU.cacheMemory
-        guard freed > 0 else { return }
+    /// The runtime actor performs the release beside the model it owns.
+    private func releaseGenerationMemory() async {
+        let release = await runtime.releaseWorkingMemory()
+        guard release.freedBytes > 0 else { return }
         // The elapsed time is here to answer a specific question. Releasing
         // gigabytes is real work for the kernel, and if playback stutters
         // shortly after a generation, the two candidates are this call and the
@@ -284,16 +279,20 @@ final class TTSEngine {
         // of milliseconds here points at the release, single-digit
         // milliseconds points elsewhere.
         log.log(String(format: "Released %@ of MLX cache in %.0f ms (%@ still in use)",
-                       freed.formatted(.byteCount(style: .memory)),
-                       elapsed * 1000,
-                       MLX.GPU.activeMemory.formatted(.byteCount(style: .memory))))
+                       release.freedBytes.formatted(.byteCount(style: .memory)),
+                       release.elapsedSeconds * 1000,
+                       release.activeBytes.formatted(.byteCount(style: .memory))))
     }
 
     /// Drops the in-memory model if it came from `dir`.
-    private func forgetModel(at dir: URL) {
+    private func forgetModel(at dir: URL) async {
         guard let loadedDir,
               loadedDir.standardizedFileURL == dir.standardizedFileURL else { return }
-        unload(reason: "its files were deleted")
+        guard !status.isBusy else {
+            log.log("Refusing to unload a model while it is generating")
+            return
+        }
+        await unload(reason: "its files were deleted")
     }
 
     /// Lets go of whatever model is loaded (spec §3e).
@@ -320,38 +319,42 @@ final class TTSEngine {
     /// Generating twice in the same mode releases nothing — it is the same
     /// model, and reloading several gigabytes per run would make every run as
     /// slow as the first.
-    func releaseModel(unlessNeededFor mode: TTSMode) {
+    public func releaseModel(unlessNeededFor mode: TTSMode) async {
         guard loadedRepo != mode.effectiveRepoID else { return }
-        unload(reason: "preparing \(mode.rawValue)")
+        await unload(reason: "preparing \(mode.rawValue)")
     }
 
-    func unload(reason: String) {
-        let wasLoaded = model != nil || loadedRepo != nil
+    public func unload(reason: String) async {
+        let wasLoaded = modelInfo != nil || loadedRepo != nil
         let what = loadedRepo ?? "the model"
 
-        model = nil
+        let runtimeReleased = await runtime.unload()
+        guard !wasLoaded || runtimeReleased else {
+            log.log("Refusing to unload \(what) while it is generating")
+            return
+        }
+        modelInfo = nil
         loadedRepo = nil
         loadedDir = nil
         modelLease = nil
 
-        guard wasLoaded else { return }
+        guard wasLoaded || runtimeReleased else { return }
         log.log("Unloading \(what) — \(reason)")
-        MLX.GPU.clearCache()
     }
 
     // MARK: Model lifecycle
 
     /// Download (if needed) and load the model for `mode`.
-    func prepare(mode: TTSMode) async throws -> Qwen3TTSModel {
+    public func prepare(mode: TTSMode) async throws -> MLXTtsModelInfo {
         let repoID = mode.effectiveRepoID
-        if let model, loadedRepo == repoID { return model }
+        if let modelInfo, loadedRepo == repoID { return modelInfo }
 
         // By here the model for another mode must already be gone, or two are
         // resident at once for exactly as long as the download below needs the
         // room. Ordinarily it is: leaving the mode released it, and the
         // generate path releases it again ahead of the preflight. This is the
         // backstop for any caller that did neither.
-        releaseModel(unlessNeededFor: mode)
+        await releaseModel(unlessNeededFor: mode)
 
         let acquiredLease = modelLease == nil
         if acquiredLease {
@@ -369,10 +372,11 @@ final class TTSEngine {
             status = .loading
             log.log("Loading model into memory…")
             let loadStart = Date()
-            let loaded = try await Qwen3TTSModel.fromPretrained(localDir.path)
+            let loaded = try await runtime.prepare(
+                repoID: repoID, directory: localDir)
             log.log(String(format: "Model loaded in %.1f s",
                            Date().timeIntervalSince(loadStart)))
-            self.model = loaded
+            self.modelInfo = loaded
             self.loadedRepo = repoID
             self.loadedDir = localDir
             return loaded
@@ -386,11 +390,13 @@ final class TTSEngine {
     ///
     /// One lease covers the whole batch so another Bunyi process cannot start
     /// inference or mutate the shared folder in the gaps between assets.
-    func downloadModels(_ modes: [TTSMode]) async throws -> [URL] {
+    public func downloadModels(
+        _ modes: [TTSMode], ownsLease: Bool = false
+    ) async throws -> [URL] {
         guard !status.isBusy else {
             throw BunyiBusyError(modelsRoot: ModelsLocation.current())
         }
-        let operationLease = modelLease == nil
+        let operationLease = !ownsLease && modelLease == nil
             ? try ModelOperationLease(
                 modelsRoot: ModelsLocation.current(), operation: "models.download")
             : nil
@@ -431,7 +437,7 @@ final class TTSEngine {
     /// Resolves every requested asset and asks each source for file sizes
     /// before a batch starts. A missing size keeps the aggregate total unknown
     /// rather than turning a known subtotal into a misleading total.
-    func planModelDownloads(_ modes: [TTSMode]) async throws -> [ModelDownloadPlan] {
+    public func planModelDownloads(_ modes: [TTSMode]) async throws -> [ModelDownloadPlan] {
         var plans: [ModelDownloadPlan] = []
         defer {
             downloadFeedback = nil
@@ -509,7 +515,7 @@ final class TTSEngine {
     /// disagree, and the symptom is nasty in both directions: Doctor reporting
     /// a model missing that the engine then loads, or reporting one present
     /// that the engine then re-downloads.
-    static func modelDirectory(for mode: TTSMode) -> URL {
+    public static func modelDirectory(for mode: TTSMode) -> URL {
         let root = ModelsLocation.current()
         switch mode.effectiveSource {
         case .repo(let repoID):
@@ -522,7 +528,7 @@ final class TTSEngine {
 
     /// Whether that folder holds a model that can actually be loaded — the same
     /// test the download path uses to decide it has nothing to do.
-    static func isModelComplete(for mode: TTSMode) -> Bool {
+    public static func isModelComplete(for mode: TTSMode) -> Bool {
         hasCompleteModel(at: modelDirectory(for: mode))
     }
 
@@ -532,7 +538,7 @@ final class TTSEngine {
     /// manifest rather than a copy of the parser — the format has enough edge
     /// cases (tabs, `*` markers, unsafe paths) that a second reader of it would
     /// be a second set of bugs.
-    func publishedDigests(for mode: TTSMode) async throws -> [ManifestEntry]? {
+    public func publishedDigests(for mode: TTSMode) async throws -> [ManifestEntry]? {
         guard case .baseURL(let base) = mode.effectiveSource else { return nil }
         return try await manifest(at: base.appendingPathComponent("manifest.sha256"))
     }
@@ -763,10 +769,10 @@ final class TTSEngine {
 
     /// One file a self-hosted server publishes, and its digest if it published
     /// one.
-    struct ManifestEntry: Sendable {
-        let path: String
+    public struct ManifestEntry: Sendable {
+        public let path: String
         /// Lowercase hex SHA-256, or nil when the manifest does not carry one.
-        let sha256: String?
+        public let sha256: String?
     }
 
     /// The file list from the server: `manifest.sha256` first, `manifest.txt`
@@ -1093,14 +1099,14 @@ final class TTSEngine {
         let speaker: String?
         let instruct: String?
         let language: String
-        let referenceAudio: MLXArray?
+        let referenceAudio: [Float]?
         let referenceText: String?
     }
 
     private struct SectionTake: Sendable {
         let samples: [Float]
         let frames: Int
-        let termination: Qwen3TTSTermination
+        let reachedEndOfSpeech: Bool
     }
 
     private final class SectionAccumulator {
@@ -1117,71 +1123,38 @@ final class TTSEngine {
     /// One bounded attempt. The dependency resets its KV cache on every call;
     /// only EOS-terminated audio is returned to the section accumulator.
     private func synthesize(
-        model: Qwen3TTSModel,
         request: SynthesisRequest,
+        sampleRate: Int,
         maximumFrames: Int?,
         progressLabel: String?,
         readySamples: Int
     ) async throws -> SectionTake {
-        let control = GenerationControl()
-        let termination = TerminationReceipt()
-        let boxed = Unchecked(value: (model, request))
+        let control = MLXTtsGenerationControl()
         let (tokens, continuation) = AsyncStream.makeStream(of: Int.self)
         status = .generating(0)
         if let progressLabel {
             generationDetail = String(
                 format: "%@ · 0.0s in this attempt · %.1fs ready",
                 progressLabel,
-                Double(readySamples) / Double(model.sampleRate))
+                Double(readySamples) / Double(sampleRate))
         }
-        let worker = Task.detached(priority: .userInitiated) {
+        let worker = Task {
             defer { continuation.finish() }
-            let (model, request) = boxed.value
-            var count = 0
-            let onToken: (Int) -> Void = { _ in
-                count += 1
-                continuation.yield(count)
+            if maximumFrames == nil, request.mode != .voiceClone {
+                return try await runtime.generateStreaming(
+                    mode: request.mode, text: request.text,
+                    speaker: request.speaker, instruct: request.instruct,
+                    language: request.language, control: control,
+                    onFrame: { continuation.yield($0) })
             }
-            let onTermination: @Sendable (Qwen3TTSTermination) -> Void = {
-                termination.set($0)
-            }
-            let wav: MLXArray
-            switch request.mode {
-            case .presetVoice:
-                guard let speaker = request.speaker else {
-                    throw TTSError.noAudio
-                }
-                wav = try model.generateCustomVoice(
-                    text: request.text, speaker: speaker,
-                    language: request.language, instruct: request.instruct,
-                    maxTokens: maximumFrames, useTextLengthLimit: false,
-                    shouldContinue: control.shouldContinue,
-                    onTermination: onTermination, onToken: onToken)
-            case .voiceDesign:
-                wav = try model.generateVoiceDesign(
-                    text: request.text, language: request.language,
-                    instruct: request.instruct, maxTokens: maximumFrames,
-                    useTextLengthLimit: false,
-                    shouldContinue: control.shouldContinue,
-                    onTermination: onTermination, onToken: onToken)
-            case .voiceClone:
-                guard let referenceAudio = request.referenceAudio,
-                      let referenceText = request.referenceText else {
-                    throw TTSError.missingReference
-                }
-                wav = try model.generateVoiceClone(
-                    text: request.text, referenceAudio: referenceAudio,
-                    referenceText: referenceText, language: request.language,
-                    maxTokens: maximumFrames, useTextLengthLimit: false,
-                    shouldContinue: control.shouldContinue,
-                    onTermination: onTermination, onToken: onToken)
-            }
-            let samples = wav.asArray(Float.self)
-            guard let reason = termination.value else {
-                throw TTSError.missingTermination
-            }
-            return SectionTake(samples: samples, frames: count,
-                               termination: reason)
+            return try await runtime.generateBounded(
+                mode: request.mode, text: request.text,
+                speaker: request.speaker, instruct: request.instruct,
+                language: request.language,
+                referenceSamples: request.referenceAudio,
+                referenceText: request.referenceText,
+                maximumFrames: maximumFrames, control: control,
+                onFrame: { continuation.yield($0) })
         }
 
         do {
@@ -1192,14 +1165,17 @@ final class TTSEngine {
                     generationDetail = String(
                         format: "%@ · %.1fs in this attempt · %.1fs ready",
                         progressLabel, Double(count) / 12.5,
-                        Double(readySamples) / Double(model.sampleRate))
+                        Double(readySamples) / Double(sampleRate))
                 }
                 if count % 100 == 0 {
                     log.log("\(progressLabel ?? "Generation"): \(count) frames in this attempt")
                 }
             }
             try Task.checkCancellation()
-            let take = try await worker.value
+            let runtimeTake = try await worker.value
+            let take = SectionTake(
+                samples: runtimeTake.samples, frames: runtimeTake.frames,
+                reachedEndOfSpeech: runtimeTake.reachedEndOfSpeech)
             guard !take.samples.isEmpty,
                   take.samples.allSatisfy(\.isFinite) else {
                 throw TTSError.invalidSectionAudio
@@ -1208,15 +1184,16 @@ final class TTSEngine {
         } catch {
             control.cancel()
             if Task.isCancelled || error is CancellationError {
-                pendingWork = Task.detached { _ = try? await worker.value }
+                worker.cancel()
+                pendingWork = Task { _ = try? await worker.value }
             }
             throw error
         }
     }
 
     private func generateSection(
-        model: Qwen3TTSModel,
         request: SynthesisRequest,
+        sampleRate: Int,
         label: String,
         depth: Int,
         accumulator: SectionAccumulator
@@ -1230,16 +1207,16 @@ final class TTSEngine {
                 let progress = attemptDepth > 0
                     ? "Retrying \(label.lowercased()) with shorter text" : label
                 let take = try await synthesize(
-                    model: model,
                     request: SynthesisRequest(
                         mode: request.mode, text: text,
                         speaker: request.speaker, instruct: request.instruct,
                         language: request.language,
                         referenceAudio: request.referenceAudio,
                         referenceText: request.referenceText),
+                    sampleRate: sampleRate,
                     maximumFrames: limit, progressLabel: progress,
                     readySamples: accumulator.samples.count)
-                guard take.termination == .endOfSpeech else {
+                guard take.reachedEndOfSpeech else {
                     if attemptDepth < 2 {
                         log.log("\(label): reached the \(limit)-frame limit. Retrying with shorter text (subdivision \(attemptDepth + 1) of 2).")
                     } else {
@@ -1247,7 +1224,7 @@ final class TTSEngine {
                     }
                     return false
                 }
-                accumulator.accept(take, sampleRate: model.sampleRate)
+                accumulator.accept(take, sampleRate: sampleRate)
                 log.log("\(label): accepted \(take.frames) frames at EOS")
                 return true
             }
@@ -1257,19 +1234,19 @@ final class TTSEngine {
     }
 
     private func generateSections(
-        model: Qwen3TTSModel,
         request: SynthesisRequest,
+        sampleRate: Int,
         accumulator: SectionAccumulator
     ) async throws {
         let sections = SpeechSections.split(request.text)
         for (index, text) in sections.enumerated() {
             try await generateSection(
-                model: model,
                 request: SynthesisRequest(
                     mode: request.mode, text: text, speaker: request.speaker,
                     instruct: request.instruct, language: request.language,
                     referenceAudio: request.referenceAudio,
                     referenceText: request.referenceText),
+                sampleRate: sampleRate,
                 label: "Section \(index + 1) of \(sections.count)", depth: 0,
                 accumulator: accumulator)
         }
@@ -1280,7 +1257,7 @@ final class TTSEngine {
         transcript: String?,
         language: String,
         sampleRate: Double
-    ) async throws -> (audio: MLXArray, text: String) {
+    ) async throws -> (audio: [Float], text: String) {
         let typed = transcript?.trimmingCharacters(in: .whitespacesAndNewlines)
         let text: String
         if let typed, !typed.isEmpty {
@@ -1294,12 +1271,12 @@ final class TTSEngine {
             log.log("Reference transcript: \"\(text)\"")
         }
         log.log("Preparing reference audio — resampling to \(Int(sampleRate / 1000)) kHz mono")
-        return (try Self.loadReferenceAudio(from: url,
-                                            targetSampleRate: sampleRate), text)
+        return (try Self.loadReferenceAudio(
+            from: url, targetSampleRate: sampleRate).asArray(Float.self), text)
     }
 
     private func generateLongText(
-        initialModel: Qwen3TTSModel,
+        initialModel: MLXTtsModelInfo,
         mode: TTSMode,
         text: String,
         speaker: String?,
@@ -1317,17 +1294,17 @@ final class TTSEngine {
             var accepted: SectionTake?
             for attempt in 0..<3 {
                 let take = try await synthesize(
-                    model: initialModel,
                     request: SynthesisRequest(
                         mode: .voiceDesign, text: opening, speaker: nil,
                         instruct: instruct, language: language,
                         referenceAudio: nil, referenceText: nil),
+                    sampleRate: initialModel.sampleRate,
                     maximumFrames: 125,
                     progressLabel: attempt == 0
                         ? "Creating your designed voice"
                         : "Retrying a shorter voice opening",
                     readySamples: 0)
-                if take.termination == .endOfSpeech {
+                if take.reachedEndOfSpeech {
                     accepted = take
                     break
                 }
@@ -1344,22 +1321,22 @@ final class TTSEngine {
             accumulator.accept(accepted, sampleRate: initialModel.sampleRate)
 
             generationDetail = "Preparing the clone model to keep your designed voice consistent"
-            unload(reason: "continuing a long designed voice through Voice clone")
+            await unload(reason: "continuing a long designed voice through Voice clone")
             let cloneModel = try await prepare(mode: .voiceClone)
             continuationRepo = TTSMode.voiceClone.effectiveRepoID
             let remaining = String(text.dropFirst(opening.count))
             if !remaining.isEmpty {
                 try await generateSections(
-                    model: cloneModel,
                     request: SynthesisRequest(
                         mode: .voiceClone, text: remaining, speaker: nil,
                         instruct: nil, language: language,
-                        referenceAudio: MLXArray(accepted.samples),
+                        referenceAudio: accepted.samples,
                         referenceText: opening),
+                    sampleRate: cloneModel.sampleRate,
                     accumulator: accumulator)
             }
         } else {
-            var reference: (audio: MLXArray, text: String)?
+            var reference: (audio: [Float], text: String)?
             var gotAccess = false
             if mode == .voiceClone {
                 guard let url = referenceAudioURL else {
@@ -1373,12 +1350,12 @@ final class TTSEngine {
                     sampleRate: Double(initialModel.sampleRate))
             }
             try await generateSections(
-                model: initialModel,
                 request: SynthesisRequest(
                     mode: mode, text: text, speaker: speaker,
                     instruct: instruct, language: language,
                     referenceAudio: reference?.audio,
                     referenceText: reference?.text),
+                sampleRate: initialModel.sampleRate,
                 accumulator: accumulator)
         }
         return (accumulator.samples, accumulator.frames, continuationRepo)
@@ -1433,7 +1410,7 @@ final class TTSEngine {
 
     // MARK: Generation
 
-    func generate(
+    public func generate(
         mode: TTSMode,
         text: String,
         speaker: String?,
@@ -1486,7 +1463,7 @@ final class TTSEngine {
                     Double(completed.samples.count) / 24_000,
                     completed.frames,
                     Date().timeIntervalSince(generateStart)))
-                releaseGenerationMemory()
+                await releaseGenerationMemory()
                 generationDetail = nil
                 lastOutputURL = saved.url
                 lastGenerationSummary = GenerationSummary(
@@ -1501,11 +1478,9 @@ final class TTSEngine {
             }
 
             status = .generating(0)
-
-            let audio: MLXArray
-            var generatedFrames = 0
-            switch mode {
-            case .voiceClone:
+            var referenceSamples: [Float]?
+            var runtimeReferenceText: String?
+            if mode == .voiceClone {
                 guard let refURL = referenceAudioURL else {
                     throw TTSError.missingReference
                 }
@@ -1532,138 +1507,39 @@ final class TTSEngine {
 
                 log.log("Preparing reference audio — resampling to "
                     + "\(model.sampleRate / 1000) kHz mono")
-                let refAudio = try Self.loadReferenceAudio(
+                referenceSamples = try Self.loadReferenceAudio(
                     from: refURL, targetSampleRate: Double(model.sampleRate))
-
-                // generateVoiceClone is synchronous and heavy. Run it off the
-                // main actor so the UI stays responsive, and bridge its onToken
-                // callback back as live progress over an AsyncStream. The model
-                // and MLXArray aren't Sendable, so cross the boundary in an
-                // unchecked box — safe because only one generation runs at once.
-                let inputs = Unchecked(value: (model, refAudio))
-                let control = GenerationControl()
-                let termination = TerminationReceipt()
-                let (tokens, continuation) = AsyncStream.makeStream(of: Int.self)
-                var cloneFrames = 0
-                let cloneTask = Task.detached(priority: .userInitiated) {
-                    defer { continuation.finish() }
-                    var count = 0
-                    let (m, ref) = inputs.value
-                    let wav = try m.generateVoiceClone(
-                        text: text,
-                        referenceAudio: ref,
-                        referenceText: refText,
-                        language: language,
-                        maxTokens: nil,
-                        useTextLengthLimit: false,
-                        shouldContinue: control.shouldContinue,
-                        onTermination: termination.set,
-                        onToken: { _ in
-                            count += 1
-                            continuation.yield(count)
-                        }
-                    )
-                    return Unchecked(value: wav)
-                }
-                for await count in tokens {
-                    cloneFrames = count
-                    if Task.isCancelled { break }
-                    if count % 5 == 0 { status = .generating(count) }
-                    if count % 100 == 0 { log.log("Generated \(count) tokens…") }
-                }
-                if Task.isCancelled {
-                    control.cancel()
-                    pendingWork = Task.detached { _ = try? await cloneTask.value }
-                    try Task.checkCancellation()
-                }
-                audio = try await cloneTask.value.value
-                generatedFrames = cloneFrames
-                try Task.checkCancellation()
-                guard termination.value == .endOfSpeech else {
-                    throw TTSError.missingTermination
-                }
-                log.log("Generation ended at EOS after \(cloneFrames) frames")
-
-            case .presetVoice, .voiceDesign:
+                    .asArray(Float.self)
+                runtimeReferenceText = refText
+            } else {
                 if mode == .presetVoice {
                     log.log("Generating with speaker \(speaker ?? "default")")
                 } else {
                     log.log("Generating designed voice")
                 }
-                // Stream so the UI can show live token progress. Held in a
-                // local so it can still be drained if we stop consuming it —
-                // the package generates on its own thread, and abandoning the
-                // stream would leave that thread running against the model
-                // with nothing tracking it.
-                let control = GenerationControl()
-                let stream = model.generateStream(
-                    text: text,
-                    speaker: mode == .presetVoice ? effectiveSpeaker : nil,
-                    instruct: (instruct?.isEmpty == false) ? instruct : nil,
-                    language: language,
-                    maxTokens: nil,
-                    useTextLengthLimit: false,
-                    shouldContinue: control.shouldContinue
-                )
-                var final: MLXArray?
-                var tokenCount = 0
-                var streamTermination: Qwen3TTSTermination?
-                do {
-                    for try await event in stream {
-                        try Task.checkCancellation()
-                        switch event {
-                        case .token:
-                            tokenCount += 1
-                            if tokenCount % 5 == 0 { status = .generating(tokenCount) }
-                            if tokenCount % 100 == 0 {
-                                log.log("Generated \(tokenCount) tokens…")
-                            }
-                        case .info(let info):
-                            streamTermination = info.termination
-                        case .audio(let wav):
-                            final = wav
-                        }
-                    }
-                } catch {
-                    control.cancel()
-                    // Cancelled mid-generation. Keep consuming in the
-                    // background so the producer thread reaches its end and
-                    // lets go of the model; `stop()` waits on this before it
-                    // reports idle.
-                    let draining = Unchecked(value: stream)
-                    pendingWork = Task.detached {
-                        do {
-                            for try await _ in draining.value {}
-                        } catch {
-                            // The producer's own failure; nothing to report
-                            // here, the run is already being cancelled.
-                        }
-                    }
-                    throw error
-                }
-                guard streamTermination == .endOfSpeech else {
-                    throw TTSError.missingTermination
-                }
-                log.log("Generation ended at EOS after \(tokenCount) frames")
-                guard let wav = final else { throw TTSError.noAudio }
-                audio = wav
-                generatedFrames = tokenCount
             }
+            let take = try await synthesize(
+                request: SynthesisRequest(
+                    mode: mode, text: text, speaker: effectiveSpeaker,
+                    instruct: (instruct?.isEmpty == false) ? instruct : nil,
+                    language: language, referenceAudio: referenceSamples,
+                    referenceText: runtimeReferenceText),
+                sampleRate: model.sampleRate, maximumFrames: nil,
+                progressLabel: nil, readySamples: 0)
+            guard take.reachedEndOfSpeech else {
+                throw TTSError.missingTermination
+            }
+            let audio = take.samples
+            let generatedFrames = take.frames
+            log.log("Generation ended at EOS after \(generatedFrames) frames")
 
             let url = outputDir.appendingPathComponent(Self.fileName(for: mode))
             try Task.checkCancellation()
 
-            // This is where the beachball came from. MLX is lazy: the array the
-            // generator yields is an unevaluated graph, and nothing in the
-            // package evaluates it. The first thing that does is
-            // `audio.asArray(Float.self)` before saving — so calling
-            // that here ran the whole audio decode on the main actor, freezing
-            // the UI at the very end of every generation, in every mode.
-            //
-            // Same unchecked box as the clone path above, for the same reason:
-            // MLXArray isn't Sendable, and only one generation runs at a time.
+            // The runtime actor evaluates MLX output before it crosses the
+            // boundary, so file preparation receives ordinary Sendable
+            // samples and remains safely off the main actor.
             status = .finalizing
-            let boxed = Unchecked(value: audio)
             let rate = Double(model.sampleRate)
             // One UI field means two different things: the delivery
             // instruction in preset voice, the voice description in voice
@@ -1691,7 +1567,7 @@ final class TTSEngine {
                 // Proves the offload rather than trusting it: this traps if the
                 // evaluation is ever back on the main thread.
                 dispatchPrecondition(condition: .notOnQueue(.main))
-                let prepared = try OutputLevel.prepare(boxed.value.asArray(Float.self))
+                let prepared = try OutputLevel.prepare(audio)
                 try saveAudioArray(MLXArray(prepared.samples), sampleRate: rate, to: url)
                 // Tagging is best-effort: a file that plays but lacks its
                 // metadata is a far better outcome than losing the audio
@@ -1705,7 +1581,7 @@ final class TTSEngine {
             }
             log.log(String(format: "Saved %@ (%.1f s total)", url.path,
                            Date().timeIntervalSince(generateStart)))
-            releaseGenerationMemory()
+            await releaseGenerationMemory()
             lastOutputURL = url
             lastGenerationSummary = GenerationSummary(
                 outputURL: url, mode: mode,
@@ -1716,21 +1592,21 @@ final class TTSEngine {
                 metadata: metadata)
             status = .idle
         } catch is CancellationError {
-            if model == nil { modelLease = nil }
+            if modelInfo == nil { modelLease = nil }
             lastFailure = RuntimeFailure(
                 code: "cancelled", message: "Speech generation was cancelled.",
                 exitCode: 5)
             await finishStopping()
         } catch let urlError as URLError where urlError.code == .cancelled {
-            if model == nil { modelLease = nil }
+            if modelInfo == nil { modelLease = nil }
             lastFailure = RuntimeFailure(
                 code: "cancelled", message: "Speech generation was cancelled.",
                 exitCode: 5)
             await finishStopping()
         } catch let error as DownloadServiceError {
-            if model == nil { modelLease = nil }
+            if modelInfo == nil { modelLease = nil }
             log.log("Error: \(String(describing: error))")
-            releaseGenerationMemory()
+            await releaseGenerationMemory()
             generationDetail = nil
             if case .unavailable(_, let paused, _) = error,
                case .baseURL(let source) = mode.effectiveSource,
@@ -1748,13 +1624,13 @@ final class TTSEngine {
                 code: code, message: error.localizedDescription, exitCode: 10)
             status = .error("Model download failed. \(error.localizedDescription)")
         } catch {
-            if model == nil { modelLease = nil }
+            if modelInfo == nil { modelLease = nil }
             log.log("Error: \(String(describing: error))")
             // A run that threw allocated just as much as one that succeeded.
             // Releasing only on success left the cache held by exactly the runs
             // most likely to have been killed by memory pressure in the first
             // place.
-            releaseGenerationMemory()
+            await releaseGenerationMemory()
             generationDetail = nil
             let stage: String
             switch status {
@@ -1803,7 +1679,7 @@ final class TTSEngine {
     ///
     /// So the app stays busy, showing "Stopping…", until the abandoned work is
     /// actually finished. The wait is real work, not an artificial delay.
-    func stop() {
+    public func stop() {
         downloadDetail = nil
         downloadFeedback = nil
         generationDetail = nil
@@ -1844,38 +1720,13 @@ final class TTSEngine {
         // task.value` on an unstructured task does not throw when the awaiting
         // task is cancelled — it waits for the save, and the success path
         // below releases the cache once it is done.
-        releaseGenerationMemory()
+        await releaseGenerationMemory()
         status = .idle
         log.log("Stopped the current operation")
     }
 
-    /// Carries a non-Sendable value across an actor boundary. Safe here
-    /// because generation is serialized — one job touches it at a time.
-    private struct Unchecked<T>: @unchecked Sendable {
-        let value: T
-    }
-
-    /// Cross-thread cancellation checked by the dependency once per codec
-    /// frame. This makes Stop end inference instead of merely abandoning its
-    /// consumer while the model continues indefinitely.
-    private final class GenerationControl: @unchecked Sendable {
-        private let lock = NSLock()
-        private var running = true
-        func cancel() { lock.withLock { running = false } }
-        func shouldContinue() -> Bool { lock.withLock { running } }
-    }
-
-    private final class TerminationReceipt: @unchecked Sendable {
-        private let lock = NSLock()
-        private var stored: Qwen3TTSTermination?
-        func set(_ value: Qwen3TTSTermination) {
-            lock.withLock { stored = value }
-        }
-        var value: Qwen3TTSTermination? { lock.withLock { stored } }
-    }
-
     /// Speech-recognition locale for the UI's language choice.
-    static func locale(for language: String) -> Locale {
+    public static func locale(for language: String) -> Locale {
         let map = [
             "english": "en-US", "chinese": "zh-CN", "japanese": "ja-JP",
             "korean": "ko-KR", "german": "de-DE", "french": "fr-FR",
@@ -1920,7 +1771,7 @@ final class TTSEngine {
         // The input block is @Sendable but AVAudioConverter calls it
         // synchronously here, so the non-Sendable buffer crosses no real
         // thread boundary — carry it in an unchecked box to satisfy the check.
-        let inBox = Unchecked(value: inBuffer)
+        let inBox = UncheckedAudioBuffer(value: inBuffer)
         nonisolated(unsafe) var provided = false
         var convError: NSError?
         converter.convert(to: outBuffer, error: &convError) { _, inStatus in
@@ -1943,6 +1794,13 @@ final class TTSEngine {
         return MLXArray(samples)
     }
 
+    /// `AVAudioConverter` invokes its input block synchronously even though the
+    /// SDK annotates that block Sendable. The buffer never leaves this call.
+    private final class UncheckedAudioBuffer: @unchecked Sendable {
+        let value: AVAudioPCMBuffer
+        init(value: AVAudioPCMBuffer) { self.value = value }
+    }
+
     private static func fileName(for mode: TTSMode) -> String {
         let stamp = Date().formatted(.iso8601.year().month().day()
             .timeSeparator(.omitted).time(includingFractionalSeconds: false))
@@ -1963,13 +1821,13 @@ final class TTSEngine {
         return parts.url?.absoluteString ?? value
     }
 
-    func revealLastOutput() {
+    public func revealLastOutput() {
         guard let url = lastOutputURL else { return }
         NSWorkspace.shared.activateFileViewerSelecting([url])
     }
 }
 
-enum TTSError: LocalizedError {
+public enum TTSError: LocalizedError {
     case missingReference
     case noAudio
     case tokenizerDownloadFailed
@@ -1984,7 +1842,7 @@ enum TTSError: LocalizedError {
     case missingTermination
     case invalidSectionAudio
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .missingReference: "Choose a reference audio clip first."
         case .noAudio: "The model finished without producing audio. Try again."

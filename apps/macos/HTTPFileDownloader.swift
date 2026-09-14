@@ -49,7 +49,7 @@ enum DownloadError: LocalizedError {
     }
 }
 
-final class HTTPFileDownloader: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
+public final class HTTPFileDownloader: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
     /// Written to while in flight, renamed on success — the same extension
     /// `hasCompleteModel` treats as an unfinished download, so an interrupted
     /// transfer can never be mistaken for a complete model.
@@ -98,7 +98,7 @@ final class HTTPFileDownloader: NSObject, URLSessionDownloadDelegate, @unchecked
     /// Chunked because the weights are gigabytes: `Data(contentsOf:)` would
     /// map the whole 3.86 GB file to hash it. 1 MB is large enough that the
     /// read syscalls disappear against the hashing itself.
-    static func sha256Hex(
+    public static func sha256Hex(
         of url: URL,
         shouldContinue: @Sendable () -> Bool = { true }
     ) throws -> String {
@@ -142,7 +142,7 @@ final class HTTPFileDownloader: NSObject, URLSessionDownloadDelegate, @unchecked
 
     // MARK: URLSessionDownloadDelegate
 
-    func urlSession(
+    public func urlSession(
         _ session: URLSession,
         downloadTask: URLSessionDownloadTask,
         didWriteData bytesWritten: Int64,
@@ -152,7 +152,7 @@ final class HTTPFileDownloader: NSObject, URLSessionDownloadDelegate, @unchecked
         onProgress(totalBytesWritten, totalBytesExpectedToWrite)
     }
 
-    func urlSession(
+    public func urlSession(
         _ session: URLSession,
         downloadTask: URLSessionDownloadTask,
         didFinishDownloadingTo location: URL
@@ -198,7 +198,7 @@ final class HTTPFileDownloader: NSObject, URLSessionDownloadDelegate, @unchecked
         }
     }
 
-    func urlSession(
+    public func urlSession(
         _ session: URLSession,
         task: URLSessionTask,
         didCompleteWithError error: Error?

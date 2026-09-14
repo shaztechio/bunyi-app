@@ -15,15 +15,54 @@
 import Foundation
 
 /// One model folder on disk.
-struct DownloadedModel: Identifiable, Hashable {
+public struct DownloadedModel: Identifiable, Hashable {
     /// The folder itself, e.g. `…/models/mlx-community/Qwen3-TTS-…`.
-    let url: URL
+    public let url: URL
     /// What the user recognises: the repo ID, or the self-hosted slug.
-    let name: String
-    let byteCount: Int64
-    let isSelfHosted: Bool
+    public let name: String
+    public let byteCount: Int64
+    public let isSelfHosted: Bool
 
-    var id: URL { url }
+    public var id: URL { url }
+
+    public init(url: URL, name: String, byteCount: Int64,
+                isSelfHosted: Bool) {
+        self.url = url
+        self.name = name
+        self.byteCount = byteCount
+        self.isSelfHosted = isSelfHosted
+    }
+}
+
+/// Collects every in-process model eviction synchronously, then lets deletion
+/// await those asynchronous actor calls before touching the files on disk.
+///
+/// Notification delivery itself is synchronous, but the MLX runtime unload is
+/// not. Keeping the registered operations here avoids a timing guess between
+/// those two facts and still permits more than one live engine to respond.
+public final class ModelDeletionRequest: @unchecked Sendable {
+    public let url: URL
+
+    private typealias Eviction = @MainActor @Sendable () async -> Void
+    private let lock = NSLock()
+    private var evictions: [Eviction] = []
+
+    public init(url: URL) {
+        self.url = url
+    }
+
+    public func register(_ eviction: @escaping @MainActor @Sendable () async -> Void) {
+        lock.withLock {
+            evictions.append(eviction)
+        }
+    }
+
+    public func performEvictions() async {
+        let registered = lock.withLock { evictions }
+        for eviction in registered {
+            await eviction()
+        }
+    }
 }
 
 /// Finds and removes downloaded models.
@@ -33,16 +72,16 @@ struct DownloadedModel: Identifiable, Hashable {
 /// engine listens for, so a model that is currently loaded gets evicted from
 /// memory rather than left in use with its files gone.
 @MainActor
-enum ModelStore {
-    /// Posted with the deleted folder as `object`.
-    static let didDeleteModel = Notification.Name("app.bunyi.didDeleteModel")
+public enum ModelStore {
+    /// Posted with a `ModelDeletionRequest` as `object`.
+    public static let didDeleteModel = Notification.Name("app.bunyi.didDeleteModel")
 
     /// Every downloaded model, largest first.
     ///
     /// The layout is two levels under `models/`: `mlx-community/<repo>` for Hub
     /// downloads and `self-hosted/<slug>` for the rest. Read from disk rather
     /// than tracked, so a folder removed in the Finder simply stops appearing.
-    static func all() -> [DownloadedModel] {
+    public static func all() -> [DownloadedModel] {
         let root = ModelsLocation.current().appendingPathComponent("models", isDirectory: true)
         let fm = FileManager.default
         guard let groups = try? fm.contentsOfDirectory(
@@ -73,13 +112,23 @@ enum ModelStore {
     ///
     /// Trash rather than `removeItem`: this is gigabytes that take many minutes
     /// to fetch again, and a mis-click should be recoverable.
-    static func delete(_ model: DownloadedModel, ownsLease: Bool = false) throws {
+    public static func delete(
+        _ model: DownloadedModel, ownsLease: Bool = false
+    ) async throws {
         // Evict first. Deleting the files under a loaded model leaves the app
         // generating happily from memory while its folder is gone — and the
         // next launch silently re-downloads with no explanation.
-        NotificationCenter.default.post(name: didDeleteModel, object: model.url)
-        let lease = ownsLease ? nil : try ModelOperationLease(
-            modelsRoot: ModelsLocation.current(), operation: "models.remove")
+        let request = ModelDeletionRequest(url: model.url)
+        NotificationCenter.default.post(name: didDeleteModel, object: request)
+        await request.performEvictions()
+        let lease: ModelOperationLease?
+        if ownsLease {
+            lease = nil
+        } else {
+            lease = try ModelOperationLease(
+                modelsRoot: ModelsLocation.current(),
+                operation: "models.remove")
+        }
         try FileManager.default.trashItem(at: model.url, resultingItemURL: nil)
         withExtendedLifetime(lease) {}
     }
@@ -93,7 +142,7 @@ enum ModelStore {
     /// Bytes a model folder occupies. Internal rather than private because
     /// Doctor sizes the same folders to work out how much memory a run will
     /// want, and a third copy of this walk is a third thing to keep in step.
-    nonisolated static func size(of dir: URL) -> Int64 {
+    public nonisolated static func size(of dir: URL) -> Int64 {
         let keys: [URLResourceKey] = [.totalFileAllocatedSizeKey, .fileSizeKey]
         guard let files = FileManager.default.enumerator(
             at: dir, includingPropertiesForKeys: keys
@@ -109,7 +158,7 @@ enum ModelStore {
     /// Logical file coverage for byte-progress accounting. Unlike allocated
     /// size, this matches HTTP Content-Length and never adds filesystem block
     /// padding when a batch advances to its next model.
-    nonisolated static func logicalSize(of dir: URL) -> Int64 {
+    public nonisolated static func logicalSize(of dir: URL) -> Int64 {
         let keys: Set<URLResourceKey> = [.fileSizeKey, .isRegularFileKey]
         guard let files = FileManager.default.enumerator(
             at: dir, includingPropertiesForKeys: Array(keys)

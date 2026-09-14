@@ -139,6 +139,9 @@ jobs:
       - name: Build the app
         run: ./apps/macos/build-dist.sh Release
 
+      - name: Build the CLI archive
+        run: ./apps/macos/build-cli-dist.sh Release
+
       # The certificate lives in a throwaway keychain, not the login keychain,
       # so nothing outlives the job. set-key-partition-list is what stops
       # codesign blocking on a UI prompt that no one can answer on a runner.
@@ -178,6 +181,14 @@ jobs:
           BUNYI_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
         run: ./apps/macos/tools/packaging/sign-and-notarize.sh
 
+      - name: Sign and notarize the CLI
+        env:
+          BUNYI_SIGN_IDENTITY: ${{ secrets.APPLE_SIGN_IDENTITY }}
+          BUNYI_APPLE_ID: ${{ secrets.APPLE_ID }}
+          BUNYI_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          BUNYI_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: ./apps/macos/tools/packaging/sign-and-notarize-cli.sh
+
       # Proves what is about to be published, rather than trusting that the
       # previous step's exit code covered everything.
       - name: Verify the notarized app
@@ -197,6 +208,24 @@ jobs:
           dmg="$(ls -t dist/macos/Bunyi-*.dmg | head -1)"
           codesign --verify --strict --verbose=2 "$dmg"
           xcrun stapler validate "$dmg"
+
+          cli="$(ls -t dist/macos/Bunyi-CLI-*-macos-arm64.zip | head -1)"
+          cli_extract="$RUNNER_TEMP/bunyi-cli-verify"
+          mkdir -p "$cli_extract"
+          ditto -x -k "$cli" "$cli_extract"
+          cli_binary="$(find "$cli_extract" -maxdepth 2 -type f -name bunyi | head -1)"
+          test -x "$cli_binary"
+          test "$(file -b "$cli_binary")" = "Mach-O 64-bit executable arm64"
+          vtool -show-build "$cli_binary" | grep -Eq 'minos 15(\.0+)?$'
+          codesign --verify --strict --verbose=2 "$cli_binary"
+          codesign -dvvv "$cli_binary" 2>&1 | grep -q 'flags=.*runtime'
+          cli_package="$(dirname "$cli_binary")"
+          while IFS= read -r nested; do
+            codesign --verify --strict --verbose=2 "$nested"
+            codesign -dvvv "$nested" 2>&1 | grep -q 'flags=.*runtime'
+          done < <(find "$cli_package" \( -name '*.framework' -o -name '*.dylib' \) -print)
+          "$cli_binary" version --json | python3 -c \
+            'import json,sys; d=json.load(sys.stdin); assert d["ok"] and d["version"]'
 
       # A run publishes when it was started by a tag push, or when the bump step
       # just created one. Deciding it once keeps the later steps from drifting
@@ -256,7 +285,8 @@ jobs:
           set -euo pipefail
           name="${{ steps.version.outputs.name }}"
           ditto -c -k --keepParent dist/macos/Bunyi.app "dist/macos/$name.zip"
-          cd dist/macos && shasum -a 256 "$name.dmg" "$name.zip" | tee "$name.sha256"
+          cli="Bunyi-CLI-${{ steps.version.outputs.short }}-${{ steps.version.outputs.build }}-macos-arm64.zip"
+          cd dist/macos && shasum -a 256 "$name.dmg" "$name.zip" "$cli" | tee "$name.sha256"
 
       # Tag builds publish a Release, whose asset is the zip itself: downloading
       # it expands straight to Bunyi.app. Uploading the same zip as an artifact
@@ -274,6 +304,7 @@ jobs:
           path: |
             dist/macos/${{ steps.version.outputs.name }}.dmg
             dist/macos/${{ steps.version.outputs.name }}.zip
+            dist/macos/Bunyi-CLI-${{ steps.version.outputs.short }}-${{ steps.version.outputs.build }}-macos-arm64.zip
             dist/macos/${{ steps.version.outputs.name }}.sha256
 
       # Tags only. A manual run still builds, signs, and uploads an artifact, so
@@ -313,7 +344,9 @@ jobs:
             printf '```\n'
           } > "$notes"
           gh release create "${{ steps.mode.outputs.tag }}" \
-            "dist/macos/$name.dmg" "dist/macos/$name.zip" "dist/macos/$name.sha256" \
+            "dist/macos/$name.dmg" "dist/macos/$name.zip" \
+            "dist/macos/Bunyi-CLI-${{ steps.version.outputs.short }}-${{ steps.version.outputs.build }}-macos-arm64.zip" \
+            "dist/macos/$name.sha256" \
             --title "Bunyi for Mac ${{ steps.version.outputs.short }}" \
             --notes-file "$notes" \
             --verify-tag

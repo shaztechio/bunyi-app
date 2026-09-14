@@ -20,10 +20,10 @@ import Foundation
 /// actually determined the audio — the text, the voice, the model — was lost
 /// the moment the file left the app. Embedding it means a WAV found later, or
 /// sent to someone else, still says how to make it again.
-struct OutputMetadata: Codable, Hashable, Sendable {
-    var mode: String
-    var text: String
-    var language: String
+public struct OutputMetadata: Codable, Hashable, Sendable {
+    public var mode: String
+    public var text: String
+    public var language: String
 
     // The three modes choose a voice in three different ways, and the UI reuses
     // one text field for two of them — "Style" in preset voice, "Voice" in
@@ -31,23 +31,42 @@ struct OutputMetadata: Codable, Hashable, Sendable {
     // tell a delivery instruction from a voice description, so each gets its
     // own, and only the one belonging to the mode is filled.
     /// Preset voice: the speaker chosen from the model's list.
-    var speaker: String?
+    public var speaker: String?
     /// Preset voice: the optional delivery instruction.
-    var style: String?
+    public var style: String?
     /// Voice design: the description the voice was built from.
-    var voiceDescription: String?
+    public var voiceDescription: String?
     /// Voice clone: the transcript of the reference clip.
-    var referenceTranscript: String?
+    public var referenceTranscript: String?
 
-    var modelRepo: String
+    public var modelRepo: String
     /// Voice Design long text continues through the clone model after one
     /// fixed designed opening. Nil for every other recording.
-    var continuationModelRepo: String? = nil
-    var appVersion: String
-    var created: Date
+    public var continuationModelRepo: String? = nil
+    public var appVersion: String
+    public var created: Date
+
+    public init(mode: String, text: String, language: String,
+                speaker: String? = nil, style: String? = nil,
+                voiceDescription: String? = nil,
+                referenceTranscript: String? = nil,
+                modelRepo: String, continuationModelRepo: String? = nil,
+                appVersion: String, created: Date) {
+        self.mode = mode
+        self.text = text
+        self.language = language
+        self.speaker = speaker
+        self.style = style
+        self.voiceDescription = voiceDescription
+        self.referenceTranscript = referenceTranscript
+        self.modelRepo = modelRepo
+        self.continuationModelRepo = continuationModelRepo
+        self.appVersion = appVersion
+        self.created = created
+    }
 
     /// Shown as the title in players that read RIFF INFO.
-    var title: String {
+    public var title: String {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return mode }
         let firstLine = trimmed.split(separator: "\n").first.map(String.init) ?? trimmed
@@ -57,7 +76,7 @@ struct OutputMetadata: Codable, Hashable, Sendable {
     /// The voice, however this mode chose one — for display, and for `IART`.
     /// For a clone the reference transcript is the only thing that identifies
     /// which voice it was, so it stands in rather than a generic label.
-    var voiceSummary: String? {
+    public var voiceSummary: String? {
         // The stored value is the model's identifier, and this is the only place
         // it is read by a person — so it is presented the way the picker
         // presents it. A clip made with "ryan" and one made with "Ryan" are the
@@ -81,7 +100,7 @@ struct OutputMetadata: Codable, Hashable, Sendable {
 /// stored as JSON in `ICMT`, because there is no standard field for "the
 /// prompt", and inventing four-character codes nothing else understands would
 /// buy nothing over one comment field.
-enum WAVMetadata {
+public enum WAVMetadata {
     private static let listID = "LIST"
     private static let infoID = "INFO"
 
@@ -163,7 +182,7 @@ enum WAVMetadata {
     }
 
     /// Returns the embedded record, or nil for a WAV written by anything else.
-    static func read(from url: URL) -> OutputMetadata? {
+    public static func read(from url: URL) -> OutputMetadata? {
         guard let data = try? Data(contentsOf: url),
               let comment = string(forField: "ICMT", in: data),
               let json = comment.data(using: .utf8) else { return nil }
@@ -276,8 +295,8 @@ enum WAVMetadata {
 /// of the word alone. Both apps read the same `speaker_ids.json`, so a name has
 /// to render the same in both or History disagrees across platforms about what
 /// a voice is called.
-enum DisplayName {
-    static func of(_ identifier: String) -> String {
+public enum DisplayName {
+    public static func of(_ identifier: String) -> String {
         let words = identifier
             .trimmingCharacters(in: .whitespaces)
             .split(whereSeparator: { $0 == "_" || $0 == " " })

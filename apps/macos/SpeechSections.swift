@@ -16,13 +16,13 @@ import Foundation
 
 /// A deterministic text-only range used to decide whether inference needs
 /// bounded sections. It is not a prediction of the generated take.
-struct SpeechDurationEstimate: Equatable {
-    let lowerSeconds: Double
-    let upperSeconds: Double
+public struct SpeechDurationEstimate: Equatable {
+    public let lowerSeconds: Double
+    public let upperSeconds: Double
 
-    var needsSections: Bool { upperSeconds > 20 }
+    public var needsSections: Bool { upperSeconds > 20 }
 
-    static func forText(_ text: String, language _: String = "auto") -> Self {
+    public static func forText(_ text: String, language _: String = "auto") -> Self {
         var words = 0
         var scriptUnits = 0
         var minorPauses = 0

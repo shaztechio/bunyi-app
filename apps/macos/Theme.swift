@@ -21,6 +21,7 @@
 //
 
 import SwiftUI
+import BunyiMLXCore
 
 /// Spacing, as a scale rather than a per-site judgement.
 ///

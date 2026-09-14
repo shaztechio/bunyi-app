@@ -14,6 +14,7 @@
 
 import Darwin
 import Foundation
+import BunyiMLXCore
 
 @MainActor
 final class ServerJob {
@@ -108,7 +109,7 @@ final class ServerHost {
         accepting.cancel()
         for job in jobs.values where !job.isComplete { job.cancel() }
         await worker.value
-        engine.unload(reason: "server stopped")
+        await engine.unload(reason: "server stopped")
         _ = Darwin.unlink(endpoint.socket.path)
         stopped = true
         let waiters = stoppedWaiters
@@ -377,17 +378,39 @@ final class ServerHost {
                 request, output: output, cancelled: cancelled,
                 engine: engine)
         case "transcribe":
+            if engine.loadedMode != nil {
+                await engine.unload(reason: "preparing local Whisper transcription")
+            }
             return try await TranscriptionCommand.run(
                 request, output: output, cancelled: cancelled)
         case "speakers":
             return try await SpeakersCommand.run(
                 request, output: output, cancelled: cancelled,
                 engine: engine)
+        case "voices.list", "voices.add", "voices.remove",
+             "history.list", "history.show", "history.remove":
+            if request.operation == "voices.add", request.has("auto-transcribe"),
+               engine.loadedMode != nil {
+                await engine.unload(reason: "preparing local Whisper transcription")
+            }
+            return try await LibraryCommand.run(
+                request, output: output, cancelled: cancelled)
+        case "config.list", "config.get", "config.set",
+             "logs.path", "logs.tail", "logs.clear":
+            return try ConfigurationCommand.run(request, engine: engine)
+        case "doctor":
+            return try await DoctorCommand.run(
+                request, output: output, cancelled: cancelled,
+                engine: engine)
+        case "backup.create", "backup.restore":
+            return try await BackupCommand.run(
+                request, output: output, cancelled: cancelled,
+                engine: engine)
         case "server.preload":
             return try await preload(
                 request, output: output, cancelled: cancelled)
         case "server.unload":
-            engine.unload(reason: "server unload command")
+            await engine.unload(reason: "server unload command")
             return CLIProtocol.result(request, ["unloaded": true])
         default:
             throw CLIError(

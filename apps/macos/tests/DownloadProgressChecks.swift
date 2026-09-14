@@ -60,10 +60,13 @@ struct DownloadProgressChecks {
         mailbox.begin(file: "next", completed: first.available, total: 0, fileTotal: 0)
         let unknown = mailbox.snapshot()
         precondition(unknown.fileBytes == 0 && unknown.total == 0)
-        precondition(unknown.available == first.available)
+        precondition(unknown.available == second.available,
+                     "Aggregate progress must not decrease between attempts")
         mailbox.prepared(offset: 0, total: 400)
         mailbox.receive(1, total: 400)
         let mixed = mailbox.snapshot()
+        precondition(mixed.available >= unknown.available,
+                     "A server ignoring Range must not decrease aggregate progress")
         precondition(mixed.total == 0 && mixed.fileTotal == 400)
         mailbox.waiting(
             until: epoch.addingTimeInterval(12), host: "example.test", attempt: 2)

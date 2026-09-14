@@ -18,6 +18,7 @@
 //
 
 import SwiftUI
+import BunyiMLXCore
 
 /// User-selectable appearance, persisted in UserDefaults. `.system` follows
 /// macOS; light/dark pin the whole app via `preferredColorScheme`.

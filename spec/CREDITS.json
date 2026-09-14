@@ -54,7 +54,7 @@
       "licence": "MIT",
       "url": "https://huggingface.co/ggerganov/whisper.cpp",
       "kind": "model",
-      "apps": ["dotnet"]
+      "apps": ["macos", "dotnet"]
     },
 
     {
@@ -80,6 +80,14 @@
       "url": "https://github.com/microsoft/onnxruntime",
       "kind": "library",
       "apps": ["dotnet"]
+    },
+    {
+      "name": "whisper.cpp",
+      "does": "Listens to a reference recording in the macOS CLI",
+      "licence": "MIT",
+      "url": "https://github.com/ggml-org/whisper.cpp",
+      "kind": "library",
+      "apps": ["macos"]
     },
     {
       "name": "whisper.cpp, via Whisper.net",

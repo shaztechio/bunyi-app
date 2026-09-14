@@ -19,6 +19,7 @@
 
 import AppKit
 import SwiftUI
+import BunyiMLXCore
 
 /// A Doctor report, as a list rather than a paragraph.
 ///

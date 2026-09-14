@@ -20,7 +20,7 @@ enum CLICommandParser {
         "stdin", "auto-transcribe", "all", "deep", "detach",
     ]
     private static let globals: Set<String> = [
-        "json", "jsonl", "one-shot", "require-server", "help", "config",
+        "json", "jsonl", "one-shot", "require-server", "help",
     ]
     private static let allowed: [String: Set<String>] = [
         "help": [], "version": [], "play": [],
@@ -94,7 +94,11 @@ enum CLICommandParser {
             throw invalid("--detach requires a server and cannot use --one-shot.")
         }
 
-        var operation = words.first ?? (options.keys.contains("version") ? "version" : "help")
+        let versionFlag = options.removeValue(forKey: "version") != nil
+        if versionFlag, !words.isEmpty {
+            throw invalid("--version cannot be combined with a command.")
+        }
+        var operation = words.first ?? (versionFlag ? "version" : "help")
         var consumed = words.isEmpty ? 0 : 1
         if groups.contains(operation) {
             if words.count < 2, options.keys.contains("help") {
@@ -191,9 +195,6 @@ enum CLICommandParser {
            let path = result.value("target") {
             result.arguments["target"] = absolute(path).path
         }
-        if let path = result.value("config") {
-            result.arguments["config"] = absolute(path).path
-        }
         return result
     }
 
@@ -263,19 +264,21 @@ enum CLICommandParser {
         bunyi generate preset (--text TEXT | --text-file FILE | --stdin) [--speaker Ryan] [--style TEXT]
         bunyi generate design (--text TEXT | --text-file FILE | --stdin) --voice DESCRIPTION
         bunyi generate clone (--text TEXT | --text-file FILE | --stdin) (--reference FILE (--transcript TEXT | --auto-transcribe) | --saved-voice ID)
+          All generation modes: [--language auto|english|chinese|japanese|korean|german|french|russian|portuguese|spanish|italian]
         bunyi transcribe AUDIO [--language LANGUAGE] | speakers
-        bunyi play AUDIO [--json | --jsonl]
+        bunyi play AUDIO [--json | --jsonl] (local WAV/MP3/FLAC playback; waits until finished; Ctrl+C stops)
         bunyi models list | status [--mode MODE] | download (--all | --mode MODE) | verify --mode MODE | remove --mode MODE
         bunyi voices list | add --name NAME --reference FILE (--transcript TEXT | --auto-transcribe) | remove ID
         bunyi history list | show PATH | remove PATH
         bunyi doctor [--mode MODE] [--deep]
         bunyi backup create ZIP | restore ZIP
         bunyi config list | get KEY | set KEY VALUE
+          Keys: modelsFolder, unloadOnModeSwitch, modelSource.preset, modelSource.design, modelSource.clone
         bunyi logs path | tail [--lines COUNT] | clear
         bunyi server run | start | status | preload --mode MODE | unload | stop
         bunyi jobs status ID | follow ID | cancel ID
         bunyi version | --help
-        Global: --json | --jsonl; --one-shot | --require-server; --config FILE
+        Global: --json | --jsonl; --one-shot | --require-server
         Long operations: --detach (requires an already-running server).
         MODE: preset | design | clone.
         """

@@ -21,6 +21,7 @@
 
 import Darwin
 import Foundation
+import BunyiMLXCore
 
 /// One line in the log (spec §8), so "it is slow to start" reaches a bug report
 /// as a number with the slow phase named.

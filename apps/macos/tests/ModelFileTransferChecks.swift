@@ -45,11 +45,12 @@ extension DownloadProgressChecks {
         precondition(FileManager.default.fileExists(atPath: partial.path))
         precondition(!FileManager.default.fileExists(atPath: dest.path))
 
-        for ignored in [false, true] {
+        for (route, ignored) in [
+            ("resume", false), ("redirect", false), ("ignore-range", true),
+        ] {
             try payload.prefix(123).write(to: partial)
             let mailbox = DownloadReceiptMailbox()
             mailbox.begin(file: "weights", completed: 0, total: 4096, fileTotal: 4096)
-            let route = ignored ? "ignore-range" : "resume"
             let response = try await ModelFileTransfer(destination: dest, digest: digest, expected: 4096, mailbox: mailbox)
                 .run(from: URL(string: "\(base)/\(route)")!, configuration: configuration)
             precondition(response.isSuccess)
@@ -89,6 +90,6 @@ extension DownloadProgressChecks {
         precondition(paused.header("X-Bunyi-Download-Status") == "paused")
         let pausedPartial = try Data(contentsOf: partial)
         precondition(pausedPartial == payload.prefix(123))
-        print("Model transfer checks passed: first-byte delivery, cancellation, accepted and ignored resume, response metadata, checksum and file contents.")
+        print("Model transfer checks passed: first-byte delivery, cancellation, direct and redirected resume, ignored ranges, response metadata, checksum and file contents.")
     }
 }

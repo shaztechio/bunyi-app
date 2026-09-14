@@ -47,6 +47,12 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", "0")
             self.end_headers()
             return
+        if self.path == "/redirect":
+            self.send_response(302)
+            self.send_header("Location", "/resume")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
         start = 0
         if self.path != "/ignore-range" and self.headers.get("Range"):
             start = int(self.headers["Range"].removeprefix("bytes=").removesuffix("-"))

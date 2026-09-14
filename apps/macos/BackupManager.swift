@@ -30,8 +30,8 @@ import Foundation
 
 @MainActor
 @Observable
-final class BackupManager {
-    enum Status: Equatable {
+public final class BackupManager {
+    public enum Status: Equatable {
         case idle
         case working(String)
         /// Stop was pressed and the child process is being torn down. A
@@ -44,7 +44,7 @@ final class BackupManager {
         case done(String)
         case error(String)
 
-        var isBusy: Bool {
+        public var isBusy: Bool {
             switch self {
             case .working, .stopping: true
             default: false
@@ -54,15 +54,17 @@ final class BackupManager {
         /// Whether Stop can still do anything. False once stopping, so the
         /// button can be disabled rather than inviting a second press that
         /// only logs a second "Stopping…".
-        var canCancel: Bool {
+        public var canCancel: Bool {
             if case .working = self { return true }
             return false
         }
     }
 
-    var status: Status = .idle
+    public var status: Status = .idle
     /// 0...1 while zipping when a total size is known; nil = indeterminate.
-    var progress: Double?
+    public var progress: Double?
+    public private(set) var lastRestored: [String] = []
+    public private(set) var lastSkipped: [String] = []
 
     private let log = LogStore.shared
     private var currentTask: Task<Void, Never>?
@@ -72,7 +74,9 @@ final class BackupManager {
     /// created inside a detached task.
     private let running = RunningProcess()
 
-    func cancel() {
+    public init() {}
+
+    public func cancel() {
         guard status.canCancel else { return }
         log.log("Stopping…")
         status = .stopping
@@ -91,16 +95,18 @@ final class BackupManager {
 
     // MARK: Backup
 
-    func startBackup(to destination: URL) {
+    public func startBackup(to destination: URL) {
         currentTask?.cancel()
         running.reset()
+        lastRestored = []
+        lastSkipped = []
         currentTask = Task { await self.runBackup(to: destination) }
     }
 
     private func runBackup(to destination: URL) async {
         let source = ModelsLocation.current()
         let modelsSubdir = source.appendingPathComponent("models", isDirectory: true)
-        let fastPath = !ModelsLocation.isCustom
+        let fastPath = CLISettingsStore.isCLI || !ModelsLocation.isCustom
         // zip builds into its own working file (ziXXXXXX) in the output's
         // directory and only renames to the final name at the end, so give
         // it a dedicated dir and monitor the whole dir, not the final name.
@@ -284,9 +290,11 @@ final class BackupManager {
 
     // MARK: Restore
 
-    func startRestore(from zipURL: URL) {
+    public func startRestore(from zipURL: URL) {
         currentTask?.cancel()
         running.reset()
+        lastRestored = []
+        lastSkipped = []
         currentTask = Task { await self.runRestore(from: zipURL) }
     }
 
@@ -299,6 +307,8 @@ final class BackupManager {
             let result = try await Task.detached(priority: .utility) { [running] in
                 try Self.performRestore(zip: zipURL, into: target, control: running)
             }.value
+            lastRestored = result.restored
+            lastSkipped = result.skipped
             for name in result.restored { log.log("Restored \(name)") }
             for name in result.skipped { log.log("Skipped \(name) (already present)") }
             let summary = result.restored.isEmpty

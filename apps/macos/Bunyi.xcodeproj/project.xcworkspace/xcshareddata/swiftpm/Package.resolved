@@ -1,5 +1,5 @@
 {
-  "originHash" : "f814ccf338d16fda9cefb67f5bd6ac9ab2430ac7b202fe36cc66bde79e05b3e5",
+  "originHash" : "fc84d84966b6a69b2be45be2ee8cb5b1b652472268b24d6e02787ebff0b29187",
   "pins" : [
     {
       "identity" : "gzipswift",
@@ -70,6 +70,14 @@
       "state" : {
         "revision" : "a2e184dddb4757bc943e77fbe99ac6786c53f0b2",
         "version" : "1.0.0"
+      }
+    },
+    {
+      "identity" : "whisper.spm",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/ggerganov/whisper.spm.git",
+      "state" : {
+        "revision" : "a2085436c2eb796af90956b62bd64731f5e5b823"
       }
     }
   ],
