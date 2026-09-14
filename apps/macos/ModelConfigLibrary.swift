@@ -13,6 +13,7 @@
 // limitations under the License.
 
 import Foundation
+import BunyiMLXCore
 
 /// The three per-mode model sources, saved under a name.
 ///

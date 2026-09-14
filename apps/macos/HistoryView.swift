@@ -15,6 +15,7 @@
 import AVFoundation
 import AppKit
 import SwiftUI
+import BunyiMLXCore
 import UniformTypeIdentifiers
 
 /// Everything generated so far: play it back, or save a copy somewhere else.

@@ -26,11 +26,11 @@ import AVFoundation
 import Foundation
 import Speech
 
-enum ReferenceTranscriber {
+public enum ReferenceTranscriber {
     /// Speech recognizers expect mono; 16 kHz is the canonical rate.
     private static let recognitionSampleRate: Double = 16000
 
-    static func transcribe(url: URL, locale: Locale) async throws -> String {
+    public static func transcribe(url: URL, locale: Locale) async throws -> String {
         guard await requestAuthorization() else {
             throw TTSError.transcriptionNotAuthorized
         }
@@ -61,7 +61,9 @@ enum ReferenceTranscriber {
 
     /// Headless transcription never sends audio to Apple's recognition
     /// service and never tries to raise a permission prompt from a server.
-    static func transcribeOnDevice(url: URL, locale: Locale) async throws -> String {
+    public static func transcribeOnDevice(
+        url: URL, locale: Locale
+    ) async throws -> String {
         guard SFSpeechRecognizer.authorizationStatus() == .authorized else {
             throw TTSError.transcriptionNotAuthorized
         }

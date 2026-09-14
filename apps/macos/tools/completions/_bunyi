@@ -1,0 +1,35 @@
+#compdef bunyi
+# Copyright 2026 Shazron Abdullah and Bunyi contributors
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+_arguments -C \
+  '--json[write one JSON result]' \
+  '--jsonl[write JSON-lines progress and a terminal result]' \
+  '--one-shot[bypass a running server]' \
+  '--require-server[require a running server]' \
+  '--help[show help]' \
+  '1:command:(generate models speakers transcribe play voices history doctor backup config logs server jobs version)' \
+  '*:argument:->args'
+
+case "$words[2]" in
+  generate) _values 'mode' preset design clone ;;
+  models) _values 'command' list status download verify remove ;;
+  voices) _values 'command' list add remove ;;
+  history) _values 'command' list show remove ;;
+  backup) _values 'command' create restore ;;
+  config) _values 'command' list get set ;;
+  logs) _values 'command' path tail clear ;;
+  server) _values 'command' run start status preload unload stop ;;
+  jobs) _values 'command' status follow cancel ;;
+esac

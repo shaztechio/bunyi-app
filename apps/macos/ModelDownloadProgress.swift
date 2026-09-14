@@ -15,37 +15,64 @@
 import Foundation
 
 /// Exact counters are independent of rounded percentages. No inferred network activity.
-struct ModelDownloadProgress: Sendable, Equatable {
-    enum Phase: String, Sendable {
+public struct ModelDownloadProgress: Sendable, Equatable {
+    public enum Phase: String, Sendable {
         case checking, sizing, downloading, verifying, reconnecting, waiting
     }
-    var phase: Phase = .checking
-    var available: Int64 = 0
-    var total: Int64 = 0
-    var file: String?
-    var fileBytes: Int64 = 0
-    var fileTotal: Int64 = 0
-    var received: Int64 = 0
-    var receipt: Int64 = 0
-    var lastReceived: Date?
-    var waitingSince = Date()
-    var rate: Double = 0
-    var elapsed: TimeInterval = 0
-    var sampledAt = Date()
-    var slow = false
-    var retryAt: Date?
-    var retryHost: String?
-    var retryAttempt = 0
-    func elapsedText(at now: Date) -> String {
+    public var phase: Phase = .checking
+    public var available: Int64 = 0
+    public var total: Int64 = 0
+    public var file: String?
+    public var fileBytes: Int64 = 0
+    public var fileTotal: Int64 = 0
+    public var received: Int64 = 0
+    public var receipt: Int64 = 0
+    public var lastReceived: Date?
+    public var waitingSince = Date()
+    public var rate: Double = 0
+    public var elapsed: TimeInterval = 0
+    public var sampledAt = Date()
+    public var slow = false
+    public var retryAt: Date?
+    public var retryHost: String?
+    public var retryAttempt = 0
+    public init(phase: Phase = .checking, available: Int64 = 0,
+                total: Int64 = 0, file: String? = nil,
+                fileBytes: Int64 = 0, fileTotal: Int64 = 0,
+                received: Int64 = 0, receipt: Int64 = 0,
+                lastReceived: Date? = nil, waitingSince: Date = Date(),
+                rate: Double = 0, elapsed: TimeInterval = 0,
+                sampledAt: Date = Date(), slow: Bool = false,
+                retryAt: Date? = nil, retryHost: String? = nil,
+                retryAttempt: Int = 0) {
+        self.phase = phase
+        self.available = available
+        self.total = total
+        self.file = file
+        self.fileBytes = fileBytes
+        self.fileTotal = fileTotal
+        self.received = received
+        self.receipt = receipt
+        self.lastReceived = lastReceived
+        self.waitingSince = waitingSince
+        self.rate = rate
+        self.elapsed = elapsed
+        self.sampledAt = sampledAt
+        self.slow = slow
+        self.retryAt = retryAt
+        self.retryHost = retryHost
+        self.retryAttempt = retryAttempt
+    }
+    public func elapsedText(at now: Date) -> String {
         let seconds = max(0, Int(elapsed + max(0, now.timeIntervalSince(sampledAt))))
         let time = seconds >= 3600
             ? String(format: "%d:%02d:%02d", seconds / 3600, seconds / 60 % 60, seconds % 60)
             : String(format: "%d:%02d", seconds / 60, seconds % 60)
         return "Model download elapsed: \(time)"
     }
-    func isSlow(at now: Date) -> Bool { phase == .downloading && slow && !stalled(at: now) }
+    public func isSlow(at now: Date) -> Bool { phase == .downloading && slow && !stalled(at: now) }
 
-    var title: String {
+    public var title: String {
         switch phase {
         case .checking: "Checking the voice model"
         case .sizing: "Calculating download size"
@@ -55,13 +82,13 @@ struct ModelDownloadProgress: Sendable, Equatable {
         case .waiting: "Waiting to retry download"
         }
     }
-    var fraction: Double { total > 0 ? min(1, Double(available) / Double(total)) : 0 }
-    var fileFraction: Double { fileTotal > 0 ? min(1, Double(fileBytes) / Double(fileTotal)) : 0 }
-    func quietSeconds(at now: Date) -> TimeInterval {
+    public var fraction: Double { total > 0 ? min(1, Double(available) / Double(total)) : 0 }
+    public var fileFraction: Double { fileTotal > 0 ? min(1, Double(fileBytes) / Double(fileTotal)) : 0 }
+    public func quietSeconds(at now: Date) -> TimeInterval {
         max(0, now.timeIntervalSince(max(lastReceived ?? waitingSince, waitingSince)))
     }
-    func stalled(at now: Date) -> Bool { phase == .downloading && quietSeconds(at: now) >= 30 }
-    func receiptText(at now: Date) -> String {
+    public func stalled(at now: Date) -> Bool { phase == .downloading && quietSeconds(at: now) >= 30 }
+    public func receiptText(at now: Date) -> String {
         if phase == .waiting {
             let seconds = max(0, Int(ceil((retryAt ?? now).timeIntervalSince(now))))
             return "Retrying in \(seconds) \(seconds == 1 ? "second" : "seconds")"
@@ -71,7 +98,7 @@ struct ModelDownloadProgress: Sendable, Equatable {
         if quietSeconds(at: now) >= 3 || lastReceived == nil { return "Waiting for more data" }
         return "Received \(receipt.formatted()) \(receipt == 1 ? "byte" : "bytes")"
     }
-    func arrivalText(at now: Date) -> String {
+    public func arrivalText(at now: Date) -> String {
         if phase == .waiting {
             return "\(retryHost ?? "The server") asked Bunyi to wait"
         }
@@ -80,7 +107,7 @@ struct ModelDownloadProgress: Sendable, Equatable {
         let seconds = max(0, Int(now.timeIntervalSince(lastReceived)))
         return seconds == 0 ? "Last data arrived just now" : "Last data arrived \(seconds) seconds ago"
     }
-    func speedText(at now: Date) -> String {
+    public func speedText(at now: Date) -> String {
         if stalled(at: now) { return "No data arriving · Download time remaining: unavailable" }
         guard quietSeconds(at: now) < 3, rate > 0 else { return "Download time remaining: estimating…" }
         let speed = Int64(rate).formatted(.byteCount(style: .file)) + "/s"
@@ -89,7 +116,7 @@ struct ModelDownloadProgress: Sendable, Equatable {
         let eta = seconds < 60 ? "Under a minute" : "About \(Int(ceil(seconds / 60))) min"
         return "\(speed) recently · \(eta) left to download"
     }
-    static func bytes(_ available: Int64, total: Int64) -> String {
+    public static func bytes(_ available: Int64, total: Int64) -> String {
         total > 0 ? "\(available.formatted()) / \(total.formatted()) bytes"
             : "\(available.formatted()) bytes available · total size unknown"
     }
@@ -136,7 +163,7 @@ final class DownloadReceiptMailbox: @unchecked Sendable {
         receivedBeforeFile = value.received
         fileReceived = 0; offset = 0
         value.phase = .downloading; value.file = file
-        value.available = completed; value.total = total
+        value.available = max(value.available, completed); value.total = total
         value.fileBytes = 0; value.fileTotal = fileTotal
         value.waitingSince = Date()
         value.lastReceived = nil
@@ -147,7 +174,8 @@ final class DownloadReceiptMailbox: @unchecked Sendable {
     func prepared(offset: Int64, total: Int64) {
         lock.lock(); defer { lock.unlock() }
         self.offset = offset
-        value.fileBytes = offset; value.available = completed + offset
+        value.fileBytes = offset
+        value.available = max(value.available, completed + offset)
         value.fileTotal = max(0, total)
         if total > 0, let otherTotal { value.total = otherTotal + total }
         value.waitingSince = Date()
@@ -161,7 +189,7 @@ final class DownloadReceiptMailbox: @unchecked Sendable {
         fileReceived += bytes
         value.received = receivedBeforeFile + fileReceived
         value.fileBytes = offset + fileReceived
-        value.available = completed + value.fileBytes
+        value.available = max(value.available, completed + value.fileBytes)
         if total > 0 { value.fileTotal = total }
         value.lastReceived = Date()
     }
@@ -248,12 +276,12 @@ struct HTTPResponseInfo: Sendable, Equatable {
 }
 
 /// HTTP failures remain errors through optional manifest and size probes.
-enum DownloadServiceError: LocalizedError {
+public enum DownloadServiceError: LocalizedError {
     case unavailable(source: URL, paused: Bool, retryAt: Date?)
     case rateLimited(source: URL, retryAt: Date)
     case httpStatus(source: URL, status: Int)
 
-    var source: URL {
+    public var source: URL {
         switch self {
         case .unavailable(let source, _, _),
              .rateLimited(let source, _),
@@ -262,7 +290,7 @@ enum DownloadServiceError: LocalizedError {
         }
     }
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .unavailable(_, let paused, _):
             if paused {

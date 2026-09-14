@@ -58,6 +58,29 @@ enum CLIContractChecks {
         try expect("invalid_arguments", [
             "models", "verify", "--mode", "unknown",
         ])
+        try expect("invalid_arguments", ["play", "missing.wav", "--detach"])
+        try expect("invalid_arguments", ["version", "--config", "settings.json"])
+
+        let surface: [([String], String)] = [
+            (["voices", "list"], "voices.list"),
+            (["voices", "remove", UUID().uuidString], "voices.remove"),
+            (["history", "list"], "history.list"),
+            (["history", "show", "result.wav"], "history.show"),
+            (["history", "remove", "result.wav"], "history.remove"),
+            (["doctor", "--mode", "design", "--deep"], "doctor"),
+            (["backup", "create", "backup.zip"], "backup.create"),
+            (["backup", "restore", "backup.zip"], "backup.restore"),
+            (["config", "list"], "config.list"),
+            (["config", "get", "modelsFolder"], "config.get"),
+            (["config", "set", "unloadOnModeSwitch", "true"], "config.set"),
+            (["logs", "path"], "logs.path"),
+            (["logs", "tail", "--lines", "25"], "logs.tail"),
+            (["logs", "clear"], "logs.clear"),
+        ]
+        for (arguments, operation) in surface {
+            let parsed = try CLICommandParser.parse(arguments)
+            precondition(parsed.operation == operation)
+        }
 
         let request = try CLICommandParser.parse(["version", "--json"])
         let result = CLIProtocol.result(request, ["version": "1.2.0"])
@@ -79,6 +102,17 @@ enum CLIContractChecks {
         let accepted = CLIProtocol.accepted(request)
         precondition(accepted["type"] as? String == "accepted")
         precondition(accepted["jobId"] as? String == request.operationID)
+
+        let event = CLIProtocol.event(request, type: "playing", [
+            "positionSeconds": 0.25,
+            "durationSeconds": 1.0,
+        ])
+        precondition(event["timestamp"] as? String != nil)
+        precondition(JSONSerialization.isValidJSONObject(event))
+
+        let versionFlag = try CLICommandParser.parse(["--version", "--json"])
+        precondition(versionFlag.operation == "version")
+        try expect("invalid_arguments", ["--version", "models", "list"])
     }
 
     private static func expect(_ code: String, _ arguments: [String]) throws {

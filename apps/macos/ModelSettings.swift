@@ -25,23 +25,29 @@ import Foundation
 
 /// Where a mode's model comes from. A Hugging Face repo (default, via the
 /// Hub API) or a plain base URL the user self-hosts (files fetched directly).
-enum ModelSource: Equatable {
+public enum ModelSource: Equatable {
     case repo(String)
     case baseURL(URL)
 }
 
-struct DownloadRecoveryOffer: Equatable {
-    let mode: TTSMode
-    let sourceURL: URL
-    let paused: Bool
+public struct DownloadRecoveryOffer: Equatable {
+    public let mode: TTSMode
+    public let sourceURL: URL
+    public let paused: Bool
 }
 
-extension TTSMode {
+public extension TTSMode {
     var repoDefaultsKey: String { "modelRepo.\(rawValue)" }
 
     /// The configured value: the Settings override when set, else the default
     /// repo ID. May be a repo ID or an http(s) base URL.
     var effectiveRepoID: String {
+        if CLISettingsStore.isCLI,
+           let source = CLISettingsStore.source(for: self)?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           !source.isEmpty {
+            return source
+        }
         let custom = UserDefaults.standard.string(forKey: repoDefaultsKey)?
             .trimmingCharacters(in: .whitespacesAndNewlines)
         if let custom, !custom.isEmpty { return custom }
@@ -89,23 +95,38 @@ extension TTSMode {
 /// point it anywhere via Settings, persisted as a security-scoped bookmark
 /// so the sandbox re-grants access across launches.
 @MainActor
-enum ModelsLocation {
+public enum ModelsLocation {
     private static let bookmarkKey = "modelsFolderBookmark"
     private static var activeScopedURL: URL?
 
-    static var defaultDir: URL {
+    public static var defaultDir: URL {
         FileManager.default.urls(for: .applicationSupportDirectory,
                                  in: .userDomainMask)[0]
             .appendingPathComponent("Bunyi/Models", isDirectory: true)
     }
 
-    static var isCustom: Bool {
-        UserDefaults.standard.data(forKey: bookmarkKey) != nil
+    public static var isCustom: Bool {
+        if CLISettingsStore.isCLI {
+            return CLISettingsStore.loadLenient().modelsFolder != nil
+        }
+        return UserDefaults.standard.data(forKey: bookmarkKey) != nil
     }
 
     /// Resolve the configured folder, starting security-scoped access once
     /// per launch. Falls back to the default on any bookmark problem.
-    static func current() -> URL {
+    public static func current() -> URL {
+        if CLISettingsStore.isCLI,
+           let path = CLISettingsStore.loadLenient().modelsFolder {
+            let url = URL(fileURLWithPath: path).standardizedFileURL
+            var isDirectory: ObjCBool = false
+            if FileManager.default.fileExists(
+                atPath: url.path, isDirectory: &isDirectory),
+               isDirectory.boolValue {
+                return url
+            }
+            LogStore.shared.log(
+                "Could not reopen the CLI models folder — using the default")
+        }
         if let active = activeScopedURL { return active }
         if let data = UserDefaults.standard.data(forKey: bookmarkKey) {
             var stale = false
@@ -129,7 +150,7 @@ enum ModelsLocation {
         return dir
     }
 
-    static func set(_ url: URL) throws {
+    public static func set(_ url: URL) throws {
         let data = try url.bookmarkData(options: .withSecurityScope)
         UserDefaults.standard.set(data, forKey: bookmarkKey)
         activeScopedURL?.stopAccessingSecurityScopedResource()
@@ -137,7 +158,7 @@ enum ModelsLocation {
         LogStore.shared.log("Models folder set to \(url.path)")
     }
 
-    static func resetToDefault() {
+    public static func resetToDefault() {
         UserDefaults.standard.removeObject(forKey: bookmarkKey)
         activeScopedURL?.stopAccessingSecurityScopedResource()
         activeScopedURL = nil

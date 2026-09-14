@@ -58,7 +58,7 @@ struct BunyiCLI {
                 || request.operation.hasPrefix("jobs.") {
                 result = try await ServerCommand.run(
                     request, output: output, cancelled: cancellation)
-            } else if serverCapable(request.operation), !request.has("one-shot") {
+            } else if shouldUseServer(request), !request.has("one-shot") {
                 do {
                     result = try await ServerClient().execute(
                         request, output: output, cancelled: cancellation)
@@ -127,6 +127,19 @@ struct BunyiCLI {
         case "speakers":
             return try await SpeakersCommand.run(
                 request, output: output, cancelled: cancelled)
+        case "voices.list", "voices.add", "voices.remove",
+             "history.list", "history.show", "history.remove":
+            return try await LibraryCommand.run(
+                request, output: output, cancelled: cancelled)
+        case "config.list", "config.get", "config.set",
+             "logs.path", "logs.tail", "logs.clear":
+            return try ConfigurationCommand.run(request)
+        case "doctor":
+            return try await DoctorCommand.run(
+                request, output: output, cancelled: cancelled)
+        case "backup.create", "backup.restore":
+            return try await BackupCommand.run(
+                request, output: output, cancelled: cancelled)
         default:
             throw CLIError(
                 "not_implemented",
@@ -135,11 +148,18 @@ struct BunyiCLI {
         }
     }
 
-    private static func serverCapable(_ operation: String) -> Bool {
-        operation.hasPrefix("generate.")
-            || operation.hasPrefix("models.")
-            || operation == "speakers"
-            || operation == "transcribe"
+    private static func shouldUseServer(_ request: CLIRequest) -> Bool {
+        if request.has("require-server") || request.has("detach") { return true }
+        return request.operation.hasPrefix("generate.")
+            || [
+                "models.status", "models.download", "models.verify",
+                "models.remove",
+            ].contains(request.operation)
+            || request.operation == "speakers"
+            || request.operation == "transcribe"
+            || request.operation == "voices.add"
+            || request.operation == "doctor"
+            || request.operation.hasPrefix("backup.")
     }
 
     private static func exitCode(of message: CLIMessage) -> Int32 {

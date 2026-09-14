@@ -132,6 +132,7 @@ Every event contains `schemaVersion`, `type`, `operation`, `operationId`, and
 - `sizing`;
 - `downloading`;
 - `verifying`;
+- `waiting`;
 - `loading`;
 - `transcribing`;
 - `generating`;
@@ -264,9 +265,11 @@ Transcription is local on every platform. The macOS implementation requires
 on-device Speech recognition or uses a local Whisper fallback; it never sends
 reference audio to Apple's server.
 
-If macOS Speech permission has not been granted, non-interactive use fails
-with `speech_permission_required` and tells the user how to grant it. A
-background server never attempts to present an authorization prompt.
+If a macOS implementation uses Speech and permission has not been granted,
+non-interactive use fails with `speech_permission_required` and tells the user
+how to grant it. A background server never attempts to present an
+authorization prompt. A macOS implementation using local Whisper instead does
+not request Speech permission and downloads its model before first use.
 
 `bunyi speakers` returns the speakers supported by the configured preset
 model. It may load that model. One-shot use unloads afterward; server use may

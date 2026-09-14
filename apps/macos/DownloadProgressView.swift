@@ -13,6 +13,7 @@
 // limitations under the License.
 
 import SwiftUI
+import BunyiMLXCore
 
 /// The live receipt panel. Time passing changes the age, never the byte counters.
 struct DownloadProgressView: View {

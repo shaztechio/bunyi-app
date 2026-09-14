@@ -16,18 +16,24 @@ import Foundation
 
 /// One generated WAV on disk. `id` is the URL: the folder is the record, so a
 /// file that disappears from the folder disappears from History.
-struct GeneratedOutput: Identifiable, Hashable, Sendable {
-    let url: URL
-    let created: Date
-    let byteCount: Int64
+public struct GeneratedOutput: Identifiable, Hashable, Sendable {
+    public let url: URL
+    public let created: Date
+    public let byteCount: Int64
 
-    var id: URL { url }
-    var name: String { url.deletingPathExtension().lastPathComponent }
+    public init(url: URL, created: Date, byteCount: Int64) {
+        self.url = url
+        self.created = created
+        self.byteCount = byteCount
+    }
+
+    public var id: URL { url }
+    public var name: String { url.deletingPathExtension().lastPathComponent }
 
     /// Filenames are `<Mode>-<ISO8601 timestamp>.wav`, so the mode is the part
     /// before the first dash. Falls back to the whole name for anything the
     /// user dropped in the folder themselves.
-    var mode: String {
+    public var mode: String {
         let parts = name.split(separator: "-", maxSplits: 1)
         return parts.count == 2 ? String(parts[0]) : name
     }

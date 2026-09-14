@@ -19,6 +19,7 @@
 
 import AVFoundation
 import SwiftUI
+import BunyiMLXCore
 import UniformTypeIdentifiers
 
 /// What the segmented control selects. History is not a generation mode —
@@ -335,7 +336,9 @@ struct ContentView: View {
         // to have prevented.
         guard !engine.status.isBusy else { return }
 
-        engine.unload(reason: "left \(lastGenerateMode.rawValue)")
+        Task {
+            await engine.unload(reason: "left \(lastGenerateMode.rawValue)")
+        }
     }
 
     // MARK: Mode bar
@@ -1101,7 +1104,7 @@ struct ContentView: View {
             // it describes a machine that will not exist by the time it does.
             // Ordinarily already done — leaving the mode released it —
             // but this is the path that still has to hold with that turned off.
-            engine.releaseModel(unlessNeededFor: mode)
+            await engine.releaseModel(unlessNeededFor: mode)
 
             // Before `engine.generate`, so a blocker is reported before a
             // download starts rather than after several gigabytes of one. Deep

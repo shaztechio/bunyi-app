@@ -13,6 +13,7 @@
 // limitations under the License.
 
 import Foundation
+import BunyiMLXCore
 
 @MainActor
 enum GenerationCommand {
@@ -72,36 +73,13 @@ enum GenerationCommand {
             guard let referenceURL else {
                 throw CLICommandParser.missing("Provide --reference.")
             }
-            output.event(CLIProtocol.event(
-                request, type: "transcribing",
-                ["detail": "Transcribing the reference clip on-device"]))
-            let transcription = Task { @MainActor in
-                try await ReferenceTranscriber.transcribeOnDevice(
-                    url: referenceURL, locale: TTSEngine.locale(for: language))
+            if let existingEngine, existingEngine.loadedMode != nil {
+                await existingEngine.unload(
+                    reason: "preparing local Whisper transcription")
             }
-            let cancellationMonitor = Task {
-                while !Task.isCancelled, !cancelled.value {
-                    try? await Task.sleep(for: .milliseconds(100))
-                }
-                if cancelled.value { transcription.cancel() }
-            }
-            defer { cancellationMonitor.cancel() }
-            do {
-                transcript = try await transcription.value
-            } catch is CancellationError {
-                throw CLIError(
-                    "cancelled", "Transcription was cancelled.", exitCode: 5)
-            } catch TTSError.transcriptionNotAuthorized {
-                throw CLIError(
-                    "speech_permission_required",
-                    "Allow speech recognition for bunyi in System Settings > Privacy & Security > Speech Recognition, then try again.",
-                    exitCode: 3)
-            } catch TTSError.transcriptionUnavailable {
-                throw CLIError(
-                    "transcription_unavailable",
-                    "On-device speech recognition is unavailable for this language.",
-                    exitCode: 10)
-            }
+            transcript = try await CLIWhisperTranscriber.transcribe(
+                referenceURL, language: language, trimReference: true,
+                request: request, output: output, cancelled: cancelled)
         }
 
         if cancelled.value {
@@ -109,11 +87,6 @@ enum GenerationCommand {
         }
 
         let engine = existingEngine ?? TTSEngine()
-        defer {
-            if unloadAfterward {
-                engine.unload(reason: "one-shot command finished")
-            }
-        }
         let style = request.operation == "generate.design"
             ? request.value("voice") : request.value("style")
         let generation = Task { @MainActor in
@@ -147,14 +120,24 @@ enum GenerationCommand {
         monitor.cancel()
 
         if let failure = engine.lastFailure {
+            if unloadAfterward {
+                await engine.unload(reason: "one-shot command finished")
+            }
             throw CLIError(failure.code, failure.message, exitCode: failure.exitCode)
         }
         guard let summary = engine.lastGenerationSummary else {
+            if unloadAfterward {
+                await engine.unload(reason: "one-shot command finished")
+            }
             throw CLIError(
                 "generation_failed", "Speech generation did not produce a result.",
                 exitCode: 10)
         }
-        return result(request, summary: summary)
+        let response = result(request, summary: summary)
+        if unloadAfterward {
+            await engine.unload(reason: "one-shot command finished")
+        }
+        return response
     }
 
     private static func progress(_ engine: TTSEngine,

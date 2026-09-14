@@ -72,6 +72,10 @@ jobs:
         run: |
           swiftc -parse-as-library CLI/CLIProtocol.swift CLI/CLICommandParser.swift tests/CLIContractChecks.swift -o /tmp/bunyi-cli-contract-checks
           /tmp/bunyi-cli-contract-checks
+      - name: Check CLI packaging scripts
+        run: |
+          zsh -n build-cli-dist.sh
+          bash -n tools/packaging/sign-and-notarize-cli.sh
       - name: Check cross-process model lease
         run: |
           swiftc -parse-as-library ModelOperationLease.swift tests/ModelOperationLeaseChecks.swift -o /tmp/bunyi-lease-checks
@@ -86,6 +90,32 @@ jobs:
           xcodebuild -project Bunyi.xcodeproj \
             -scheme "BunyiCLI" \
             -destination 'platform=macOS' build
+      - name: Check bounded CLI command surface
+        run: |
+          set -euo pipefail
+          CLI_BUILD_DIR="$(xcodebuild -project Bunyi.xcodeproj -scheme BunyiCLI -showBuildSettings | sed -n 's/^[[:space:]]*TARGET_BUILD_DIR = //p' | head -1)"
+          CLI_BIN="$CLI_BUILD_DIR/bunyi"
+          python3 - "$CLI_BIN" <<'PY'
+          import json, subprocess, sys
+          cli = sys.argv[1]
+          commands = [
+              ["version", "--json"],
+              ["config", "list", "--json", "--one-shot"],
+              ["voices", "list", "--json", "--one-shot"],
+              ["history", "list", "--json", "--one-shot"],
+              ["logs", "path", "--json", "--one-shot"],
+              ["logs", "tail", "--lines", "5", "--json", "--one-shot"],
+          ]
+          for command in commands:
+              completed = subprocess.run(
+                  [cli, *command], check=True, text=True,
+                  stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+              lines = completed.stdout.splitlines()
+              assert len(lines) == 1, (command, completed.stdout)
+              value = json.loads(lines[0])
+              assert value["schemaVersion"] == 1 and value["ok"] is True
+              assert value["type"] == "result" and value["operationId"]
+          PY
       - name: Check CLI server lifecycle
         run: |
           set -euo pipefail

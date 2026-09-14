@@ -21,12 +21,16 @@ packages:
   swift-qwen3-tts:
     url: https://github.com/shaztechio/swift-qwen3-tts.git
     revision: c0806fbf383fbfdc4a3ad2945f31d7087dcc477d
+  whisper-spm:
+    url: https://github.com/ggerganov/whisper.spm.git
+    revision: a2085436c2eb796af90956b62bd64731f5e5b823
 targets:
-  BunyiCLI:
-    type: tool
+  BunyiMLXCore:
+    type: framework
     platform: macOS
     sources:
-      - CLI
+      - CLISettingsStore.swift
+      - MLXTtsRuntime.swift
       - TTSEngine.swift
       - LogStore.swift
       - HTTPFileDownloader.swift
@@ -40,14 +44,29 @@ targets:
       - ModelSettings.swift
       - ModelOperationLease.swift
       - ReferenceTranscriber.swift
+      - WhisperModelStore.swift
       - VoiceLibrary.swift
+      - Doctor.swift
+      - BackupManager.swift
     dependencies:
       - package: swift-qwen3-tts
         product: Qwen3TTS
-    entitlements:
-      path: BunyiCLI.entitlements
-      properties:
-        com.apple.security.device.speech-recognition: true
+    settings:
+      base:
+        ARCHS: arm64
+        PRODUCT_MODULE_NAME: BunyiMLXCore
+        PRODUCT_BUNDLE_IDENTIFIER: app.bunyi.BunyiMLXCore
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "6.0"
+  BunyiCLI:
+    type: tool
+    platform: macOS
+    sources:
+      - CLI
+    dependencies:
+      - target: BunyiMLXCore
+      - package: whisper-spm
+        product: whisper
     info:
       path: BunyiCLI-Info.plist
       properties:
@@ -56,8 +75,6 @@ targets:
         CFBundleIdentifier: $(PRODUCT_BUNDLE_IDENTIFIER)
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        NSSpeechRecognitionUsageDescription: >-
-          Used to transcribe local audio on-device for Bunyi voice cloning.
     settings:
       base:
         ARCHS: arm64
@@ -69,7 +86,10 @@ targets:
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_IDENTITY: "-"
         CREATE_INFOPLIST_SECTION_IN_BINARY: YES
-        ENABLE_HARDENED_RUNTIME: NO
+        ENABLE_HARDENED_RUNTIME: YES
+        # The sibling path runs the raw Xcode product in CI; the Frameworks
+        # path is the layout in the self-contained release archive.
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path @executable_path/Frameworks"
   Bunyi:
     type: application
     platform: macOS
@@ -77,34 +97,17 @@ targets:
       - Assets.xcassets
       - BunyiApp.swift
       - ContentView.swift
-      - TTSEngine.swift
-      - LogStore.swift
       - StartupTimeline.swift
       - LogsView.swift
       - HistoryView.swift
-      - GeneratedOutput.swift
-      - HTTPFileDownloader.swift
-      - ModelFileTransfer.swift
-      - ModelDownloadProgress.swift
-      - SpeechSections.swift
       - DownloadProgressView.swift
-      - DownloadedModels.swift
-      - Doctor.swift
       - DoctorView.swift
       - ModelConfigLibrary.swift
-      - OutputMetadata.swift
-      - OutputLevel.swift
-      - ModelSettings.swift
-      - ModelOperationLease.swift
       - SettingsView.swift
-      - BackupManager.swift
-      - ReferenceTranscriber.swift
-      - VoiceLibrary.swift
       - WindowCloseGuard.swift
       - Theme.swift
     dependencies:
-      - package: swift-qwen3-tts
-        product: Qwen3TTS
+      - target: BunyiMLXCore
     entitlements:
       path: Bunyi.entitlements
       properties:

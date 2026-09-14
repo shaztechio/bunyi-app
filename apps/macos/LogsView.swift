@@ -19,6 +19,7 @@
 
 import AppKit
 import SwiftUI
+import BunyiMLXCore
 
 struct LogsView: View {
     private let store = LogStore.shared

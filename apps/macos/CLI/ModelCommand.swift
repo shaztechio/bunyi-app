@@ -13,6 +13,7 @@
 // limitations under the License.
 
 import Foundation
+import BunyiMLXCore
 
 @MainActor
 enum ModelCommand {
@@ -36,7 +37,8 @@ enum ModelCommand {
             return try await verify(
                 request, cancelled: cancelled, engine: engine)
         case "models.remove":
-            return try remove(request, ownsLease: engine?.loadedMode != nil)
+            return try await remove(
+                request, ownsLease: engine?.loadedMode != nil)
         default:
             throw CLICommandParser.invalid("Unknown models command.")
         }
@@ -59,6 +61,12 @@ enum ModelCommand {
                 value["mode"] = modeName(mode)
                 value["complete"] = TTSEngine.isModelComplete(for: mode)
                 value["loaded"] = engine?.loadedMode == mode
+            } else if model.url.standardizedFileURL
+                == WhisperModelStore.folder.standardizedFileURL {
+                value["id"] = WhisperModelStore.id
+                value["kind"] = "transcription"
+                value["complete"] = WhisperModelStore.isComplete()
+                value["loaded"] = false
             }
             return value
         }
@@ -69,10 +77,14 @@ enum ModelCommand {
         _ request: CLIRequest, engine: TTSEngine?
     ) -> CLIMessage {
         let modes = request.value("mode").map { [mode($0)] } ?? TTSMode.allCases
-        return CLIProtocol.result(request, [
+        var fields: CLIMessage = [
             "models": modes.map { modelStatus($0, engine: engine) },
             "modelsRoot": ModelsLocation.current().path,
-        ])
+        ]
+        if request.value("mode") == nil {
+            fields["transcriptionModels"] = [whisperStatus()]
+        }
+        return CLIProtocol.result(request, fields)
     }
 
     private static func download(
@@ -83,9 +95,14 @@ enum ModelCommand {
             ? TTSMode.allCases
             : [mode(request.value("mode")!)]
         let engine = existingEngine ?? TTSEngine()
+        if engine.loadedMode != nil {
+            await engine.unload(reason: "downloading model assets")
+        }
+        let includeWhisper = request.has("all")
+        let itemCount = modes.count + (includeWhisper ? 1 : 0)
         output.event(CLIProtocol.event(
             request, type: "resolving",
-            ["detail": "Resolving \(modes.count) model source\(modes.count == 1 ? "" : "s")"]))
+            ["detail": "Resolving \(itemCount) model source\(itemCount == 1 ? "" : "s")"]))
 
         let planning = Task { @MainActor in
             try await engine.planModelDownloads(modes)
@@ -110,9 +127,14 @@ enum ModelCommand {
             throw CLIError("download_failed", error.localizedDescription, exitCode: 10)
         }
         planningCancellation.cancel()
-        try checkAggregateDiskSpace(for: plans)
+        let whisper = WhisperModelStore.status()
+        let whisperNeeded = includeWhisper && !whisper.complete
+            ? max(0, whisper.expectedBytes - whisper.downloadedBytes) : 0
+        try checkAggregateDiskSpace(
+            for: plans, additionalNeededBytes: whisperNeeded)
         let knownTotal: Int64? = plans.allSatisfy { $0.totalBytes != nil }
             ? plans.reduce(Int64(0)) { $0 + ($1.totalBytes ?? 0) }
+                + (includeWhisper ? WhisperModelStore.expectedBytes : 0)
             : nil
         output.event(CLIProtocol.event(request, type: "sizing", [
             "bytesCompleted": plans.reduce(Int64(0)) {
@@ -125,8 +147,19 @@ enum ModelCommand {
             throw CLIError("cancelled", "Model download was cancelled.", exitCode: 5)
         }
 
+        let operationLease: ModelOperationLease
+        do {
+            operationLease = try ModelOperationLease(
+                modelsRoot: ModelsLocation.current(), operation: "models.download")
+        } catch is BunyiBusyError {
+            throw CLIError(
+                "bunyi_busy", "Another Bunyi process is using this models folder.",
+                exitCode: 4)
+        }
+        defer { withExtendedLifetime(operationLease) {} }
+
         let operation = Task { @MainActor in
-            try await engine.downloadModels(modes)
+            try await engine.downloadModels(modes, ownsLease: true)
         }
         let monitor = Task { @MainActor in
             var previous = ""
@@ -136,7 +169,8 @@ enum ModelCommand {
                     engine.stop()
                 }
                 if let event = progress(
-                    engine, request: request, totalBytes: knownTotal) {
+                    engine, request: request, totalBytes: knownTotal,
+                    itemCount: itemCount) {
                     let type = String(describing: event["type"] ?? "")
                     let key = "\(type)-\(engine.downloadItemIndex)"
                     if key != previous || type == "downloading" || type == "waiting" {
@@ -147,12 +181,7 @@ enum ModelCommand {
                 try? await Task.sleep(for: .milliseconds(250))
             }
         }
-        defer {
-            monitor.cancel()
-            if existingEngine == nil {
-                engine.unload(reason: "model command finished")
-            }
-        }
+        defer { monitor.cancel() }
 
         let directories: [URL]
         do {
@@ -172,6 +201,21 @@ enum ModelCommand {
             throw CLIError("download_failed", error.localizedDescription, exitCode: 10)
         }
 
+        let whisperURL: URL?
+        if includeWhisper {
+            let completed = knownTotal.map {
+                $0 - WhisperModelStore.expectedBytes
+            } ?? directories.reduce(Int64(0)) {
+                $0 + ModelStore.logicalSize(of: $1)
+            }
+            whisperURL = try await CLIWhisperTranscriber.ensureModel(
+                request: request, output: output, cancelled: cancelled,
+                aggregateBase: completed, aggregateTotal: knownTotal,
+                itemIndex: itemCount, itemCount: itemCount, ownsLease: true)
+        } else {
+            whisperURL = nil
+        }
+
         let assets: [CLIMessage] = zip(modes, directories).map { mode, directory in
             [
                 "id": modeName(mode),
@@ -181,12 +225,22 @@ enum ModelCommand {
                 "complete": TTSEngine.isModelComplete(for: mode),
             ]
         }
+        let transcriptionAssets: [CLIMessage] = whisperURL.map { url in
+            [[
+                "id": WhisperModelStore.id,
+                "source": WhisperModelStore.source,
+                "folder": url.deletingLastPathComponent().path,
+                "bytes": WhisperModelStore.expectedBytes,
+                "complete": WhisperModelStore.isComplete(),
+                "kind": "transcription",
+            ]]
+        } ?? []
+        let allAssets = assets + transcriptionAssets
         return CLIProtocol.result(request, [
-            "assets": assets,
-            "offlineReady": assets.allSatisfy { $0["complete"] as? Bool == true },
-            // An empty list is meaningful: macOS uses the operating system's
-            // on-device Speech service and has no fourth model to download.
-            "transcriptionAssets": [CLIMessage](),
+            "assets": allAssets,
+            "offlineReady": allAssets.allSatisfy {
+                $0["complete"] as? Bool == true
+            },
         ])
     }
 
@@ -254,7 +308,7 @@ enum ModelCommand {
 
     private static func remove(
         _ request: CLIRequest, ownsLease: Bool
-    ) throws -> CLIMessage {
+    ) async throws -> CLIMessage {
         let mode = mode(request.value("mode")!)
         let directory = TTSEngine.modelDirectory(for: mode)
         guard FileManager.default.fileExists(atPath: directory.path) else {
@@ -271,7 +325,7 @@ enum ModelCommand {
                 return false
             }())
         do {
-            try ModelStore.delete(model, ownsLease: ownsLease)
+            try await ModelStore.delete(model, ownsLease: ownsLease)
         } catch is BunyiBusyError {
             throw CLIError(
                 "bunyi_busy",
@@ -289,12 +343,13 @@ enum ModelCommand {
 
     private static func progress(_ engine: TTSEngine,
                                  request: CLIRequest,
-                                 totalBytes: Int64?) -> CLIMessage? {
+                                 totalBytes: Int64?,
+                                 itemCount: Int) -> CLIMessage? {
         guard let mode = engine.downloadMode else { return nil }
         let item: CLIMessage = [
             "id": modeName(mode),
             "index": engine.downloadItemIndex,
-            "count": engine.downloadItemCount,
+            "count": itemCount,
         ]
         guard let progress = engine.downloadFeedback else {
             return CLIProtocol.event(request, type: "checking", [
@@ -350,6 +405,22 @@ enum ModelCommand {
         ]
     }
 
+    private static func whisperStatus() -> CLIMessage {
+        let status = WhisperModelStore.status()
+        return [
+            "id": status.id,
+            "kind": "transcription",
+            "source": status.source,
+            "folder": status.folder.path,
+            "complete": status.complete,
+            "missingFiles": status.complete ? [] : [WhisperModelStore.fileName],
+            "partialFiles": status.partialFiles,
+            "downloadedBytes": status.downloadedBytes,
+            "approximateSizeBytes": status.expectedBytes,
+            "loaded": false,
+        ]
+    }
+
     private static func inspect(_ directory: URL)
         -> (missing: [String], partials: [String]) {
         let fm = FileManager.default
@@ -381,9 +452,9 @@ enum ModelCommand {
     }
 
     private static func checkAggregateDiskSpace(
-        for plans: [ModelDownloadPlan]
+        for plans: [ModelDownloadPlan], additionalNeededBytes: Int64 = 0
     ) throws {
-        let needed = plans.reduce(Int64(0)) { total, plan in
+        let needed = plans.reduce(additionalNeededBytes) { total, plan in
             guard !plan.complete else { return total }
             let fullSize = plan.totalBytes
                 ?? Int64(plan.mode.approxDownloadBytes)

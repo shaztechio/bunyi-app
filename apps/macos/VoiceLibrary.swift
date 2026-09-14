@@ -24,18 +24,18 @@
 
 import Foundation
 
-struct SavedVoice: Identifiable, Codable, Hashable {
-    let id: UUID
-    var name: String
-    var fileName: String
-    var transcript: String
-    var createdAt: Date
+public struct SavedVoice: Identifiable, Codable, Hashable {
+    public let id: UUID
+    public var name: String
+    public var fileName: String
+    public var transcript: String
+    public var createdAt: Date
 }
 
 @MainActor
 @Observable
-final class VoiceLibrary {
-    private(set) var voices: [SavedVoice] = []
+public final class VoiceLibrary {
+    public private(set) var voices: [SavedVoice] = []
 
     private let log = LogStore.shared
 
@@ -52,13 +52,13 @@ final class VoiceLibrary {
 
     private var indexURL: URL { dir.appendingPathComponent("voices.json") }
 
-    init() { load() }
+    public init() { load() }
 
-    func audioURL(for voice: SavedVoice) -> URL {
+    public func audioURL(for voice: SavedVoice) -> URL {
         dir.appendingPathComponent(voice.fileName)
     }
 
-    func voice(with id: UUID?) -> SavedVoice? {
+    public func voice(with id: UUID?) -> SavedVoice? {
         guard let id else { return nil }
         return voices.first { $0.id == id }
     }
@@ -66,7 +66,7 @@ final class VoiceLibrary {
     /// Copies the clip into the container so it survives relaunches without
     /// needing a security-scoped bookmark for the user's original file.
     @discardableResult
-    func save(name: String, audioURL source: URL,
+    public func save(name: String, audioURL source: URL,
               transcript: String) throws -> SavedVoice {
         let id = UUID()
         let ext = source.pathExtension.isEmpty ? "wav" : source.pathExtension
@@ -81,15 +81,30 @@ final class VoiceLibrary {
                                transcript: transcript, createdAt: .now)
         voices.append(voice)
         sortVoices()
-        persist()
+        do {
+            try persistStrict()
+        } catch {
+            voices.removeAll { $0.id == voice.id }
+            try? FileManager.default.removeItem(
+                at: dir.appendingPathComponent(fileName))
+            throw error
+        }
         log.log("Saved voice \"\(name)\"")
         return voice
     }
 
-    func delete(_ voice: SavedVoice) {
-        try? FileManager.default.removeItem(at: audioURL(for: voice))
+    public func delete(_ voice: SavedVoice) {
+        do {
+            try deleteStrict(voice)
+        } catch {
+            log.log("Couldn't delete voice \"\(voice.name)\": \(error.localizedDescription)")
+        }
+    }
+
+    public func deleteStrict(_ voice: SavedVoice) throws {
+        try FileManager.default.removeItem(at: audioURL(for: voice))
         voices.removeAll { $0.id == voice.id }
-        persist()
+        try persistStrict()
         log.log("Deleted voice \"\(voice.name)\"")
     }
 
@@ -111,13 +126,9 @@ final class VoiceLibrary {
         sortVoices()
     }
 
-    private func persist() {
-        do {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            try encoder.encode(voices).write(to: indexURL, options: .atomic)
-        } catch {
-            log.log("Couldn't save the voice library: \(error.localizedDescription)")
-        }
+    private func persistStrict() throws {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try encoder.encode(voices).write(to: indexURL, options: .atomic)
     }
 }

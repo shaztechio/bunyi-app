@@ -19,6 +19,7 @@
 
 import AppKit
 import SwiftUI
+import BunyiMLXCore
 import UniformTypeIdentifiers
 
 struct SettingsView: View {
@@ -640,13 +641,15 @@ struct SettingsView: View {
     }
 
     private func delete(_ model: DownloadedModel) {
-        do {
-            try ModelStore.delete(model)
-            deleteError = nil
-        } catch {
-            deleteError = error.localizedDescription
+        Task {
+            do {
+                try await ModelStore.delete(model)
+                deleteError = nil
+            } catch {
+                deleteError = error.localizedDescription
+            }
+            refreshModels()
         }
-        refreshModels()
     }
 }
 

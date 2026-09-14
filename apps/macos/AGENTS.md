@@ -87,14 +87,17 @@ reliably from AppleScript, and the gaps it finds are real.
 - `ContentView.swift` — UI: segmented mode picker, text editor, per-mode
   controls, status area, AVAudioPlayer playback, fileImporter for clone
   reference audio, saved-voice picker
-- `TTSEngine.swift` — @MainActor @Observable engine: model download via
-  swift-transformers HubApi.snapshot, one model resident at a time (evict +
-  `MLX.GPU.clearCache()` on switch), generation, WAV output to
-  `Bunyi/Outputs` under the container's Application Support.
-  Skips the network when a complete model is on disk
-  (`hasCompleteModel`); a disk monitor logs bytes-on-disk every 10 s. Also
-  hosts self-hosted base-URL downloads (`downloadFromBaseURL` + manifest.txt
-  / built-in list) and reference-audio resampling.
+- `MLXTtsRuntime.swift` — actor and sole owner of the non-Sendable Qwen model;
+  serializes loading and inference, keeps one model resident, converts MLX
+  arrays to Sendable samples at the boundary, and clears working buffers.
+- `TTSEngine.swift` — @MainActor @Observable adapter shared by the app and CLI:
+  model download via swift-transformers, progress/state, reference-audio
+  preparation, generation orchestration, and WAV output. It skips the network
+  when a complete model is on disk and delegates every model access to
+  `MLXTtsRuntime`.
+- `CLI/` — native arm64 `bunyi` command surface and owner-only Unix-socket
+  server. `build-cli-dist.sh` packages it with `BunyiMLXCore.framework`, MLX's
+  Metal resources, notices, and shell completions.
 - `ModelSettings.swift` / `SettingsView.swift` — tabbed Settings (⌘,):
   per-mode source (`TTSMode.effectiveRepoID` / `effectiveSource`; HF repo ID
   OR http(s) self-host base URL, scheme decides) and a custom models folder
@@ -107,6 +110,10 @@ reliably from AppleScript, and the gaps it finds are real.
   the main actor.
 - `ReferenceTranscriber.swift` — on-device auto-transcription (Speech) when
   the transcript field is blank; feeds PCM buffers, not a file URL.
+- `WhisperModelStore.swift` / `CLI/WhisperTranscriber.swift` — the CLI's local
+  Whisper fallback. A terminal is the TCC-responsible process for a standalone
+  executable, so Apple Terminal cannot reliably request Speech permission;
+  the CLI downloads the multilingual base model and never sends audio away.
 - `LogStore.swift` / `LogsView.swift` — Logs window (⌘L), mirrored to OSLog
   subsystem `app.bunyi.Bunyi`.
 - `WindowCloseGuard.swift` — confirm-and-stop when the window is closed
@@ -213,9 +220,12 @@ certificate.
   at a time).
 - Voice clone reference audio MUST be 24 kHz mono (`loadReferenceAudio`
   resamples; do not use `loadAudioArray`, which keeps native rate).
-- Voice clone is ICL: it REQUIRES the transcript. Blank → auto-transcribe
-  via Speech, feeding PCM buffers (the recognition daemon can't read a
-  sandboxed file URL). Needs `NSSpeechRecognitionUsageDescription`.
+- Voice clone is ICL: it REQUIRES the transcript. In the app, blank means
+  Speech with PCM buffers (the recognition daemon cannot read a sandboxed
+  file URL) and `NSSpeechRecognitionUsageDescription`. In the standalone CLI,
+  blank means local whisper.cpp using the downloaded multilingual base model;
+  Apple Terminal cannot be the responsible process for a reliable Speech
+  permission prompt.
 - Metal library errors at runtime → the README `default.metallib` copy step.
 - swift-qwen3-tts is young: pin the resolved commit in Package.resolved
   before any release.
