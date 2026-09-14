@@ -56,6 +56,13 @@ jobs:
         run: xcodebuild -downloadComponent MetalToolchain || true
       - name: Generate project
         run: xcodegen generate
+      - name: Check app and CLI versions match
+        run: |
+          set -euo pipefail
+          test "$(grep -c '^[[:space:]]*MARKETING_VERSION:' project.yml)" -eq 2
+          test "$(grep -c '^[[:space:]]*CURRENT_PROJECT_VERSION:' project.yml)" -eq 2
+          test "$(sed -n 's/^ *MARKETING_VERSION: *//p' project.yml | sort -u | wc -l | tr -d ' ')" -eq 1
+          test "$(sed -n 's/^ *CURRENT_PROJECT_VERSION: *//p' project.yml | sort -u | wc -l | tr -d ' ')" -eq 1
       - name: Check measured download feedback
         run: |
           swiftc -parse-as-library ModelDownloadProgress.swift HTTPFileDownloader.swift ModelFileTransfer.swift tests/DownloadProgressChecks.swift tests/ModelFileTransferChecks.swift -o /tmp/bunyi-download-checks
@@ -113,16 +120,21 @@ jobs:
           xcodebuild -project Bunyi.xcodeproj \
             -scheme "Bunyi" \
             -destination 'platform=macOS' build
-      - name: Build CLI preview
+      - name: Build and check the CLI archive
         run: |
-          xcodebuild -project Bunyi.xcodeproj \
-            -scheme "BunyiCLI" \
-            -destination 'platform=macOS' build
+          set -euo pipefail
+          ./build-cli-dist.sh Debug
+          archive="$(ls -t ../../dist/macos/Bunyi-CLI-*-macos-arm64.zip | head -1)"
+          extract="$RUNNER_TEMP/bunyi-cli"
+          mkdir -p "$extract"
+          ditto -x -k "$archive" "$extract"
+          cli="$(find "$extract" -maxdepth 2 -type f -name bunyi | head -1)"
+          test -x "$cli"
+          echo "BUNYI_CI_CLI_BIN=$cli" >> "$GITHUB_ENV"
       - name: Check bounded CLI command surface
         run: |
           set -euo pipefail
-          CLI_BUILD_DIR="$(xcodebuild -project Bunyi.xcodeproj -scheme BunyiCLI -showBuildSettings | sed -n 's/^[[:space:]]*TARGET_BUILD_DIR = //p' | head -1)"
-          CLI_BIN="$CLI_BUILD_DIR/bunyi"
+          CLI_BIN="$BUNYI_CI_CLI_BIN"
           python3 - "$CLI_BIN" <<'PY'
           import json, subprocess, sys
           cli = sys.argv[1]
@@ -147,8 +159,7 @@ jobs:
       - name: Check CLI server lifecycle
         run: |
           set -euo pipefail
-          CLI_BUILD_DIR="$(xcodebuild -project Bunyi.xcodeproj -scheme BunyiCLI -showBuildSettings | sed -n 's/^[[:space:]]*TARGET_BUILD_DIR = //p' | head -1)"
-          CLI_BIN="$CLI_BUILD_DIR/bunyi"
+          CLI_BIN="$BUNYI_CI_CLI_BIN"
           SERVER_SCOPE="ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           SERVER_STREAM="$RUNNER_TEMP/bunyi-server.jsonl"
           STATUS_JSON="$RUNNER_TEMP/bunyi-server-status.json"
