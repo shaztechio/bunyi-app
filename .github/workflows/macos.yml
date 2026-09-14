@@ -86,3 +86,90 @@ jobs:
           xcodebuild -project Bunyi.xcodeproj \
             -scheme "BunyiCLI" \
             -destination 'platform=macOS' build
+      - name: Check CLI server lifecycle
+        run: |
+          set -euo pipefail
+          CLI_BUILD_DIR="$(xcodebuild -project Bunyi.xcodeproj -scheme BunyiCLI -showBuildSettings | sed -n 's/^[[:space:]]*TARGET_BUILD_DIR = //p' | head -1)"
+          CLI_BIN="$CLI_BUILD_DIR/bunyi"
+          SERVER_SCOPE="ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          SERVER_STREAM="$RUNNER_TEMP/bunyi-server.jsonl"
+          STATUS_JSON="$RUNNER_TEMP/bunyi-server-status.json"
+          FOLLOW_STREAM="$RUNNER_TEMP/bunyi-job-follow.jsonl"
+          cleanup() {
+            env BUNYI_SERVER_SCOPE="$SERVER_SCOPE" "$CLI_BIN" server stop --json >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          env BUNYI_SERVER_SCOPE="$SERVER_SCOPE" "$CLI_BIN" server run --jsonl >"$SERVER_STREAM" &
+          SERVER_PID=$!
+          for ATTEMPT in {1..100}; do
+            if env BUNYI_SERVER_SCOPE="$SERVER_SCOPE" "$CLI_BIN" server status --json >"$STATUS_JSON" 2>/dev/null; then
+              break
+            fi
+            sleep 0.05
+          done
+          kill -0 "$SERVER_PID"
+          python3 - "$STATUS_JSON" <<'PY'
+          import json, os, stat, sys
+          status = json.load(open(sys.argv[1]))
+          assert status["protocolVersion"] == 1
+          assert status["loadedMode"] is None
+          socket_path = status["socketPath"]
+          assert stat.S_ISSOCK(os.stat(socket_path).st_mode)
+          assert stat.S_IMODE(os.stat(socket_path).st_mode) == 0o600
+          assert stat.S_IMODE(os.stat(os.path.dirname(socket_path)).st_mode) == 0o700
+          PY
+          if lsof -nP -a -p "$SERVER_PID" -iTCP | grep -q .; then
+            echo "Bunyi server unexpectedly opened a TCP listener" >&2
+            exit 1
+          fi
+
+          START_JSON="$(env BUNYI_SERVER_SCOPE="$SERVER_SCOPE" "$CLI_BIN" server start --json)"
+          python3 -c 'import json,sys; assert json.load(sys.stdin)["alreadyRunning"] is True' <<<"$START_JSON"
+          set +e
+          SECOND_RUN="$(env BUNYI_SERVER_SCOPE="$SERVER_SCOPE" "$CLI_BIN" server run --json)"
+          SECOND_CODE=$?
+          set -e
+          test "$SECOND_CODE" -eq 4
+          python3 -c 'import json,sys; assert json.load(sys.stdin)["error"]["code"] == "bunyi_busy"' <<<"$SECOND_RUN"
+
+          JOB_JSON="$(env BUNYI_SERVER_SCOPE="$SERVER_SCOPE" "$CLI_BIN" server unload --detach --json)"
+          JOB_ID="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["operationId"])' <<<"$JOB_JSON")"
+          env BUNYI_SERVER_SCOPE="$SERVER_SCOPE" "$CLI_BIN" jobs status "$JOB_ID" --json >/dev/null
+          env BUNYI_SERVER_SCOPE="$SERVER_SCOPE" "$CLI_BIN" jobs follow "$JOB_ID" --jsonl >"$FOLLOW_STREAM"
+          python3 - "$FOLLOW_STREAM" <<'PY'
+          import json, sys
+          lines = [json.loads(line) for line in open(sys.argv[1])]
+          assert lines[-1]["type"] == "result"
+          assert lines[-1]["operationId"]
+          PY
+
+          env BUNYI_SERVER_SCOPE="$SERVER_SCOPE" "$CLI_BIN" server stop --json >/dev/null
+          wait "$SERVER_PID"
+          trap - EXIT
+          python3 - "$SERVER_STREAM" <<'PY'
+          import json, sys
+          lines = [json.loads(line) for line in open(sys.argv[1])]
+          assert lines[0]["type"] == "ready"
+          assert lines[-1]["type"] == "result"
+          assert lines[-1]["stopped"] is True
+          PY
+
+          SIGNAL_STREAM="$RUNNER_TEMP/bunyi-server-signal.jsonl"
+          env BUNYI_SERVER_SCOPE="$SERVER_SCOPE-signal" "$CLI_BIN" server run --jsonl >"$SIGNAL_STREAM" &
+          SIGNAL_PID=$!
+          for ATTEMPT in {1..100}; do
+            if env BUNYI_SERVER_SCOPE="$SERVER_SCOPE-signal" "$CLI_BIN" server status --json >/dev/null 2>&1; then
+              break
+            fi
+            sleep 0.05
+          done
+          kill -INT "$SIGNAL_PID"
+          wait "$SIGNAL_PID"
+          python3 - "$SIGNAL_STREAM" <<'PY'
+          import json, sys
+          lines = [json.loads(line) for line in open(sys.argv[1])]
+          assert lines[0]["type"] == "ready"
+          assert lines[-1]["type"] == "result"
+          assert lines[-1]["stopped"] is True
+          PY

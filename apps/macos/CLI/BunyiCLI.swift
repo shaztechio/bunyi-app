@@ -19,6 +19,9 @@ import Foundation
 struct BunyiCLI {
     @MainActor
     static func main() async {
+        if ProcessInfo.processInfo.environment["BUNYI_SERVER_BACKGROUND"] == "1" {
+            signal(SIGHUP, SIG_IGN)
+        }
         let code = await run(Array(CommandLine.arguments.dropFirst()))
         Darwin.exit(code)
     }
@@ -34,8 +37,12 @@ struct BunyiCLI {
         let cancellation = CancellationState()
         signal(SIGINT, SIG_IGN)
         signal(SIGTERM, SIG_IGN)
-        let interrupt = DispatchSource.makeSignalSource(signal: SIGINT)
-        let terminate = DispatchSource.makeSignalSource(signal: SIGTERM)
+        // The closures are MainActor-isolated because this entry point is.
+        // Deliver on the main queue so Swift's runtime isolation check agrees.
+        let interrupt = DispatchSource.makeSignalSource(
+            signal: SIGINT, queue: .main)
+        let terminate = DispatchSource.makeSignalSource(
+            signal: SIGTERM, queue: .main)
         interrupt.setEventHandler { cancellation.cancel() }
         terminate.setEventHandler { cancellation.cancel() }
         interrupt.resume()
@@ -47,43 +54,40 @@ struct BunyiCLI {
             request = try CLICommandParser.normalize(request, stdin: stdin)
             let output = CLIOutput(json: request.has("json"), jsonl: request.has("jsonl"))
             let result: CLIMessage
-            switch request.operation {
-            case "help":
-                result = CLIProtocol.result(request, ["help": CLICommandParser.help])
-            case "version":
-                let info = Bundle.main.infoDictionary
-                let version = info?["CFBundleShortVersionString"] as? String ?? "0.1.0"
-                result = CLIProtocol.result(request, ["version": version])
-            case "play":
-                result = try await PlaybackCommand.run(
+            if request.operation.hasPrefix("server.")
+                || request.operation.hasPrefix("jobs.") {
+                result = try await ServerCommand.run(
                     request, output: output, cancelled: cancellation)
-            case "generate.preset", "generate.design", "generate.clone":
-                result = try await GenerationCommand.run(
+            } else if serverCapable(request.operation), !request.has("one-shot") {
+                do {
+                    result = try await ServerClient().execute(
+                        request, output: output, cancelled: cancellation)
+                } catch let error as ServerError
+                    where error.code == "server_unavailable"
+                        && !request.has("require-server")
+                        && !request.has("detach") {
+                    result = try await executeLocally(
+                        request, output: output, cancelled: cancellation)
+                }
+            } else {
+                result = try await executeLocally(
                     request, output: output, cancelled: cancellation)
-            case "models.list", "models.status", "models.download",
-                 "models.verify", "models.remove":
-                result = try await ModelCommand.run(
-                    request, output: output, cancelled: cancellation)
-            case "transcribe":
-                result = try await TranscriptionCommand.run(
-                    request, output: output, cancelled: cancellation)
-            case "speakers":
-                result = try await SpeakersCommand.run(
-                    request, output: output, cancelled: cancellation)
-            default:
-                throw CLIError(
-                    "not_implemented",
-                    "This preview build does not implement \(request.operation) yet.",
-                    exitCode: 10)
             }
             output.finish(result)
-            return 0
+            return exitCode(of: result)
         } catch let error as CLIError {
             let output = CLIOutput(
                 json: request.has("json") || requestedJSON,
                 jsonl: request.has("jsonl") || requestedJSONL)
             output.finish(CLIProtocol.failure(request, error))
             return error.exitCode
+        } catch let error as ServerError {
+            let failure = CLIError(error.code, error.message, exitCode: 4)
+            let output = CLIOutput(
+                json: request.has("json") || requestedJSON,
+                jsonl: request.has("jsonl") || requestedJSONL)
+            output.finish(CLIProtocol.failure(request, failure))
+            return failure.exitCode
         } catch {
             let failure = CLIError("operation_failed", error.localizedDescription,
                                    exitCode: 10)
@@ -93,5 +97,56 @@ struct BunyiCLI {
             output.finish(CLIProtocol.failure(request, failure))
             return failure.exitCode
         }
+    }
+
+    @MainActor
+    private static func executeLocally(
+        _ request: CLIRequest, output: CLIOutput,
+        cancelled: CancellationState
+    ) async throws -> CLIMessage {
+        switch request.operation {
+        case "help":
+            return CLIProtocol.result(request, ["help": CLICommandParser.help])
+        case "version":
+            let info = Bundle.main.infoDictionary
+            let version = info?["CFBundleShortVersionString"] as? String ?? "0.1.0"
+            return CLIProtocol.result(request, ["version": version])
+        case "play":
+            return try await PlaybackCommand.run(
+                request, output: output, cancelled: cancelled)
+        case "generate.preset", "generate.design", "generate.clone":
+            return try await GenerationCommand.run(
+                request, output: output, cancelled: cancelled)
+        case "models.list", "models.status", "models.download",
+             "models.verify", "models.remove":
+            return try await ModelCommand.run(
+                request, output: output, cancelled: cancelled)
+        case "transcribe":
+            return try await TranscriptionCommand.run(
+                request, output: output, cancelled: cancelled)
+        case "speakers":
+            return try await SpeakersCommand.run(
+                request, output: output, cancelled: cancelled)
+        default:
+            throw CLIError(
+                "not_implemented",
+                "This preview build does not implement \(request.operation) yet.",
+                exitCode: 10)
+        }
+    }
+
+    private static func serverCapable(_ operation: String) -> Bool {
+        operation.hasPrefix("generate.")
+            || operation.hasPrefix("models.")
+            || operation == "speakers"
+            || operation == "transcribe"
+    }
+
+    private static func exitCode(of message: CLIMessage) -> Int32 {
+        guard message["type"] as? String == "error" else { return 0 }
+        if let code = message["exitCode"] as? Int32 { return code }
+        if let code = message["exitCode"] as? Int { return Int32(code) }
+        if let code = message["exitCode"] as? NSNumber { return code.int32Value }
+        return 10
     }
 }

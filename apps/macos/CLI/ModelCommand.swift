@@ -17,29 +17,34 @@ import Foundation
 @MainActor
 enum ModelCommand {
     static func run(_ request: CLIRequest, output: CLIOutput,
-                    cancelled: CancellationState) async throws -> CLIMessage {
+                    cancelled: CancellationState,
+                    engine: TTSEngine? = nil) async throws -> CLIMessage {
         if request.has("require-server") {
             throw serverUnavailable()
         }
         switch request.operation {
         case "models.list":
-            return list(request)
+            return list(request, engine: engine)
         case "models.status":
-            return status(request)
+            return status(request, engine: engine)
         case "models.download":
             if request.has("detach") { throw serverUnavailable() }
-            return try await download(request, output: output, cancelled: cancelled)
+            return try await download(
+                request, output: output, cancelled: cancelled, engine: engine)
         case "models.verify":
             if request.has("detach") { throw serverUnavailable() }
-            return try await verify(request, cancelled: cancelled)
+            return try await verify(
+                request, cancelled: cancelled, engine: engine)
         case "models.remove":
-            return try remove(request)
+            return try remove(request, ownsLease: engine?.loadedMode != nil)
         default:
             throw CLICommandParser.invalid("Unknown models command.")
         }
     }
 
-    private static func list(_ request: CLIRequest) -> CLIMessage {
+    private static func list(
+        _ request: CLIRequest, engine: TTSEngine?
+    ) -> CLIMessage {
         let configured = Dictionary(uniqueKeysWithValues: TTSMode.allCases.map {
             (TTSEngine.modelDirectory(for: $0).standardizedFileURL, $0)
         })
@@ -53,27 +58,31 @@ enum ModelCommand {
             if let mode = configured[model.url.standardizedFileURL] {
                 value["mode"] = modeName(mode)
                 value["complete"] = TTSEngine.isModelComplete(for: mode)
+                value["loaded"] = engine?.loadedMode == mode
             }
             return value
         }
         return CLIProtocol.result(request, ["models": models])
     }
 
-    private static func status(_ request: CLIRequest) -> CLIMessage {
+    private static func status(
+        _ request: CLIRequest, engine: TTSEngine?
+    ) -> CLIMessage {
         let modes = request.value("mode").map { [mode($0)] } ?? TTSMode.allCases
         return CLIProtocol.result(request, [
-            "models": modes.map(modelStatus),
+            "models": modes.map { modelStatus($0, engine: engine) },
             "modelsRoot": ModelsLocation.current().path,
         ])
     }
 
     private static func download(
-        _ request: CLIRequest, output: CLIOutput, cancelled: CancellationState
+        _ request: CLIRequest, output: CLIOutput, cancelled: CancellationState,
+        engine existingEngine: TTSEngine?
     ) async throws -> CLIMessage {
         let modes = request.has("all")
             ? TTSMode.allCases
             : [mode(request.value("mode")!)]
-        let engine = TTSEngine()
+        let engine = existingEngine ?? TTSEngine()
         output.event(CLIProtocol.event(
             request, type: "resolving",
             ["detail": "Resolving \(modes.count) model source\(modes.count == 1 ? "" : "s")"]))
@@ -140,7 +149,9 @@ enum ModelCommand {
         }
         defer {
             monitor.cancel()
-            engine.unload(reason: "model command finished")
+            if existingEngine == nil {
+                engine.unload(reason: "model command finished")
+            }
         }
 
         let directories: [URL]
@@ -180,7 +191,8 @@ enum ModelCommand {
     }
 
     private static func verify(
-        _ request: CLIRequest, cancelled: CancellationState
+        _ request: CLIRequest, cancelled: CancellationState,
+        engine existingEngine: TTSEngine?
     ) async throws -> CLIMessage {
         let mode = mode(request.value("mode")!)
         let directory = TTSEngine.modelDirectory(for: mode)
@@ -189,7 +201,7 @@ enum ModelCommand {
                 "missing_input", "\(displayName(mode)) is not downloaded completely.",
                 exitCode: 3)
         }
-        let engine = TTSEngine()
+        let engine = existingEngine ?? TTSEngine()
         let entries: [TTSEngine.ManifestEntry]?
         do {
             entries = try await engine.publishedDigests(for: mode)
@@ -240,7 +252,9 @@ enum ModelCommand {
         ])
     }
 
-    private static func remove(_ request: CLIRequest) throws -> CLIMessage {
+    private static func remove(
+        _ request: CLIRequest, ownsLease: Bool
+    ) throws -> CLIMessage {
         let mode = mode(request.value("mode")!)
         let directory = TTSEngine.modelDirectory(for: mode)
         guard FileManager.default.fileExists(atPath: directory.path) else {
@@ -257,7 +271,7 @@ enum ModelCommand {
                 return false
             }())
         do {
-            try ModelStore.delete(model)
+            try ModelStore.delete(model, ownsLease: ownsLease)
         } catch is BunyiBusyError {
             throw CLIError(
                 "bunyi_busy",
@@ -318,7 +332,9 @@ enum ModelCommand {
         return CLIProtocol.event(request, type: type, fields)
     }
 
-    private static func modelStatus(_ mode: TTSMode) -> CLIMessage {
+    private static func modelStatus(
+        _ mode: TTSMode, engine: TTSEngine?
+    ) -> CLIMessage {
         let directory = TTSEngine.modelDirectory(for: mode)
         let inspection = inspect(directory)
         return [
@@ -330,7 +346,7 @@ enum ModelCommand {
             "partialFiles": inspection.partials,
             "downloadedBytes": ModelStore.logicalSize(of: directory),
             "approximateSizeBytes": Int64(mode.approxDownloadBytes),
-            "loaded": false,
+            "loaded": engine?.loadedMode == mode,
         ]
     }
 

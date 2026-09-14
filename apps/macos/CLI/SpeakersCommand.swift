@@ -17,14 +17,15 @@ import Foundation
 @MainActor
 enum SpeakersCommand {
     static func run(_ request: CLIRequest, output: CLIOutput,
-                    cancelled: CancellationState) async throws -> CLIMessage {
+                    cancelled: CancellationState,
+                    engine existingEngine: TTSEngine? = nil) async throws -> CLIMessage {
         if request.has("require-server") || request.has("detach") {
             throw CLIError(
                 "server_unavailable",
                 "No Bunyi server is available. Run bunyi server start first.",
                 exitCode: 4)
         }
-        let engine = TTSEngine()
+        let engine = existingEngine ?? TTSEngine()
         let loading = Task { @MainActor in
             _ = try await engine.prepare(mode: .presetVoice)
         }
@@ -46,7 +47,9 @@ enum SpeakersCommand {
         }
         defer {
             monitor.cancel()
-            engine.unload(reason: "one-shot speakers command finished")
+            if existingEngine == nil {
+                engine.unload(reason: "one-shot speakers command finished")
+            }
         }
         do {
             try await loading.value

@@ -17,7 +17,9 @@ import Foundation
 @MainActor
 enum GenerationCommand {
     static func run(_ request: CLIRequest, output: CLIOutput,
-                    cancelled: CancellationState) async throws -> CLIMessage {
+                    cancelled: CancellationState,
+                    engine existingEngine: TTSEngine? = nil,
+                    unloadAfterward: Bool = true) async throws -> CLIMessage {
         if request.has("require-server") || request.has("detach") {
             throw CLIError(
                 "server_unavailable",
@@ -106,7 +108,12 @@ enum GenerationCommand {
             throw CLIError("cancelled", "Speech generation was cancelled.", exitCode: 5)
         }
 
-        let engine = TTSEngine()
+        let engine = existingEngine ?? TTSEngine()
+        defer {
+            if unloadAfterward {
+                engine.unload(reason: "one-shot command finished")
+            }
+        }
         let style = request.operation == "generate.design"
             ? request.value("voice") : request.value("style")
         let generation = Task { @MainActor in
@@ -138,7 +145,6 @@ enum GenerationCommand {
         }
         await generation.value
         monitor.cancel()
-        defer { engine.unload(reason: "one-shot command finished") }
 
         if let failure = engine.lastFailure {
             throw CLIError(failure.code, failure.message, exitCode: failure.exitCode)

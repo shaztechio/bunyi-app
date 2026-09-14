@@ -46,6 +46,15 @@ enum CLIContractChecks {
             "models", "download", "--mode", "clone", "--one-shot",
         ])
         precondition(oneModel.value("mode") == "clone")
+        let preload = try CLICommandParser.parse([
+            "server", "preload", "--mode", "preset", "--detach",
+        ])
+        precondition(preload.operation == "server.preload")
+        precondition(preload.has("detach"))
+        let follow = try CLICommandParser.parse([
+            "jobs", "follow", "01M2EJQGSX0BM8W711CD7N5EGB", "--jsonl",
+        ])
+        precondition(follow.value("target") == "01M2EJQGSX0BM8W711CD7N5EGB")
         try expect("invalid_arguments", [
             "models", "verify", "--mode", "unknown",
         ])
@@ -66,6 +75,10 @@ enum CLIContractChecks {
         precondition(failure["exitCode"] as? Int32 == 3)
         let nested = failure["error"] as? [String: String]
         precondition(nested?["code"] == "missing_input")
+
+        let accepted = CLIProtocol.accepted(request)
+        precondition(accepted["type"] as? String == "accepted")
+        precondition(accepted["jobId"] as? String == request.operationID)
     }
 
     private static func expect(_ code: String, _ arguments: [String]) throws {

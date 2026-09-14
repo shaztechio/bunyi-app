@@ -194,6 +194,13 @@ final class TTSEngine {
 
     private let log = LogStore.shared
 
+    var loadedMode: TTSMode? {
+        guard let loadedRepo else { return nil }
+        return TTSMode.allCases.first { $0.effectiveRepoID == loadedRepo }
+    }
+
+    var loadedModelFolder: String? { loadedDir?.path }
+
     private struct HubTreeEntry: Decodable {
         let type: String
         let path: String
@@ -383,8 +390,10 @@ final class TTSEngine {
         guard !status.isBusy else {
             throw BunyiBusyError(modelsRoot: ModelsLocation.current())
         }
-        let lease = try ModelOperationLease(
-            modelsRoot: ModelsLocation.current(), operation: "models.download")
+        let operationLease = modelLease == nil
+            ? try ModelOperationLease(
+                modelsRoot: ModelsLocation.current(), operation: "models.download")
+            : nil
         downloadItemCount = modes.count
         downloadItemIndex = 0
         aggregateDownloadCompleted = 0
@@ -396,7 +405,7 @@ final class TTSEngine {
             downloadItemIndex = 0
             downloadItemCount = 0
             status = .idle
-            withExtendedLifetime(lease) {}
+            withExtendedLifetime(operationLease) {}
         }
 
         var downloaded: [URL] = []

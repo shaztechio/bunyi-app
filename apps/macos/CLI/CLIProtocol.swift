@@ -59,6 +59,13 @@ enum CLIProtocol {
         return message
     }
 
+    static func accepted(_ request: CLIRequest) -> CLIMessage {
+        var message = envelope(request, type: "accepted")
+        message["ok"] = true
+        message["jobId"] = request.operationID
+        return message
+    }
+
     static func event(_ request: CLIRequest, type: String,
                       _ fields: CLIMessage = [:]) -> CLIMessage {
         var message = envelope(request, type: type)
@@ -113,20 +120,29 @@ enum OperationID {
     }
 }
 
-final class CLIOutput: @unchecked Sendable {
+@MainActor
+final class CLIOutput {
     private let lock = NSLock()
     private let json: Bool
     private let jsonl: Bool
+    private let eventSink: (@MainActor (CLIMessage) -> Void)?
     private var finished = false
 
-    init(json: Bool, jsonl: Bool) {
+    init(json: Bool, jsonl: Bool,
+         eventSink: (@MainActor (CLIMessage) -> Void)? = nil) {
         self.json = json
         self.jsonl = jsonl
+        self.eventSink = eventSink
     }
 
     func event(_ message: CLIMessage) {
         lock.withLock {
-            guard !finished, !json else { return }
+            guard !finished else { return }
+            if let eventSink {
+                eventSink(message)
+                return
+            }
+            guard !json else { return }
             if jsonl {
                 writeJSON(message, to: .standardOutput)
             } else {
