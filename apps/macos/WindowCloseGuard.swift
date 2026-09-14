@@ -99,7 +99,19 @@ struct WindowCloseGuard: NSViewRepresentable {
             alert.addButton(withTitle: "Keep Working")
             alert.addButton(withTitle: "Stop and Close")
             alert.buttons.last?.hasDestructiveAction = true
-            guard alert.runModal() == .alertSecondButtonReturn else { return false }
+            // NSAlert assigns Return to the first button, but with no Cancel
+            // role it leaves Escape inert. Intercept Escape for the duration
+            // of this modal run and abort it; every non-second response already
+            // means the safe "Keep Working" path below.
+            let escapeMonitor = NSEvent.addLocalMonitorForEvents(
+                matching: .keyDown) { event in
+                    guard event.keyCode == 53 else { return event }
+                    NSApp.abortModal()
+                    return nil
+                }
+            let response = alert.runModal()
+            if let escapeMonitor { NSEvent.removeMonitor(escapeMonitor) }
+            guard response == .alertSecondButtonReturn else { return false }
 
             // Stop first, close after. Returning true here would tear the
             // window down while the engine was still generating: the status

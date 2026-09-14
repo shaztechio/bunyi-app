@@ -22,6 +22,18 @@ import SwiftUI
 import BunyiMLXCore
 import UniformTypeIdentifiers
 
+private enum SettingsTab: Hashable {
+    case general, models, storage, backup
+}
+
+private enum SettingsFocusTarget: Hashable {
+    case generalAppearance, generalMemory
+    case modelsPreset, modelRestore(UUID), modelDelete(UUID)
+    case storageChange, storageShowInFinder, storageUseDefault
+    case storageDelete(URL), storageCopy
+    case backupStop, backupCreate, backupRestore
+}
+
 struct SettingsView: View {
     @State private var backup = BackupManager()
     @AppStorage("appearance") private var appearance: AppAppearance = .system
@@ -44,6 +56,13 @@ struct SettingsView: View {
     @State private var newConfigName = ""
     @State private var configError: String?
     @State private var pendingConfigDeletion: ModelConfig?
+    @State private var selectedTab: SettingsTab = .general
+    @FocusState private var focusedControl: SettingsFocusTarget?
+
+    private static let tabShortcutKeys: Set<KeyEquivalent> = ["1", "2", "3", "4"]
+    private static let tabNavigationKeys: Set<KeyEquivalent> = [
+        .tab, KeyEquivalent(Character("\u{19}")),
+    ]
 
     /// Modes currently pointed at a Hugging Face repo, and their repo IDs.
     ///
@@ -79,17 +98,33 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        TabView {
+        TabView(selection: $selectedTab) {
             generalTab
-                .tabItem { Label("General", systemImage: "gearshape") }
+                .tabItem {
+                    Label("General", systemImage: "gearshape").focusable(false)
+                }
+                .tag(SettingsTab.general)
             modelsTab
-                .tabItem { Label("Models", systemImage: "person.wave.2") }
+                .tabItem {
+                    Label("Models", systemImage: "person.wave.2").focusable(false)
+                }
+                .tag(SettingsTab.models)
             storageTab
-                .tabItem { Label("Storage", systemImage: "internaldrive") }
+                .tabItem {
+                    Label("Storage", systemImage: "internaldrive").focusable(false)
+                }
+                .tag(SettingsTab.storage)
             backupTab
-                .tabItem { Label("Backup", systemImage: "archivebox") }
+                .tabItem {
+                    Label("Backup", systemImage: "archivebox").focusable(false)
+                }
+                .tag(SettingsTab.backup)
         }
         .frame(width: 560, height: 440)
+        .onKeyPress(keys: Self.tabShortcutKeys, phases: .down,
+                    action: selectTabFromShortcut)
+        .onKeyPress(keys: Self.tabNavigationKeys,
+                    phases: .down, action: wrapSettingsFocus)
         .onAppear(perform: refreshFolderPath)
         // A real binding, not .constant: dismissing with Escape must clear the
         // pending deletion, or the dialog reappears with no way out.
@@ -150,6 +185,9 @@ struct SettingsView: View {
                     }
                 }
                 .pickerStyle(.segmented)
+                .focused($focusedControl, equals: .generalAppearance)
+                .onKeyPress(keys: Self.tabNavigationKeys,
+                            phases: .down, action: moveBeforePage)
                 Text("System follows your macOS appearance; Light and Dark "
                     + "pin the app regardless. Applies immediately.")
                     .font(.caption)
@@ -159,6 +197,7 @@ struct SettingsView: View {
 
             Section {
                 Toggle("Free memory when switching modes", isOn: $unloadOnModeSwitch)
+                    .focused($focusedControl, equals: .generalMemory)
                 Text("Each mode uses its own model, and a model can be several "
                     + "gigabytes. Leave this on and Bunyi lets go of a mode's "
                     + "model as soon as you leave it. Turn it off to keep it "
@@ -176,6 +215,9 @@ struct SettingsView: View {
         Form {
             Section {
                 repoField("Preset voice", text: $presetRepo, mode: .presetVoice)
+                    .focused($focusedControl, equals: .modelsPreset)
+                    .onKeyPress(keys: Self.tabNavigationKeys,
+                                phases: .down, action: moveBeforePage)
                 repoField("Voice design", text: $designRepo, mode: .voiceDesign)
                 repoField("Voice clone", text: $cloneRepo, mode: .voiceClone)
                 Text("A Hugging Face repo ID (MLX conversion of Qwen3-TTS) or a "
@@ -225,6 +267,8 @@ struct SettingsView: View {
                         }
                         Spacer(minLength: 12)
                         Button("Restore") { restore(config) }
+                            .focused($focusedControl,
+                                     equals: .modelRestore(config.id))
                         // Nothing to delete: a built-in was never written to
                         // disk. Saving your own config under the same name
                         // replaces it in the list.
@@ -250,6 +294,8 @@ struct SettingsView: View {
                             .foregroundStyle(.secondary)
                             .help("Delete this configuration")
                             .accessibilityLabel("Delete the configuration \(config.name)")
+                            .focused($focusedControl,
+                                     equals: .modelDelete(config.id))
                         }
                     }
                 }
@@ -355,15 +401,20 @@ struct SettingsView: View {
                 }
                 HStack {
                     Button("Change…") { showFolderPicker = true }
+                        .focused($focusedControl, equals: .storageChange)
+                        .onKeyPress(keys: Self.tabNavigationKeys,
+                                    phases: .down, action: moveBeforePage)
                     Button("Show in Finder") {
                         NSWorkspace.shared.activateFileViewerSelecting(
                             [ModelsLocation.current()])
                     }
+                    .focused($focusedControl, equals: .storageShowInFinder)
                     if ModelsLocation.isCustom {
                         Button("Use default") {
                             ModelsLocation.resetToDefault()
                             refreshFolderPath()
                         }
+                        .focused($focusedControl, equals: .storageUseDefault)
                     }
                 }
                 if let folderError {
@@ -411,6 +462,8 @@ struct SettingsView: View {
                             .foregroundStyle(.secondary)
                             .help("Move to Trash")
                             .accessibilityLabel("Move \(model.name) to Trash")
+                            .focused($focusedControl,
+                                     equals: .storageDelete(model.id))
                         }
                     }
                     Text("Deleting moves the folder to the Trash. The model "
@@ -498,6 +551,8 @@ struct SettingsView: View {
                         }
                         .buttonStyle(.borderless)
                         .help("Copy command")
+                        .accessibilityLabel("Copy pre-download commands")
+                        .focused($focusedControl, equals: .storageCopy)
                     }
                 }
             } header: {
@@ -514,9 +569,16 @@ struct SettingsView: View {
                     if backup.status.isBusy {
                         Button("Stop", role: .destructive) { backup.cancel() }
                             .disabled(!backup.status.canCancel)
+                            .focused($focusedControl, equals: .backupStop)
+                            .onKeyPress(keys: Self.tabNavigationKeys,
+                                        phases: .down, action: moveBeforePage)
                     } else {
                         Button("Back up models…") { chooseBackupDestination() }
+                            .focused($focusedControl, equals: .backupCreate)
+                            .onKeyPress(keys: Self.tabNavigationKeys,
+                                        phases: .down, action: moveBeforePage)
                         Button("Restore from backup…") { chooseRestoreArchive() }
+                            .focused($focusedControl, equals: .backupRestore)
                     }
                 }
                 backupStatus
@@ -629,6 +691,101 @@ struct SettingsView: View {
         TextField(label, text: text, prompt: Text(mode.repoID))
             .textFieldStyle(.roundedBorder)
             .autocorrectionDisabled()
+    }
+
+    /// SwiftUI renders a Settings TabView in the title bar, where its four
+    /// buttons do not expose useful keyboard focus. Number shortcuts provide a
+    /// stable route and put focus on the first control in the selected page.
+    private func selectTabFromShortcut(_ press: KeyPress) -> KeyPress.Result {
+        guard press.modifiers.contains(.command),
+              !press.modifiers.contains(.control),
+              !press.modifiers.contains(.option),
+              !press.modifiers.contains(.shift) else { return .ignored }
+
+        let tab: SettingsTab
+        switch press.key {
+        case "1": tab = .general
+        case "2": tab = .models
+        case "3": tab = .storage
+        case "4": tab = .backup
+        default: return .ignored
+        }
+        selectedTab = tab
+        focusAfterKeyEvent(firstFocusTarget(for: tab))
+        return .handled
+    }
+
+    /// Keep forward and reverse traversal inside the page content. Without
+    /// this, AppKit inserts four title-bar key views after the last content
+    /// control; VoiceOver reaches them as four unnamed "button" stops.
+    private func wrapSettingsFocus(_ press: KeyPress) -> KeyPress.Result {
+        guard !press.modifiers.contains(.command),
+              !press.modifiers.contains(.control),
+              !press.modifiers.contains(.option) else { return .ignored }
+
+        if press.modifiers.contains(.shift) {
+            guard focusedControl == firstFocusTarget(for: selectedTab) else {
+                return .ignored
+            }
+            focusAfterKeyEvent(lastFocusTarget(for: selectedTab))
+        } else {
+            guard focusedControl == lastFocusTarget(for: selectedTab) else {
+                return .ignored
+            }
+            focusAfterKeyEvent(firstFocusTarget(for: selectedTab))
+        }
+        return .handled
+    }
+
+    /// A segmented picker reports focus on its native child rather than on the
+    /// SwiftUI wrapper, so the root FocusState comparison is not dependable for
+    /// reverse traversal. Handle Shift-Tab on each page's first control itself.
+    private func moveBeforePage(_ press: KeyPress) -> KeyPress.Result {
+        guard press.modifiers.contains(.shift),
+              !press.modifiers.contains(.command),
+              !press.modifiers.contains(.control),
+              !press.modifiers.contains(.option) else { return .ignored }
+        focusAfterKeyEvent(lastFocusTarget(for: selectedTab))
+        return .handled
+    }
+
+    private func firstFocusTarget(for tab: SettingsTab) -> SettingsFocusTarget {
+        switch tab {
+        case .general: .generalAppearance
+        case .models: .modelsPreset
+        case .storage: .storageChange
+        case .backup: backup.status.isBusy ? .backupStop : .backupCreate
+        }
+    }
+
+    private func lastFocusTarget(for tab: SettingsTab) -> SettingsFocusTarget {
+        switch tab {
+        case .general:
+            .generalMemory
+        case .models:
+            if let last = configs.listed.last {
+                ModelConfigLibrary.isBuiltIn(last)
+                    ? .modelRestore(last.id) : .modelDelete(last.id)
+            } else {
+                .modelsPreset
+            }
+        case .storage:
+            if !hubModes.isEmpty {
+                .storageCopy
+            } else if let last = models.last {
+                .storageDelete(last.id)
+            } else if ModelsLocation.isCustom {
+                .storageUseDefault
+            } else {
+                .storageShowInFinder
+            }
+        case .backup:
+            backup.status.isBusy ? .backupStop : .backupRestore
+        }
+    }
+
+    private func focusAfterKeyEvent(_ target: SettingsFocusTarget) {
+        DispatchQueue.main.async { focusedControl = target }
     }
 
     private func refreshFolderPath() {

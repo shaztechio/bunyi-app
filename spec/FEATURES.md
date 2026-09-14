@@ -1008,14 +1008,15 @@ chords differ and only the requirement is pinned.
   the safe default. §9's busy-close prompt already pins *Keep Working* as that
   default.
 
-> **The macOS spoken audit remains open. Windows and Linux completed their
-> recorded reader checks; this section remains the contract for future
-> changes.** [#158](https://github.com/shaztechio/bunyi-app/issues/158) tracks
-> the remaining manual VoiceOver work. The keyboard gaps tracked by
+> **macOS, Windows and Linux have each completed a recorded screen-reader
+> pass; this section remains the contract for future changes.** The macOS pass
+> under VoiceOver is recorded in
+> [#158](https://github.com/shaztechio/bunyi-app/issues/158). The keyboard gaps
+> it verified are implemented by
 > [#157](https://github.com/shaztechio/bunyi-app/issues/157) and
-> [#164](https://github.com/shaztechio/bunyi-app/issues/164) are implemented.
-> [#159](https://github.com/shaztechio/bunyi-app/issues/159) is closed after the
-> Windows Narrator and Linux Orca checks.
+> [#164](https://github.com/shaztechio/bunyi-app/issues/164). The Windows
+> Narrator and Linux Orca records are in
+> [#159](https://github.com/shaztechio/bunyi-app/issues/159).
 >
 > It is recorded here first for the reason the parity rule exists: both apps
 > reached the same gap independently — a list of user content with no
@@ -1027,7 +1028,13 @@ chords differ and only the requirement is pinned.
 > shortcuts rather than the title bar's unnamed key-view stops: Settings
 > **⌘,**, Doctor **⇧⌘D**, Logs **⌘L** and Help **⌘?**. History has a visible
 > list cursor for arrows, Home, End, Page Up and Page Down, followed by its
-> separately named row actions.
+> separately named row actions. The four native Settings tabs use **⌘1**
+> through **⌘4** in visual order, and Tab wraps inside the selected page rather
+> than entering the four unnamed title-bar stops. The Logs title-bar actions
+> use **⇧⌘C** for Copy all and **⇧⌘K** for Clear; the read-only log pane keeps
+> ordinary **⌘A**, **⌘C** and Find. These explicit routes are required because
+> SwiftUI's title-bar controls do not participate reliably in the content
+> key-view loop.
 >
 > **Linux focus events must work before a reader has explored the tree.**
 > In the 5 Sep 2026 Fedora Orca check (#159), Tab moved focus but Orca spoke
@@ -1069,25 +1076,26 @@ chords differ and only the requirement is pinned.
 > validation messages remain available. Windows retains its usual peer, which
 > uses HelpText for placeholders. Check actual Orca speech as well as AT-SPI.
 >
-> **"A control that changes says what it changed to" is new here, and is
-> unverified on macOS.** It was added because Windows failed it: the pickers
-> moved through their values in silence, and nothing in the app was wrong —
-> The toolkit did not deliver a usable selection change to the reader. **Windows
-> now satisfies it, confirmed under Narrator by ear on 3 Sep 2026**, not only as
-> a UIA event. Whether SwiftUI's `Picker` announces under VoiceOver has not been
-> checked, and "probably, it usually does" is the assumption that produced this
-> bullet in the first place. #158 is where that gets measured.
+> **"A control that changes says what it changed to" is checked on macOS and
+> Windows.** It was added because Windows failed it: the pickers moved through
+> their values in silence, and nothing in the app was wrong — the toolkit did
+> not deliver a usable selection change to the reader. Windows now satisfies
+> it, confirmed under Narrator by ear on 3 Sep 2026. macOS's native Language,
+> Speaker and mode pickers announced their newly selected values under
+> VoiceOver on 14 Sep 2026. A readable property is still not a substitute for
+> the selection event either reader needs.
 >
-> **The pacing rule holds on Windows, confirmed aloud on 3 Sep 2026. It is
-> unverified on macOS, which has the same ingredient.** `TTSEngine` publishes a token count per frame there as well, so
-> if VoiceOver is given that as a live announcement it will have the same
-> problem: not "too chatty" but *silent*, because nothing is ever allowed to
-> finish. Checked on Windows, where it was found; #158 is where macOS gets the
-> same look.
+> **The pacing rule holds on both native implementations.** `TTSEngine`
+> publishes a token count per frame on macOS, just as the .NET engine does.
+> Bunyi therefore posts a VoiceOver announcement immediately when generation
+> changes phase, succeeds, stops or fails, but frame-count progress at most
+> once every ten seconds. Model downloads retain their separate paced
+> announcement, including receipt health and ETA. Visible status can continue
+> updating between announcements and must not take keyboard focus.
 >
-> Both apps' screen-reader behaviour proper — Narrator and Orca actually
-> speaking, in a real desktop session — remains a manual pass under #159 and
-> #158. Nothing automated substitutes for it.
+> The recorded VoiceOver, Narrator and Orca passes were performed in real
+> desktop sessions. Automated pacing and focus checks protect their mechanics,
+> but do not substitute for listening again after a toolkit or bridge change.
 
 ---
 

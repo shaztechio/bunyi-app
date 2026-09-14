@@ -39,10 +39,16 @@ struct LogsView: View {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(store.text, forType: .string)
                 }
+                .keyboardShortcut("c", modifiers: [.command, .shift])
+                .help("Copy all logs (⇧⌘C)")
+                .focusable(false)
                 .disabled(store.entries.isEmpty)
             }
             ToolbarItem {
                 Button("Clear") { store.clear() }
+                    .keyboardShortcut("k", modifiers: [.command, .shift])
+                    .help("Clear logs (⇧⌘K)")
+                    .focusable(false)
                     .disabled(store.entries.isEmpty)
             }
         }
