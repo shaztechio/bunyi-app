@@ -71,9 +71,11 @@ public sealed class DownloadRecoveryTests : IDisposable
         var store = new SettingsStore(log, Path.Combine(root, "settings.json"));
         store.SaveStrict(new AppSettings { ModelsFolder = root });
         var calls = 0;
-        using var http = new HttpClient(new Handler(_ =>
+        string? requestedHost = null;
+        using var http = new HttpClient(new Handler(request =>
         {
             calls++;
+            requestedHost = request.RequestUri!.Host;
             var response = new HttpResponseMessage(HttpStatusCode.TooManyRequests);
             response.Headers.Add("Retry-After", "60");
             response.Headers.TryAddWithoutValidation("RateLimit", "\"resolvers\";r=0;t=90");
@@ -95,7 +97,7 @@ public sealed class DownloadRecoveryTests : IDisposable
         try
         {
             var wait = Assert.Single(events, e => e.RootElement.GetProperty("type").GetString() == "waiting").RootElement;
-            Assert.Equal("huggingface.co", wait.GetProperty("host").GetString());
+            Assert.Equal(requestedHost, wait.GetProperty("host").GetString());
             Assert.InRange(wait.GetProperty("retryAfterSeconds").GetInt32(), 89, 90);
             Assert.Equal(1, wait.GetProperty("retryAttempt").GetInt32());
             Assert.True(wait.GetProperty("retryAt").TryGetDateTimeOffset(out _));
