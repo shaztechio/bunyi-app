@@ -65,6 +65,9 @@ struct BunyiApp: App {
         .defaultSize(width: 760, height: 680)
         .windowResizability(.contentSize)
         .commands {
+            CommandGroup(replacing: .appInfo) {
+                Button("About Bunyi") { AboutCredits.show() }
+            }
             // Replaces SwiftUI's default Help item, which opens a book that was
             // never registered and shows an empty window. `showHelp` resolves
             // the book named by CFBundleHelpBookName in Info.plist.

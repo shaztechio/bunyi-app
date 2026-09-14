@@ -327,6 +327,7 @@ Stored in a `Voices` subfolder of app data, alongside copied audio clips.
     "name": "Eric",
     "fileName": "<UUID>.wav",     // copied clip, sibling of voices.json
     "transcript": "He shoots, he scores…",
+    "transcriptAudioSeconds": 10,  // optional; transcript covers this leading window
     "createdAt": "ISO-8601"
   }
 ]
@@ -334,6 +335,10 @@ Stored in a `Voices` subfolder of app data, alongside copied audio clips.
 
 - The clip is **copied in** (24 kHz mono preferred) so it survives without
   a security-scoped bookmark to the user's original file.
+- `transcriptAudioSeconds` is optional for backward compatibility. When set,
+  cloning uses only that many leading seconds of the copied clip so an
+  automatically generated transcript and its reference audio remain aligned.
+  Missing means the transcript covers the full clip.
 - Entries whose `fileName` is missing on disk are pruned on load.
 
 ## Backup archive

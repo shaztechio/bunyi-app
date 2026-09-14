@@ -57,10 +57,12 @@ enum LibraryCommand {
         }
         let reference = URL(fileURLWithPath: path)
         var transcript = request.value("transcript")
+        var transcriptAudioSeconds: TimeInterval?
         if request.has("auto-transcribe") {
             transcript = try await transcribe(
                 reference, request: request, output: output,
                 cancelled: cancelled)
+            transcriptAudioSeconds = ReferenceClipPolicy.automaticTranscriptSeconds
         }
         guard let transcript,
               !transcript.trimmingCharacters(
@@ -75,7 +77,8 @@ enum LibraryCommand {
         let voice: SavedVoice
         do {
             voice = try library.save(
-                name: name, audioURL: reference, transcript: transcript)
+                name: name, audioURL: reference, transcript: transcript,
+                transcriptAudioSeconds: transcriptAudioSeconds)
         } catch {
             throw CLIError(
                 "voice_save_failed", error.localizedDescription, exitCode: 10)
@@ -119,13 +122,17 @@ enum LibraryCommand {
     }
 
     private static func voiceMessage(_ voice: SavedVoice) -> CLIMessage {
-        [
+        var message: CLIMessage = [
             "id": voice.id.uuidString,
             "name": voice.name,
             "fileName": voice.fileName,
             "transcript": voice.transcript,
             "createdAt": CLIProtocol.timestamp(voice.createdAt),
         ]
+        if let seconds = voice.transcriptAudioSeconds {
+            message["transcriptAudioSeconds"] = seconds
+        }
+        return message
     }
 
     private static var outputDirectory: URL {
@@ -211,6 +218,7 @@ enum LibraryCommand {
         message["voiceDescription"] = metadata.voiceDescription ?? NSNull()
         message["referenceTranscript"] = metadata.referenceTranscript ?? NSNull()
         message["continuationModelRepo"] = metadata.continuationModelRepo ?? NSNull()
+        message["platform"] = metadata.platform ?? NSNull()
         return message
     }
 }

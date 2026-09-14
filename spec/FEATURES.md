@@ -9,7 +9,7 @@ which audio library) are noted but never change the observable behavior.
 The command-line interface exposes these features to agentic systems.
 Its command, progress, output, one-shot, and persistent-server contract is in
 [`CLI.md`](CLI.md). Windows/Linux implement it through the shared ONNX runtime;
-native macOS implementation is tracked separately in #217.
+native macOS implements it through the MLX runtime.
 
 The right-hand "macOS source" references point at the reference
 implementation in `apps/macos/` so a second implementation has something
@@ -629,6 +629,12 @@ macOS source: `TTSEngine.loadReferenceAudio`, `ReferenceTranscriber.swift`.
 - Reference audio **must be resampled to 24 kHz mono** before use — the
   model asserts that rate; feeding 44.1/48 kHz produces distorted,
   wrong-pitch clones. Downmix stereo → mono.
+- For macOS automatic transcription, transcription and cloning use the exact
+  same first **up to 10 seconds** of the recording. A longer source file remains
+  valid; it is sampled rather than rejected. A typed or previously saved full
+  transcript keeps the existing full-clip behaviour. When an automatically
+  regenerated saved-voice transcript covers a sampled window, that window is
+  persisted with the recipe so later generations keep the same alignment.
 - Voice clone is **ICL**: it requires the reference **transcript** to align
   audio to words. An empty transcript yields gibberish that ignores the
   target text — so the transcript is effectively mandatory.
@@ -647,7 +653,13 @@ macOS source: `TTSEngine.loadReferenceAudio`, `ReferenceTranscriber.swift`.
   the transcript or retry; cancellation must not proceed to the next stage.
   An explicit Listen again action may still refresh the transcript separately.
   - macOS: Speech framework (`SFSpeechRecognizer`), fed PCM buffers (not a
-    file URL — the recognition daemon can't read a sandboxed file).
+    file URL — the recognition daemon can't read a sandboxed file), when the
+    user has selected a language. **Auto** uses the same local multilingual
+    Whisper model as the CLI so it actually detects the language instead of
+    silently assuming English. Empty or unavailable Speech recognition falls
+    back to that local model; reference audio is never sent to Apple's server.
+    The model is downloaded on first use through §3b's ordinary resumable,
+    checksummed transcription-model flow.
   - .NET (Win+Linux): Whisper (whisper.cpp), so the same words come out on
     both OSes and nothing leaves the machine.
     - The model is **fetched on first use** through the same downloader as
@@ -671,7 +683,10 @@ macOS source: `VoiceLibrary.swift`.
 - Save a clone recipe: **name + reference clip + transcript**. The clip is
   **copied into app storage** (not referenced by path) so it survives
   relaunch. Appears in a picker in clone mode; selecting it fills reference
-  + transcript. Delete removes the entry and its copied clip.
+  + transcript. A legacy saved voice with no transcript automatically
+  regenerates and persists one locally on the next Generate, including the
+  optional sampled-audio window that transcript covers. Delete removes the
+  entry and its copied clip.
 - Persisted as `voices.json` + copied audio (schema in `DATA-FORMATS.md`).
 - On load, entries whose audio is missing are pruned.
 - Not a real model "preset" — presets are trained speaker tokens; this just

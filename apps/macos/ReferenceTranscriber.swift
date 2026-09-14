@@ -30,7 +30,11 @@ public enum ReferenceTranscriber {
     /// Speech recognizers expect mono; 16 kHz is the canonical rate.
     private static let recognitionSampleRate: Double = 16000
 
-    public static func transcribe(url: URL, locale: Locale) async throws -> String {
+    public static func transcribe(
+        url: URL,
+        locale: Locale,
+        maximumSeconds: TimeInterval? = nil
+    ) async throws -> String {
         guard await requestAuthorization() else {
             throw TTSError.transcriptionNotAuthorized
         }
@@ -42,27 +46,29 @@ public enum ReferenceTranscriber {
         // Decode in-process — we hold the security scope, the recognition
         // daemon does not, so a file URL request comes back empty. Convert to
         // mono at the recognizer's rate; stereo/odd rates make the task fail.
-        let buffer = try decodeMono(from: url)
+        let buffer = try decodeMono(from: url, maximumSeconds: maximumSeconds)
 
-        // Prefer on-device (stays local). Its model may not be provisioned,
-        // which surfaces as an opaque error — fall back to the server model.
-        if recognizer.supportsOnDeviceRecognition {
-            do {
-                return try await recognize(buffer, with: recognizer, onDevice: true)
-            } catch is CancellationError {
-                throw CancellationError()
-            } catch {
-                await log("On-device transcription failed (\(error.localizedDescription))"
-                    + " — retrying with Apple's server recognizer")
-            }
+        guard recognizer.supportsOnDeviceRecognition else {
+            throw TTSError.transcriptionUnavailable
         }
-        return try await recognize(buffer, with: recognizer, onDevice: false)
+        do {
+            return try await recognize(buffer, with: recognizer, onDevice: true)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as TTSError {
+            throw error
+        } catch {
+            await log("On-device transcription failed: \(error.localizedDescription)")
+            throw TTSError.transcriptionFailed
+        }
     }
 
     /// Headless transcription never sends audio to Apple's recognition
     /// service and never tries to raise a permission prompt from a server.
     public static func transcribeOnDevice(
-        url: URL, locale: Locale
+        url: URL,
+        locale: Locale,
+        maximumSeconds: TimeInterval? = nil
     ) async throws -> String {
         guard SFSpeechRecognizer.authorizationStatus() == .authorized else {
             throw TTSError.transcriptionNotAuthorized
@@ -72,7 +78,8 @@ public enum ReferenceTranscriber {
             throw TTSError.transcriptionUnavailable
         }
         return try await recognize(
-            decodeMono(from: url), with: recognizer, onDevice: true)
+            decodeMono(from: url, maximumSeconds: maximumSeconds),
+            with: recognizer, onDevice: true)
     }
 
     private static func log(_ message: String) async {
@@ -112,16 +119,23 @@ public enum ReferenceTranscriber {
         return trimmed
     }
 
-    /// Whole clip decoded to mono Float32 at `recognitionSampleRate`.
-    private static func decodeMono(from url: URL) throws -> AVAudioPCMBuffer {
+    /// Requested leading clip window decoded to mono Float32 at
+    /// `recognitionSampleRate`.
+    private static func decodeMono(
+        from url: URL,
+        maximumSeconds: TimeInterval?
+    ) throws -> AVAudioPCMBuffer {
         let file = try AVAudioFile(forReading: url)
         let inFormat = file.processingFormat
+        let framesToRead = maximumSeconds.map {
+            min(file.length, AVAudioFramePosition($0 * inFormat.sampleRate))
+        } ?? file.length
         guard let read = AVAudioPCMBuffer(
             pcmFormat: inFormat,
-            frameCapacity: AVAudioFrameCount(file.length)) else {
+            frameCapacity: AVAudioFrameCount(framesToRead)) else {
             throw TTSError.referenceAudioUnreadable
         }
-        try file.read(into: read)
+        try file.read(into: read, frameCount: AVAudioFrameCount(framesToRead))
 
         guard let outFormat = AVAudioFormat(
             commonFormat: .pcmFormatFloat32, sampleRate: recognitionSampleRate,

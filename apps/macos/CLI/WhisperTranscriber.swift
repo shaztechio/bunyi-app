@@ -322,7 +322,9 @@ enum CLIWhisperTranscriber {
         parameters.print_realtime = false
         parameters.print_timestamps = false
         parameters.print_special = false
-        parameters.detect_language = language == nil
+        // Passing "auto" asks Whisper to detect and then transcribe. Its
+        // detect_language flag performs detection only and returns no text.
+        parameters.detect_language = false
         parameters.abort_callback = { pointer in
             guard let pointer else { return false }
             return Unmanaged<WhisperAbortState>
@@ -338,11 +340,7 @@ enum CLIWhisperTranscriber {
                     Int32(buffer.count))
             }
         }
-        let result = if let language {
-            language.withCString { execute($0) }
-        } else {
-            execute(nil)
-        }
+        let result = (language ?? "auto").withCString { execute($0) }
         if abort.isCancelled || Task.isCancelled {
             throw CancellationError()
         }

@@ -108,12 +108,14 @@ reliably from AppleScript, and the gaps it finds are real.
 - `BackupManager.swift` — zip backup/restore, `zip -0` stored, live progress
   + Stop (child process killed via `RunningProcess`), volume-aware save off
   the main actor.
-- `ReferenceTranscriber.swift` — on-device auto-transcription (Speech) when
-  the transcript field is blank; feeds PCM buffers, not a file URL.
-- `WhisperModelStore.swift` / `CLI/WhisperTranscriber.swift` — the CLI's local
-  Whisper fallback. A terminal is the TCC-responsible process for a standalone
-  executable, so Apple Terminal cannot reliably request Speech permission;
-  the CLI downloads the multilingual base model and never sends audio away.
+- `ReferenceTranscriber.swift` — on-device Speech transcription for an
+  explicitly selected language; feeds PCM buffers, not a file URL.
+- `LocalWhisperTranscriber.swift` / `WhisperModelStore.swift` — local
+  multilingual Auto transcription and Speech fallback. The app and CLI share
+  the downloaded base model contract and never send audio away. The CLI keeps
+  its runtime wrapper in `CLI/WhisperTranscriber.swift`; a terminal is the
+  TCC-responsible process for a standalone executable, so Apple Terminal
+  cannot reliably request Speech permission.
 - `LogStore.swift` / `LogsView.swift` — Logs window (⌘L), mirrored to OSLog
   subsystem `app.bunyi.Bunyi`.
 - `WindowCloseGuard.swift` — confirm-and-stop when the window is closed
@@ -221,11 +223,14 @@ certificate.
 - Voice clone reference audio MUST be 24 kHz mono (`loadReferenceAudio`
   resamples; do not use `loadAudioArray`, which keeps native rate).
 - Voice clone is ICL: it REQUIRES the transcript. In the app, blank means
-  Speech with PCM buffers (the recognition daemon cannot read a sandboxed
-  file URL) and `NSSpeechRecognitionUsageDescription`. In the standalone CLI,
-  blank means local whisper.cpp using the downloaded multilingual base model;
-  Apple Terminal cannot be the responsible process for a reliable Speech
-  permission prompt.
+  local Whisper for Auto, or Speech with PCM buffers for an explicit language
+  (the recognition daemon cannot read a sandboxed file URL) and
+  `NSSpeechRecognitionUsageDescription`. Automatic transcription and clone
+  inference must use the same leading, at-most-10-second audio window; saved
+  recipes persist that optional window. In the standalone CLI, blank means
+  local whisper.cpp using the downloaded multilingual base model; Apple
+  Terminal cannot be the responsible process for a reliable Speech permission
+  prompt.
 - Metal library errors at runtime → the README `default.metallib` copy step.
 - swift-qwen3-tts is young: pin the resolved commit in Package.resolved
   before any release.

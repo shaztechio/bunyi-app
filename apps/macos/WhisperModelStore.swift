@@ -94,11 +94,16 @@ public enum WhisperModelStore {
 @MainActor
 public final class WhisperModelDownload {
     private let mailbox = DownloadReceiptMailbox()
+    private var activeTransfer: ModelFileTransfer?
 
     public init() {}
 
     public func snapshot() -> ModelDownloadProgress {
         mailbox.snapshot()
+    }
+
+    public func requestReconnect() {
+        activeTransfer?.requestReconnect()
     }
 
     public func run(ownsLease: Bool = false) async throws -> URL {
@@ -151,6 +156,7 @@ public final class WhisperModelDownload {
                 digest: WhisperModelStore.sha256,
                 expected: WhisperModelStore.expectedBytes,
                 mailbox: mailbox)
+            activeTransfer = transfer
             let response: HTTPResponseInfo
             do {
                 let configuration = URLSessionConfiguration.ephemeral
@@ -163,7 +169,12 @@ public final class WhisperModelDownload {
                 response = try await transfer.run(
                     from: source, configuration: configuration)
             } catch {
+                activeTransfer = nil
                 try Task.checkCancellation()
+                if transfer.reconnectRequested {
+                    mailbox.reconnecting()
+                    continue
+                }
                 guard Self.isTransient(error),
                       connectionRetries < DownloadRetryPolicy.maximumRetries else {
                     throw error
@@ -174,6 +185,7 @@ public final class WhisperModelDownload {
                     for: .seconds(Int64(1 << connectionRetries)))
                 continue
             }
+            activeTransfer = nil
             try Task.checkCancellation()
             if response.statusCode == 429 {
                 let retryNumber = min(

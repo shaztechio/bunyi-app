@@ -96,7 +96,6 @@ public extension TTSMode {
 /// so the sandbox re-grants access across launches.
 @MainActor
 public enum ModelsLocation {
-    private static let bookmarkKey = "modelsFolderBookmark"
     private static var activeScopedURL: URL?
 
     public static var defaultDir: URL {
@@ -109,7 +108,7 @@ public enum ModelsLocation {
         if CLISettingsStore.isCLI {
             return CLISettingsStore.loadLenient().modelsFolder != nil
         }
-        return UserDefaults.standard.data(forKey: bookmarkKey) != nil
+        return ModelsFolderBookmarkStore.read() != nil
     }
 
     /// Resolve the configured folder, starting security-scoped access once
@@ -128,7 +127,7 @@ public enum ModelsLocation {
                 "Could not reopen the CLI models folder — using the default")
         }
         if let active = activeScopedURL { return active }
-        if let data = UserDefaults.standard.data(forKey: bookmarkKey) {
+        if let data = ModelsFolderBookmarkStore.read() {
             var stale = false
             if let url = try? URL(resolvingBookmarkData: data,
                                   options: .withSecurityScope,
@@ -136,7 +135,7 @@ public enum ModelsLocation {
                                   bookmarkDataIsStale: &stale),
                url.startAccessingSecurityScopedResource() {
                 if stale, let fresh = try? url.bookmarkData(options: .withSecurityScope) {
-                    UserDefaults.standard.set(fresh, forKey: bookmarkKey)
+                    ModelsFolderBookmarkStore.write(fresh)
                 }
                 activeScopedURL = url
                 return url
@@ -152,14 +151,14 @@ public enum ModelsLocation {
 
     public static func set(_ url: URL) throws {
         let data = try url.bookmarkData(options: .withSecurityScope)
-        UserDefaults.standard.set(data, forKey: bookmarkKey)
+        ModelsFolderBookmarkStore.write(data)
         activeScopedURL?.stopAccessingSecurityScopedResource()
         activeScopedURL = nil
         LogStore.shared.log("Models folder set to \(url.path)")
     }
 
     public static func resetToDefault() {
-        UserDefaults.standard.removeObject(forKey: bookmarkKey)
+        ModelsFolderBookmarkStore.clear()
         activeScopedURL?.stopAccessingSecurityScopedResource()
         activeScopedURL = nil
         LogStore.shared.log("Models folder reset to \(defaultDir.path)")

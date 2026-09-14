@@ -105,6 +105,11 @@ public struct ModelDownloadPlan: Sendable {
     public let complete: Bool
 }
 
+public enum ModelDownloadPurpose: Sendable, Equatable {
+    case voice
+    case transcription
+}
+
 // MARK: - Engine
 
 @MainActor
@@ -164,6 +169,7 @@ public final class TTSEngine {
     /// Human-readable download detail ("42% — about 3.1 MB/s, ~6 min left").
     public var downloadDetail: String?
     public var downloadFeedback: ModelDownloadProgress?
+    public private(set) var downloadPurpose: ModelDownloadPurpose = .voice
     public var downloadRecovery: DownloadRecoveryOffer?
     /// Batch-download context consumed by the CLI's aggregate progress stream.
     public private(set) var downloadMode: TTSMode?
@@ -171,15 +177,20 @@ public final class TTSEngine {
     public private(set) var downloadItemCount = 0
     public private(set) var aggregateDownloadCompleted: Int64 = 0
     private var activeModelTransfer: ModelFileTransfer?
+    private var activeWhisperDownload: WhisperModelDownload?
     public func reconnectDownload() {
         guard downloadFeedback?.phase == .downloading else { return }
         activeModelTransfer?.requestReconnect()
+        activeWhisperDownload?.requestReconnect()
         downloadFeedback?.phase = .reconnecting
     }
     public func clearDownloadRecovery() { downloadRecovery = nil }
     /// Transcript produced by auto-transcription, so the UI can show it and
     /// save it with the voice instead of storing an empty string.
     public var lastReferenceTranscript: String?
+    /// Leading audio window covered by `lastReferenceTranscript`. Nil means a
+    /// provided transcript covers the full clip.
+    public var lastReferenceTranscriptAudioSeconds: TimeInterval?
 
     private var loadedRepo: String?
     /// Where the loaded model was read from. Compared against a deletion rather
@@ -326,7 +337,7 @@ public final class TTSEngine {
 
     public func unload(reason: String) async {
         let wasLoaded = modelInfo != nil || loadedRepo != nil
-        let what = loadedRepo ?? "the model"
+        let what = loadedRepo.map(PrivacyRedactor.modelSource) ?? "the model"
 
         let runtimeReleased = await runtime.unload()
         guard !wasLoaded || runtimeReleased else {
@@ -363,7 +374,7 @@ public final class TTSEngine {
         }
 
         do {
-            log.log("Preparing \(mode.rawValue) — \(repoID)")
+            log.log("Preparing \(mode.rawValue) — \(PrivacyRedactor.modelSource(repoID))")
             let source = mode.effectiveSource
             status = .checking
             let localDir = try await download(mode: mode, source: source)
@@ -1255,24 +1266,33 @@ public final class TTSEngine {
     private func preparedCloneReference(
         url: URL,
         transcript: String?,
+        transcriptAudioSeconds: TimeInterval?,
         language: String,
         sampleRate: Double
     ) async throws -> (audio: [Float], text: String) {
         let typed = transcript?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasProvidedTranscript = typed?.isEmpty == false
+        let audioMaximumSeconds = ReferenceClipPolicy.audioMaximumSeconds(
+            hasProvidedTranscript: hasProvidedTranscript,
+            savedTranscriptAudioSeconds: transcriptAudioSeconds)
         let text: String
         if let typed, !typed.isEmpty {
             text = typed
         } else {
-            status = .transcribing
-            log.log("No transcript given — transcribing the reference clip on-device")
-            text = try await ReferenceTranscriber.transcribe(
-                url: url, locale: Self.locale(for: language))
+            text = try await transcribeReference(url: url, language: language)
             lastReferenceTranscript = text
-            log.log("Reference transcript: \"\(text)\"")
+            lastReferenceTranscriptAudioSeconds = audioMaximumSeconds
+            logReferenceTranscription(text)
         }
         log.log("Preparing reference audio — resampling to \(Int(sampleRate / 1000)) kHz mono")
+        if let audioMaximumSeconds {
+            log.log(String(
+                format: "Using the first %.1f seconds for matching reference audio and transcript",
+                audioMaximumSeconds))
+        }
         return (try Self.loadReferenceAudio(
-            from: url, targetSampleRate: sampleRate).asArray(Float.self), text)
+            from: url, targetSampleRate: sampleRate,
+            maximumSeconds: audioMaximumSeconds).asArray(Float.self), text)
     }
 
     private func generateLongText(
@@ -1283,7 +1303,8 @@ public final class TTSEngine {
         instruct: String?,
         language: String,
         referenceAudioURL: URL?,
-        referenceText: String?
+        referenceText: String?,
+        referenceTranscriptAudioSeconds: TimeInterval?
     ) async throws -> (samples: [Float], frames: Int,
                        continuationModelRepo: String?) {
         let accumulator = SectionAccumulator()
@@ -1346,7 +1367,9 @@ public final class TTSEngine {
                 gotAccess = url.startAccessingSecurityScopedResource()
                 defer { if gotAccess { url.stopAccessingSecurityScopedResource() } }
                 reference = try await preparedCloneReference(
-                    url: url, transcript: referenceText, language: language,
+                    url: url, transcript: referenceText,
+                    transcriptAudioSeconds: referenceTranscriptAudioSeconds,
+                    language: language,
                     sampleRate: Double(initialModel.sampleRate))
             }
             try await generateSections(
@@ -1388,9 +1411,9 @@ public final class TTSEngine {
             referenceTranscript: mode == .voiceClone
                 ? nonEmpty(referenceText) ?? nonEmpty(lastReferenceTranscript)
                 : nil,
-            modelRepo: Self.metadataSource(mode.effectiveRepoID),
+            modelRepo: PrivacyRedactor.modelSource(mode.effectiveRepoID),
             continuationModelRepo: continuationModelRepo.map(
-                Self.metadataSource),
+                PrivacyRedactor.modelSource),
             appVersion: Self.appVersion, created: Date())
 
         status = .finalizing
@@ -1417,7 +1440,8 @@ public final class TTSEngine {
         instruct: String?,
         language: String,
         referenceAudioURL: URL?,
-        referenceText: String?
+        referenceText: String?,
+        referenceTranscriptAudioSeconds: TimeInterval? = nil
     ) async {
         // Serialization is not a nicety here: one model, non-Sendable, shared
         // by everything below. `stop()` keeps the app busy until abandoned work
@@ -1431,6 +1455,8 @@ public final class TTSEngine {
         lastFailure = nil
         downloadRecovery = nil
         generationDetail = nil
+        lastReferenceTranscript = nil
+        lastReferenceTranscriptAudioSeconds = nil
         do {
             let model = try await prepare(mode: mode)
             try Task.checkCancellation()
@@ -1446,7 +1472,8 @@ public final class TTSEngine {
                     initialModel: model, mode: mode, text: text,
                     speaker: effectiveSpeaker, instruct: instruct, language: language,
                     referenceAudioURL: referenceAudioURL,
-                    referenceText: referenceText)
+                    referenceText: referenceText,
+                    referenceTranscriptAudioSeconds: referenceTranscriptAudioSeconds)
                 let saved = try await saveLongText(
                     completed.samples, mode: mode, text: text,
                     speaker: effectiveSpeaker, instruct: instruct, language: language,
@@ -1471,7 +1498,7 @@ public final class TTSEngine {
                     durationSeconds: Double(completed.samples.count) / 24_000,
                     frames: completed.frames,
                     elapsedSeconds: Date().timeIntervalSince(generateStart),
-                    modelSource: Self.metadataSource(mode.effectiveRepoID),
+                    modelSource: PrivacyRedactor.modelSource(mode.effectiveRepoID),
                     metadata: saved.metadata)
                 status = .idle
                 return
@@ -1492,23 +1519,31 @@ public final class TTSEngine {
                 // it blank, transcribe the clip on-device so they don't have to.
                 let refText: String
                 let typed = referenceText?.trimmingCharacters(in: .whitespacesAndNewlines)
+                let hasProvidedTranscript = typed?.isEmpty == false
+                let audioMaximumSeconds = ReferenceClipPolicy.audioMaximumSeconds(
+                    hasProvidedTranscript: hasProvidedTranscript,
+                    savedTranscriptAudioSeconds: referenceTranscriptAudioSeconds)
                 if let typed, !typed.isEmpty {
                     refText = typed
                 } else {
-                    status = .transcribing
-                    log.log("No transcript given — transcribing the reference "
-                        + "clip on-device")
-                    refText = try await ReferenceTranscriber.transcribe(
-                        url: refURL, locale: Self.locale(for: language))
+                    refText = try await transcribeReference(
+                        url: refURL, language: language)
                     lastReferenceTranscript = refText
-                    log.log("Reference transcript: \"\(refText)\"")
+                    lastReferenceTranscriptAudioSeconds = audioMaximumSeconds
+                    logReferenceTranscription(refText)
                     status = .generating(0)
                 }
 
                 log.log("Preparing reference audio — resampling to "
                     + "\(model.sampleRate / 1000) kHz mono")
+                if let audioMaximumSeconds {
+                    log.log(String(
+                        format: "Using the first %.1f seconds for matching reference audio and transcript",
+                        audioMaximumSeconds))
+                }
                 referenceSamples = try Self.loadReferenceAudio(
-                    from: refURL, targetSampleRate: Double(model.sampleRate))
+                    from: refURL, targetSampleRate: Double(model.sampleRate),
+                    maximumSeconds: audioMaximumSeconds)
                     .asArray(Float.self)
                 runtimeReferenceText = refText
             } else {
@@ -1559,7 +1594,7 @@ public final class TTSEngine {
                 referenceTranscript: mode == .voiceClone
                     ? nonEmpty(referenceText) ?? nonEmpty(lastReferenceTranscript)
                     : nil,
-                modelRepo: Self.metadataSource(mode.effectiveRepoID),
+                modelRepo: PrivacyRedactor.modelSource(mode.effectiveRepoID),
                 appVersion: Self.appVersion,
                 created: Date()
             )
@@ -1588,7 +1623,7 @@ public final class TTSEngine {
                 durationSeconds: Double(savedOutput.samples) / rate,
                 frames: generatedFrames,
                 elapsedSeconds: Date().timeIntervalSince(generateStart),
-                modelSource: Self.metadataSource(mode.effectiveRepoID),
+                modelSource: PrivacyRedactor.modelSource(mode.effectiveRepoID),
                 metadata: metadata)
             status = .idle
         } catch is CancellationError {
@@ -1690,6 +1725,93 @@ public final class TTSEngine {
         status = status.isBusy ? .stopping : .idle
     }
 
+    private func transcribeReference(url: URL, language: String) async throws
+        -> String {
+        let normalized = language.lowercased()
+        if normalized != "auto" {
+            status = .transcribing
+            log.log("No transcript given — transcribing the reference clip on-device")
+            do {
+                return try await ReferenceTranscriber.transcribe(
+                    url: url, locale: Self.locale(for: language),
+                    maximumSeconds: ReferenceClipPolicy.automaticTranscriptSeconds)
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                log.log("Apple on-device transcription did not succeed — "
+                    + "using Bunyi's local multilingual transcriber")
+            }
+        } else {
+            log.log("No transcript given — detecting its language and "
+                + "transcribing locally")
+        }
+
+        let modelURL = try await prepareLocalTranscriptionModel()
+        status = .transcribing
+        generationDetail = "Transcribing the reference clip locally…"
+        let control = WhisperTranscriptionControl()
+        do {
+            let text = try await LocalWhisperTranscriber.transcribe(
+                url, modelURL: modelURL, language: language,
+                maximumSeconds: ReferenceClipPolicy.automaticTranscriptSeconds,
+                control: control)
+            generationDetail = nil
+            return text
+        } catch is CancellationError {
+            control.cancel()
+            generationDetail = nil
+            throw CancellationError()
+        } catch {
+            generationDetail = nil
+            log.log("Local transcription failed: \(error.localizedDescription)")
+            throw TTSError.transcriptionFailed
+        }
+    }
+
+    private func prepareLocalTranscriptionModel() async throws -> URL {
+        let download = WhisperModelDownload()
+        activeWhisperDownload = download
+        downloadPurpose = .transcription
+        generationDetail = "Checking the local transcription model…"
+        downloadFeedback = ModelDownloadProgress(
+            phase: .checking,
+            available: WhisperModelStore.status().downloadedBytes,
+            total: WhisperModelStore.expectedBytes,
+            file: WhisperModelStore.fileName,
+            fileTotal: WhisperModelStore.expectedBytes)
+        status = .checking
+
+        let operation = Task { @MainActor in
+            try await download.run(ownsLease: modelLease != nil)
+        }
+        let ticker = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(250))
+                guard let self, !Task.isCancelled else { break }
+                let progress = download.snapshot()
+                self.downloadFeedback = progress
+                switch progress.phase {
+                case .downloading, .reconnecting, .waiting:
+                    self.status = .downloading(progress.fraction)
+                case .checking, .sizing, .verifying:
+                    self.status = .checking
+                }
+            }
+        }
+        defer {
+            ticker.cancel()
+            activeWhisperDownload = nil
+            downloadFeedback = nil
+            downloadPurpose = .voice
+        }
+
+        return try await withTaskCancellationHandler {
+            try await operation.value
+        } onCancel: {
+            operation.cancel()
+        }
+    }
+
     /// Work that was abandoned by cancellation but is still running inside the
     /// inference engine. Awaiting it is how the app knows the model is free.
     private var pendingWork: Task<Void, Never>?
@@ -1742,16 +1864,20 @@ public final class TTSEngine {
     /// sample-rate argument, so it assumes 24 kHz. Feeding a 44.1/48 kHz clip
     /// unchanged is exactly what produces distorted, wrong-pitch output.
     nonisolated private static func loadReferenceAudio(
-        from url: URL, targetSampleRate: Double
+        from url: URL, targetSampleRate: Double,
+        maximumSeconds: TimeInterval? = nil
     ) throws -> MLXArray {
         let file = try AVAudioFile(forReading: url)
         let inFormat = file.processingFormat
+        let framesToRead = maximumSeconds.map {
+            min(file.length, AVAudioFramePosition($0 * inFormat.sampleRate))
+        } ?? file.length
         guard let inBuffer = AVAudioPCMBuffer(
             pcmFormat: inFormat,
-            frameCapacity: AVAudioFrameCount(file.length)) else {
+            frameCapacity: AVAudioFrameCount(framesToRead)) else {
             throw TTSError.referenceAudioUnreadable
         }
-        try file.read(into: inBuffer)
+        try file.read(into: inBuffer, frameCount: AVAudioFrameCount(framesToRead))
 
         guard let outFormat = AVAudioFormat(
             commonFormat: .pcmFormatFloat32, sampleRate: targetSampleRate,
@@ -1808,17 +1934,12 @@ public final class TTSEngine {
         return "\(mode.rawValue.replacingOccurrences(of: " ", with: "-"))-\(stamp).wav"
     }
 
-    /// Output metadata identifies a source without persisting URL credentials,
-    /// signed queries or fragments.
-    private static func metadataSource(_ value: String) -> String {
-        guard var parts = URLComponents(string: value), parts.scheme != nil else {
-            return value
+    private func logReferenceTranscription(_ text: String) {
+        if CLISettingsStore.isCLI {
+            log.log("Reference transcription completed")
+        } else {
+            log.log("Reference transcript: \"\(text)\"")
         }
-        parts.user = nil
-        parts.password = nil
-        parts.query = nil
-        parts.fragment = nil
-        return parts.url?.absoluteString ?? value
     }
 
     public func revealLastOutput() {
@@ -1835,6 +1956,7 @@ public enum TTSError: LocalizedError {
     case referenceAudioEmpty
     case transcriptionNotAuthorized
     case transcriptionUnavailable
+    case transcriptionFailed
     case transcriptionEmpty
     case selfHostFileMissing(String, Int)
     case selfHostIncomplete
@@ -1856,6 +1978,8 @@ public enum TTSError: LocalizedError {
             "Allow speech recognition in System Settings > Privacy, or type the reference transcript yourself."
         case .transcriptionUnavailable:
             "Speech recognition isn't available for this language. Type the reference transcript yourself."
+        case .transcriptionFailed:
+            "Automatic transcription failed. Use a clean speech clip and try again."
         case .transcriptionEmpty:
             "Couldn't make out any speech in the reference clip. Use a clean clip, or type the transcript yourself."
         case .selfHostFileMissing(let name, let code):
@@ -1870,6 +1994,7 @@ public enum TTSError: LocalizedError {
             "The model produced invalid section audio. Please generate again."
         }
     }
+
 }
 
 #if canImport(AppKit)

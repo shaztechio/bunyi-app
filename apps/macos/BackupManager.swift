@@ -21,8 +21,9 @@
 //  with `zip -0` (stored, no compression) so it's fast — model weights are
 //  already-incompressible safetensors — and the output size tracks the
 //  source, which drives a real progress bar. A custom (bookmarked) folder
-//  isn't reachable by a child process, so it falls back to NSFileCoordinator
-//  (in-process, no progress). Restore extracts with /usr/bin/ditto on
+//  isn't reachable by a child process, so the app streams it into temporary
+//  app-owned storage first, with byte progress and cancellation, then runs the
+//  same cancellable zip path. Restore extracts with /usr/bin/ditto on
 //  container-local temp paths, then merges in-process.
 //
 
@@ -112,76 +113,101 @@ public final class BackupManager {
         // it a dedicated dir and monitor the whole dir, not the final name.
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("backup-\(UUID().uuidString)", isDirectory: true)
-        let tempZip = tempDir.appendingPathComponent("models.zip")
+        let archiveDir = tempDir.appendingPathComponent("archive", isDirectory: true)
+        let tempZip = archiveDir.appendingPathComponent("models.zip")
+        var destinationWasTouched = false
 
         status = .working("Creating archive…")
         progress = nil
         log.log("Backing up models from \(source.path)")
 
         do {
-            if fastPath {
-                try FileManager.default.createDirectory(
-                    at: tempDir, withIntermediateDirectories: true)
-                let total = Self.directorySize(modelsSubdir)
-                log.log("Creating \(destination.lastPathComponent) — "
-                    + "\(total.formatted(.byteCount(style: .file))) to archive "
-                    + "(stored, no compression)")
-                let monitor = startSizeMonitor(total: total, label: "Archiving") {
-                    Self.directorySize(tempDir)
+            try FileManager.default.createDirectory(
+                at: archiveDir, withIntermediateDirectories: true)
+            let total = Self.directorySize(modelsSubdir)
+            var archiveSource = source
+            if !fastPath {
+                let stagedRoot = tempDir
+                    .appendingPathComponent("staged", isDirectory: true)
+                let stagedModels = stagedRoot
+                    .appendingPathComponent("models", isDirectory: true)
+                archiveSource = stagedRoot
+                status = .working("Preparing custom models folder…")
+                log.log("Preparing custom models folder — copying "
+                    + "\(total.formatted(.byteCount(style: .file))) "
+                    + "into cancellable temporary storage")
+                let copyMonitor = startSizeMonitor(
+                    total: total, label: "Preparing backup") {
+                        Self.directorySize(stagedModels)
+                    }
+                do {
+                    try await Task.detached(priority: .utility) { [running] in
+                        try BackupFileTree.copyDirectory(
+                            from: modelsSubdir, to: stagedModels,
+                            isCancelled: { running.wasCancelled })
+                    }.value
+                } catch {
+                    copyMonitor.cancel()
+                    throw error
+                }
+                copyMonitor.cancel()
+                try Task.checkCancellation()
+            }
+
+            status = .working("Creating archive…")
+            progress = nil
+            log.log("Creating \(destination.lastPathComponent) — "
+                + "\(total.formatted(.byteCount(style: .file))) to archive "
+                + "(stored, no compression)")
+            let archiveMonitor = startSizeMonitor(total: total, label: "Archiving") {
+                Self.directorySize(archiveDir)
+            }
+            let sourceForArchive = archiveSource
+            do {
+                try await Task.detached(priority: .utility) { [running] in
+                    try Self.createZipStored(
+                        sourceFolder: sourceForArchive, to: tempZip,
+                        control: running)
+                }.value
+            } catch {
+                archiveMonitor.cancel()
+                throw error
+            }
+            archiveMonitor.cancel()
+            try Task.checkCancellation()
+
+            // The child zip built inside the container (it can't write to the
+            // sandbox-granted destination directly). Move it out — but OFF the
+            // main thread, or a slow save freezes the UI. On another volume it
+            // is a real multi-GB copy, so stream it with progress and Stop.
+            status = .working("Saving…")
+            progress = nil
+            destinationWasTouched = true
+            if Self.sameVolume(tempZip, destination) {
+                try await Task.detached(priority: .utility) {
+                    let manager = FileManager.default
+                    if manager.fileExists(atPath: destination.path) {
+                        try manager.removeItem(at: destination)
+                    }
+                    try manager.moveItem(at: tempZip, to: destination)
+                }.value
+            } else {
+                let bytes = Self.fileSize(tempZip)
+                log.log("Saving to another drive — copying "
+                    + "\(bytes.formatted(.byteCount(style: .file)))")
+                let saveMonitor = startSizeMonitor(total: bytes, label: "Saving") {
+                    Self.fileSize(destination)
                 }
                 do {
                     try await Task.detached(priority: .utility) { [running] in
-                        try Self.createZipStored(
-                            sourceFolder: source, to: tempZip, control: running)
+                        try Self.copyFile(
+                            from: tempZip, to: destination, control: running)
                     }.value
                 } catch {
-                    monitor.cancel()
+                    saveMonitor.cancel()
                     throw error
                 }
-                monitor.cancel()
-                try Task.checkCancellation()
-
-                // The child zip built inside the container (it can't write to
-                // the sandbox-granted destination directly). Move it out — but
-                // OFF the main thread, or a slow save freezes the UI. On the
-                // same volume that's an instant rename; on a different volume
-                // (network/external drive) it's a real multi-GB copy, so stream
-                // it with a progress bar and Stop support.
-                status = .working("Saving…")
-                progress = nil
-                if Self.sameVolume(tempZip, destination) {
-                    try await Task.detached(priority: .utility) {
-                        let fm = FileManager.default
-                        if fm.fileExists(atPath: destination.path) {
-                            try fm.removeItem(at: destination)
-                        }
-                        try fm.moveItem(at: tempZip, to: destination)
-                    }.value
-                } else {
-                    let bytes = Self.fileSize(tempZip)
-                    log.log("Saving to another drive — copying "
-                        + "\(bytes.formatted(.byteCount(style: .file)))")
-                    let saveMonitor = startSizeMonitor(total: bytes, label: "Saving") {
-                        Self.fileSize(destination)
-                    }
-                    do {
-                        try await Task.detached(priority: .utility) { [running] in
-                            try Self.copyFile(
-                                from: tempZip, to: destination, control: running)
-                        }.value
-                    } catch {
-                        saveMonitor.cancel()
-                        throw error
-                    }
-                    saveMonitor.cancel()
-                }
-            } else {
-                log.log("Creating \(destination.lastPathComponent) — this can "
-                    + "take a few minutes (custom folder: no progress, and "
-                    + "Stop can't interrupt archiving mid-file)")
-                try await Task.detached(priority: .utility) {
-                    try Self.createZipCoordinated(of: source, to: destination)
-                }.value
+                saveMonitor.cancel()
             }
 
             try? FileManager.default.removeItem(at: tempDir)
@@ -193,7 +219,9 @@ public final class BackupManager {
             status = .done("Backed up \(size) to \(destination.lastPathComponent)")
         } catch is CancellationError {
             try? FileManager.default.removeItem(at: tempDir)
-            if fastPath { try? FileManager.default.removeItem(at: destination) }
+            if destinationWasTouched {
+                try? FileManager.default.removeItem(at: destination)
+            }
             progress = nil
             log.log("Backup cancelled")
             status = .idle
@@ -262,30 +290,6 @@ public final class BackupManager {
                 encoding: .utf8) ?? ""
             throw BackupError.zipFailed(message)
         }
-    }
-
-    /// NSFileCoordinator with .forUploading yields a zipped temp copy of
-    /// the directory; the copy must happen inside the accessor block.
-    nonisolated private static func createZipCoordinated(
-        of source: URL, to destination: URL
-    ) throws {
-        let coordinator = NSFileCoordinator()
-        var coordinationError: NSError?
-        var copyError: Error?
-        coordinator.coordinate(readingItemAt: source, options: .forUploading,
-                               error: &coordinationError) { zipURL in
-            do {
-                let fm = FileManager.default
-                if fm.fileExists(atPath: destination.path) {
-                    try fm.removeItem(at: destination)
-                }
-                try fm.copyItem(at: zipURL, to: destination)
-            } catch {
-                copyError = error
-            }
-        }
-        if let coordinationError { throw coordinationError }
-        if let copyError { throw copyError }
     }
 
     // MARK: Restore
@@ -485,17 +489,19 @@ public final class BackupManager {
 final class RunningProcess: @unchecked Sendable {
     private let lock = NSLock()
     private var process: Process?
-    private(set) var wasCancelled = false
+    private var cancelled = false
+
+    var wasCancelled: Bool { lock.withLock { cancelled } }
 
     func reset() {
         lock.lock(); defer { lock.unlock() }
         process = nil
-        wasCancelled = false
+        cancelled = false
     }
 
     func start(_ make: () -> Process) throws -> Process {
         lock.lock(); defer { lock.unlock() }
-        if wasCancelled { throw CancellationError() }
+        if cancelled { throw CancellationError() }
         let p = make()
         process = p
         return p
@@ -508,7 +514,7 @@ final class RunningProcess: @unchecked Sendable {
 
     func cancel() {
         lock.lock()
-        wasCancelled = true
+        cancelled = true
         let p = process
         lock.unlock()
         p?.terminate()

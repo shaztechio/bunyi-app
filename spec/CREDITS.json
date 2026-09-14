@@ -83,7 +83,7 @@
     },
     {
       "name": "whisper.cpp",
-      "does": "Listens to a reference recording in the macOS CLI",
+      "does": "Listens to a reference recording in the macOS app and CLI",
       "licence": "MIT",
       "url": "https://github.com/ggml-org/whisper.cpp",
       "kind": "library",

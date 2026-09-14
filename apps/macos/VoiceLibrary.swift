@@ -24,14 +24,6 @@
 
 import Foundation
 
-public struct SavedVoice: Identifiable, Codable, Hashable {
-    public let id: UUID
-    public var name: String
-    public var fileName: String
-    public var transcript: String
-    public var createdAt: Date
-}
-
 @MainActor
 @Observable
 public final class VoiceLibrary {
@@ -67,7 +59,8 @@ public final class VoiceLibrary {
     /// needing a security-scoped bookmark for the user's original file.
     @discardableResult
     public func save(name: String, audioURL source: URL,
-              transcript: String) throws -> SavedVoice {
+              transcript: String,
+              transcriptAudioSeconds: TimeInterval? = nil) throws -> SavedVoice {
         let id = UUID()
         let ext = source.pathExtension.isEmpty ? "wav" : source.pathExtension
         let fileName = "\(id.uuidString).\(ext)"
@@ -78,7 +71,9 @@ public final class VoiceLibrary {
             at: source, to: dir.appendingPathComponent(fileName))
 
         let voice = SavedVoice(id: id, name: name, fileName: fileName,
-                               transcript: transcript, createdAt: .now)
+                               transcript: transcript,
+                               transcriptAudioSeconds: transcriptAudioSeconds,
+                               createdAt: .now)
         voices.append(voice)
         sortVoices()
         do {
@@ -108,6 +103,31 @@ public final class VoiceLibrary {
         log.log("Deleted voice \"\(voice.name)\"")
     }
 
+    /// A legacy voice may have been saved before automatic transcription
+    /// completed. Once Generate recovers it, keep the result with the recipe
+    /// so future selections do not transcribe the same clip again.
+    public func updateTranscript(
+        _ transcript: String,
+        audioSeconds: TimeInterval?,
+        for id: UUID
+    ) throws {
+        let trimmed = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              let index = voices.firstIndex(where: { $0.id == id }) else { return }
+        let previous = voices[index].transcript
+        let previousSeconds = voices[index].transcriptAudioSeconds
+        voices[index].transcript = trimmed
+        voices[index].transcriptAudioSeconds = audioSeconds
+        do {
+            try persistStrict()
+        } catch {
+            voices[index].transcript = previous
+            voices[index].transcriptAudioSeconds = previousSeconds
+            throw error
+        }
+        log.log("Updated transcript for saved voice \"\(voices[index].name)\"")
+    }
+
     private func sortVoices() {
         voices.sort {
             $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
@@ -116,19 +136,29 @@ public final class VoiceLibrary {
 
     private func load() {
         guard let data = try? Data(contentsOf: indexURL),
-              let decoded = try? JSONDecoder().decode([SavedVoice].self, from: data)
+              let decoded = try? SavedVoiceFile.decode(data)
         else { return }
         // Drop entries whose audio went missing so the picker never offers a
         // voice that can't be generated.
+        let legacyDate = SavedVoiceFile.containsLegacyNumericDate(data)
         voices = decoded.filter {
             FileManager.default.fileExists(atPath: audioURL(for: $0).path)
         }
         sortVoices()
+        if legacyDate || voices.count != decoded.count {
+            do {
+                try persistStrict()
+                if legacyDate {
+                    log.log("Updated saved-voice timestamps to ISO-8601")
+                }
+            } catch {
+                log.log("Could not update the saved-voices index: "
+                    + error.localizedDescription)
+            }
+        }
     }
 
     private func persistStrict() throws {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        try encoder.encode(voices).write(to: indexURL, options: .atomic)
+        try SavedVoiceFile.encode(voices).write(to: indexURL, options: .atomic)
     }
 }

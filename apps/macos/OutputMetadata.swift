@@ -44,6 +44,9 @@ public struct OutputMetadata: Codable, Hashable, Sendable {
     /// fixed designed opening. Nil for every other recording.
     public var continuationModelRepo: String? = nil
     public var appVersion: String
+    /// Which operating system produced the file. Optional so WAVs created by
+    /// earlier Bunyi versions still decode.
+    public var platform: String?
     public var created: Date
 
     public init(mode: String, text: String, language: String,
@@ -51,7 +54,7 @@ public struct OutputMetadata: Codable, Hashable, Sendable {
                 voiceDescription: String? = nil,
                 referenceTranscript: String? = nil,
                 modelRepo: String, continuationModelRepo: String? = nil,
-                appVersion: String, created: Date) {
+                appVersion: String, platform: String? = "macOS", created: Date) {
         self.mode = mode
         self.text = text
         self.language = language
@@ -62,6 +65,7 @@ public struct OutputMetadata: Codable, Hashable, Sendable {
         self.modelRepo = modelRepo
         self.continuationModelRepo = continuationModelRepo
         self.appVersion = appVersion
+        self.platform = platform
         self.created = created
     }
 

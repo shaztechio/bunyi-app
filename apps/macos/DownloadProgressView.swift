@@ -19,6 +19,7 @@ import BunyiMLXCore
 struct DownloadProgressView: View {
     let progress: ModelDownloadProgress
     let mode: String
+    let purpose: ModelDownloadPurpose
     let reconnect: () -> Void
     @State private var announcedAt = Date.distantPast
     @State private var announcedPhase: ModelDownloadProgress.Phase?
@@ -26,10 +27,11 @@ struct DownloadProgressView: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             VStack(alignment: .leading, spacing: 6) {
-                Text(progress.title).font(.headline)
-                Text("\(mode) · Speech has not started").foregroundStyle(Color.accentColor)
+                Text(stageTitle).font(.headline)
+                Text("\(contextName) · Speech has not started")
+                    .foregroundStyle(Color.accentColor)
                     .fixedSize(horizontal: false, vertical: true)
-                Text("Bunyi saves this model for reuse. Speech starts automatically after setup.")
+                Text("Bunyi saves this \(modelKind) for reuse. Speech starts automatically after setup.")
                     .font(.caption).fixedSize(horizontal: false, vertical: true)
                 Text(progress.elapsedText(at: context.date)).font(.caption)
                 VStack(alignment: .leading, spacing: 2) {
@@ -55,7 +57,7 @@ struct DownloadProgressView: View {
                 if progress.isSlow(at: context.date) || progress.stalled(at: context.date) {
                     Button("Reconnect and resume", action: reconnect)
                 }
-                Text("Next: Check downloaded files → Load model → Create speech")
+                Text(nextSteps)
                     .font(.caption).fixedSize(horizontal: false, vertical: true)
             }
             .monospacedDigit()
@@ -65,6 +67,32 @@ struct DownloadProgressView: View {
             .onChange(of: context.date, initial: true) { _, now in announce(at: now) }
             .onChange(of: progress.phase) { _, _ in announce(at: Date()) }
         }
+    }
+
+    private var stageTitle: String {
+        guard purpose == .transcription else { return progress.title }
+        return switch progress.phase {
+        case .checking: "Checking the transcription model"
+        case .sizing: "Calculating transcription-model download size"
+        case .downloading: "Downloading transcription model"
+        case .verifying: "Checking transcription model files"
+        case .reconnecting: "Reconnecting — keeping downloaded bytes"
+        case .waiting: "Waiting to retry transcription-model download"
+        }
+    }
+
+    private var contextName: String {
+        purpose == .transcription ? "Automatic reference transcription" : mode
+    }
+
+    private var modelKind: String {
+        purpose == .transcription ? "transcription model" : "voice model"
+    }
+
+    private var nextSteps: String {
+        purpose == .transcription
+            ? "Next: Transcribe clip → Load voice model → Create speech"
+            : "Next: Check downloaded files → Load model → Create speech"
     }
 
     private func meter(_ title: String, available: Int64, total: Int64, fraction: Double) -> some View {
@@ -90,7 +118,7 @@ struct DownloadProgressView: View {
         let percent = progress.total > 0 ? progress.fraction.formatted(.percent.precision(.fractionLength(1))) : "size unknown"
         let health = progress.isSlow(at: now) ? "Download is slow. " : ""
         AccessibilityAnnouncementCenter.post(
-            "\(progress.title). \(health)\(progress.receiptText(at: now)). "
+            "\(stageTitle). \(health)\(progress.receiptText(at: now)). "
                 + "Overall model download: \(percent). "
                 + "\(progress.arrivalText(at: now)).")
     }
