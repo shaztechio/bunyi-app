@@ -58,6 +58,10 @@ def complete_assets(release, family, version):
             for rid, extension in (("win-x64", "zip"), ("linux-x64", "tar.gz"))
             for cuda in ("", "-cuda")
         }
+        # A complete installer set replaces the standard Windows desktop ZIP.
+        # Legacy releases still need it because their primary link uses it.
+        if has_installers(release, version):
+            archives.remove(f"Bunyi-{version}-win-x64.zip")
         return archives | {name + ".sha256" for name in archives} <= names
     # macOS includes an independent build number and one checksum file for
     # both archives. Require a complete set with the same version AND build.
