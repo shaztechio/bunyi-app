@@ -80,6 +80,24 @@ class SiteBuildTests(unittest.TestCase):
             self.assertNotIn("there is no installer", html)
             self.assertNotIn("INSTALLERS:START", html)
 
+    def test_installer_release_can_replace_windows_desktop_zip(self):
+        candidate = release("dotnet", "1.3.1")
+        removed = {"Bunyi-1.3.1-win-x64.zip", "Bunyi-1.3.1-win-x64.zip.sha256"}
+        candidate["assets"] = [asset for asset in candidate["assets"]
+                               if asset["name"] not in removed]
+        names = installer_names("1.3.1")
+        entries = [{"name": name, "state": "uploaded", "size": 100}
+                   for name in names | {name + ".sha256" for name in names}]
+        candidate["assets"] += entries
+        legacy = [release("dotnet", "1.3.0"), release("macos", "1.3.1")]
+        with tempfile.TemporaryDirectory() as temp:
+            self.assertEqual(build(ROOT / "docs", temp, [candidate] + legacy)["dotnet"], "1.3.1")
+            html = (Path(temp) / "index.html").read_text(encoding="utf-8")
+            self.assertIn("Bunyi-1.3.1-win-x64-setup.exe", html)
+            self.assertNotIn("Bunyi-1.3.1-win-x64.zip", html)
+        candidate["assets"].remove(entries[0])
+        self.assertEqual(select_versions([candidate] + legacy)["dotnet"], "1.3.0")
+
     def test_numeric_order_and_independent_families_across_pages(self):
         pages = [[release("dotnet", "2.9.0"), release("macos", "1.8.0")],
                  [release("dotnet", "2.10.0"), release("dotnet", "1.99.0")]]
