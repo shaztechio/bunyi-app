@@ -20,6 +20,7 @@ param(
     [string]$CompilerPath,
     [string]$Python = 'python',
     [string]$Version,
+    [string]$VcRuntimeDirectory,
     # Inno SignTool command with $f placeholder; credentials stay in the signing
     # tool's environment. The staged EXE/DLLs must already be production-signed.
     [string]$SigningCommand
@@ -65,9 +66,47 @@ $metadata = Join-Path $dotnetRoot ('artifacts/installer-metadata/' + [guid]::New
 & $Python (Join-Path $PSScriptRoot '../desktop_metadata.py') --output $metadata
 if ($LASTEXITCODE -ne 0) { throw 'Store metadata generation failed.' }
 $product = Get-Content -LiteralPath (Join-Path $metadata 'metadata.json') -Raw | ConvertFrom-Json
+if (-not $VcRuntimeDirectory) {
+    $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+    if (-not (Test-Path -LiteralPath $vswhere)) {
+        throw 'Install the Visual Studio C++ redistributable build component or supply -VcRuntimeDirectory (x64 Microsoft.VC*.CRT).'
+    }
+    $visualStudio = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+    if ($LASTEXITCODE -ne 0 -or -not $visualStudio) { throw 'No Visual Studio C++ installation found.' }
+    $candidates = @(Get-ChildItem -Path "$visualStudio/VC/Redist/MSVC/*/x64/Microsoft.VC*.CRT" -Directory |
+        Sort-Object { [version][Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $_.FullName 'vcruntime140.dll')).FileVersion } -Descending)
+    if (-not $candidates.Count) { throw 'No x64 Visual C++ redistributable CRT directory found.' }
+    $VcRuntimeDirectory = $candidates[0].FullName
+}
+foreach ($file in @('msvcp140.dll', 'msvcp140_1.dll', 'vcruntime140.dll', 'vcruntime140_1.dll')) {
+    if (-not (Test-Path -LiteralPath (Join-Path $VcRuntimeDirectory $file))) { throw "Missing Visual C++ runtime: $file" }
+}
+$openmp = Join-Path $VcRuntimeDirectory 'vcomp140.dll'
+if (-not (Test-Path -LiteralPath $openmp)) {
+    $openmpFolder = Join-Path (Split-Path $VcRuntimeDirectory) ((Split-Path $VcRuntimeDirectory -Leaf) -replace '\.CRT$', '.OpenMP')
+    $openmp = Join-Path $openmpFolder 'vcomp140.dll'
+}
+if (-not (Test-Path -LiteralPath $openmp)) { throw 'The x64 Microsoft Visual C++ OpenMP redistributable (vcomp140.dll) is required by Whisper.' }
+# App-local redistribution permits non-administrative installation. Never copy
+# runtime DLLs out of System32: use Microsoft's designated VS Redist directory.
+# Keep the supplied publish immutable, including when preparing signed builds.
+$payload = Join-Path $metadata 'payload'
+New-Item -ItemType Directory -Path $payload | Out-Null
+Get-ChildItem -LiteralPath $publish | Copy-Item -Destination $payload -Recurse
+$runtimeFiles = @((Get-ChildItem -LiteralPath $VcRuntimeDirectory -Filter '*.dll' -File)) + @((Get-Item -LiteralPath $openmp))
+foreach ($dll in $runtimeFiles | Sort-Object FullName -Unique) {
+    $signature = Get-AuthenticodeSignature -LiteralPath $dll.FullName
+    if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'O=Microsoft Corporation') {
+        throw "Visual C++ runtime is not validly signed by Microsoft: $($dll.Name)"
+    }
+    $bytes = [IO.File]::ReadAllBytes($dll.FullName)
+    $peOffset = [BitConverter]::ToInt32($bytes, 0x3c)
+    if ([BitConverter]::ToUInt16($bytes, $peOffset + 4) -ne 0x8664) { throw "Expected x64 runtime: $($dll.Name)" }
+    Copy-Item -LiteralPath $dll.FullName -Destination $payload
+}
 $arguments = @('/Qp', "/DProductVersion=$version", "/DProductName=$($product.name)",
     "/DPublisherName=$($product.publisher)", "/DProductDescription=$($product.description)",
-    "/DPublishDirectory=$publish", "/DMetadataDirectory=$metadata", "/DOutputDirectory=$OutputDirectory",
+    "/DPublishDirectory=$payload", "/DMetadataDirectory=$metadata", "/DOutputDirectory=$OutputDirectory",
     "/DLicensePath=$([IO.Path]::GetFullPath((Join-Path $dotnetRoot '../../LICENSE')))")
 if ($SigningCommand) { $arguments += @('/DSignedBuild', "/Sbunyi=$SigningCommand") }
 & $CompilerPath @arguments (Join-Path $PSScriptRoot 'Bunyi.iss')

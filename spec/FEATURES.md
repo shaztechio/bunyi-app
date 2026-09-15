@@ -1148,7 +1148,9 @@ these are permitted platform-specific distribution formats, not inference change
 The unsigned Store MSIX remains submission preparation (§13).
 
 - Installers contain the self-contained application, including .NET and the
-  packaged mirror default. Models are downloaded by Bunyi, never by setup.
+  packaged mirror default. Windows also carries the Microsoft Visual C++ runtime
+  beside the executable, so native inference does not require a separate elevated
+  prerequisite install. Models are downloaded by Bunyi, never by setup.
 - Windows installs under `%LOCALAPPDATA%\Programs\Bunyi` by default, without
   elevation, adds a Start menu entry and optional desktop shortcut, and registers
   in Installed Apps. A stable identity permits in-place upgrades. Setup and

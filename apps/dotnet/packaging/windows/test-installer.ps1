@@ -54,6 +54,26 @@ try {
     if ((Invoke-Setup $installerPath @('/DIR="' + $install + '"', '/TASKS=desktopicon')) -ne 0) { throw 'Install failed.' }
     if (-not (Test-Path $key)) { throw 'Installed Apps registration missing.' }
     & (Join-Path $PSScriptRoot '../test-defaults.ps1') -Path $install
+    foreach ($dll in @('msvcp140.dll', 'msvcp140_1.dll', 'vcruntime140.dll', 'vcruntime140_1.dll', 'vcomp140.dll')) {
+        if (-not (Test-Path -LiteralPath (Join-Path $install $dll))) { throw "Installer omitted native runtime: $dll" }
+        if ((Get-AuthenticodeSignature -LiteralPath (Join-Path $install $dll)).Status -ne 'Valid') {
+            throw "Invalid Microsoft runtime signature: $dll"
+        }
+    }
+    # Load the installed inference/audio natives too: desktop startup alone
+    # doesn't load ONNX or Whisper and can hide missing CRT/OpenMP dependencies.
+    $nativeHandles = [Collections.Generic.List[IntPtr]]::new()
+    try {
+        foreach ($dll in @('vcruntime140.dll', 'vcruntime140_1.dll', 'msvcp140.dll', 'msvcp140_1.dll', 'vcomp140.dll',
+                            'onnxruntime.dll', 'miniaudio.dll', 'runtimes/win-x64/ggml-base-whisper.dll',
+                            'runtimes/win-x64/ggml-cpu-whisper.dll', 'runtimes/win-x64/ggml-whisper.dll',
+                            'runtimes/win-x64/whisper.dll')) {
+            $nativeHandles.Add([Runtime.InteropServices.NativeLibrary]::Load((Join-Path $install $dll)))
+        }
+    }
+    finally {
+        for ($i = $nativeHandles.Count - 1; $i -ge 0; $i--) { [Runtime.InteropServices.NativeLibrary]::Free($nativeHandles[$i]) }
+    }
     foreach ($shortcut in @((Join-Path ([Environment]::GetFolderPath('Programs')) 'Bunyi.lnk'),
                              (Join-Path ([Environment]::GetFolderPath('Desktop')) 'Bunyi.lnk'))) {
         if (-not (Test-Path -LiteralPath $shortcut)) { throw "Missing shortcut: $shortcut" }

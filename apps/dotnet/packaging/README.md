@@ -23,7 +23,8 @@ Bunyi's existing reverse-domain identity. Linux's launcher is `bunyi-desktop`;
 
 ## Windows
 
-Needs PowerShell 7, Python 3.12+, .NET 10 and Inno Setup 6. CI downloads
+Needs PowerShell 7, Python 3.12+, .NET 10, Visual Studio's C++ redistributable
+component and Inno Setup 6. CI downloads
 Inno Setup **6.7.3** from the official release and verifies its pinned SHA-256.
 
 From `apps/dotnet`:
@@ -59,6 +60,16 @@ Credentials belong in the signing tool's environment. The builder refuses
 unsigned application binaries in this mode, signs setup and uninstall, and
 verifies the finished setup signature before checksumming. Production signing
 is not configured or claimed by this PR. MSIX/Store submission stays separate.
+
+ONNX and Whisper need the Visual C++ CRT and OpenMP runtimes even in a
+self-contained .NET build. Setup stages Microsoft's signed x64 DLLs from
+Visual Studio's `VC/Redist/MSVC/.../x64/Microsoft.VC*.CRT` and sibling
+`Microsoft.VC*.OpenMP` directories beside the app. Override detection with
+`-VcRuntimeDirectory`; it must contain the CRT DLLs with OpenMP beside or in it.
+The builder verifies Microsoft signatures and x64 architecture and never copies
+System32 DLLs. App-local deployment keeps setup non-administrative; runtime
+updates ship with Bunyi releases. See Microsoft's
+[local deployment guidance](https://learn.microsoft.com/en-us/cpp/windows/choosing-a-deployment-method?view=msvc-170).
 
 ## Linux
 
