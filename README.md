@@ -33,10 +33,15 @@ On macOS, drag the signed and notarized app from the `.dmg` to Applications
 and launch. Windows releases provide a setup `.exe`; Linux releases provide
 `.deb` (Ubuntu/Debian) and `.rpm` (Fedora) packages. Install, then open Bunyi
 from Start or your application menu. Portable archives remain available,
-including for older releases such as 1.3.1. The download page only offers
+including for older archive-only releases. The download page only offers
 installers once they are published. No .NET runtime installation is needed.
 Upgrades and uninstall retain models, voices, recordings and settings.
 Windows builds are unsigned; see the code signing policy below.
+
+**NVIDIA GPU acceleration:** follow the [CUDA setup guide](CUDA.md) for the
+Windows CUDA installer or Linux CUDA archive. It covers the NVIDIA driver,
+CUDA 13 and cuDNN versions, library paths, verifying acceleration in Bunyi,
+and switching back to the standard CPU build.
 
 **For agents and terminals:** the [Windows/Linux CLI guide](apps/dotnet/CLI.md)
 covers one-shot generation, an optional resident server, and observable model
