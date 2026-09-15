@@ -2,7 +2,7 @@
 
 The standard CPU desktop publish feeds three installers. All include .NET;
 models remain downloads. CUDA and standalone CLI builds remain separate archives.
-The [spec](../../../../spec/FEATURES.md#14-desktop-installers-windows-and-linux)
+The [spec](../../../spec/FEATURES.md#14-desktop-installers-windows-and-linux)
 defines upgrade, uninstall and data-preservation behavior. macOS keeps its DMG.
 
 ## Metadata and artwork
