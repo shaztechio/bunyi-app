@@ -214,6 +214,9 @@ What ships, per release:
 
 - `Bunyi-<version>-win-x64-setup.exe`: per-user CPU installer, Start menu entry,
   optional desktop shortcut, upgrade and uninstall through Windows Settings.
+- `Bunyi-<version>-win-x64-cuda-setup.exe`: the opt-in NVIDIA build with the
+  same installation identity; either installer can replace the other while
+  preserving data. CUDA/cuDNN prerequisites are installed separately.
 - `bunyi_<version>_amd64.deb` and `bunyi-<version>-1.x86_64.rpm`: CPU desktop
   packages, application-menu entries and native dependencies. Initial validation
   targets are Ubuntu 24.04, Debian 12/13 and Fedora 43/44.

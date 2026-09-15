@@ -145,6 +145,17 @@ jobs:
           $installer = (Get-ChildItem dist/*-setup.exe).FullName
           ./packaging/windows/test-installer.ps1 -Installer $installer -PreviousInstaller artifacts/installer-previous/Bunyi-0.0.1-win-x64-setup.exe
 
+      - name: Build and exercise Windows CUDA installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          dotnet publish src/App -c Release -r win-x64 --self-contained -p:BunyiCuda=true -o artifacts/win-x64-cuda
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ./packaging/windows/build-installer.ps1 -PublishDirectory artifacts/win-x64-cuda -Cuda -CompilerPath "$env:RUNNER_TEMP/inno/compiler/ISCC.exe"
+          $cudaInstaller = (Get-ChildItem dist/*-cuda-setup.exe).FullName
+          $cpuInstaller = (Get-ChildItem dist/*-setup.exe | Where-Object Name -notlike '*-cuda-setup.exe').FullName
+          ./packaging/windows/test-installer.ps1 -Installer $cudaInstaller -Cuda -AlternativeInstaller $cpuInstaller -PreviousInstaller artifacts/installer-previous/Bunyi-0.0.1-win-x64-setup.exe
+
       - name: Build Linux installers
         if: runner.os == 'Linux'
         run: |

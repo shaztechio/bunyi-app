@@ -1,0 +1,10 @@
+Bunyi for NVIDIA GPUs
+
+This edition can accelerate speech generation using a compatible NVIDIA GPU.
+It requires compatible CUDA and cuDNN libraries installed separately. Setup
+does not install NVIDIA drivers, CUDA or cuDNN. If GPU acceleration cannot
+load, Bunyi falls back to the CPU and explains why in its log.
+
+This installer replaces the standard Bunyi installation. Models, saved voices,
+recordings and settings are retained. To switch back, run the standard Bunyi
+installer. Close Bunyi before installing either edition.

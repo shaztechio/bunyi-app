@@ -1,7 +1,8 @@
 # Desktop installers
 
 The standard CPU desktop publish feeds three installers. All include .NET;
-models remain downloads. CUDA and standalone CLI builds remain separate archives.
+models remain downloads. Windows CUDA also has a setup EXE. Linux CUDA and
+standalone CLI builds remain separate archives.
 The [spec](../../../spec/FEATURES.md#14-desktop-installers-windows-and-linux)
 defines upgrade, uninstall and data-preservation behavior. macOS keeps its DMG.
 
@@ -41,6 +42,19 @@ Bunyi and uses a temporary program directory. It checks Start/desktop shortcuts,
 Installed Apps registration, reinstall repair, setup/uninstall refusal while
 the desktop mutex exists, removal, and user-data preservation. It does not
 exercise speech or claim a screen-reader pass. Installer logs are retained.
+
+For CUDA, publish with `-p:BunyiCuda=true` into a separate directory and pass
+`-Cuda` to both `build-installer.ps1` and `test-installer.ps1`. The output is
+`Bunyi-<version>-win-x64-cuda-setup.exe`. The builder checks the dependency
+manifest and provider payload, refusing a CPU/CUDA mismatch.
+
+Both installers use the same Bunyi identity and path. Installing one replaces
+the other while retaining user data. CPU setup removes the exact GPU-provider
+DLLs owned by the CUDA package. Pass the other flavor's installer as
+`-AlternativeInstaller` to exercise a full flavor round trip; CI tests CUDA
+over an older CPU fixture, CUDA → CPU → CUDA, repair, startup and uninstall.
+GPU acceleration itself requires NVIDIA hardware and compatible user-installed
+CUDA/cuDNN libraries; the hosted runner verifies packaging, not GPU inference.
 
 CI also publishes version `0.0.1` as a disposable upgrade fixture, using
 `-p:Version=0.0.1` and the builder's `-Version 0.0.1`. Passing its setup as
