@@ -193,6 +193,9 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
 
       # The tests are not the release gate — dotnet.yml already runs them on
       # every pull request — but a release built from a tree that cannot pass
@@ -213,6 +216,24 @@ jobs:
         shell: pwsh
         working-directory: apps/dotnet
         run: ./packaging/test-defaults.ps1 -Path publish/${{ matrix.rid }}
+
+      - name: Build and exercise Windows installer
+        if: matrix.rid == 'win-x64' && matrix.cuda == false
+        shell: pwsh
+        working-directory: apps/dotnet
+        run: |
+          ./packaging/windows/install-inno.ps1 -Destination "$env:RUNNER_TEMP/inno"
+          ./packaging/windows/build-installer.ps1 -PublishDirectory publish/win-x64 -CompilerPath "$env:RUNNER_TEMP/inno/compiler/ISCC.exe"
+          $installer = (Get-ChildItem dist/*-setup.exe).FullName
+          ./packaging/windows/test-installer.ps1 -Installer $installer
+
+      - name: Build Linux installers
+        if: matrix.rid == 'linux-x64' && matrix.cuda == false
+        working-directory: apps/dotnet
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y rpm
+          python3 packaging/linux/build-packages.py --publish-directory publish/linux-x64
 
       - name: Prepare unsigned MSIX
         if: matrix.rid == 'win-x64' && matrix.cuda == false
@@ -319,8 +340,15 @@ jobs:
           path: apps/dotnet/dist/*
           if-no-files-found: error
 
-  release:
+  linux-installers:
     needs: [version, build]
+    uses: ./.github/workflows/linux-installer-check.yml
+    with:
+      artifact: linux-x64
+      ref: ${{ needs.version.outputs.publish == 'true' && needs.version.outputs.tag || github.ref }}
+
+  release:
+    needs: [version, build, linux-installers]
     if: needs.version.outputs.publish == 'true'
     runs-on: ubuntu-latest
     steps:
@@ -362,16 +390,21 @@ jobs:
 
             printf '\n---\n\n'
             printf '### Installing\n\n'
-            printf '**Windows** — unzip and run `Bunyi.App.exe`.\n'
-            printf '**Linux** — untar and run `./Bunyi.App`.\n\n'
+            printf '**Windows** — run `Bunyi-%s-win-x64-setup.exe`, then open Bunyi from Start.\n' "$version"
+            printf '**Ubuntu/Debian** — install `bunyi_%s_amd64.deb` with your package installer.\n' "$version"
+            printf '**Fedora** — install `bunyi-%s-1.x86_64.rpm` with your package installer.\n' "$version"
+            printf 'Linux packages add Bunyi to your application menu and install native dependencies.\n\n'
+            printf 'Upgrades and uninstall retain your models, voices, recordings and settings. '
+            printf 'Close Bunyi before upgrading. Download a newer installer to update the app.\n\n'
+            printf '**Portable alternatives** — unzip the Windows ZIP and run `Bunyi.App.exe`, '
+            printf 'or extract the Linux tarball and run `./Bunyi.App`.\n\n'
             printf '**CLI for agents and terminals** — use the separate `Bunyi-CLI-` '
             printf 'archive for your OS, extract the entire folder, and run `bunyi --help` '
             printf '(Windows: `bunyi.exe --help`). Add that folder to PATH if desired. '
             printf 'No desktop session or .NET installation is required. '
             printf 'See [the CLI guide](https://github.com/shaztechio/bunyi-app/blob/%s/apps/dotnet/CLI.md) ' "$tag"
             printf 'for one-shot generation, the resident server, and download progress.\n\n'
-            printf 'Self-contained: there is no .NET runtime to install, and nothing is '
-            printf 'written outside the folder you unpack plus your own app-data directory.\n\n'
+            printf 'Self-contained: there is no .NET runtime to install. Models download through Bunyi after installation.\n\n'
             printf 'The **-cuda** downloads are the same app built against ONNX Runtime '
             printf 'with its GPU package, measured 1.7x faster on long text. Take one '
             printf 'only if you have an NVIDIA card **and** the NVIDIA CUDA Toolkit '
@@ -383,10 +416,9 @@ jobs:
             printf '**Windows** — not code-signed. SmartScreen warns the first '
             printf 'time you run it: choose *More info*, then *Run anyway*. There is no '
             printf 'certificate behind the download, so nothing would make that warning '
-            printf 'go away. Verify the archive against the SHA-256 checksum below.\n\n'
-            printf '**Linux** — nothing signs a portable tarball in a way the system '
-            printf 'checks, so there is no equivalent to claim. Verify the archive against '
-            printf 'the SHA-256 checksum published below.\n\n'
+            printf 'go away. Verify the download against the SHA-256 checksum below.\n\n'
+            printf '**Linux** — DEB, RPM and portable downloads are unsigned. Verify them against '
+            printf 'the SHA-256 checksums published below.\n\n'
             printf '**macOS** is a separate download, signed with an Apple Developer ID '
             printf 'certificate and notarized by Apple.\n\n'
             printf '**Team roles** — committers, reviewers and approvers: '

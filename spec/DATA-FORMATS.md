@@ -26,6 +26,13 @@ Subfolders of the data root, identical everywhere: `Models` (the default
 models folder, §3d — relocatable), `Outputs` (§2), `Voices` (§5),
 `ModelConfigs` (§3a).
 
+Windows EXE and Linux DEB/RPM installers use these same roots. Program files
+live separately (`%LOCALAPPDATA%\Programs\Bunyi` or `/usr/lib/bunyi`). Installing,
+upgrading and uninstalling must not remove these data/config roots or any
+user-selected model folder. Package removal, including DEB purge, removes only
+package-owned application files and desktop integration. MSIX virtualization
+and migration remain the separate Store validation described in FEATURES §13.
+
 **Settings and data are separated on the platforms that separate them.** On
 Windows `%APPDATA%` roams and `%LOCALAPPDATA%` does not, so a multi-gigabyte
 models folder under `%APPDATA%` would be handed to a domain roaming profile to

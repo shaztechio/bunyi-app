@@ -1121,8 +1121,8 @@ chords differ and only the requirement is pinned.
 
 Windows can additionally be packaged as a self-contained x64 MSIX using the
 standard CPU build, with the same Bunyi artwork and generation features as the
-portable app. Models remain downloads, not package payload. macOS and Linux
-keep their existing distribution formats; this is Windows packaging only.
+portable app. Models remain downloads, not package payload. This section covers
+Windows Store preparation; direct Windows and Linux installers are defined in §14.
 
 Local-test packages use a separate identity and the display name **Bunyi
 (Local Test)**. Store packages require the exact identity and publisher supplied
@@ -1136,6 +1136,42 @@ Store certification remain tracked in
 [#215](https://github.com/shaztechio/bunyi-app/issues/215). The existing data-format
 spec remains the application contract; migration or storage behavior changes
 require a separate spec update before Store publication.
+
+---
+
+## 14. Desktop installers (Windows and Linux)
+
+The standard x64 CPU desktop build ships as a per-user Windows setup EXE,
+a Debian/Ubuntu DEB, and a Fedora RPM. Portable desktop and CUDA archives and
+the standalone CLI remain available separately. macOS retains its signed DMG;
+these are permitted platform-specific distribution formats, not inference changes.
+The unsigned Store MSIX remains submission preparation (§13).
+
+- Installers contain the self-contained application, including .NET and the
+  packaged mirror default. Models are downloaded by Bunyi, never by setup.
+- Windows installs under `%LOCALAPPDATA%\Programs\Bunyi` by default, without
+  elevation, adds a Start menu entry and optional desktop shortcut, and registers
+  in Installed Apps. A stable identity permits in-place upgrades. Setup and
+  uninstall ask the user to close Bunyi; they never force-close an active run.
+- Linux packages install into `/usr/lib/bunyi`, with a `bunyi-desktop` launcher,
+  application-menu entry, icons and AppStream metadata. The `bunyi` command
+  remains reserved for the separate CLI. Native dependencies are declared by
+  each package. Installation and removal use the system package manager.
+- Product name, publisher, description, keywords and artwork are taken from the
+  Windows Store manifest/listing assets, with platform-neutral text selected for
+  Linux. Packaging must not invent a separate product identity or artwork.
+- Upgrades and uninstall retain all existing app data, settings and custom model
+  locations (DATA-FORMATS, "Per-user app data"). A portable user starts with the
+  same existing data after installing. Installers do not migrate Store data.
+- Re-running setup upgrades/reinstalls the application. Automatic application
+  updates, package repositories, Store certification and CUDA installers are
+  separate work. Direct downloads have SHA-256 sidecars; Windows remains
+  unsigned until production signing is configured.
+- Initial package targets: Windows 10 build 17763 or later on x64 (the existing
+  Store installation floor), Ubuntu 24.04, Debian 12/13, and Fedora 43/44 x64.
+  This names the validation matrix, not a claim that every desktop/hardware
+  combination has been tested. Package installation checks and real-desktop
+  generation/audio/accessibility checks must be reported separately.
 
 ---
 

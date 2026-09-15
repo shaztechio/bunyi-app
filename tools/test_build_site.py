@@ -22,7 +22,7 @@ import unittest
 from urllib.parse import urlparse, parse_qs
 import xml.etree.ElementTree as ET
 
-from build_site import build, render, select_versions, release_badge
+from build_site import build, render, select_versions, release_badge, installer_names
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -43,6 +43,43 @@ def release(family, version, build_number=4):
 
 
 class SiteBuildTests(unittest.TestCase):
+    def test_installer_release_requires_all_packages_and_checksums(self):
+        candidate = release("dotnet", "1.4.0")
+        names = installer_names("1.4.0")
+        entries = [{"name": name, "state": "uploaded", "size": 100}
+                   for name in sorted(names | {name + ".sha256" for name in names})]
+        candidate["assets"] += entries
+        legacy = [release("dotnet", "1.3.1"), release("macos", "1.3.1")]
+        self.assertEqual(select_versions([candidate] + legacy)["dotnet"], "1.4.0")
+        for entry in entries:
+            for field, value in (("state", "new"), ("size", 0)):
+                old = entry[field]
+                entry[field] = value
+                self.assertEqual(select_versions([candidate] + legacy)["dotnet"], "1.3.1")
+                entry[field] = old
+            candidate["assets"].remove(entry)
+            self.assertEqual(select_versions([candidate] + legacy)["dotnet"], "1.3.1")
+            candidate["assets"].append(entry)
+
+    def test_installer_links_only_appear_for_published_complete_set(self):
+        candidate = release("dotnet", "1.4.0")
+        names = installer_names("1.4.0")
+        other = release("macos", "1.3.1")
+        with tempfile.TemporaryDirectory() as temp:
+            build(ROOT / "docs", temp, [candidate, other])
+            legacy = (Path(temp) / "index.html").read_text(encoding="utf-8")
+            self.assertIn("is a portable zip", legacy)
+            self.assertNotIn("-setup.exe", legacy)
+            candidate["assets"] += [{"name": name, "state": "uploaded", "size": 100}
+                                     for name in names | {name + ".sha256" for name in names}]
+            build(ROOT / "docs", temp, [[candidate], [other]])
+            html = (Path(temp) / "index.html").read_text(encoding="utf-8")
+            for name in names:
+                self.assertIn("/download/dotnet-v1.4.0/" + name, html)
+            self.assertNotIn("is a portable zip", html)
+            self.assertNotIn("there is no installer", html)
+            self.assertNotIn("INSTALLERS:START", html)
+
     def test_numeric_order_and_independent_families_across_pages(self):
         pages = [[release("dotnet", "2.9.0"), release("macos", "1.8.0")],
                  [release("dotnet", "2.10.0"), release("dotnet", "1.99.0")]]

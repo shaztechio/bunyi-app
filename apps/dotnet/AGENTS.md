@@ -212,6 +212,11 @@ than one that failed to build.
 
 What ships, per release:
 
+- `Bunyi-<version>-win-x64-setup.exe`: per-user CPU installer, Start menu entry,
+  optional desktop shortcut, upgrade and uninstall through Windows Settings.
+- `bunyi_<version>_amd64.deb` and `bunyi-<version>-1.x86_64.rpm`: CPU desktop
+  packages, application-menu entries and native dependencies. Initial validation
+  targets are Ubuntu 24.04, Debian 12/13 and Fedora 43/44.
 - `Bunyi-<version>-win-x64.zip`
 - `Bunyi-<version>-linux-x64.tar.gz`, which is a tarball rather than a zip
   because the executable bit does not survive the latter
@@ -224,9 +229,10 @@ What ships, per release:
   load, so taking the wrong one is slow rather than broken
 - a `.sha256` beside each
 
-Both are **self-contained**: no .NET runtime to install, and nothing written
-outside the unpacked folder plus the app-data directories in
-`/spec/DATA-FORMATS.md`.
+All are **self-contained**: no .NET runtime to install. Installers preserve the
+same user data/settings locations as portable builds, including on uninstall.
+See [`packaging/README.md`](packaging/README.md) for build and validation commands.
+Desktop metadata and icons come from the Windows Store manifest/listing assets.
 
 - **Not code-signed.** There is no certificate for either platform, so Windows
   SmartScreen warns on first run, and the release notes say so rather than

@@ -1,0 +1,1 @@
+Turn text into speech on your own PC. Choose preset voices, describe a new voice, or clone a voice from a short recording. Bunyi runs locally with no account required.

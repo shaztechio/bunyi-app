@@ -1,0 +1,29 @@
+Turn your words into speech on your own computer.
+
+Bunyi makes local AI speech generation approachable: type your text, choose a voice, and press Generate. Create narration for a video, listen to a draft, or try a character voice without a terminal or a cloud account.
+
+THREE WAYS TO CREATE A VOICE
+
+Preset voice: pick a built-in speaker and guide the delivery with a short style instruction, such as calm, cheerful, or energetic.
+
+Voice design: describe the voice you want in plain language, then give it something to say.
+
+Voice clone: use a short, clear recording as the reference for new speech. Bunyi can transcribe the reference audio locally, and you can save voices to use again. Only clone voices you have permission to use.
+
+YOUR TEXT AND AUDIO STAY ON YOUR PC
+
+Speech generation and reference-audio transcription run locally. Bunyi does not upload your scripts or audio for processing. Once the models you need are downloaded, you can generate speech offline. No Bunyi account is required.
+
+MADE FOR EVERYDAY USE
+
+Replay your results, find past recordings in History, and save copies as WAV files. Manage downloaded models, back up your models folder, and use the built-in Doctor to check common setup problems.
+
+Speech generation supports English, Chinese, Japanese, Korean, German, French, Russian, Portuguese, Spanish, and Italian. The application interface is in English.
+
+BEFORE YOU START
+
+An internet connection is needed to download models initially. Each voice mode downloads approximately 3.9-5.9 GB; automatic reference transcription may download an additional model. Allow extra storage for generated audio and any model backups.
+
+This Windows Store build generates speech on the CPU and does not require an NVIDIA GPU or CUDA Toolkit. Generation speed and memory use depend on your computer, the selected voice mode, and text length. Longer passages take more time and memory; speech may take longer to generate than to play. Start with a short sentence.
+
+Bunyi is open-source software built on Qwen3-TTS.
