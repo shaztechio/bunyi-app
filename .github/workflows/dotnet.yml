@@ -25,9 +25,9 @@ name: .NET build (Windows + Linux)
 on:
   push:
     branches: [main]
-    paths: ["apps/dotnet/**", "spec/**", ".github/workflows/dotnet.yml", ".github/workflows/dotnet-release.yml"]
+    paths: ["apps/dotnet/**", "spec/**", ".github/workflows/dotnet.yml", ".github/workflows/dotnet-release.yml", ".github/workflows/linux-installer-check.yml"]
   pull_request:
-    paths: ["apps/dotnet/**", "spec/**", ".github/workflows/dotnet.yml", ".github/workflows/dotnet-release.yml"]
+    paths: ["apps/dotnet/**", "spec/**", ".github/workflows/dotnet.yml", ".github/workflows/dotnet-release.yml", ".github/workflows/linux-installer-check.yml"]
   workflow_dispatch:
 
 permissions:
@@ -53,6 +53,9 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "10.0.x"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
 
       - name: Cache NuGet packages
         uses: actions/cache@v6
@@ -69,6 +72,9 @@ jobs:
 
       - name: Test
         run: dotnet test --no-build -c Release --verbosity normal
+
+      - name: Test Store metadata reuse
+        run: python -m unittest discover -s packaging -p 'test_*.py' -v
 
       # tools/UiaProbe is deliberately outside Bunyi.sln: it targets
       # net10.0-windows, so a solution build on Linux could not contain it.
@@ -127,6 +133,42 @@ jobs:
         shell: pwsh
         run: ./packaging/windows/build-msix.ps1 -PublishDirectory artifacts/win-x64
 
+      - name: Build and exercise Windows installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ./packaging/windows/install-inno.ps1 -Destination "$env:RUNNER_TEMP/inno"
+          ./packaging/windows/build-installer.ps1 -PublishDirectory artifacts/win-x64 -CompilerPath "$env:RUNNER_TEMP/inno/compiler/ISCC.exe"
+          dotnet publish src/App -c Release -r win-x64 --self-contained -p:BunyiCuda=false -p:Version=0.0.1 -o artifacts/previous-win-x64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ./packaging/windows/build-installer.ps1 -PublishDirectory artifacts/previous-win-x64 -Version 0.0.1 -OutputDirectory artifacts/installer-previous -CompilerPath "$env:RUNNER_TEMP/inno/compiler/ISCC.exe"
+          $installer = (Get-ChildItem dist/*-setup.exe).FullName
+          ./packaging/windows/test-installer.ps1 -Installer $installer -PreviousInstaller artifacts/installer-previous/Bunyi-0.0.1-win-x64-setup.exe
+
+      - name: Build Linux installers
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y rpm
+          python3 packaging/linux/build-packages.py --publish-directory artifacts/linux-x64
+          dotnet publish src/App -c Release -r linux-x64 --self-contained -p:BunyiCuda=false -p:Version=0.0.1 -o artifacts/previous-linux-x64
+          python3 packaging/linux/build-packages.py --publish-directory artifacts/previous-linux-x64 --version 0.0.1 --output artifacts/installer-previous
+
+      - name: Upload Linux upgrade fixture
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-installers-Linux-previous
+          path: apps/dotnet/artifacts/installer-previous/*
+          if-no-files-found: error
+
+      - name: Upload desktop installers
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-installers-${{ runner.os }}
+          path: apps/dotnet/dist/*
+          if-no-files-found: error
+
       - name: Publish and exercise the standalone CLI
         shell: pwsh
         run: |
@@ -178,3 +220,10 @@ jobs:
           fi
 
           echo "Only $rid Whisper natives present."
+
+  linux-installers:
+    needs: build
+    uses: ./.github/workflows/linux-installer-check.yml
+    with:
+      artifact: desktop-installers-Linux
+      previous-artifact: desktop-installers-Linux-previous

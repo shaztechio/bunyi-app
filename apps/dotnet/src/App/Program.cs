@@ -40,6 +40,11 @@ internal static class Program
         // meant to hold only what happened before it got control.
         Startup = StartupTimeline.FromProcessStart();
 
+        // Inno Setup checks this object before installing or uninstalling. It
+        // only signals that the desktop is running; it does not prevent users
+        // from opening multiple windows. Never let setup kill a generation.
+        using var installerGuard = OperatingSystem.IsWindows()
+            ? new Mutex(false, @"Local\Bunyi.Desktop.Running") : null;
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }
 

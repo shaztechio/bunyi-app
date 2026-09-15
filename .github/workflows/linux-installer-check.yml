@@ -1,0 +1,73 @@
+# Copyright 2026 Shazron Abdullah and Bunyi contributors
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: Linux installer checks
+on:
+  workflow_call:
+    inputs:
+      artifact:
+        required: true
+        type: string
+      ref:
+        required: false
+        type: string
+        default: ''
+      previous-artifact:
+        required: false
+        type: string
+        default: ''
+permissions:
+  contents: read
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: ubuntu:24.04
+            format: deb
+          - image: debian:12
+            format: deb
+          - image: debian:13
+            format: deb
+          - image: fedora:43
+            format: rpm
+          - image: fedora:44
+            format: rpm
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.artifact }}
+          path: packages
+      - uses: actions/download-artifact@v8
+        if: inputs.previous-artifact != ''
+        with:
+          name: ${{ inputs.previous-artifact }}
+          path: previous
+      - name: Install, launch, repair and remove in a clean distribution
+        env:
+          IMAGE: ${{ matrix.image }}
+          FORMAT: ${{ matrix.format }}
+          PREVIOUS: ${{ inputs.previous-artifact != '' && '/previous' || '' }}
+        run: |
+          mkdir -p previous
+          docker run --rm -v "$PWD/packages:/packages:ro" \
+            -v "$PWD/previous:/previous:ro" \
+            -v "$PWD/apps/dotnet/packaging/linux:/checks:ro" \
+            "$IMAGE" bash /checks/test-installed.sh /packages "$FORMAT" "$PREVIOUS"

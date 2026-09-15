@@ -28,12 +28,31 @@ BADGES = {"macos": ("macOS", "macos"), "windows": ("Windows", "dotnet"),
           "linux": ("Linux", "dotnet")}
 
 
+def installer_names(version):
+    return {f"Bunyi-{version}-win-x64-setup.exe", f"bunyi_{version}_amd64.deb",
+            f"bunyi-{version}-1.x86_64.rpm"}
+
+
+def has_installers(release, version):
+    names = {asset["name"] for asset in release.get("assets", [])
+             if asset.get("state") == "uploaded" and asset.get("size", 0) > 0}
+    installers = installer_names(version)
+    return installers | {name + ".sha256" for name in installers} <= names
+
+
 def complete_assets(release, family, version):
     names = {
         asset["name"] for asset in release.get("assets", [])
         if asset.get("state") == "uploaded" and asset.get("size", 0) > 0
     }
     if family == "dotnet":
+        # Legacy releases stay usable. Once any installer appears, require the
+        # entire set before advertising that release (including its archives).
+        installers = installer_names(version)
+        offered = {asset["name"] for asset in release.get("assets", [])}
+        if offered & (installers | {name + ".sha256" for name in installers}):
+            if not has_installers(release, version):
+                return False
         archives = {
             f"Bunyi-{version}-{rid}{cuda}.{extension}"
             for rid, extension in (("win-x64", "zip"), ("linux-x64", "tar.gz"))
@@ -75,7 +94,12 @@ def select_versions(releases):
     return {family: value[1] for family, value in selected.items()}
 
 
-def render(template, versions):
+def render(template, versions, installers=False):
+    # Build-time conditional copy keeps the current site accurate before the
+    # first installer release. No browser API or guessed future asset links.
+    for kind, keep in (("INSTALLERS", installers), ("PORTABLE", not installers)):
+        template = re.sub(rf"<!-- {kind}:START -->(.*?)<!-- {kind}:END -->",
+                          lambda match: match[1] if keep else "", template, flags=re.S)
     for family, token in TOKENS.items():
         if token not in template:
             raise ValueError("Missing release placeholder: " + token)
@@ -109,7 +133,10 @@ def build(source, output, releases):
     if output == source or source in output.parents:
         raise ValueError("Build output must be outside the docs source directory")
     versions = select_versions(releases)
-    html = render((source / "index.html").read_text(encoding="utf-8"), versions)
+    flat = [item for page in releases for item in page] if releases and isinstance(releases[0], list) else releases
+    installers = any(release.get("tag_name") == "dotnet-v" + versions["dotnet"] and
+                     has_installers(release, versions["dotnet"]) for release in flat)
+    html = render((source / "index.html").read_text(encoding="utf-8"), versions, installers)
     output.mkdir(parents=True, exist_ok=True)
     # Only public site assets ship; build tools, credentials and release API
     # responses stay outside the Pages artifact.

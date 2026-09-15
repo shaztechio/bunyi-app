@@ -395,14 +395,21 @@
       </div>
       <p class="note">
         <span class="note-os note-mac"><strong>macOS {{MACOS_VERSION}}</strong> — a signed, notarized disk image for Apple Silicon,
-        macOS&nbsp;15 or later. Open it and drag Bunyi to Applications. Windows and Linux {{DOTNET_VERSION}} are portable:
-        unzip and run.</span>
+        macOS&nbsp;15 or later. Open it and drag Bunyi to Applications. Windows and Linux {{DOTNET_VERSION}} are also available.</span>
+        <!-- PORTABLE:START -->
         <span class="note-os note-win"><strong>Windows {{DOTNET_VERSION}}</strong> — portable and self-contained: unzip anywhere and run
         <code>Bunyi.App.exe</code>, with no runtime to install. It is unsigned, so SmartScreen warns once.
         macOS and Linux builds are here too.</span>
         <span class="note-os note-linux"><strong>Linux {{DOTNET_VERSION}}</strong> — portable and self-contained: untar, <code>chmod +x</code>,
         and run, with no runtime to install. A desktop system needs nothing else. macOS and Windows builds are
         here too.</span>
+        <!-- PORTABLE:END -->
+        <!-- INSTALLERS:START -->
+        <span class="note-os note-win"><strong>Windows {{DOTNET_VERSION}}</strong> — run the setup installer, then open Bunyi from Start.
+        No .NET installation needed. Windows downloads are unsigned.</span>
+        <span class="note-os note-linux"><strong>Linux {{DOTNET_VERSION}}</strong> — install the DEB for Ubuntu/Debian or RPM for Fedora,
+        then open Bunyi from your application menu. No .NET installation needed.</span>
+        <!-- INSTALLERS:END -->
       </p>
     </div>
     <div class="hero-art">
@@ -600,7 +607,7 @@
           <tr>
             <td><strong>Windows and Linux</strong><br><span style="color:var(--muted)">One app, both systems</span></td>
             <td>C# .NET + Avalonia + ONNX Runtime</td>
-            <td><span class="pill pill-ok">Working</span><br><span style="color:var(--muted)">All three modes; <a href="https://github.com/shaztechio/bunyi-app/releases/tag/dotnet-v{{DOTNET_VERSION}}">portable download</a></span></td>
+            <td><span class="pill pill-ok">Working</span><br><span style="color:var(--muted)">All three modes; <a href="https://github.com/shaztechio/bunyi-app/releases/tag/dotnet-v{{DOTNET_VERSION}}">downloads</a></span></td>
           </tr>
         </tbody>
       </table>
@@ -654,11 +661,23 @@
       </div>
 
       <div class="os-panel os-win" id="download-win">
+        <!-- PORTABLE:START -->
         <p>
           <a href="https://github.com/shaztechio/bunyi-app/releases/tag/dotnet-v{{DOTNET_VERSION}}"><strong>Bunyi {{DOTNET_VERSION}} for Windows</strong></a> is a portable zip for 64-bit
           Windows 10 or 11. Unzip it anywhere and run <code>Bunyi.App.exe</code> — there is no installer and
           no .NET runtime to install.
         </p>
+        <!-- PORTABLE:END -->
+        <!-- INSTALLERS:START -->
+        <p>
+          <a href="https://github.com/shaztechio/bunyi-app/releases/tag/dotnet-v{{DOTNET_VERSION}}"><strong>Bunyi {{DOTNET_VERSION}} for Windows</strong></a>
+          runs on x64 Windows 10 (build 17763+) and Windows 11. Run the setup installer, then open Bunyi from Start.
+          Setup installs for your account and offers an optional desktop shortcut. No .NET runtime installation is needed.
+        </p>
+        <p><a class="btn" href="https://github.com/shaztechio/bunyi-app/releases/download/dotnet-v{{DOTNET_VERSION}}/Bunyi-{{DOTNET_VERSION}}-win-x64-setup.exe">Download Windows installer</a></p>
+        <p>Run a newer installer to upgrade. Remove Bunyi through Windows Settings → Apps.
+          Your models, voices, recordings and settings are retained. A portable ZIP is also available on the release page.</p>
+        <!-- INSTALLERS:END -->
         <p>
           It is not code-signed, so SmartScreen warns the first time: choose <em>More info</em>, then
           <em>Run anyway</em>. The SHA-256 beside the download is there if you would rather check it first.
@@ -677,6 +696,7 @@
       </div>
 
       <div class="os-panel os-linux" id="download-linux">
+        <!-- PORTABLE:START -->
         <p>
           <a href="https://github.com/shaztechio/bunyi-app/releases/tag/dotnet-v{{DOTNET_VERSION}}"><strong>Bunyi {{DOTNET_VERSION}} for Linux</strong></a> is a portable tarball for x86-64.
           Untar it, make it executable, and run it — the same self-contained build, with no runtime to
@@ -692,6 +712,24 @@ chmod +x Bunyi.App
         </p>
 <pre><code>sudo apt install libx11-6 libice6 libsm6 libxi6 libxcursor1 libxrandr2 \
   libxext6 libxrender1 libgl1 libfontconfig1 libicu74 libssl3 libasound2t64</code></pre>
+        <!-- PORTABLE:END -->
+        <!-- INSTALLERS:START -->
+        <p>
+          <a href="https://github.com/shaztechio/bunyi-app/releases/tag/dotnet-v{{DOTNET_VERSION}}"><strong>Bunyi {{DOTNET_VERSION}} for Linux</strong></a>
+          has x86-64 packages for Ubuntu 24.04, Debian 12/13 and Fedora 43/44.
+          Open the package with your system's package installer, then launch Bunyi from the application menu.
+          Native dependencies are installed with the package; .NET is included.
+        </p>
+        <p><a class="btn" href="https://github.com/shaztechio/bunyi-app/releases/download/dotnet-v{{DOTNET_VERSION}}/bunyi_{{DOTNET_VERSION}}_amd64.deb">Download for Ubuntu / Debian (.deb)</a>
+          <a class="btn" href="https://github.com/shaztechio/bunyi-app/releases/download/dotnet-v{{DOTNET_VERSION}}/bunyi-{{DOTNET_VERSION}}-1.x86_64.rpm">Download for Fedora (.rpm)</a></p>
+        <p>If your desktop does not open local packages, use:</p>
+<pre><code># Ubuntu / Debian
+sudo apt install ./bunyi_{{DOTNET_VERSION}}_amd64.deb
+# Fedora
+sudo dnf install ./bunyi-{{DOTNET_VERSION}}-1.x86_64.rpm</code></pre>
+        <p>Install a newer package to upgrade, or remove Bunyi with your package manager.
+          Your models, voices, recordings and settings are retained. Portable tarballs remain available.</p>
+        <!-- INSTALLERS:END -->
         <p>
           A <a href="https://github.com/shaztechio/bunyi-app/releases/tag/dotnet-v{{DOTNET_VERSION}}"><code>-cuda</code> tarball</a>
           is on the same release page: the same app built against ONNX Runtime’s GPU package, for machines with an NVIDIA
@@ -745,15 +783,14 @@ chmod +x Bunyi.App
         <p>
           <strong>Windows</strong> — <strong>not code-signed.</strong> SmartScreen warns the first time
           you run it: choose <em>More info</em>, then <em>Run anyway</em>. There is no certificate behind
-          the download, so nothing would make that warning go away. Verify the archive against the
+          the download, so nothing would make that warning go away. Verify the download against the
           SHA-256 checksum published with each release.
         </p>
       </div>
       <div class="os-panel os-linux" id="signing-panel-linux">
         <p>
-          <strong>Linux</strong> — nothing signs a portable tarball in a way the system checks, so there is
-          no equivalent to claim. Every release publishes a SHA-256 checksum for the archive, which is what
-          there is to verify against.
+          <strong>Linux</strong> — downloads are unsigned. Verify your download against the SHA-256
+          checksum published with each release.
         </p>
       </div>
     </div>

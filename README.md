@@ -30,9 +30,13 @@ Home: [bunyi.app](https://bunyi.app)
 | [Linux](https://bunyi.app/?os=linux#get) | [![Current Linux release](https://bunyi.app/releases/linux.svg)](https://bunyi.app/?os=linux#get) | x64, standard and NVIDIA CUDA builds |
 
 On macOS, drag the signed and notarized app from the `.dmg` to Applications
-and launch. On Windows and Linux, extract the portable archive and run Bunyi;
-no runtime installation is needed. Windows builds are unsigned; see the
-code signing policy below for first-launch instructions.
+and launch. Windows releases provide a setup `.exe`; Linux releases provide
+`.deb` (Ubuntu/Debian) and `.rpm` (Fedora) packages. Install, then open Bunyi
+from Start or your application menu. Portable archives remain available,
+including for older releases such as 1.3.1. The download page only offers
+installers once they are published. No .NET runtime installation is needed.
+Upgrades and uninstall retain models, voices, recordings and settings.
+Windows builds are unsigned; see the code signing policy below.
 
 **For agents and terminals:** the [Windows/Linux CLI guide](apps/dotnet/CLI.md)
 covers one-shot generation, an optional resident server, and observable model
@@ -92,8 +96,9 @@ Any feature change updates the spec **and** every app.
 - **macOS** → [`apps/macos/README.md`](apps/macos/README.md) /
   [`apps/macos/AGENTS.md`](apps/macos/AGENTS.md) (XcodeGen + xcodebuild).
 - **Windows / Linux** → [`apps/dotnet/AGENTS.md`](apps/dotnet/AGENTS.md)
-  (`dotnet build`, .NET 10 SDK). All three modes work. Releases are portable
-  self-contained builds — unzip and run, with no runtime to install.
+  (`dotnet build`, .NET 10 SDK). All three modes work. Releases contain
+  self-contained builds, with no runtime to install. Installer build and
+  validation instructions are in [packaging/README.md](apps/dotnet/packaging/README.md).
 
 ## Code signing policy
 
@@ -106,12 +111,11 @@ before publishing, so Gatekeeper accepts them offline.
 **Windows** — **not code-signed.** SmartScreen warns the first time you run
 it: choose *More info*, then *Run anyway*. There is no certificate behind the
 download, so nothing would make that warning go away, and a page claiming
-otherwise would be the one thing worse than the warning. Verify the archive
+otherwise would be the one thing worse than the warning. Verify the download
 against the SHA-256 checksum published with each release.
 
-**Linux** — nothing signs a portable tarball in a way the system checks, so
-there is no equivalent to claim. Every release publishes a SHA-256 checksum for
-the archive, which is what there is to verify against.
+**Linux** — packages and portable archives are unsigned. Verify the download
+against the SHA-256 checksum published with each release.
 
 **Team roles** — committers, reviewers and approvers:
 Shazron Abdullah ([@shazron](https://github.com/shazron)).
