@@ -77,7 +77,12 @@ if (-not $VcRuntimeDirectory) {
     $visualStudio = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
     if ($LASTEXITCODE -ne 0 -or -not $visualStudio) { throw 'No Visual Studio C++ installation found.' }
     $candidates = @(Get-ChildItem -Path "$visualStudio/VC/Redist/MSVC/*/x64/Microsoft.VC*.CRT" -Directory |
-        Sort-Object { [version][Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $_.FullName 'vcruntime140.dll')).FileVersion } -Descending)
+        Sort-Object {
+            # The display string can include "built by: cloudtest". Sort using
+            # the fixed numeric resource fields instead of parsing that text.
+            $info = [Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $_.FullName 'vcruntime140.dll'))
+            [version]::new($info.FileMajorPart, $info.FileMinorPart, $info.FileBuildPart, $info.FilePrivatePart)
+        } -Descending)
     if (-not $candidates.Count) { throw 'No x64 Visual C++ redistributable CRT directory found.' }
     $VcRuntimeDirectory = $candidates[0].FullName
 }
