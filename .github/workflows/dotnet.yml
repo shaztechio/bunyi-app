@@ -94,6 +94,11 @@ jobs:
       - name: Build the mirror manifest tool
         run: dotnet build tools/MirrorManifest -c Release
 
+      # Live network checks are manual in model-mirror-smoke.yml. Compile the
+      # shared-downloader probe here so app API changes cannot silently break it.
+      - name: Build the mirror smoke test
+        run: dotnet build tools/MirrorSmoke -c Release
+
       # src/Core is UI-framework-free by rule (see apps/dotnet/AGENTS.md).
       # Checked rather than trusted: the rule is easy to break by reflex, with
       # an editor's using-completion, and hard to notice in review.
