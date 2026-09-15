@@ -14,7 +14,8 @@
 
 # Run on a disposable Windows runner. Refuse to touch an existing installation.
 [CmdletBinding()]
-param([Parameter(Mandatory)][string]$Installer, [string]$PreviousInstaller)
+param([Parameter(Mandatory)][string]$Installer, [string]$PreviousInstaller,
+      [switch]$Cuda, [string]$AlternativeInstaller)
 $ErrorActionPreference = 'Stop'
 $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\app.bunyi.Bunyi.Desktop_is1'
 if (Test-Path $key) { throw 'Bunyi is already installed; use a clean test account.' }
@@ -39,6 +40,24 @@ function Invoke-Setup([string]$Path, [string[]]$Extra = @()) {
     if (-not $process.WaitForExit(120000)) { throw 'Installer did not finish within two minutes.' }
     return $process.ExitCode
 }
+function Assert-Flavor([bool]$ExpectedCuda) {
+    $deps = Get-Content -LiteralPath (Join-Path $install 'Bunyi.App.deps.json') -Raw | ConvertFrom-Json
+    $gpu = @($deps.libraries.PSObject.Properties.Name | Where-Object { $_ -like 'Microsoft.ML.OnnxRuntime.Gpu/*' }).Count -gt 0
+    if ($gpu -ne $ExpectedCuda) { throw 'Installed dependency manifest has the wrong flavor.' }
+    foreach ($name in @('onnxruntime_providers_cuda.dll', 'onnxruntime_providers_tensorrt.dll')) {
+        if ((Test-Path -LiteralPath (Join-Path $install $name)) -ne $ExpectedCuda) {
+            throw "Incorrect provider payload: $name"
+        }
+    }
+    if (-not (Test-Path -LiteralPath (Join-Path $install 'onnxruntime_providers_shared.dll'))) {
+        throw 'Installed ONNX runtime is missing its shared provider library.'
+    }
+    if (-not $ExpectedCuda) {
+        foreach ($name in @('onnxruntime_providers_cuda.lib', 'onnxruntime_providers_tensorrt.lib')) {
+            if (Test-Path -LiteralPath (Join-Path $install $name)) { throw "CPU installation retained $name" }
+        }
+    }
+}
 try {
     if ($PreviousInstaller) {
         $previous = (Resolve-Path -LiteralPath $PreviousInstaller).Path
@@ -53,6 +72,15 @@ try {
     }
     if ((Invoke-Setup $installerPath @('/DIR="' + $install + '"', '/TASKS=desktopicon')) -ne 0) { throw 'Install failed.' }
     if (-not (Test-Path $key)) { throw 'Installed Apps registration missing.' }
+    Assert-Flavor $Cuda.IsPresent
+    if ($AlternativeInstaller) {
+        $alternative = (Resolve-Path -LiteralPath $AlternativeInstaller).Path
+        if ((Invoke-Setup $alternative) -ne 0) { throw 'Flavor switch failed.' }
+        Assert-Flavor (-not $Cuda.IsPresent)
+        if ((Invoke-Setup $installerPath) -ne 0) { throw 'Switching back to original flavor failed.' }
+        Assert-Flavor $Cuda.IsPresent
+        Write-Host 'CPU/CUDA flavor round trip verified in the same installation.'
+    }
     & (Join-Path $PSScriptRoot '../test-defaults.ps1') -Path $install
     foreach ($dll in @('msvcp140.dll', 'msvcp140_1.dll', 'vcruntime140.dll', 'vcruntime140_1.dll', 'vcomp140.dll')) {
         if (-not (Test-Path -LiteralPath (Join-Path $install $dll))) { throw "Installer omitted native runtime: $dll" }

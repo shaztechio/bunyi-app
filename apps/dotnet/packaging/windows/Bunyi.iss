@@ -17,6 +17,10 @@
 AppId=app.bunyi.Bunyi.Desktop
 AppName={#ProductName}
 AppVersion={#ProductVersion}
+#ifdef CudaBuild
+AppVerName={#ProductName} {#ProductVersion} (CUDA)
+InfoBeforeFile=cuda-info.txt
+#endif
 AppPublisher={#PublisherName}
 AppPublisherURL=https://bunyi.app/
 AppSupportURL=https://github.com/shaztechio/bunyi-app/issues
@@ -32,7 +36,11 @@ WizardStyle=modern
 Compression=lzma2
 SolidCompression=yes
 OutputDir={#OutputDirectory}
+#ifdef CudaBuild
+OutputBaseFilename=Bunyi-{#ProductVersion}-win-x64-cuda-setup
+#else
 OutputBaseFilename=Bunyi-{#ProductVersion}-win-x64-setup
+#endif
 SetupIconFile={#MetadataDirectory}\bunyi.ico
 UninstallDisplayIcon={app}\bunyi.ico
 LicenseFile={#LicensePath}
@@ -47,6 +55,16 @@ SignedUninstaller=yes
 
 [Tasks]
 Name: desktopicon; Description: "Create a &desktop shortcut"; Flags: unchecked
+
+#ifndef CudaBuild
+; Exact installer-owned files only; switching back to CPU must not retain GPU
+; providers from a previous CUDA installation. Never remove user data.
+[InstallDelete]
+Type: files; Name: "{app}\onnxruntime_providers_cuda.dll"
+Type: files; Name: "{app}\onnxruntime_providers_cuda.lib"
+Type: files; Name: "{app}\onnxruntime_providers_tensorrt.dll"
+Type: files; Name: "{app}\onnxruntime_providers_tensorrt.lib"
+#endif
 
 [Files]
 Source: "{#PublishDirectory}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs

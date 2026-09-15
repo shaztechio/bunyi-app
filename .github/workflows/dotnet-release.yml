@@ -218,14 +218,15 @@ jobs:
         run: ./packaging/test-defaults.ps1 -Path publish/${{ matrix.rid }}
 
       - name: Build and exercise Windows installer
-        if: matrix.rid == 'win-x64' && matrix.cuda == false
+        if: matrix.rid == 'win-x64'
         shell: pwsh
         working-directory: apps/dotnet
         run: |
           ./packaging/windows/install-inno.ps1 -Destination "$env:RUNNER_TEMP/inno"
-          ./packaging/windows/build-installer.ps1 -PublishDirectory publish/win-x64 -CompilerPath "$env:RUNNER_TEMP/inno/compiler/ISCC.exe"
+          $cuda = '${{ matrix.cuda }}' -eq 'true'
+          ./packaging/windows/build-installer.ps1 -PublishDirectory publish/win-x64 -Cuda:$cuda -CompilerPath "$env:RUNNER_TEMP/inno/compiler/ISCC.exe"
           $installer = (Get-ChildItem dist/*-setup.exe).FullName
-          ./packaging/windows/test-installer.ps1 -Installer $installer
+          ./packaging/windows/test-installer.ps1 -Installer $installer -Cuda:$cuda
 
       - name: Build Linux installers
         if: matrix.rid == 'linux-x64' && matrix.cuda == false
@@ -391,6 +392,7 @@ jobs:
             printf '\n---\n\n'
             printf '### Installing\n\n'
             printf '**Windows** — run `Bunyi-%s-win-x64-setup.exe`, then open Bunyi from Start.\n' "$version"
+            printf '**Windows with NVIDIA acceleration** — use `Bunyi-%s-win-x64-cuda-setup.exe`. It replaces the standard edition and retains your data; run the standard installer to switch back. Compatible CUDA and cuDNN libraries must be installed separately.\n' "$version"
             printf '**Ubuntu/Debian** — install `bunyi_%s_amd64.deb` with your package installer.\n' "$version"
             printf '**Fedora** — install `bunyi-%s-1.x86_64.rpm` with your package installer.\n' "$version"
             printf 'Linux packages add Bunyi to your application menu and install native dependencies.\n\n'

@@ -1147,6 +1147,15 @@ the standalone CLI remain available separately. macOS retains its signed DMG;
 these are permitted platform-specific distribution formats, not inference changes.
 The unsigned Store MSIX remains submission preparation (§13).
 
+Windows also offers `Bunyi-<version>-win-x64-cuda-setup.exe` for the opt-in
+CUDA build. It uses the same installation identity, directory, shortcuts and
+data as the standard installer: installing either flavor replaces the other.
+Returning to CPU removes the installer-owned GPU provider DLLs. CUDA setup
+explains that compatible NVIDIA/CUDA/cuDNN dependencies are user-installed;
+it does not download drivers/toolkits or require a GPU merely to install.
+The app's existing CPU fallback remains unchanged. Linux CUDA packaging remains
+a portable archive; macOS retains its MLX runtime.
+
 - Installers contain the self-contained application, including .NET and the
   packaged mirror default. Windows also carries the Microsoft Visual C++ runtime
   beside the executable, so native inference does not require a separate elevated
@@ -1166,7 +1175,7 @@ The unsigned Store MSIX remains submission preparation (§13).
   locations (DATA-FORMATS, "Per-user app data"). A portable user starts with the
   same existing data after installing. Installers do not migrate Store data.
 - Re-running setup upgrades/reinstalls the application. Automatic application
-  updates, package repositories, Store certification and CUDA installers are
+  updates, package repositories, Store certification and Linux CUDA installers are
   separate work. Direct downloads have SHA-256 sidecars; Windows remains
   unsigned until production signing is configured.
 - Initial package targets: Windows 10 build 17763 or later on x64 (the existing

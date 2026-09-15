@@ -20,6 +20,7 @@ param(
     [string]$CompilerPath,
     [string]$Python = 'python',
     [string]$Version,
+    [switch]$Cuda,
     [string]$VcRuntimeDirectory,
     # Inno SignTool command with $f placeholder; credentials stay in the signing
     # tool's environment. The staged EXE/DLLs must already be production-signed.
@@ -48,9 +49,12 @@ foreach ($file in @('Bunyi.App.exe', 'Bunyi.App.dll', 'coreclr.dll', 'onnxruntim
     if (-not (Test-Path -LiteralPath (Join-Path $publish $file))) { throw "Missing self-contained app file: $file" }
 }
 $deps = Get-Content -LiteralPath (Join-Path $publish 'Bunyi.App.deps.json') -Raw | ConvertFrom-Json
-if ($deps.runtimeTarget.name -notlike '*/win-x64' -or
-    @($deps.libraries.PSObject.Properties.Name | Where-Object { $_ -like 'Microsoft.ML.OnnxRuntime.Gpu/*' }).Count) {
-    throw 'Only the self-contained win-x64 CPU desktop build can be installed.'
+$hasCuda = @($deps.libraries.PSObject.Properties.Name | Where-Object { $_ -like 'Microsoft.ML.OnnxRuntime.Gpu/*' }).Count -gt 0
+if ($deps.runtimeTarget.name -notlike '*/win-x64' -or $hasCuda -ne $Cuda.IsPresent) {
+    throw 'Expected a self-contained win-x64 desktop build matching -Cuda (omit it for CPU).'
+}
+if ($Cuda -and -not (Test-Path -LiteralPath (Join-Path $publish 'onnxruntime_providers_cuda.dll'))) {
+    throw 'CUDA publish is missing its ONNX CUDA provider.'
 }
 $binaryVersion = [Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $publish 'Bunyi.App.dll')).FileVersion
 if ([version]$binaryVersion -ne [version]"$version.0") { throw "Binary version $binaryVersion does not match $version." }
@@ -117,9 +121,11 @@ $arguments = @('/Qp', "/DProductVersion=$version", "/DProductName=$($product.nam
     "/DPublishDirectory=$payload", "/DMetadataDirectory=$metadata", "/DOutputDirectory=$OutputDirectory",
     "/DLicensePath=$([IO.Path]::GetFullPath((Join-Path $dotnetRoot '../../LICENSE')))")
 if ($SigningCommand) { $arguments += @('/DSignedBuild', "/Sbunyi=$SigningCommand") }
+if ($Cuda) { $arguments += '/DCudaBuild' }
 & $CompilerPath @arguments (Join-Path $PSScriptRoot 'Bunyi.iss')
 if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compilation failed.' }
-$name = "Bunyi-$version-win-x64-setup.exe"
+$suffix = if ($Cuda) { '-cuda' } else { '' }
+$name = "Bunyi-$version-win-x64$suffix-setup.exe"
 $installer = Join-Path $OutputDirectory $name
 if ($SigningCommand -and (Get-AuthenticodeSignature -LiteralPath $installer).Status -ne 'Valid') {
     throw 'Installer signature verification failed.'
