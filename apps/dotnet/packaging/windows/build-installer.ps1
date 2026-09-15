@@ -62,7 +62,10 @@ if ($SigningCommand) {
         }
     }
 }
-$metadata = Join-Path $dotnetRoot ('artifacts/installer-metadata/' + [guid]::NewGuid().ToString('N'))
+$metadata = Join-Path ([IO.Path]::GetTempPath()) ('bunyi-installer-' + [guid]::NewGuid().ToString('N'))
+if ($metadata.StartsWith($publish.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) {
+    throw 'The temporary staging directory must be outside PublishDirectory.'
+}
 & $Python (Join-Path $PSScriptRoot '../desktop_metadata.py') --output $metadata
 if ($LASTEXITCODE -ne 0) { throw 'Store metadata generation failed.' }
 $product = Get-Content -LiteralPath (Join-Path $metadata 'metadata.json') -Raw | ConvertFrom-Json
