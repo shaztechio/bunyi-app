@@ -1191,6 +1191,8 @@ a portable archive; macOS retains its MLX runtime.
   an explicit signing marker in that release's notes and a complete Windows
   asset/checksum set. Drafts, incomplete uploads and unmarked legacy releases
   must not cause the site to advertise signed Windows downloads.
+  Windows help identifies the signed-release publisher and explains that new
+  signed downloads can still trigger SmartScreen; local/PR builds may be unsigned.
 - Initial package targets: Windows 10 build 17763 or later on x64 (the existing
   Store installation floor), Ubuntu 24.04, Debian 12/13, and Fedora 43/44 x64.
   This names the validation matrix, not a claim that every desktop/hardware
