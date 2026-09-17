@@ -86,8 +86,10 @@ contains development tools, but Bunyi uses its runtime libraries.
 5. From the [Windows/Linux releases](https://github.com/shaztechio/bunyi-app/releases),
    download **`Bunyi-<version>-win-x64-cuda-setup.exe`** and its `.sha256` file.
    For 1.3.1 the filename is `Bunyi-1.3.1-win-x64-cuda-setup.exe`.
-   Close Bunyi, run setup, then open **Bunyi** from Start. Windows downloads
-   are currently unsigned; see the [signing policy](README.md#code-signing-policy).
+   Close Bunyi, run setup, then open **Bunyi** from Start. Check the release notes
+   for signing status: signed installers identify **Shazron Elhazar Abdullah**
+   as the publisher; the older 1.3.1 files remain unsigned. See the
+   [signing policy](README.md#code-signing-policy).
 6. Follow [Verify acceleration](#verify-acceleration) below.
 
 The CUDA installer replaces the standard edition in the same location and

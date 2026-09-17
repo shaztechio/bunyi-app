@@ -191,6 +191,8 @@ The same lines are also written to a file, so a run that ended badly still left 
 
 ## If something goes wrong
 
+**Windows warns when opening Bunyi.** Official Windows release downloads from version 1.3.2 are signed and timestamped with a Certum certificate issued to **Shazron Elhazar Abdullah**, for both standard and CUDA editions. SmartScreen may still warn on a new signed download. Choose **More info** to check the publisher, then **Run anyway** if you trust the download. You can also check the executable's **Properties → Digital Signatures**. Older releases and local or development builds may be unsigned.
+
 **Start with the stethoscope.** It checks the things that most often stop a generation — disk space, memory, a model that has not downloaded, a server that is not answering — and says which one it is.
 
 **A download seems stuck.** Model files are big, and the progress bar can look frozen while a single multi-gigabyte file is being written. Bunyi watches the bytes actually arriving on disk and says so in the status line if nothing new has arrived for a while. Open the Logs for detail.

@@ -26,6 +26,23 @@ TAG = re.compile(r"(?P<prefix>dotnet-v|v)(?P<version>[0-9]+\.[0-9]+\.[0-9]+)")
 TOKENS = {"macos": "{{MACOS_VERSION}}", "dotnet": "{{DOTNET_VERSION}}"}
 BADGES = {"macos": ("macOS", "macos"), "windows": ("Windows", "dotnet"),
           "linux": ("Linux", "dotnet")}
+SIGNED_WINDOWS_MARKER = "<!-- bunyi-windows-signing: certum-authenticode-v1 -->"
+
+
+def signed_windows(release):
+    # Written by the release workflow only after signing and verification pass.
+    # This is publication metadata, not a replacement for signature verification.
+    return SIGNED_WINDOWS_MARKER in (release.get("body") or "")
+
+
+def signed_windows_names(version):
+    return {
+        name
+        for suffix in ("", "-cuda")
+        for name in (f"Bunyi-{version}-win-x64{suffix}-setup.exe",
+                     f"Bunyi-{version}-win-x64{suffix}.zip",
+                     f"Bunyi-CLI-{version}-win-x64{suffix}.zip")
+    }
 
 
 def installer_names(version):
@@ -46,6 +63,10 @@ def complete_assets(release, family, version):
         if asset.get("state") == "uploaded" and asset.get("size", 0) > 0
     }
     if family == "dotnet":
+        if signed_windows(release):
+            required = signed_windows_names(version)
+            if not required | {name + ".sha256" for name in required} <= names:
+                return False
         # Legacy releases stay usable. Once any installer appears, require the
         # entire set before advertising that release (including its archives).
         installers = installer_names(version)
@@ -98,10 +119,11 @@ def select_versions(releases):
     return {family: value[1] for family, value in selected.items()}
 
 
-def render(template, versions, installers=False):
+def render(template, versions, installers=False, windows_signed=False):
     # Build-time conditional copy keeps the current site accurate before the
     # first installer release. No browser API or guessed future asset links.
-    for kind, keep in (("INSTALLERS", installers), ("PORTABLE", not installers)):
+    for kind, keep in (("INSTALLERS", installers), ("PORTABLE", not installers),
+                       ("WINDOWS_SIGNED", windows_signed), ("WINDOWS_UNSIGNED", not windows_signed)):
         template = re.sub(rf"<!-- {kind}:START -->(.*?)<!-- {kind}:END -->",
                           lambda match: match[1] if keep else "", template, flags=re.S)
     for family, token in TOKENS.items():
@@ -140,7 +162,10 @@ def build(source, output, releases):
     flat = [item for page in releases for item in page] if releases and isinstance(releases[0], list) else releases
     installers = any(release.get("tag_name") == "dotnet-v" + versions["dotnet"] and
                      has_installers(release, versions["dotnet"]) for release in flat)
-    html = render((source / "index.html").read_text(encoding="utf-8"), versions, installers)
+    windows_signed = any(release.get("tag_name") == "dotnet-v" + versions["dotnet"] and
+                         signed_windows(release) for release in flat)
+    html = render((source / "index.html").read_text(encoding="utf-8"), versions,
+                  installers, windows_signed)
     output.mkdir(parents=True, exist_ok=True)
     # Only public site assets ship; build tools, credentials and release API
     # responses stay outside the Pages artifact.

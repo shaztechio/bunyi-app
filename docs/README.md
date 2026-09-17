@@ -199,6 +199,18 @@ filenames, and `{{MACOS_VERSION}}` for macOS. The renderer fills every occurrenc
 no manual version edit is needed when cutting a release. If release asset names
 change, update `tools/build_site.py` and its tests to match.
 
+Windows signing copy is conditional too. The release workflow writes
+`<!-- bunyi-windows-signing: certum-authenticode-v1 -->` into the notes only
+after the signing job succeeds. The site requires all CPU/CUDA Windows
+installers, desktop/CLI ZIPs and checksums before selecting a marked release.
+Only the selected published stable release determines the notice; draft or
+incomplete releases cannot switch it. `WINDOWS_SIGNED` / `WINDOWS_UNSIGNED`
+template blocks keep the hero, installation instructions and signing policy
+consistent. This is release metadata; the release job performs the actual
+cryptographic verification. The website refresh after publication updates the
+download links, badges and signing notice together. No manual site version bump
+or early claim about unpublished downloads is needed.
+
 The feature section shows its first six items and keeps the remaining items in
 native `<details>`, accessible by pointer or keyboard with scripting disabled.
 Screenshot, download, and code-signing sections share CSS for their OS pickers

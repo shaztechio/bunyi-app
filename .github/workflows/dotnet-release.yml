@@ -473,6 +473,8 @@ jobs:
             printf 'CPU, says so in the log, and generates normally. Everyone else '
             printf 'wants the plain download.\n\n'
             printf '### Code signing policy\n\n'
+            # The website uses this marker only on complete, published releases.
+            printf '<!-- bunyi-windows-signing: certum-authenticode-v1 -->\n\n'
             printf '**Windows** — app/CLI binaries and installers are Authenticode-signed '
             printf 'with a Certum certificate and timestamped. The publisher is '
             printf '*Shazron Elhazar Abdullah*. SmartScreen may still warn on new downloads; '
