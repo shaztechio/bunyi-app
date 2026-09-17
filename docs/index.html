@@ -398,7 +398,9 @@
         macOS&nbsp;15 or later. Open it and drag Bunyi to Applications. Windows and Linux {{DOTNET_VERSION}} are also available.</span>
         <!-- PORTABLE:START -->
         <span class="note-os note-win"><strong>Windows {{DOTNET_VERSION}}</strong> — portable and self-contained: unzip anywhere and run
-        <code>Bunyi.App.exe</code>, with no runtime to install. It is unsigned, so SmartScreen warns once.
+        <code>Bunyi.App.exe</code>, with no runtime to install.
+        <!-- WINDOWS_SIGNED:START -->Signed with a Certum certificate.<!-- WINDOWS_SIGNED:END -->
+        <!-- WINDOWS_UNSIGNED:START -->Windows downloads are unsigned; SmartScreen may warn.<!-- WINDOWS_UNSIGNED:END -->
         macOS and Linux builds are here too.</span>
         <span class="note-os note-linux"><strong>Linux {{DOTNET_VERSION}}</strong> — portable and self-contained: untar, <code>chmod +x</code>,
         and run, with no runtime to install. A desktop system needs nothing else. macOS and Windows builds are
@@ -406,7 +408,9 @@
         <!-- PORTABLE:END -->
         <!-- INSTALLERS:START -->
         <span class="note-os note-win"><strong>Windows {{DOTNET_VERSION}}</strong> — run the setup installer, then open Bunyi from Start.
-        No .NET installation needed. Windows downloads are unsigned.</span>
+        No .NET installation needed.
+        <!-- WINDOWS_SIGNED:START -->Signed with a Certum certificate.<!-- WINDOWS_SIGNED:END -->
+        <!-- WINDOWS_UNSIGNED:START -->Windows downloads are unsigned.<!-- WINDOWS_UNSIGNED:END --></span>
         <span class="note-os note-linux"><strong>Linux {{DOTNET_VERSION}}</strong> — install the DEB for Ubuntu/Debian or RPM for Fedora,
         then open Bunyi from your application menu. No .NET installation needed.</span>
         <!-- INSTALLERS:END -->
@@ -678,10 +682,19 @@
         <p>Run a newer installer to upgrade. Remove Bunyi through Windows Settings → Apps.
           Your models, voices, recordings and settings are retained. A portable ZIP is also available on the release page.</p>
         <!-- INSTALLERS:END -->
+        <!-- WINDOWS_SIGNED:START -->
         <p>
-          It is not code-signed, so SmartScreen warns the first time: choose <em>More info</em>, then
-          <em>Run anyway</em>. The SHA-256 beside the download is there if you would rather check it first.
+          Windows apps and installers are digitally signed and timestamped. The publisher is
+          <strong>Shazron Elhazar Abdullah</strong>. SmartScreen may still warn on new downloads;
+          choose <em>More info</em> to check the publisher. SHA-256 checksums accompany every download.
         </p>
+        <!-- WINDOWS_SIGNED:END -->
+        <!-- WINDOWS_UNSIGNED:START -->
+        <p>
+          This release is not code-signed. SmartScreen may warn when you open it; choose
+          <em>More info</em> to inspect the details. SHA-256 checksums accompany every download.
+        </p>
+        <!-- WINDOWS_UNSIGNED:END -->
         <p>
           The same release page has a <a href="https://github.com/shaztechio/bunyi-app/releases/tag/dotnet-v{{DOTNET_VERSION}}"><code>-cuda</code> download</a>:
           the same app built against ONNX Runtime’s GPU package, about 1.7× faster on long text in voice
@@ -780,12 +793,22 @@ sudo dnf install ./bunyi-{{DOTNET_VERSION}}-1.x86_64.rpm</code></pre>
         </p>
       </div>
       <div class="os-panel os-win" id="signing-panel-win">
+        <!-- WINDOWS_SIGNED:START -->
         <p>
-          <strong>Windows</strong> — <strong>not code-signed.</strong> SmartScreen warns the first time
-          you run it: choose <em>More info</em>, then <em>Run anyway</em>. There is no certificate behind
-          the download, so nothing would make that warning go away. Verify the download against the
+          <strong>Windows</strong> — <strong>digitally signed and timestamped</strong> with a Certum
+          code-signing certificate issued to <strong>Shazron Elhazar Abdullah</strong>. This covers
+          the desktop app, CLI and installers for both CPU and CUDA. SmartScreen can still warn
+          while a new download builds reputation. Verify the download against the
           SHA-256 checksum published with each release.
         </p>
+        <!-- WINDOWS_SIGNED:END -->
+        <!-- WINDOWS_UNSIGNED:START -->
+        <p>
+          <strong>Windows</strong> — this release is <strong>not code-signed.</strong>
+          SmartScreen may warn when you open it. Verify the download against the SHA-256
+          checksum published with each release.
+        </p>
+        <!-- WINDOWS_UNSIGNED:END -->
       </div>
       <div class="os-panel os-linux" id="signing-panel-linux">
         <p>

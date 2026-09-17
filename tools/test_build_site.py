@@ -22,7 +22,8 @@ import unittest
 from urllib.parse import urlparse, parse_qs
 import xml.etree.ElementTree as ET
 
-from build_site import build, render, select_versions, release_badge, installer_names
+from build_site import (build, render, select_versions, release_badge, installer_names,
+                        SIGNED_WINDOWS_MARKER, signed_windows_names)
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -43,6 +44,66 @@ def release(family, version, build_number=4):
 
 
 class SiteBuildTests(unittest.TestCase):
+    def signed_release(self, version="1.3.2"):
+        candidate = release("dotnet", version)
+        names = signed_windows_names(version) | installer_names(version)
+        existing = {asset["name"] for asset in candidate["assets"]}
+        candidate["assets"] += [
+            {"name": name, "state": "uploaded", "size": 100}
+            for name in sorted((names | {name + ".sha256" for name in names}) - existing)
+        ]
+        candidate["body"] = "Release notes\n" + SIGNED_WINDOWS_MARKER
+        return candidate
+
+    def test_signing_copy_follows_selected_release_not_version_number(self):
+        legacy = [release("dotnet", "1.3.1"), release("macos", "1.3.1")]
+        signed = self.signed_release()
+        with tempfile.TemporaryDirectory() as temp:
+            build(ROOT / "docs", temp, legacy)
+            html = (Path(temp) / "index.html").read_text(encoding="utf-8")
+            self.assertIn("Windows downloads are unsigned", html)
+            self.assertNotIn("Signed with a Certum certificate", html)
+            build(ROOT / "docs", temp, [[signed], legacy])
+            html = (Path(temp) / "index.html").read_text(encoding="utf-8")
+            self.assertIn("Windows 1.3.2", html)
+            self.assertIn("Signed with a Certum certificate", html)
+            self.assertIn("digitally signed and timestamped", html)
+            self.assertIn("Shazron Elhazar Abdullah", html)
+            self.assertIn("SmartScreen may still warn", html)
+            self.assertNotIn("not code-signed", html)
+            self.assertNotIn("Windows downloads are unsigned", html)
+            self.assertNotIn("WINDOWS_SIGNED:", html)
+            self.assertNotIn("WINDOWS_UNSIGNED:", html)
+            # A higher version without the explicit marker is not assumed signed.
+            build(ROOT / "docs", temp, [release("dotnet", "1.4.0"), signed] + legacy)
+            html = (Path(temp) / "index.html").read_text(encoding="utf-8")
+            self.assertIn("Windows 1.4.0", html)
+            self.assertIn("Windows downloads are unsigned", html)
+            self.assertNotIn("Signed with a Certum certificate", html)
+
+    def test_draft_or_incomplete_signed_release_cannot_change_site_notice(self):
+        legacy = [release("dotnet", "1.3.1"), release("macos", "1.3.1")]
+        for field, value in (("draft", True), ("prerelease", True), ("published_at", None)):
+            candidate = self.signed_release()
+            candidate[field] = value
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as temp:
+                build(ROOT / "docs", temp, [candidate] + legacy)
+                html = (Path(temp) / "index.html").read_text(encoding="utf-8")
+                self.assertIn("Windows 1.3.1", html)
+                self.assertNotIn("Signed with a Certum certificate", html)
+        names = signed_windows_names("1.3.2")
+        for name in names | {name + ".sha256" for name in names}:
+            for field, value in (("state", "new"), ("size", 0)):
+                candidate = self.signed_release()
+                asset = next(asset for asset in candidate["assets"] if asset["name"] == name)
+                asset[field] = value
+                with self.subTest(asset=name, field=field):
+                    self.assertEqual(select_versions([candidate] + legacy)["dotnet"], "1.3.1")
+
+    def test_release_workflow_writes_the_signing_marker(self):
+        workflow = (ROOT / ".github/workflows/dotnet-release.yml").read_text(encoding="utf-8")
+        self.assertIn(SIGNED_WINDOWS_MARKER, workflow)
+
     def test_installer_release_requires_all_packages_and_checksums(self):
         candidate = release("dotnet", "1.4.0")
         names = installer_names("1.4.0")

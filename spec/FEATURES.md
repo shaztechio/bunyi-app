@@ -1187,6 +1187,10 @@ a portable archive; macOS retains its MLX runtime.
   SmartScreen may still warn on new signed downloads. Store MSIX submission
   remains separate and unsigned. macOS retains Developer ID signing/notarization;
   Linux retains unsigned packages and checksum verification.
+  The website reports signing status for its selected published release, using
+  an explicit signing marker in that release's notes and a complete Windows
+  asset/checksum set. Drafts, incomplete uploads and unmarked legacy releases
+  must not cause the site to advertise signed Windows downloads.
 - Initial package targets: Windows 10 build 17763 or later on x64 (the existing
   Store installation floor), Ubuntu 24.04, Debian 12/13, and Fedora 43/44 x64.
   This names the validation matrix, not a claim that every desktop/hardware

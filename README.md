@@ -36,7 +36,7 @@ from Start or your application menu. Portable archives remain available,
 including for older archive-only releases. The download page only offers
 installers once they are published. No .NET runtime installation is needed.
 Upgrades and uninstall retain models, voices, recordings and settings.
-Windows builds are unsigned; see the code signing policy below.
+See the code signing policy below for Windows publisher and signature details.
 
 **NVIDIA GPU acceleration:** follow the [CUDA setup guide](CUDA.md) for the
 Windows CUDA installer or Linux CUDA archive. It covers the NVIDIA driver,
@@ -113,9 +113,9 @@ Signing differs by platform, because the three do not offer the same thing.
 and stapled. The release workflow verifies both the app and the disk image
 before publishing, so Gatekeeper accepts them offline.
 
-**Windows** — existing published downloads are **not code-signed**. The release
-workflow now supports Certum signing for new releases; each release's notes
-state its signing status. Signed builds identify **Shazron Elhazar Abdullah**
+**Windows** — the release workflow signs desktop apps, CLI binaries and
+installers with Certum. Each release's notes state its signing status;
+older 1.3.1 downloads remain unsigned. Signed builds identify **Shazron Elhazar Abdullah**
 as the publisher and include a timestamp. SmartScreen can still warn on new
 signed downloads; inspect the publisher under *More info*. Verify downloads
 against the SHA-256 checksum published with each release. See the
