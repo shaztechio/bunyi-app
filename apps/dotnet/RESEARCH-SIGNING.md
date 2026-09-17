@@ -19,7 +19,23 @@ limitations under the License.
   that goes stale, so it is dated and sits above it rather than woven in.
 -->
 
-## Status, as of 2026-09-01
+## Status, as of 2026-09-17
+
+Certum issued the certificate for **Shazron Elhazar Abdullah**. Local SimplySign
+signing and RFC 3161 timestamp verification succeeded. The release workflow now
+has a dedicated Windows signing job for CPU/CUDA desktop and CLI binaries,
+installers and uninstallers; it requires all three `CERTUM_*` Actions secrets
+and refuses to publish if signing or verification fails. See
+[`packaging/README.md`](packaging/README.md) for setup and the non-publishing
+workflow test. This does not retroactively sign existing downloads: until the
+first signed release is published, the site's current unsigned-download notice
+continues to describe those releases correctly.
+
+macOS retains its existing Developer ID/notarization pipeline. Linux artifacts
+remain unsigned with SHA-256 sidecars. Signing identifies the Windows publisher;
+it does not promise that SmartScreen will suppress reputation warnings.
+
+## Historical status, as of 2026-09-01
 
 - **SignPath Foundation — applied for and rejected.** That is what prompted
   this document. Every claim that Windows builds are signed was removed from

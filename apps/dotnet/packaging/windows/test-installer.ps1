@@ -15,7 +15,7 @@
 # Run on a disposable Windows runner. Refuse to touch an existing installation.
 [CmdletBinding()]
 param([Parameter(Mandatory)][string]$Installer, [string]$PreviousInstaller,
-      [switch]$Cuda, [string]$AlternativeInstaller)
+      [switch]$Cuda, [string]$AlternativeInstaller, [string]$SigningThumbprint)
 $ErrorActionPreference = 'Stop'
 $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\app.bunyi.Bunyi.Desktop_is1'
 if (Test-Path $key) { throw 'Bunyi is already installed; use a clean test account.' }
@@ -131,6 +131,11 @@ try {
         $app.Dispose()
     }
     $uninstaller = Join-Path $install 'unins000.exe'
+    if ($SigningThumbprint) {
+        & (Join-Path $PSScriptRoot 'sign-files.ps1') -VerifyOnly -Thumbprint $SigningThumbprint -Path @(
+            $installerPath, $uninstaller, (Join-Path $install 'Bunyi.App.exe'),
+            (Join-Path $install 'Bunyi.App.dll'), (Join-Path $install 'Bunyi.Core.dll'))
+    }
     $guard = [Threading.Mutex]::new($false, 'Local\Bunyi.Desktop.Running')
     try {
         if ((Invoke-Setup $installerPath) -eq 0) { throw 'Setup ignored a running Bunyi instance.' }

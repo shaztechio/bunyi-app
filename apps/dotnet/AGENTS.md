@@ -237,13 +237,13 @@ same user data/settings locations as portable builds, including on uninstall.
 See [`packaging/README.md`](packaging/README.md) for build and validation commands.
 Desktop metadata and icons come from the Windows Store manifest/listing assets.
 
-- **Not code-signed.** There is no certificate for either platform, so Windows
-  SmartScreen warns on first run, and the release notes say so rather than
-  leaving people to guess. The SignPath Foundation application was **rejected**;
-  a Certum open-source certificate is **in progress**. Until one exists, no
-  claim that Windows builds are signed goes back into the README, the site or
-  the release notes — that is what had to be removed once already.
-  [`RESEARCH-SIGNING.md`](RESEARCH-SIGNING.md) has the routes and their state.
+- **Windows release signing uses Certum SimplySign.** The dedicated release
+  job signs and timestamps Bunyi's desktop/CLI EXE and DLL files plus setup and
+  uninstall, for CPU and CUDA. Signature failure blocks publication. PR/local
+  builds and Linux packages remain unsigned. Existing downloads are unchanged;
+  update the site's notice only when the first signed release is published.
+  See [`packaging/README.md`](packaging/README.md) for the three Actions secrets
+  and dry-run procedure, and [`RESEARCH-SIGNING.md`](RESEARCH-SIGNING.md) for history.
 - **CPU only.** `RESEARCH-ONNX.md` measured DirectML as slower than plain CPU
   and CUDA as worth an opt-in — but CUDA needs a user-installed toolkit, which
   is the wrong trade for this audience. Anyone who wants it can publish with the
