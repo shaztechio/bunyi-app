@@ -113,11 +113,13 @@ Signing differs by platform, because the three do not offer the same thing.
 and stapled. The release workflow verifies both the app and the disk image
 before publishing, so Gatekeeper accepts them offline.
 
-**Windows** — **not code-signed.** SmartScreen warns the first time you run
-it: choose *More info*, then *Run anyway*. There is no certificate behind the
-download, so nothing would make that warning go away, and a page claiming
-otherwise would be the one thing worse than the warning. Verify the download
-against the SHA-256 checksum published with each release.
+**Windows** — existing published downloads are **not code-signed**. The release
+workflow now supports Certum signing for new releases; each release's notes
+state its signing status. Signed builds identify **Shazron Elhazar Abdullah**
+as the publisher and include a timestamp. SmartScreen can still warn on new
+signed downloads; inspect the publisher under *More info*. Verify downloads
+against the SHA-256 checksum published with each release. See the
+[signing setup](apps/dotnet/packaging/README.md) for the release procedure.
 
 **Linux** — packages and portable archives are unsigned. Verify the download
 against the SHA-256 checksum published with each release.

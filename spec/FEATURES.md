@@ -1176,8 +1176,17 @@ a portable archive; macOS retains its MLX runtime.
   same existing data after installing. Installers do not migrate Store data.
 - Re-running setup upgrades/reinstalls the application. Automatic application
   updates, package repositories, Store certification and Linux CUDA installers are
-  separate work. Direct downloads have SHA-256 sidecars; Windows remains
-  unsigned until production signing is configured.
+  separate work. Direct downloads have SHA-256 sidecars, computed after signing.
+- Windows release builds use Certum Authenticode signing with SHA-256 and an
+  RFC 3161 timestamp: desktop `Bunyi.App.exe`, `Bunyi.App.dll`, `Bunyi.Core.dll`;
+  CLI `bunyi.exe`, `bunyi.dll`, `Bunyi.Core.dll`; and setup/uninstall executables,
+  for both CPU and CUDA. Verify trust, the expected certificate and timestamp
+  before publishing; missing credentials or failed signing must stop the release.
+  Third-party binaries retain their existing signatures. PR/local builds may
+  remain unsigned. Existing unsigned releases are not retroactively changed;
+  SmartScreen may still warn on new signed downloads. Store MSIX submission
+  remains separate and unsigned. macOS retains Developer ID signing/notarization;
+  Linux retains unsigned packages and checksum verification.
 - Initial package targets: Windows 10 build 17763 or later on x64 (the existing
   Store installation floor), Ubuntu 24.04, Debian 12/13, and Fedora 43/44 x64.
   This names the validation matrix, not a claim that every desktop/hardware

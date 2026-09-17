@@ -67,13 +67,49 @@ never force-closes a generation. The mutex is only a lifetime signal, not a
 single-instance restriction. Inno removes its registered files on uninstall;
 there are no wildcard user-data deletions or model-download steps.
 
-Windows downloads remain unsigned. When production signing is ready, sign
-`Bunyi.App.exe`, `Bunyi.App.dll` and `Bunyi.Core.dll` first, then supply
-`-SigningCommand` with an Inno-compatible signing command containing `$f`.
-Credentials belong in the signing tool's environment. The builder refuses
-unsigned application binaries in this mode, signs setup and uninstall, and
-verifies the finished setup signature before checksumming. Production signing
-is not configured or claimed by this PR. MSIX/Store submission stays separate.
+The release workflow signs Windows downloads using Certum SimplySign. The
+build jobs upload intermediate payloads; a separate Windows signing job uses
+one authenticated session for CPU and CUDA. It signs the desktop and CLI's
+own EXE/DLL files, builds signed setup/uninstall executables, checks the
+installed signatures, and verifies the binaries again after ZIP extraction.
+Checksums describe the final signed files. A signing failure stops publication;
+unsigned intermediate artifacts are never included in a release. Existing
+unsigned releases are unchanged. MSIX/Store submission stays separate.
+
+Configure these Actions secrets on the repository (or a protected signing
+environment if an `environment:` gate is added to the signing job):
+
+- `CERTUM_USERNAME`: SimplySign login email.
+- `CERTUM_OTP_URI`: the full `otpauth://totp/...` provisioning URI, including
+  its secret and algorithm/digits/period parameters; not a temporary OTP.
+- `CERTUM_KEY_ID`: the certificate's 40-character SHA-1 thumbprint, without
+  spaces. This is a certificate selector; signatures use SHA-256. Update it
+  when the certificate is renewed or reissued.
+
+The workflow uses `dismine/windows-app-signing-setup-action`, pinned to reviewed
+commit `89ae3b032d4bc7a5b98d1a42a34e61ecb6faad64`, to install SimplySign and
+authenticate its desktop client on the hosted Windows runner. This is a
+third-party integration, not a Certum headless API. Screenshots are disabled;
+never print or upload the provisioning URI, generated OTPs or authentication
+screenshots. The URI grants signing access and belongs only in Actions secrets.
+Only trusted release code should run this job; it has a read-only GitHub token,
+and no PR trigger. PR checks exercise ordinary unsigned builds without secrets.
+
+Use **Windows + Linux release → Run workflow → bump: none**, leaving `version`
+empty, to test the full signing flow without tagging, releasing or refreshing
+the website. Successful runs expose `windows-signed` containing both flavors'
+installers, portable desktop/CLI ZIPs and checksums. Inspect signatures before
+cutting the first signed release; SmartScreen can still warn on new downloads.
+
+For local signing with SimplySign connected, `windows/sign-files.ps1 -Path ...`
+uses `CERTUM_KEY_ID` and discovers the Windows SDK x64 SignTool; set
+`BUNYI_SIGNTOOL` to override its location. `-VerifyOnly` requires a valid trusted
+signature from that exact certificate and a trusted timestamp. For an installer,
+sign `Bunyi.App.exe`, `Bunyi.App.dll` and `Bunyi.Core.dll` first, then pass
+`-SigningCommand` to `build-installer.ps1` with an Inno-compatible command
+containing `$f`. The release packaging script supplies this command and signs
+both setup and uninstall. Run `package-signed-release.ps1` only on a disposable
+Windows runner: it includes installation/uninstallation tests.
 
 ONNX and Whisper need the Visual C++ CRT and OpenMP runtimes even in a
 self-contained .NET build. Setup stages Microsoft's signed x64 DLLs from
