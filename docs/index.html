@@ -399,7 +399,7 @@
         <!-- PORTABLE:START -->
         <span class="note-os note-win"><strong>Windows {{DOTNET_VERSION}}</strong> — portable and self-contained: unzip anywhere and run
         <code>Bunyi.App.exe</code>, with no runtime to install.
-        <!-- WINDOWS_SIGNED:START -->Signed with a Certum certificate.<!-- WINDOWS_SIGNED:END -->
+        <!-- WINDOWS_SIGNED:START -->Signed with a Certum certificate; SmartScreen may still warn.<!-- WINDOWS_SIGNED:END -->
         <!-- WINDOWS_UNSIGNED:START -->Windows downloads are unsigned; SmartScreen may warn.<!-- WINDOWS_UNSIGNED:END -->
         macOS and Linux builds are here too.</span>
         <span class="note-os note-linux"><strong>Linux {{DOTNET_VERSION}}</strong> — portable and self-contained: untar, <code>chmod +x</code>,
@@ -409,7 +409,7 @@
         <!-- INSTALLERS:START -->
         <span class="note-os note-win"><strong>Windows {{DOTNET_VERSION}}</strong> — run the setup installer, then open Bunyi from Start.
         No .NET installation needed.
-        <!-- WINDOWS_SIGNED:START -->Signed with a Certum certificate.<!-- WINDOWS_SIGNED:END -->
+        <!-- WINDOWS_SIGNED:START -->Signed with a Certum certificate; SmartScreen may still warn.<!-- WINDOWS_SIGNED:END -->
         <!-- WINDOWS_UNSIGNED:START -->Windows downloads are unsigned.<!-- WINDOWS_UNSIGNED:END --></span>
         <span class="note-os note-linux"><strong>Linux {{DOTNET_VERSION}}</strong> — install the DEB for Ubuntu/Debian or RPM for Fedora,
         then open Bunyi from your application menu. No .NET installation needed.</span>
@@ -685,8 +685,10 @@
         <!-- WINDOWS_SIGNED:START -->
         <p>
           Windows apps and installers are digitally signed and timestamped. The publisher is
-          <strong>Shazron Elhazar Abdullah</strong>. SmartScreen may still warn on new downloads;
-          choose <em>More info</em> to check the publisher. SHA-256 checksums accompany every download.
+          <strong>Shazron Elhazar Abdullah</strong>. Signing does not remove Microsoft's
+          SmartScreen warning dialog. Choose <em>More info</em> to check the publisher;
+          choose <em>Run anyway</em> only if you trust the source.
+          <a href="#signing">Read why signed downloads can still trigger a warning.</a>
         </p>
         <!-- WINDOWS_SIGNED:END -->
         <!-- WINDOWS_UNSIGNED:START -->
@@ -797,9 +799,21 @@ sudo dnf install ./bunyi-{{DOTNET_VERSION}}-1.x86_64.rpm</code></pre>
         <p>
           <strong>Windows</strong> — <strong>digitally signed and timestamped</strong> with a Certum
           code-signing certificate issued to <strong>Shazron Elhazar Abdullah</strong>. This covers
-          the desktop app, CLI and installers for both CPU and CUDA. SmartScreen can still warn
-          while a new download builds reputation. Verify the download against the
-          SHA-256 checksum published with each release.
+          the desktop app, CLI and installers for both CPU and CUDA. The signature lets Windows
+          show this verified publisher instead of “Unknown publisher” and detect changes to signed files.
+        </p>
+        <p>
+          <strong>Signing does not turn off “Windows protected your PC”.</strong>
+          Microsoft Defender SmartScreen separately checks the reputation of the publisher and
+          the exact downloaded file. A new signed release can still be unfamiliar to Microsoft,
+          so the warning may appear even when its signature is valid.
+        </p>
+        <p>
+          Reputation can improve as Microsoft sees downloads without reported harmful behavior.
+          Using the same signing identity can help across releases, but Microsoft sets no fixed
+          threshold or guaranteed date for warnings to stop. See
+          <a href="https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/smartscreen-reputation">Microsoft's explanation of SmartScreen reputation</a>.
+          SHA-256 checksums are also published with each release.
         </p>
         <!-- WINDOWS_SIGNED:END -->
         <!-- WINDOWS_UNSIGNED:START -->

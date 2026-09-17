@@ -1193,6 +1193,8 @@ a portable archive; macOS retains its MLX runtime.
   must not cause the site to advertise signed Windows downloads.
   Windows help identifies the signed-release publisher and explains that new
   signed downloads can still trigger SmartScreen; local/PR builds may be unsigned.
+  The website distinguishes Certum publisher verification from Microsoft's
+  separate SmartScreen reputation checks, with a link to Microsoft's explanation.
 - Initial package targets: Windows 10 build 17763 or later on x64 (the existing
   Store installation floor), Ubuntu 24.04, Debian 12/13, and Fedora 43/44 x64.
   This names the validation matrix, not a claim that every desktop/hardware
