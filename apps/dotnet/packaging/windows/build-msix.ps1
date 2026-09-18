@@ -18,7 +18,8 @@ param(
     [switch]$LocalTest,
     [string]$PublishDirectory,
     [string]$OutputDirectory,
-    [string]$SdkBinPath
+    [string]$SdkBinPath,
+    [string]$VcRuntimeDirectory
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -108,6 +109,7 @@ if ([version]$binaryVersion -ne $packageVersion) {
     throw "Published binary version $binaryVersion does not match package version $packageVersion. Republish the app."
 }
 Get-ChildItem -LiteralPath $publish | Copy-Item -Destination $stage -Recurse
+& (Join-Path $PSScriptRoot 'copy-vc-runtime.ps1') -Destination $stage -VcRuntimeDirectory $VcRuntimeDirectory
 # Stage the shared distribution default explicitly so a caller cannot supply a
 # stale publish folder with a different value. The caller's folder is unchanged.
 Copy-Item -LiteralPath (Join-Path $dotnetRoot '../../spec/bunyi.defaults.json') `
@@ -141,6 +143,7 @@ $packagePath = Join-Path $OutputDirectory "Bunyi-$packageVersion-win-x64$suffix.
 & $makeAppx pack /d $stage /p $packagePath /o
 if ($LASTEXITCODE -ne 0) { throw 'MakeAppx packaging/validation failed.' }
 & (Join-Path $dotnetRoot 'packaging/test-defaults.ps1') -Path $packagePath -ExpectedSource mirror
+& (Join-Path $PSScriptRoot 'test-msix.ps1') -PackagePath $packagePath
 $hash = (Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash.ToLowerInvariant()
 "$hash  $([IO.Path]::GetFileName($packagePath))" | Set-Content -LiteralPath "$packagePath.sha256" -Encoding ascii
 Write-Host "Unsigned MSIX: $packagePath"

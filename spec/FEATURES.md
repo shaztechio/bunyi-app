@@ -1124,6 +1124,12 @@ standard CPU build, with the same Bunyi artwork and generation features as the
 portable app. Models remain downloads, not package payload. This section covers
 Windows Store preparation; direct Windows and Linux installers are defined in §14.
 
+The MSIX includes the Microsoft x64 Visual C++ CRT and OpenMP DLLs beside
+the executable, as the setup installer does. Native inference and transcription
+must not depend on a separately installed Visual C++ redistributable. Packaging
+validates the runtime payload in the finished MSIX and probes native loading;
+installed-package generation on a clean Windows machine remains a release check.
+
 Local-test packages use a separate identity and the display name **Bunyi
 (Local Test)**. Store packages require the exact identity and publisher supplied
 by Partner Center. Packaging must not silently present test identity values as

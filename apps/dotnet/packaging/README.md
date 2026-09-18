@@ -112,7 +112,8 @@ both setup and uninstall. Run `package-signed-release.ps1` only on a disposable
 Windows runner: it includes installation/uninstallation tests.
 
 ONNX and Whisper need the Visual C++ CRT and OpenMP runtimes even in a
-self-contained .NET build. Setup stages Microsoft's signed x64 DLLs from
+self-contained .NET build. Setup and MSIX share `windows/copy-vc-runtime.ps1`
+to stage Microsoft's signed x64 DLLs from
 Visual Studio's `VC/Redist/MSVC/.../x64/Microsoft.VC*.CRT` and sibling
 `Microsoft.VC*.OpenMP` directories beside the app. Override detection with
 `-VcRuntimeDirectory`; it must contain the CRT DLLs with OpenMP beside or in it.
