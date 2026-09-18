@@ -54,8 +54,13 @@ public sealed class DownloadServiceTests : IDisposable
         Assert.InRange(DownloadHttp.DelayFor(response, Start, attempt).TotalSeconds, minimum, minimum + 1);
     }
 
-    [Fact]
-    public async Task Retries_original_request_at_most_three_times_and_never_before_reset()
+    [Theory]
+    [InlineData(429)]
+    [InlineData(500)]
+    [InlineData(502)]
+    [InlineData(503)]
+    [InlineData(504)]
+    public async Task Retries_original_request_at_most_three_times_and_never_before_reset(int status)
     {
         var clock = new FakeTimeProvider(Start);
         var times = new List<DateTimeOffset>();
@@ -64,7 +69,7 @@ public sealed class DownloadServiceTests : IDisposable
             Assert.Equal(Source, request.RequestUri);
             Assert.Equal("bytes=2-", request.Headers.Range!.ToString());
             times.Add(clock.GetUtcNow());
-            return Limited("2");
+            return Failure(status, "2");
         }));
         var waits = new List<DownloadWait?>();
         var task = DownloadHttp.SendAsync(http, () =>
@@ -75,21 +80,23 @@ public sealed class DownloadServiceTests : IDisposable
         }, default, waits.Add, clock);
         await AdvanceUntilComplete(task, clock);
         var error = await Assert.ThrowsAsync<DownloadServiceException>(() => task);
-        Assert.Equal("download_rate_limited", error.Code);
+        Assert.Equal(status == 429 ? "download_rate_limited" : "download_service_unavailable", error.Code);
         Assert.Equal(4, times.Count);
         for (var i = 1; i < times.Count; i++) Assert.True(times[i] - times[i - 1] >= TimeSpan.FromSeconds(2));
         Assert.Equal(3, waits.Count(w => w is null));
         Assert.Equal(3, waits.Max(w => w?.Attempt));
     }
 
-    [Fact]
-    public async Task Stop_during_wait_keeps_partial_and_does_not_retry()
+    [Theory]
+    [InlineData(429)]
+    [InlineData(503)]
+    public async Task Stop_during_wait_keeps_partial_and_does_not_retry(int status)
     {
         var partial = Path.Combine(root, "model.incomplete");
         await File.WriteAllBytesAsync(partial, [1, 2]);
         using var cancel = new CancellationTokenSource();
         var calls = 0;
-        using var http = new HttpClient(new Handler(_ => { calls++; return Limited("60"); }));
+        using var http = new HttpClient(new Handler(_ => { calls++; return Failure(status, "60"); }));
         var downloader = new HttpFileDownloader(http, new RecordingLog());
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => downloader.FetchAsync(Source,
             Path.Combine(root, "model"), null, 4, null, cancel.Token,
@@ -99,8 +106,13 @@ public sealed class DownloadServiceTests : IDisposable
         Assert.False(File.Exists(Path.Combine(root, "model")));
     }
 
-    [Fact]
-    public async Task Resume_after_429_keeps_range_and_verifies_the_whole_file()
+    [Theory]
+    [InlineData(429)]
+    [InlineData(500)]
+    [InlineData(502)]
+    [InlineData(503)]
+    [InlineData(504)]
+    public async Task Resume_after_service_error_keeps_range_and_verifies_the_whole_file(int status)
     {
         var destination = Path.Combine(root, "model");
         await File.WriteAllBytesAsync(destination + ".incomplete", [1, 2]);
@@ -109,7 +121,7 @@ public sealed class DownloadServiceTests : IDisposable
         using var http = new HttpClient(new Handler(request =>
         {
             Assert.Equal("bytes=2-", request.Headers.Range!.ToString());
-            if (++calls == 1) return Limited("2");
+            if (++calls == 1) return Failure(status, "2");
             var response = new HttpResponseMessage(HttpStatusCode.PartialContent) { Content = new ByteArrayContent([3, 4]) };
             response.Content.Headers.ContentRange = new ContentRangeHeaderValue(2, 3, 4);
             return response;
@@ -166,19 +178,27 @@ public sealed class DownloadServiceTests : IDisposable
     [InlineData(false, "unavailable")]
     public async Task Only_the_explicit_header_identifies_a_pause(bool marked, string word)
     {
+        var clock = new FakeTimeProvider(Start);
+        var calls = 0;
         using var http = new HttpClient(new Handler(_ =>
         {
+            calls++;
             var response = new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
-            if (marked) response.Headers.Add("X-Bunyi-Download-Status", "paused");
+            if (marked) response.Headers.Add("X-Bunyi-Download-Status", " PAUSED ");
             return response;
         }));
-        var error = await Assert.ThrowsAsync<DownloadServiceException>(() => DownloadHttp.SendAsync(http,
-            () => new HttpRequestMessage(HttpMethod.Get, Source), default));
+        var task = DownloadHttp.SendAsync(http,
+            () => new HttpRequestMessage(HttpMethod.Get, Source), default, time: clock);
+        await AdvanceUntilComplete(task, clock);
+        var error = await Assert.ThrowsAsync<DownloadServiceException>(() => task);
         Assert.Contains(word, error.Message);
+        Assert.Equal(marked ? 1 : 4, calls);
     }
 
-    [Fact]
-    public async Task Aggregate_planning_reports_manifest_and_head_waits_then_finishes()
+    [Theory]
+    [InlineData(429)]
+    [InlineData(503)]
+    public async Task Aggregate_planning_reports_manifest_and_head_waits_then_finishes(int status)
     {
         var clock = new FakeTimeProvider(Start);
         var seen = new HashSet<string>();
@@ -189,7 +209,7 @@ public sealed class DownloadServiceTests : IDisposable
                 ? new(HttpStatusCode.OK) { Content = new ByteArrayContent([1, 2, 3, 4]) }
                 : new(HttpStatusCode.OK) { Content = request.RequestUri.AbsolutePath.EndsWith("manifest.sha256")
                     ? new StringContent("model.onnx") : new ByteArrayContent([1, 2, 3, 4]) };
-            return Limited("1");
+            return Failure(status, "1");
         }));
         var events = new List<AggregateDownloadProgress>();
         var task = new ModelDownloader(http, new RecordingLog(), clock).DownloadAssetsAsync(
@@ -201,6 +221,80 @@ public sealed class DownloadServiceTests : IDisposable
         Assert.Contains(events, p => p.Phase == DownloadPhase.Waiting && p.CurrentFile == "model.onnx");
         Assert.All(events.Where(p => p.Phase == DownloadPhase.Waiting), p => Assert.NotNull(p.Download!.ServiceWait));
         Assert.Equal(4, events.Last().BytesCompleted);
+    }
+
+    [Fact]
+    public async Task Mixed_rate_limits_and_server_errors_share_one_exponential_retry_budget()
+    {
+        var clock = new FakeTimeProvider(Start);
+        var statuses = new[] { 429, 503, 502, 504 };
+        var times = new List<DateTimeOffset>();
+        using var http = new HttpClient(new Handler(_ =>
+        {
+            var status = statuses[times.Count];
+            times.Add(clock.GetUtcNow());
+            return Failure(status);
+        }));
+        var waits = new List<DownloadWait?>();
+        var task = DownloadHttp.SendAsync(http,
+            () => new HttpRequestMessage(HttpMethod.Head, Source), default, waits.Add, clock);
+        await AdvanceUntilComplete(task, clock);
+        var error = await Assert.ThrowsAsync<DownloadServiceException>(() => task);
+        Assert.Equal("download_service_unavailable", error.Code);
+        Assert.Equal(4, times.Count);
+        for (var i = 1; i < times.Count; i++)
+            Assert.True(times[i] - times[i - 1] >= TimeSpan.FromSeconds(Math.Pow(2, i)));
+        Assert.Equal(3, waits.Count(w => w is null));
+    }
+
+    [Theory]
+    [InlineData(400)]
+    [InlineData(401)]
+    [InlineData(403)]
+    [InlineData(404)]
+    [InlineData(501)]
+    [InlineData(505)]
+    public async Task Non_transient_errors_are_not_retried(int status)
+    {
+        var calls = 0;
+        using var http = new HttpClient(new Handler(_ => { calls++; return Failure(status); }));
+        var task = DownloadHttp.SendAsync(http,
+            () => new HttpRequestMessage(HttpMethod.Get, Source), default,
+            _ => throw new InvalidOperationException("A terminal response must not wait."));
+        if (status >= 500)
+            await Assert.ThrowsAsync<DownloadServiceException>(() => task);
+        else
+        {
+            using var response = await task;
+            Assert.Equal(status, (int)response.StatusCode);
+        }
+        Assert.Equal(1, calls);
+    }
+
+    [Fact]
+    public async Task Explicit_pause_stops_retries_even_after_a_transient_response()
+    {
+        var clock = new FakeTimeProvider(Start);
+        var calls = 0;
+        using var http = new HttpClient(new Handler(_ =>
+        {
+            var response = Failure(503, "60");
+            if (++calls == 2) response.Headers.Add("X-Bunyi-Download-Status", "paused");
+            return response;
+        }));
+        var task = DownloadHttp.SendAsync(http,
+            () => new HttpRequestMessage(HttpMethod.Get, Source), default, time: clock);
+        await AdvanceUntilComplete(task, clock);
+        var error = await Assert.ThrowsAsync<DownloadServiceException>(() => task);
+        Assert.Contains("paused", error.Message);
+        Assert.Equal(2, calls);
+    }
+
+    private static HttpResponseMessage Failure(int status, string? retry = null)
+    {
+        var response = new HttpResponseMessage((HttpStatusCode)status);
+        if (retry is not null) response.Headers.TryAddWithoutValidation("Retry-After", retry);
+        return response;
     }
 
     private static HttpResponseMessage Limited(string retry, string? limit = null)

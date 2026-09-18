@@ -142,7 +142,7 @@ public final class WhisperModelDownload {
         let source = URL(string:
             "https://huggingface.co/ggerganov/whisper.cpp/resolve/"
             + WhisperModelStore.revision + "/ggml-base.bin")!
-        var rateLimitRetries = 0
+        var responseRetries = 0
         var connectionRetries = 0
         while true {
             try Task.checkCancellation()
@@ -187,22 +187,22 @@ public final class WhisperModelDownload {
             }
             activeTransfer = nil
             try Task.checkCancellation()
-            if response.statusCode == 429 {
+            if response.shouldRetryDownload {
                 let retryNumber = min(
-                    rateLimitRetries + 1, DownloadRetryPolicy.maximumRetries)
+                    responseRetries + 1, DownloadRetryPolicy.maximumRetries)
                 let delay = DownloadRetryPolicy.delay(
                     for: response, now: Date(), retryNumber: retryNumber,
                     jitter: Double.random(in: 0...1))
                 let retryAt = Date().addingTimeInterval(delay)
-                guard rateLimitRetries < DownloadRetryPolicy.maximumRetries,
+                guard responseRetries < DownloadRetryPolicy.maximumRetries,
                       delay <= DownloadRetryPolicy.maximumDelay else {
-                    throw DownloadServiceError.rateLimited(
+                    throw response.retryExhaustedError(
                         source: source, retryAt: retryAt)
                 }
-                rateLimitRetries += 1
+                responseRetries += 1
                 mailbox.waiting(
                     until: retryAt, host: source.host ?? "The server",
-                    attempt: rateLimitRetries)
+                    attempt: responseRetries)
                 try await DownloadRetryPolicy.wait(until: retryAt)
                 continue
             }

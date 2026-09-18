@@ -673,7 +673,7 @@ public final class TTSEngine {
             let otherTotal: Int64? = otherPaths.allSatisfy { sizes[$0] != nil }
                 ? otherPaths.reduce(Int64(0)) { $0 + (sizes[$1] ?? 0) } : nil
             var response = HTTPResponseInfo(statusCode: 0)
-            var rateLimitRetries = 0
+            var responseRetries = 0
             while true {
                 try Task.checkCancellation()
                 mailbox.begin(file: entry.path, completed: completed, total: total(),
@@ -723,26 +723,26 @@ public final class TTSEngine {
                 ticker.cancel()
                 try Task.checkCancellation()
                 downloadFeedback = mailbox.snapshot()
-                if response.statusCode == 429 {
+                if response.shouldRetryDownload {
                     let source = base.appendingPathComponent(entry.path)
-                    let retryNumber = min(rateLimitRetries + 1,
+                    let retryNumber = min(responseRetries + 1,
                                           DownloadRetryPolicy.maximumRetries)
                     let delay = DownloadRetryPolicy.delay(
                         for: response, now: Date(),
                         retryNumber: retryNumber,
                         jitter: Double.random(in: 0...1))
                     let retryAt = Date().addingTimeInterval(delay)
-                    guard rateLimitRetries < DownloadRetryPolicy.maximumRetries,
+                    guard responseRetries < DownloadRetryPolicy.maximumRetries,
                           delay <= DownloadRetryPolicy.maximumDelay else {
-                        throw DownloadServiceError.rateLimited(
+                        throw response.retryExhaustedError(
                             source: source, retryAt: retryAt)
                     }
-                    rateLimitRetries += 1
+                    responseRetries += 1
                     mailbox.waiting(until: retryAt,
                                     host: source.host ?? "The server",
-                                    attempt: rateLimitRetries)
+                                    attempt: responseRetries)
                     downloadFeedback = mailbox.snapshot()
-                    log.log("Download limited by \(source.host ?? "the server"); retrying in \(Int(ceil(delay))) s")
+                    log.log("Download from \(source.host ?? "the server") returned HTTP \(response.statusCode); retrying in \(Int(ceil(delay))) s")
                     try await DownloadRetryPolicy.wait(until: retryAt)
                     continue
                 }
@@ -871,7 +871,7 @@ public final class TTSEngine {
         s.count == 64 && s.allSatisfy(\.isHexDigit)
     }
 
-    /// Executes one metadata request under the same bounded rate-limit policy
+    /// Executes one metadata request under the same bounded HTTP retry policy
     /// as file transfers. The original request is recreated on each attempt,
     /// so a Hugging Face resolve URL obtains a fresh signed redirect.
     private func requestData(from url: URL,
@@ -895,7 +895,7 @@ public final class TTSEngine {
                 throw URLError(.badServerResponse)
             }
             let response = HTTPResponseInfo(http)
-            if response.statusCode == 429 {
+            if response.shouldRetryDownload {
                 let retryNumber = min(retries + 1,
                                       DownloadRetryPolicy.maximumRetries)
                 let delay = DownloadRetryPolicy.delay(
@@ -904,7 +904,7 @@ public final class TTSEngine {
                 let retryAt = Date().addingTimeInterval(delay)
                 guard retries < DownloadRetryPolicy.maximumRetries,
                       delay <= DownloadRetryPolicy.maximumDelay else {
-                    throw DownloadServiceError.rateLimited(
+                    throw response.retryExhaustedError(
                         source: source, retryAt: retryAt)
                 }
                 retries += 1
@@ -917,7 +917,7 @@ public final class TTSEngine {
                 waiting.slow = false
                 waiting.rate = 0
                 downloadFeedback = waiting
-                log.log("Request limited by \(source.host ?? "the server"); retrying in \(Int(ceil(delay))) s")
+                log.log("Request to \(source.host ?? "the server") returned HTTP \(response.statusCode); retrying in \(Int(ceil(delay))) s")
                 do {
                     try await DownloadRetryPolicy.wait(until: retryAt)
                 } catch {

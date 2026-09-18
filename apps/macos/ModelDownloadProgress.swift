@@ -265,6 +265,18 @@ struct HTTPResponseInfo: Sendable, Equatable {
             .caseInsensitiveCompare("paused") == .orderedSame
     }
 
+    /// Share the retry budget between rate limits and transient server errors.
+    /// A deliberate pause must never be retried automatically.
+    var shouldRetryDownload: Bool {
+        statusCode == 429 || (!bunyiDownloadsPaused && [500, 502, 503, 504].contains(statusCode))
+    }
+
+    func retryExhaustedError(source: URL, retryAt: Date) -> DownloadServiceError {
+        statusCode == 429
+            ? .rateLimited(source: source, retryAt: retryAt)
+            : .unavailable(source: source, paused: bunyiDownloadsPaused, retryAt: retryAt)
+    }
+
     func unavailableError(source: URL,
                           now: Date = Date()) -> DownloadServiceError {
         let delay = DownloadRetryPolicy.serverDelay(for: self, now: now)
