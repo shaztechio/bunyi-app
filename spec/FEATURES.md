@@ -1134,7 +1134,9 @@ Local-test packages use a separate identity and the display name **Bunyi
 (Local Test)**. Store packages require the exact identity and publisher supplied
 by Partner Center. Packaging must not silently present test identity values as
 Store credentials. Package versions follow the .NET version with a fourth
-component of zero; packaging does not bump the application version.
+component of zero; packaging does not bump the application version. Artifact
+filenames use the three-part release version, matching the other Windows assets
+(for example, `Bunyi-1.3.2-win-x64-store.msix`); only the manifest uses `1.3.2.0`.
 
 This prepares artifacts, not a published or certified Store release. Installed
 package testing, storage virtualization/coexistence, upgrades, uninstall, and

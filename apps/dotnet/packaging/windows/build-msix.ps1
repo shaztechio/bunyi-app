@@ -139,7 +139,7 @@ $config.Save($priConfig)
 & $makePri new /pr $stage /cf $priConfig /mn $manifestPath /of (Join-Path $stage 'resources.pri') /o
 if ($LASTEXITCODE -ne 0) { throw 'MakePri resource indexing failed.' }
 $suffix = if ($LocalTest) { '-local-test' } else { '-store' }
-$packagePath = Join-Path $OutputDirectory "Bunyi-$packageVersion-win-x64$suffix.msix"
+$packagePath = Join-Path $OutputDirectory "Bunyi-$versionPrefix-win-x64$suffix.msix"
 & $makeAppx pack /d $stage /p $packagePath /o
 if ($LASTEXITCODE -ne 0) { throw 'MakeAppx packaging/validation failed.' }
 & (Join-Path $dotnetRoot 'packaging/test-defaults.ps1') -Path $packagePath -ExpectedSource mirror

@@ -59,7 +59,9 @@ From the repository root:
 The script publishes the app, generates a resource index for all icon sizes,
 stages Microsoft-signed x64 CRT/OpenMP DLLs with the same helper as the setup
 installer, and runs MakeAppx validation. Output is under `apps/dotnet/artifacts/msix`:
-`Bunyi-<version>-win-x64-store.msix` and its SHA-256 checksum. A unique staging
+`Bunyi-<version>-win-x64-store.msix` and its SHA-256 checksum. Filenames use the
+three-part release version (for example, `1.3.2`); the manifest uses the required
+four-part package version (`1.3.2.0`). A unique staging
 folder is retained for manifest/resource inspection on each run. The script
 never recursively deletes supplied paths.
 
