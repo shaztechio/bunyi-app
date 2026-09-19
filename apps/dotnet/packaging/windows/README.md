@@ -44,7 +44,10 @@ raise it when the packaged application has been tested on newer releases.
 ## Build
 
 Requires Windows, PowerShell 7, the .NET 10 SDK, and the Windows SDK's x64
-`MakeAppx.exe` and `MakePri.exe`. Visual Studio is optional. No Python or
+`MakeAppx.exe` and `MakePri.exe`, plus Microsoft's x64 Visual C++ CRT and
+OpenMP redistributable files. These are discovered from Visual Studio's C++
+build component, or supplied with `-VcRuntimeDirectory` pointing to its
+`Microsoft.VC*.CRT` directory (OpenMP beside or inside it). No Python or
 certificate is required to build from the committed assets.
 
 From the repository root:
@@ -54,8 +57,11 @@ From the repository root:
 ```
 
 The script publishes the app, generates a resource index for all icon sizes,
-and runs MakeAppx validation. Output is under `apps/dotnet/artifacts/msix`:
-`Bunyi-<version>-win-x64-store.msix` and its SHA-256 checksum. A unique staging
+stages Microsoft-signed x64 CRT/OpenMP DLLs with the same helper as the setup
+installer, and runs MakeAppx validation. Output is under `apps/dotnet/artifacts/msix`:
+`Bunyi-<version>-win-x64-store.msix` and its SHA-256 checksum. Filenames use the
+three-part release version (for example, `1.3.2`); the manifest uses the required
+four-part package version (`1.3.2.0`). A unique staging
 folder is retained for manifest/resource inspection on each run. The script
 never recursively deletes supplied paths.
 
@@ -76,6 +82,34 @@ SDK tools can also come from Microsoft's `Microsoft.Windows.SDK.BuildTools`
 NuGet package: unpack it and supply its `bin/<version>/x64` directory.
 CI builds and uploads an unsigned `windows-store-msix` artifact on Windows;
 it does not submit to Partner Center or change the existing release downloads.
+
+## Native runtime validation
+
+`build-msix.ps1` automatically runs `test-msix.ps1` against the finished MSIX
+before writing its checksum. This extracts the archive into a retained temporary
+folder, rejects missing, unsigned/non-Microsoft or wrong-architecture required
+runtime DLLs, then starts a fresh x64 PowerShell process. That process loads the
+packaged runtimes, initializes ONNX Runtime's managed `SessionOptions` (including
+`NativeMethods`), and loads every packaged Windows Whisper library. Both PR and
+release workflows run this gate through the MSIX builder.
+
+```powershell
+./apps/dotnet/packaging/windows/test-msix.ps1 -PackagePath 'path/to/Bunyi-version-win-x64-store.msix'
+```
+
+A self-contained .NET publish does not supply these C++ prerequisites. Both
+Windows builders use `copy-vc-runtime.ps1`, checking Microsoft signatures and
+x64 architecture before copying runtime DLLs into staging. A supplied publish
+folder remains unchanged. Runtime updates ship with Bunyi releases.
+
+The package probe does not install MSIX or generate speech. Before resubmission,
+install a signed local-test package in a clean Windows VM without Visual Studio
+or a separately installed VC++ redistributable. Download the preset model and
+generate a short sentence, then the text that failed review; exercise Whisper
+transcription too. Capture Bunyi's log on failure: it includes the inner native
+loader exception omitted from the status label. Do not uninstall host runtime
+packages to simulate a clean machine. Continue with the installed-package checks
+below; an archive check alone does not establish Store compatibility.
 
 ## Artwork
 
