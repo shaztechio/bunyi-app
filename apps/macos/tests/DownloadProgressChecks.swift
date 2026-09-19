@@ -94,6 +94,33 @@ struct DownloadProgressChecks {
             for: fallback, now: epoch, retryNumber: 2, jitter: 0.5) == 4.5)
         precondition(DownloadRetryPolicy.delay(
             for: fallback, now: epoch, retryNumber: 3, jitter: 0.5) == 8.5)
+        // Transient service failures use the same bounded timing as 429.
+        let source = URL(string: "https://models.example/model")!
+        for status in [500, 502, 503, 504] {
+            let response = HTTPResponseInfo(statusCode: status)
+            precondition(response.shouldRetryDownload)
+            for retry in 1...DownloadRetryPolicy.maximumRetries {
+                precondition(DownloadRetryPolicy.delay(
+                    for: response, now: epoch, retryNumber: retry, jitter: 0.5)
+                    == pow(2, Double(retry)) + 0.5)
+            }
+            let retryAt = epoch.addingTimeInterval(60)
+            guard case .unavailable(let failedSource, let paused, let deadline) =
+                response.retryExhaustedError(source: source, retryAt: retryAt) else {
+                preconditionFailure("Exhausted server retries must remain an unavailable error")
+            }
+            precondition(failedSource == source && !paused && deadline == retryAt)
+        }
+        for status in [200, 206, 400, 401, 403, 404, 501, 505] {
+            precondition(!HTTPResponseInfo(statusCode: status).shouldRetryDownload)
+        }
+        precondition(seconds.shouldRetryDownload)
+        guard case .rateLimited = seconds.retryExhaustedError(source: source, retryAt: epoch) else {
+            preconditionFailure("Exhausted 429 retries must remain rate limited")
+        }
+        let serviceTiming = HTTPResponseInfo(statusCode: 503, headers: ["Retry-After": "60"])
+        precondition(DownloadRetryPolicy.delay(
+            for: serviceTiming, now: epoch, retryNumber: 1, jitter: 0.5) == 60)
         let paused = HTTPResponseInfo(
             statusCode: 503,
             headers: ["x-bunyi-download-status": " PAUSED "])
@@ -103,6 +130,7 @@ struct DownloadProgressChecks {
             preconditionFailure("A 503 did not produce an unavailable error")
         }
         precondition(isPaused)
+        precondition(!paused.shouldRetryDownload)
 
         let deliberateWait = Task {
             try await DownloadRetryPolicy.wait(

@@ -369,8 +369,9 @@ A platform ships this only if its mirror publishes `manifest.sha256`
 (`DATA-FORMATS.md`). Offering a source the app itself endorses is a higher bar
 than documenting one a user picked, and unverified bytes do not clear it.
 
-**Download service recovery.** A paused/unavailable built-in mirror must stop
-the operation with a clear explanation and offer **Download from Hugging Face**.
+**Download service recovery.** An explicitly paused built-in mirror, or one
+still unavailable after the bounded retries below, must stop the operation
+with a clear explanation and offer **Download from Hugging Face**.
 The action changes only the affected mode to its canonical upstream repository,
 then retries generation with the current inputs. It is never automatic. The UI
 explains that this saves the source choice and may require a separate download:
@@ -380,11 +381,16 @@ receive this offer. A changed mode/source invalidates an old offer. The Worker
 marks a killswitch 503 with `X-Bunyi-Download-Status: paused`; older mirror 503s
 are described as unavailable, not definitively identified as killswitch events.
 
-For HTTP 429, honor `Retry-After` (seconds or HTTP date) and the Hugging Face
+For HTTP 429 and transient server responses **500, 502, 503 and 504**, honor
+`Retry-After` (seconds or HTTP date) and the Hugging Face
 `RateLimit` reset (`t` seconds), using the later valid deadline when both exist.
 Without valid server timing, use exponential delays of 2, 4, and 8 seconds plus
-up to one second of jitter. Permit at most three retries per request. If the
-server requires more than 15 minutes, or retries are exhausted, fail clearly
+up to one second of jitter. Permit at most three retries per request, sharing
+that budget across rate limits and transient server responses. An explicit
+`X-Bunyi-Download-Status: paused` server response stops immediately, even with
+`Retry-After`; other HTTP statuses (including 501/505) are not retried by this
+policy. If the server requires more than 15 minutes, or retries are exhausted,
+fail clearly
 with the retry timing instead of retrying early. Show a waiting/countdown state
 with Stop available; do not report a deliberate wait as a stalled transfer.
 Preserve accepted bytes and totals. Retry the original source URL, obtaining a

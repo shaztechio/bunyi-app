@@ -56,6 +56,11 @@ internal static class DownloadHttp
         return TimeSpan.FromSeconds(Math.Max(1, seconds ?? Math.Pow(2, attempt) + Random.Shared.NextDouble()));
     }
 
+    private static DownloadServiceException Unavailable(Uri source, bool paused, DateTimeOffset? until) =>
+        new("download_service_unavailable",
+            paused ? "Model downloads are temporarily paused. Your downloaded files have been kept."
+                : $"{source.Host} is temporarily unavailable. Your downloaded files have been kept. Try again later.", source, until);
+
     public static async Task<HttpResponseMessage> SendAsync(HttpClient http,
         Func<HttpRequestMessage> createRequest, CancellationToken ct,
         Action<DownloadWait?>? waiting = null, TimeProvider? time = null)
@@ -67,14 +72,23 @@ internal static class DownloadHttp
             using var request = createRequest(); // Always original URL, never a cached signed redirect.
             var source = request.RequestUri!;
             var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
-            if (response.StatusCode == HttpStatusCode.TooManyRequests)
+            var rateLimited = response.StatusCode == HttpStatusCode.TooManyRequests;
+            var paused = response.Headers.TryGetValues("X-Bunyi-Download-Status", out var values)
+                && values.Any(value => string.Equals(value.Trim(), "paused", StringComparison.OrdinalIgnoreCase));
+            var transient = !paused && response.StatusCode is (HttpStatusCode.InternalServerError
+                or HttpStatusCode.BadGateway or HttpStatusCode.ServiceUnavailable or HttpStatusCode.GatewayTimeout);
+            if (rateLimited || transient)
             {
-                var delay = DelayFor(response, clock.GetUtcNow(), attempt + 1);
+                var delay = DelayFor(response, clock.GetUtcNow(), Math.Min(attempt + 1, 3));
                 var until = clock.GetUtcNow() + delay;
                 response.Dispose();
                 if (attempt >= 3 || delay > TimeSpan.FromMinutes(15))
-                    throw new DownloadServiceException("download_rate_limited",
-                        $"{source.Host} is limiting downloads. Try again after {until:yyyy-MM-dd HH:mm:ss} UTC. Your downloaded files have been kept.", source, until);
+                {
+                    if (rateLimited)
+                        throw new DownloadServiceException("download_rate_limited",
+                            $"{source.Host} is limiting downloads. Try again after {until:yyyy-MM-dd HH:mm:ss} UTC. Your downloaded files have been kept.", source, until);
+                    throw Unavailable(source, paused: false, until);
+                }
                 try
                 {
                     while (clock.GetUtcNow() < until)
@@ -90,14 +104,10 @@ internal static class DownloadHttp
             }
             if ((int)response.StatusCode >= 500)
             {
-                var paused = response.Headers.TryGetValues("X-Bunyi-Download-Status", out var values)
-                    && values.Contains("paused", StringComparer.OrdinalIgnoreCase);
                 DateTimeOffset? until = response.Headers.Contains("Retry-After")
                     ? clock.GetUtcNow() + DelayFor(response, clock.GetUtcNow(), 1) : null;
                 response.Dispose();
-                throw new DownloadServiceException("download_service_unavailable",
-                    paused ? "Model downloads are temporarily paused. Your downloaded files have been kept."
-                        : $"{source.Host} is temporarily unavailable. Your downloaded files have been kept. Try again later.", source, until);
+                throw Unavailable(source, paused, until);
             }
             return response;
         }
