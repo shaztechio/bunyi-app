@@ -77,6 +77,7 @@ site is reachable at `https://shaztechio.github.io/bunyi-app/`; delete
 | `assets/icon-256.png` | 256px copy: favicon and `apple-touch-icon` |
 | `assets/icon-512.png` | 512px copy, the hero image |
 | `assets/icon-64.png` | 64px copy, the wordmark in the header and footer |
+| `assets/microsoft-store-badge.svg` | Unmodified [official Microsoft Store badge](https://get.microsoft.com/images/en-us%20light.svg) for dark backgrounds; links to Bunyi's Store listing without JavaScript |
 | `assets/og-card.png` | 1200×630 link-preview image (`og:image`) |
 | `tools/generate-og-card.swift` | Renders `og-card.png` |
 | `CNAME` | Custom domain |
