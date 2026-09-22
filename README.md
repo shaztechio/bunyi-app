@@ -21,6 +21,8 @@ toolbar.](docs/assets/screenshot-macos.png)
 
 Home: [bunyi.app](https://bunyi.app)
 
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy_Me_a_Coffee-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=000000)](https://buymeacoffee.com/shazron)
+
 **Download:**
 
 | Platform | Current release | Requirements |
