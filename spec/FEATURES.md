@@ -264,9 +264,13 @@ reveal-in-file-manager.
   sandboxed platform that choice is also what grants permission to write
   there, so a fixed destination would need an entitlement this does not
   otherwise require.
-- History remains available while a generation is running — it only reads the
-  folder. The generation modes do not: switching one evicts the model the
-  running job is using (§2).
+- **The whole mode picker, including History, is disabled while work runs
+  on a generation tab**, including download, transcription, generation, and
+  cooperative cancellation. Mouse and keyboard navigation both stay on that
+  tab until work finishes or stops. This keeps the active job visible and
+  prevents switching modes from evicting its model (§2). If History is already
+  showing when work starts, the picker stays available so the user can return
+  to a generation tab; it then locks for the rest of the operation.
 - Playback is **play/stop, with progress drawn as a ring around the button
   itself** rather than a separate bar — the control and its progress are the
   same object, which is what the row has space for. No pause: these are short

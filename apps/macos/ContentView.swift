@@ -260,8 +260,8 @@ struct ContentView: View {
             // History has no Generate button, so an idle bar would read
             // "press ⌘↩ to generate" beside nothing that generates — and the
             // list is better off with the height. It comes back while a run is
-            // in progress, which is reachable from History on purpose: that is
-            // where the progress and the Stop button live.
+            // in progress if work starts while History is already showing:
+            // that is where the progress and the Stop button live.
             if tab != .history || engine.status.isBusy {
                 Divider()
 
@@ -397,6 +397,7 @@ struct ContentView: View {
                 Text("History").tag(MainTab.history)
             }
             .pickerStyle(.segmented)
+            .disabled(engine.status.isBusy && tab != .history)
             .labelsHidden()
             .controlSize(.large)
             .focused($modePickerFocused)
@@ -518,13 +519,7 @@ struct ContentView: View {
     /// Keep the segmented control's selection aligned with the radio button
     /// its native arrow-key behavior is about to focus.
     private func moveModeSelection(for key: KeyEquivalent) {
-        if engine.status.isBusy {
-            if tab != .history,
-               key == .rightArrow || key == .downArrow {
-                tab = .history
-            }
-            return
-        }
+        guard !engine.status.isBusy || tab == .history else { return }
         let tabs = TTSMode.allCases.map(MainTab.generate) + [.history]
         guard let current = tabs.firstIndex(of: tab) else { return }
 
@@ -538,14 +533,15 @@ struct ContentView: View {
         tab = tabs[destination]
     }
 
-    /// History remains selectable while the running generation mode stays
-    /// locked. A single `.disabled` on the segmented picker made History
-    /// unreachable, so selection—not the whole control—enforces the lock.
+    /// Keep every segment locked during work, including History. If work
+    /// starts while History is already showing, allow a return to a mode.
+    /// Guard the binding as well as disabling the picker so selection cannot
+    /// change while the control is updating its enabled state.
     private var busyAwareTabSelection: Binding<MainTab> {
         Binding(
             get: { tab },
             set: { destination in
-                if engine.status.isBusy, destination != .history { return }
+                if engine.status.isBusy, tab != .history { return }
                 tab = destination
             })
     }
