@@ -16,7 +16,7 @@ import Foundation
 
 @main
 enum ReferenceClipPolicyChecks {
-    static func main() {
+    static func main() throws {
         precondition(ReferenceClipPolicy.audioMaximumSeconds(
             hasProvidedTranscript: false,
             savedTranscriptAudioSeconds: nil) == 10)
@@ -32,6 +32,31 @@ enum ReferenceClipPolicyChecks {
         precondition(ReferenceClipPolicy.audioMaximumSeconds(
             hasProvidedTranscript: true,
             savedTranscriptAudioSeconds: -1) == nil)
+        for rate in [16000, 24000, 48000] {
+            var samples = [Float](repeating: 0.2, count: rate * 12)
+            for i in (rate * 4)..<(rate * 4 + rate / 5) { samples[i] = 0.00001 }
+            for i in (rate * 8)..<(rate * 8 + rate / 5) { samples[i] = 0.00001 }
+            let end = try ReferenceClipPolicy.automaticEnd(samples: samples,
+                sampleRate: rate, sourceExceedsLimit: true)
+            precondition(abs(end - 8.1) < 0.00001)
+            // A 100 ms hesitation is not enough; choose the earlier sustained pause.
+            for i in (rate * 8)..<(rate * 8 + rate / 5) { samples[i] = 0.2 }
+            for i in (rate * 8)..<(rate * 8 + rate / 10) { samples[i] = 0 }
+            let earlier = try ReferenceClipPolicy.automaticEnd(samples: samples,
+                sampleRate: rate, sourceExceedsLimit: true)
+            precondition(abs(earlier - 4.1) < 0.00001)
+            let short = try ReferenceClipPolicy.automaticEnd(samples: Array(samples.prefix(rate * 3)),
+                sampleRate: rate, sourceExceedsLimit: false)
+            precondition(short == 3)
+            for value: Float in [0, 0.2] {
+                do {
+                    _ = try ReferenceClipPolicy.automaticEnd(
+                        samples: Array(repeating: value, count: rate * 12),
+                        sampleRate: rate, sourceExceedsLimit: true)
+                    preconditionFailure("No safe pause should have been found")
+                } catch ReferencePauseError.noPause {}
+            }
+        }
         print("Reference clip checks passed: automatic, full and saved-window alignment.")
     }
 }

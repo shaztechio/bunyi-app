@@ -170,6 +170,8 @@ public sealed class BunyiRuntime : IAsyncDisposable
     public async Task<string> TranscribeAsync(string path, string language,
         IProgress<AggregateDownloadProgress>? progress, CancellationToken ct, bool trimReference = true)
     {
+        if (trimReference)
+            return (await TranscribeReferenceAsync(path, language, progress, ct).ConfigureAwait(false)).Text;
         // Never hold Whisper and a TTS model together.
         await Engine.UnloadAsync().ConfigureAwait(false);
         using var lease = AcquireOperation("transcribe");
@@ -181,8 +183,25 @@ public sealed class BunyiRuntime : IAsyncDisposable
                 ModelsRoot, progress, token).ConfigureAwait(false);
             return Path.Combine(assets[0].Folder, "ggml-base.bin");
         }, _log);
-        var trimmed = trimReference ? ReferenceAudio.WriteTrimmedCopy(path, TimeSpan.FromSeconds(10), _log) : null;
-        try { return await transcriber.TranscribeAsync(trimmed ?? path, language, ct).ConfigureAwait(false); }
+        return await transcriber.TranscribeAsync(path, language, ct).ConfigureAwait(false);
+    }
+
+    public async Task<(string Text, double AudioSeconds)> TranscribeReferenceAsync(
+        string path, string language, IProgress<AggregateDownloadProgress>? progress, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        var seconds = await Task.Run(() => ReferenceClipPolicy.AutomaticEnd(
+            ReferenceAudio.Load(path, 16000, _log), 16000), ct).ConfigureAwait(false);
+        ct.ThrowIfCancellationRequested();
+        var trimmed = await Task.Run(() => ReferenceAudio.WriteTrimmedCopy(
+            path, TimeSpan.FromSeconds(seconds), _log), ct).ConfigureAwait(false);
+        try
+        {
+            ct.ThrowIfCancellationRequested();
+            var text = await TranscribeAsync(trimmed ?? path, language, progress, ct,
+                trimReference: false).ConfigureAwait(false);
+            return (text, seconds);
+        }
         finally { if (trimmed is not null && File.Exists(trimmed)) File.Delete(trimmed); }
     }
 

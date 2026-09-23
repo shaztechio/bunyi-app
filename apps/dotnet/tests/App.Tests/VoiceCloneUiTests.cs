@@ -209,12 +209,14 @@ public sealed class VoiceCloneUiTests : HeadlessWindows
             Assert.False(model.ShowGenerate);
             Assert.False(model.CanEditTranscript);
             Assert.Null(engine.LastRequest);
+            model.ReferenceTranscriptAudioSeconds = 7.81;
             return Task.FromResult("The recording's words");
         };
 
         Assert.True(model.CanGenerate);
         var run = model.GenerateCommand.ExecuteAsync(null);
         Assert.Equal("The recording's words", engine.LastRequest?.ReferenceTranscript);
+        Assert.Equal(7.81, engine.LastRequest?.ReferenceTranscriptAudioSeconds);
         Assert.True(model.IsBusy);
         Assert.False(model.ShowGenerate);
         Assert.Equal(new[] { true }, busyChanges);

@@ -97,9 +97,15 @@ public partial class App : Application
             };
             viewModel.Download.Reconnect = runtime.Downloader.RequestReconnect;
 
-            viewModel.Transcribe = (path, ct) => runtime.TranscribeAsync(path, viewModel.Language,
-                new InlineProgress<Bunyi.Core.Runtime.AggregateDownloadProgress>(p =>
-                    viewModel.ReportTranscriptionDownload(p.Download ?? new DownloadProgress(p.Phase))), ct);
+            viewModel.Transcribe = async (path, ct) =>
+            {
+                var result = await runtime.TranscribeReferenceAsync(path, viewModel.Language,
+                    new InlineProgress<Bunyi.Core.Runtime.AggregateDownloadProgress>(p =>
+                        viewModel.ReportTranscriptionDownload(p.Download ?? new DownloadProgress(p.Phase))), ct);
+                ct.ThrowIfCancellationRequested();
+                viewModel.ReferenceTranscriptAudioSeconds = result.AudioSeconds;
+                return result.Text;
+            };
             settingsViewModel.AcquireOperation = runtime.AcquireOperation;
 
             // §3d: a model being deleted is evicted from memory first,

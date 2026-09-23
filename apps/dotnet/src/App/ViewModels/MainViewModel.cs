@@ -318,6 +318,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     /// <summary>Listens to a recording and returns what it says (spec §4).</summary>
     public Func<string, CancellationToken, Task<string>>? Transcribe { get; set; }
+    public double? ReferenceTranscriptAudioSeconds { get; set; }
 
     /// <summary>The on-demand run, or null when no Doctor was supplied.</summary>
     public async Task<DoctorReport?> RunDoctorAsync()
@@ -668,6 +669,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         ReferenceAudioPath = _voices.ClipPath(value);
         ReferenceTranscript = value.Transcript;
+        ReferenceTranscriptAudioSeconds = value.TranscriptAudioSeconds;
     }
 
     /// <summary>What a voice about to be saved will be called.</summary>
@@ -689,7 +691,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         try
         {
-            var saved = _voices!.Save(NewVoiceName, ReferenceAudioPath!, ReferenceTranscript);
+            var saved = _voices!.Save(NewVoiceName, ReferenceAudioPath!, ReferenceTranscript, ReferenceTranscriptAudioSeconds);
 
             ReloadVoices();
             NewVoiceName = string.Empty;
@@ -793,7 +795,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         catch (Exception ex) when (ex is not (OperationCanceledException or DownloadServiceException))
         {
             throw new InvalidOperationException(
-                "Could not transcribe the recording. Type what it says, or press Generate to try again.", ex);
+                "Could not transcribe the recording. " + ex.Message, ex);
         }
         finally
         {
@@ -835,7 +837,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             if (request.Mode == TtsMode.VoiceClone && string.IsNullOrWhiteSpace(request.ReferenceTranscript))
             {
                 await TranscribeReferenceAsync(cancellation.Token);
-                request = request with { ReferenceTranscript = ReferenceTranscript };
+                request = request with { ReferenceTranscript = ReferenceTranscript,
+                    ReferenceTranscriptAudioSeconds = ReferenceTranscriptAudioSeconds };
             }
 
             cancellation.Token.ThrowIfCancellationRequested();
@@ -979,7 +982,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         Mode == TtsMode.PresetVoice ? Speaker : null,
         Mode == TtsMode.VoiceClone ? null : Instruct,
         Mode == TtsMode.VoiceClone ? ReferenceAudioPath : null,
-        Mode == TtsMode.VoiceClone ? ReferenceTranscript : null);
+        Mode == TtsMode.VoiceClone ? ReferenceTranscript : null,
+        Mode == TtsMode.VoiceClone ? ReferenceTranscriptAudioSeconds : null);
 
     private void OnEngineStatusChanged(object? sender, EngineStatus status)
     {
@@ -1148,7 +1152,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     partial void OnLastOutputPathChanged(string? value) => Refresh();
     partial void OnLanguageChanged(string value) => Refresh();
     partial void OnSpeakerChanged(string value) => Refresh();
-    partial void OnReferenceAudioPathChanged(string? value) => Refresh();
+    partial void OnReferenceAudioPathChanged(string? value)
+    {
+        ReferenceTranscriptAudioSeconds = null;
+        Refresh();
+    }
     partial void OnReferenceTranscriptChanged(string value) => Refresh();
 
     partial void OnShowingHistoryChanged(bool value)

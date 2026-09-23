@@ -130,6 +130,8 @@ public sealed class CloneSpeechSynthesizer(
         var reference = ReferenceAudio.Load(
             request.ReferenceAudioPath, MelSpectrogram.SampleRate, _log);
 
+        if (request.ReferenceTranscriptAudioSeconds is { } seconds && double.IsFinite(seconds) && seconds > 0)
+            reference = reference[..(int)Math.Min(reference.Length, seconds * MelSpectrogram.SampleRate)];
         ct.ThrowIfCancellationRequested();
 
         var result = _pipeline.Generate(

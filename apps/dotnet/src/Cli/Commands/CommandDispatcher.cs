@@ -64,20 +64,24 @@ public sealed class CommandDispatcher(ILogSink log)
             mode = CommandParser.Mode(operation.Split('.')[1]);
             var reference = request.Get("reference");
             var transcript = request.Get("transcript");
+            double? transcriptAudioSeconds = null;
             if (request.Has("saved-voice"))
             {
                 var library = Voices();
                 var voice = FindVoice(library, request.Get("saved-voice")!);
                 reference = CommandParser.ReadableFile(library.ClipPath(voice));
                 transcript = voice.Transcript;
+                transcriptAudioSeconds = voice.TranscriptAudioSeconds;
             }
             if (request.Has("auto-transcribe"))
             {
                 emit(CliProtocol.Event(request, "transcribing"));
-                transcript = await runtime.TranscribeAsync(reference!, request.Get("language") ?? "auto", downloadProgress, ct);
+                var transcribed = await runtime.TranscribeReferenceAsync(reference!, request.Get("language") ?? "auto", downloadProgress, ct);
+                transcript = transcribed.Text;
+                transcriptAudioSeconds = transcribed.AudioSeconds;
             }
             var generation = new GenerateRequest(mode, request.Get("text")!, request.Get("language") ?? Languages.Default,
-                request.Get("speaker") ?? FallbackSpeakers.Default, request.Get("style") ?? request.Get("voice"), reference, transcript);
+                request.Get("speaker") ?? FallbackSpeakers.Default, request.Get("style") ?? request.Get("voice"), reference, transcript, transcriptAudioSeconds);
             if (GenerationReadiness.Missing(generation) is { } missing) throw CommandParser.Missing(missing.Reason);
             var result = await runtime.Engine.GenerateAsync(generation, engineProgress, ct);
             return CliProtocol.Result(request, ("outputPath", Path.GetFullPath(result.OutputPath)),
@@ -166,13 +170,16 @@ public sealed class CommandDispatcher(ILogSink log)
             case "voices.add":
                 {
                     var transcript = request.Get("transcript");
+                    double? transcriptAudioSeconds = null;
                     if (request.Has("auto-transcribe"))
                     {
                         emit(CliProtocol.Event(request, "transcribing"));
-                        transcript = await runtime.TranscribeAsync(request.Get("reference")!, "auto", downloadProgress, ct);
+                        var transcribed = await runtime.TranscribeReferenceAsync(request.Get("reference")!, "auto", downloadProgress, ct);
+                        transcript = transcribed.Text;
+                        transcriptAudioSeconds = transcribed.AudioSeconds;
                     }
                     using var voiceLease = runtime.AcquireOperation(operation);
-                    var voice = Voices().Save(request.Get("name")!, request.Get("reference")!, transcript!);
+                    var voice = Voices().Save(request.Get("name")!, request.Get("reference")!, transcript!, transcriptAudioSeconds);
                     return CliProtocol.Result(request, ("voice", voice), ("clipPath", Path.Combine(AppPaths.Voices, voice.FileName)));
                 }
             case "voices.remove":

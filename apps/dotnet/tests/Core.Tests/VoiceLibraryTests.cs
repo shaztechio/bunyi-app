@@ -42,6 +42,18 @@ public sealed class VoiceLibraryTests : IDisposable
         if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true);
     }
 
+    [Fact]
+    public void A_selected_reference_window_survives_save_and_reload()
+    {
+        var library = New();
+        var voice = library.Save("Pause", Clip(), "Some words.", 0.5);
+        var reopened = New();
+        reopened.Load();
+        Assert.Equal(0.5, reopened.Voices.Single().TranscriptAudioSeconds);
+        var samples = ReferenceAudio.Load(library.ClipPath(voice), 24000);
+        Assert.Equal(12000, samples.Length);
+    }
+
     // ---- Saving ----
 
     [Fact]
