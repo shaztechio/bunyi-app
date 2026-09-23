@@ -156,8 +156,9 @@ limitations under the License.
         choosing any segment leaves the last one.
 
         The mode picker is an input: switching mid-run would evict the model the
-        running job is using (§2). History is not, so it stays reachable — which
-        is why the segments are individually disabled rather than the control.
+        running job is using (§2). Every segment, including History, locks while
+        work runs on a generation tab. If History was already showing when work
+        started, the segments stay enabled so the user can return to a mode.
       -->
       <!--
         Named, because a list that announces as "list" tells a reader nothing

@@ -472,8 +472,8 @@ public partial class MainWindow : Window
     /// The picker is a ListBox laid out by a UniformGrid, and a UniformGrid is
     /// not a navigable container, so the arrows did nothing while macOS's
     /// segmented control moves with them. Only enabled segments are candidates:
-    /// while work runs the mode segments are disabled and History is not, and
-    /// arrowing onto a disabled one would change a model mid-run.
+    /// while work runs on a generation tab, every segment is disabled so
+    /// keyboard navigation keeps the active job on screen.
     /// </remarks>
     private void OnModePickerKeyDown(object? sender, Avalonia.Input.KeyEventArgs e)
     {
