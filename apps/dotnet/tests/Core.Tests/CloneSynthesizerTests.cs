@@ -126,6 +126,16 @@ public sealed class CloneSynthesizerTests : IDisposable
         Assert.Null(pipeline.LastRequest);
     }
 
+    [Fact]
+    public async Task The_selected_transcription_window_is_used_for_cloning()
+    {
+        var pipeline = new FakePipeline();
+        await using var synth = await LoadedAsync(pipeline);
+        await synth.SynthesizeAsync(Request(audio: MakeClip(seconds: 3)) with
+            { ReferenceTranscriptAudioSeconds = 1.5 }, default);
+        Assert.Equal(36000, pipeline.LastSampleCount);
+    }
+
     // ---- What it passes along ----
 
     [Fact]

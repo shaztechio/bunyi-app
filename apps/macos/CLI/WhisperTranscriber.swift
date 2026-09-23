@@ -23,18 +23,20 @@ import whisper
 /// whisper.cpp needs no privacy grant and never sends the recording away.
 @MainActor
 enum CLIWhisperTranscriber {
-    static let referenceLimitSeconds: TimeInterval = 10
-
     static func transcribe(
         _ url: URL, language: String, trimReference: Bool,
         request: CLIRequest, output: CLIOutput,
-        cancelled: CancellationState, ownsLease: Bool = false
+        cancelled: CancellationState, ownsLease: Bool = false,
+        referenceSeconds: TimeInterval? = nil
     ) async throws -> String {
         let samples: [Float]
         do {
-            samples = try decodeMono(
-                from: url,
-                maximumSeconds: trimReference ? referenceLimitSeconds : nil)
+            let duration: TimeInterval?
+            if trimReference {
+                if let referenceSeconds { duration = referenceSeconds }
+                else { duration = try await ReferenceClipPolicy.automaticWindow(url: url) }
+            } else { duration = nil }
+            samples = try decodeMono(from: url, maximumSeconds: duration)
         } catch {
             throw CLIError(
                 "transcription_failed",

@@ -1277,14 +1277,18 @@ public final class TTSEngine {
     ) async throws -> (audio: [Float], text: String) {
         let typed = transcript?.trimmingCharacters(in: .whitespacesAndNewlines)
         let hasProvidedTranscript = typed?.isEmpty == false
-        let audioMaximumSeconds = ReferenceClipPolicy.audioMaximumSeconds(
+        var audioMaximumSeconds = ReferenceClipPolicy.audioMaximumSeconds(
             hasProvidedTranscript: hasProvidedTranscript,
             savedTranscriptAudioSeconds: transcriptAudioSeconds)
         let text: String
         if let typed, !typed.isEmpty {
             text = typed
         } else {
-            text = try await transcribeReference(url: url, language: language)
+            let selectedSeconds = try await ReferenceClipPolicy.automaticWindow(url: url)
+            audioMaximumSeconds = selectedSeconds
+            try Task.checkCancellation()
+            text = try await transcribeReference(url: url, language: language,
+                                                maximumSeconds: selectedSeconds)
             lastReferenceTranscript = text
             lastReferenceTranscriptAudioSeconds = audioMaximumSeconds
             logReferenceTranscription(text)
@@ -1528,14 +1532,17 @@ public final class TTSEngine {
                 let refText: String
                 let typed = referenceText?.trimmingCharacters(in: .whitespacesAndNewlines)
                 let hasProvidedTranscript = typed?.isEmpty == false
-                let audioMaximumSeconds = ReferenceClipPolicy.audioMaximumSeconds(
+                var audioMaximumSeconds = ReferenceClipPolicy.audioMaximumSeconds(
                     hasProvidedTranscript: hasProvidedTranscript,
                     savedTranscriptAudioSeconds: referenceTranscriptAudioSeconds)
                 if let typed, !typed.isEmpty {
                     refText = typed
                 } else {
+                    let selectedSeconds = try await ReferenceClipPolicy.automaticWindow(url: refURL)
+                    audioMaximumSeconds = selectedSeconds
+                    try Task.checkCancellation()
                     refText = try await transcribeReference(
-                        url: refURL, language: language)
+                        url: refURL, language: language, maximumSeconds: selectedSeconds)
                     lastReferenceTranscript = refText
                     lastReferenceTranscriptAudioSeconds = audioMaximumSeconds
                     logReferenceTranscription(refText)
@@ -1733,7 +1740,8 @@ public final class TTSEngine {
         status = status.isBusy ? .stopping : .idle
     }
 
-    private func transcribeReference(url: URL, language: String) async throws
+    private func transcribeReference(url: URL, language: String,
+                                     maximumSeconds: TimeInterval) async throws
         -> String {
         let normalized = language.lowercased()
         if normalized != "auto" {
@@ -1742,7 +1750,7 @@ public final class TTSEngine {
             do {
                 return try await ReferenceTranscriber.transcribe(
                     url: url, locale: Self.locale(for: language),
-                    maximumSeconds: ReferenceClipPolicy.automaticTranscriptSeconds)
+                    maximumSeconds: maximumSeconds)
             } catch is CancellationError {
                 throw CancellationError()
             } catch {
@@ -1761,7 +1769,7 @@ public final class TTSEngine {
         do {
             let text = try await LocalWhisperTranscriber.transcribe(
                 url, modelURL: modelURL, language: language,
-                maximumSeconds: ReferenceClipPolicy.automaticTranscriptSeconds,
+                maximumSeconds: maximumSeconds,
                 control: control)
             generationDetail = nil
             return text

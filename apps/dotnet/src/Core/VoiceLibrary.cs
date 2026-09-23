@@ -27,7 +27,8 @@ public sealed record SavedVoice(
     [property: JsonPropertyName("name")] string Name,
     [property: JsonPropertyName("fileName")] string FileName,
     [property: JsonPropertyName("transcript")] string Transcript,
-    [property: JsonPropertyName("createdAt")] DateTimeOffset CreatedAt);
+    [property: JsonPropertyName("createdAt")] DateTimeOffset CreatedAt,
+    [property: JsonPropertyName("transcriptAudioSeconds")] double? TranscriptAudioSeconds = null);
 
 /// <summary>
 /// Saved voices: a name, a recording and what it says (spec §5).
@@ -156,7 +157,7 @@ public sealed class VoiceLibrary
     /// risked on every use.
     /// </para>
     /// </remarks>
-    public SavedVoice Save(string name, string audioPath, string transcript)
+    public SavedVoice Save(string name, string audioPath, string transcript, double? transcriptAudioSeconds = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentException.ThrowIfNullOrWhiteSpace(audioPath);
@@ -178,10 +179,10 @@ public sealed class VoiceLibrary
         var fileName = $"{id:D}.wav";
 
         Directory.CreateDirectory(_folder);
-        WriteClip(audioPath, System.IO.Path.Combine(_folder, fileName));
+        WriteClip(audioPath, System.IO.Path.Combine(_folder, fileName), transcriptAudioSeconds);
 
         var voice = new SavedVoice(
-            id, name.Trim(), fileName, transcript.Trim(), DateTimeOffset.UtcNow);
+            id, name.Trim(), fileName, transcript.Trim(), DateTimeOffset.UtcNow, transcriptAudioSeconds);
 
         lock (_gate)
         {
@@ -223,10 +224,12 @@ public sealed class VoiceLibrary
     /// <summary>
     /// Writes the copied clip: 24 kHz mono, at most ten seconds.
     /// </summary>
-    internal static void WriteClip(string source, string destination)
+    internal static void WriteClip(string source, string destination, double? seconds = null)
     {
         var samples = ReferenceAudio.Load(source, MelSpectrogram.SampleRate);
         var used = Math.Min(samples.Length, MaxClipSamples);
+        if (seconds is { } duration && double.IsFinite(duration) && duration > 0)
+            used = (int)Math.Min(used, duration * MelSpectrogram.SampleRate);
 
         var pcm = new short[used];
         for (var i = 0; i < used; i++)

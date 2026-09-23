@@ -59,10 +59,11 @@ enum LibraryCommand {
         var transcript = request.value("transcript")
         var transcriptAudioSeconds: TimeInterval?
         if request.has("auto-transcribe") {
-            transcript = try await transcribe(
-                reference, request: request, output: output,
-                cancelled: cancelled)
-            transcriptAudioSeconds = ReferenceClipPolicy.automaticTranscriptSeconds
+            transcriptAudioSeconds = try await ReferenceClipPolicy.automaticWindow(url: reference)
+            transcript = try await CLIWhisperTranscriber.transcribe(
+                reference, language: "auto", trimReference: true,
+                request: request, output: output, cancelled: cancelled,
+                referenceSeconds: transcriptAudioSeconds)
         }
         guard let transcript,
               !transcript.trimmingCharacters(

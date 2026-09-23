@@ -76,7 +76,7 @@ Give Bunyi a short recording of a voice and it reads your text in that voice.
 
 Two things matter for a good clone:
 
-- **The transcript.** Cloning works by lining up the recording with its words. Leave this box blank and press **Generate**: Bunyi transcribes up to the first 10 seconds on your Mac, uses that exact same audio sample for cloning, and creates your speech in one run. A longer source file is fine. Selecting a recording does not start a download. Whatever you type yourself is used instead. **Stop** cancels the current run and keeps downloaded files for reuse. You can edit the transcript afterwards and generate again.
+- **The transcript.** Cloning works by lining up the recording with its words. Leave this box blank and press **Generate**: Bunyi selects up to the first 10 seconds, ending at a quiet pause in longer recordings, transcribes that selection on your Mac, uses that exact same audio sample for cloning, and creates your speech in one run. If no suitable pause is found in a longer recording, choose a shorter clip ending at a natural pause. Selecting a recording does not start a download. Whatever you type yourself is used instead. **Stop** cancels the current run and keeps downloaded files for reuse. You can edit the transcript afterwards and generate again.
 - **The recording.** A few clean seconds of a single person speaking, without music or background noise, beats a long noisy clip. Bunyi converts the audio to the rate the model needs, so you do not have to prepare the file.
 
 There is no style instruction in this mode. The model behind cloning cannot take one, so the emotion of a cloned voice comes from the delivery in the reference clip. If you want the same cloned voice in different moods, save one voice per mood.

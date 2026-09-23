@@ -336,7 +336,7 @@ Stored in a `Voices` subfolder of app data, alongside copied audio clips.
     "name": "Eric",
     "fileName": "<UUID>.wav",     // copied clip, sibling of voices.json
     "transcript": "He shoots, he scores…",
-    "transcriptAudioSeconds": 10,  // optional; transcript covers this leading window
+    "transcriptAudioSeconds": 8.42,  // optional; transcript covers this leading window
     "createdAt": "ISO-8601"
   }
 ]
@@ -347,7 +347,9 @@ Stored in a `Voices` subfolder of app data, alongside copied audio clips.
 - `transcriptAudioSeconds` is optional for backward compatibility. When set,
   cloning uses only that many leading seconds of the copied clip so an
   automatically generated transcript and its reference audio remain aligned.
-  Missing means the transcript covers the full clip.
+  New automatic transcripts store the selected pause boundary, not a fixed
+  ten-second limit. Missing retains legacy behavior (full clip on macOS; the
+  ONNX runtime still has its existing ten-second encoder limit).
 - Entries whose `fileName` is missing on disk are pruned on load.
 
 ## Backup archive

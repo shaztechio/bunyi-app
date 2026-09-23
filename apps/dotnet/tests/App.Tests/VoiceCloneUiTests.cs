@@ -209,12 +209,14 @@ public sealed class VoiceCloneUiTests : HeadlessWindows
             Assert.False(model.ShowGenerate);
             Assert.False(model.CanEditTranscript);
             Assert.Null(engine.LastRequest);
+            model.ReferenceTranscriptAudioSeconds = 7.81;
             return Task.FromResult("The recording's words");
         };
 
         Assert.True(model.CanGenerate);
         var run = model.GenerateCommand.ExecuteAsync(null);
         Assert.Equal("The recording's words", engine.LastRequest?.ReferenceTranscript);
+        Assert.Equal(7.81, engine.LastRequest?.ReferenceTranscriptAudioSeconds);
         Assert.True(model.IsBusy);
         Assert.False(model.ShowGenerate);
         Assert.Equal(new[] { true }, busyChanges);
@@ -273,6 +275,22 @@ public sealed class VoiceCloneUiTests : HeadlessWindows
         Assert.False(model.IsBusy);
         Assert.True(model.CanEditTranscript);
         Assert.Contains("Type what it says", model.Status);
+    }
+
+    [AvaloniaFact]
+    public async Task Unsafe_reference_boundary_keeps_its_actionable_explanation()
+    {
+        var engine = new FakeEngine();
+        using var model = New(engine);
+        model.Mode = TtsMode.VoiceClone;
+        model.Script = "New words";
+        model.ReferenceAudioPath = "clip.wav";
+        model.Transcribe = (_, _) => throw new InvalidDataException(
+            "No clear pause was found. Choose a shorter reference recording.");
+        await model.GenerateCommand.ExecuteAsync(null);
+        Assert.Null(engine.LastRequest);
+        Assert.Contains("Choose a shorter reference recording", model.Status);
+        Assert.False(model.IsBusy);
     }
 
     [AvaloniaFact]

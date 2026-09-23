@@ -80,7 +80,8 @@ public sealed record GenerateRequest(
     string? Instruct = null,
 
     string? ReferenceAudioPath = null,
-    string? ReferenceTranscript = null)
+    string? ReferenceTranscript = null,
+    double? ReferenceTranscriptAudioSeconds = null)
 {
     // Internal section orchestration, not user settings or CLI parameters.
     internal int? SectionFrameLimit { get; init; }

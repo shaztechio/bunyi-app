@@ -642,12 +642,22 @@ macOS source: `TTSEngine.loadReferenceAudio`, `ReferenceTranscriber.swift`.
 - Reference audio **must be resampled to 24 kHz mono** before use — the
   model asserts that rate; feeding 44.1/48 kHz produces distorted,
   wrong-pitch clones. Downmix stereo → mono.
-- For macOS automatic transcription, transcription and cloning use the exact
-  same first **up to 10 seconds** of the recording. A longer source file remains
-  valid; it is sampled rather than rejected. A typed or previously saved full
-  transcript keeps the existing full-clip behaviour. When an automatically
-  regenerated saved-voice transcript covers a sampled window, that window is
-  persisted with the recipe so later generations keep the same alignment.
+- Automatic transcription and cloning use the exact same leading reference
+  window, **up to 10 seconds**, on every platform. For longer recordings, choose
+  the last sustained quiet interval before 10 seconds, at least 2 seconds
+  from the start and after speech, and end 100 ms into that pause. Detect quiet using 10 ms
+  mono RMS windows, a threshold of 3% of the peak window RMS (bounded to
+  0.0001–0.01), and at least 150 ms of continuous quiet. Never fall back to a
+  hard cut through speech: if no suitable pause exists, ask for a shorter clip
+  ending at a natural pause. Recordings already at most 10 seconds are unchanged.
+  Select the window before transcription and retain its duration for generation,
+  retries, saving and CLI use. Re-transcribing replaces any earlier window;
+  existing saved transcripts retain their original window until re-transcribed.
+  Typed transcripts retain existing behavior: full clip on macOS, at most ten
+  seconds on the ONNX runtime. Saving an automatically transcribed voice
+  persists the selected window with the recipe so later generations keep the
+  same alignment. macOS also updates that window when regenerating a saved
+  voice's transcript.
 - Voice clone is **ICL**: it requires the reference **transcript** to align
   audio to words. An empty transcript yields gibberish that ignores the
   target text — so the transcript is effectively mandatory.

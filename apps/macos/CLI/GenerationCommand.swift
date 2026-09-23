@@ -79,11 +79,11 @@ enum GenerationCommand {
                 await existingEngine.unload(
                     reason: "preparing local Whisper transcription")
             }
+            referenceTranscriptAudioSeconds = try await ReferenceClipPolicy.automaticWindow(url: referenceURL)
             transcript = try await CLIWhisperTranscriber.transcribe(
                 referenceURL, language: language, trimReference: true,
-                request: request, output: output, cancelled: cancelled)
-            referenceTranscriptAudioSeconds =
-                ReferenceClipPolicy.automaticTranscriptSeconds
+                request: request, output: output, cancelled: cancelled,
+                referenceSeconds: referenceTranscriptAudioSeconds)
         }
 
         if cancelled.value {
