@@ -33,6 +33,16 @@ public enum Appearance
 /// </summary>
 public sealed record AppSettings
 {
+    private int _sentenceGapMilliseconds = 300;
+
+    /// <summary>Added silence at long-text joins, in milliseconds (spec §7).</summary>
+    [JsonPropertyName("sentenceGapMilliseconds")]
+    public int SentenceGapMilliseconds
+    {
+        get => _sentenceGapMilliseconds;
+        init => _sentenceGapMilliseconds = Math.Clamp(value, 0, 5000);
+    }
+
     /// <summary>Spec §7. Persisted under <c>appearance</c>, defaulting to System.</summary>
     [JsonPropertyName("appearance")]
     public Appearance Appearance { get; init; } = Appearance.System;

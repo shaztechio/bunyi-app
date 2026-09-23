@@ -27,7 +27,7 @@ private enum SettingsTab: Hashable {
 }
 
 private enum SettingsFocusTarget: Hashable {
-    case generalAppearance, generalMemory
+    case generalAppearance, generalMemory, generalSentenceGap
     case modelsPreset, modelRestore(UUID), modelDelete(UUID)
     case storageChange, storageShowInFinder, storageUseDefault
     case storageDelete(URL), storageCopy
@@ -36,6 +36,7 @@ private enum SettingsFocusTarget: Hashable {
 
 struct SettingsView: View {
     @State private var backup = BackupManager()
+    @AppStorage("sentenceGapMilliseconds") private var sentenceGapMilliseconds = 300
     @AppStorage("appearance") private var appearance: AppAppearance = .system
     /// Spec §3e. On unless it has been turned off — an absent key is
     /// someone who has never been asked, not someone who said no.
@@ -171,13 +172,6 @@ struct SettingsView: View {
 
     private var generalTab: some View {
         Form {
-            // No eyebrow on either of these. The rows label themselves —
-            // Appearance, and a checkbox that is a whole sentence — so a
-            // header above each could say nothing that is not already on
-            // screen twice, which is the trap Stage 3 fell into with the mode
-            // heading. Two unnamed sections rather than one: appearance and
-            // memory have nothing to do with each other, and the gap between
-            // groups is what says so.
             Section {
                 Picker("Appearance", selection: $appearance) {
                     ForEach(AppAppearance.allCases) { mode in
@@ -203,6 +197,19 @@ struct SettingsView: View {
                     + "model as soon as you leave it. Turn it off to keep it "
                     + "loaded, so coming back to that mode starts straight "
                     + "away — at the cost of the memory it holds meanwhile.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .calloutBlock()
+            }
+            Section {
+                TextField("Sentence gap (ms)", value: $sentenceGapMilliseconds,
+                          format: .number.precision(.fractionLength(0)))
+                    .focused($focusedControl, equals: .generalSentenceGap)
+                    .onChange(of: sentenceGapMilliseconds) { _, value in
+                        sentenceGapMilliseconds = min(5000, max(0, value))
+                    }
+                Text("Silence between joined sections of long text. Default: 300 ms. "
+                    + "Choose 0–5000 ms; 0 adds no silence. Applies to the next recording.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .calloutBlock()
@@ -762,7 +769,7 @@ struct SettingsView: View {
     private func lastFocusTarget(for tab: SettingsTab) -> SettingsFocusTarget {
         switch tab {
         case .general:
-            .generalMemory
+            .generalSentenceGap
         case .models:
             if let last = configs.listed.last {
                 ModelConfigLibrary.isBuiltIn(last)

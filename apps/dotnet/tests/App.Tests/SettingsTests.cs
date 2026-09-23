@@ -46,6 +46,19 @@ public sealed class SettingsTests : HeadlessWindows
         if (Directory.Exists(_folder)) Directory.Delete(_folder, recursive: true);
     }
 
+    [AvaloniaFact]
+    public void Sentence_gap_control_loads_and_saves_milliseconds()
+    {
+        var model = NewModel();
+        var window = Open(new SettingsWindow { DataContext = model });
+        var input = window.FindControl<NumericUpDown>("SentenceGapInput")!;
+        Assert.Equal(300m, input.Value);
+        input.Value = 750;
+        Assert.Equal(750, NewModel().SentenceGapMilliseconds);
+        input.Value = 0;
+        Assert.Equal(0, NewModel().SentenceGapMilliseconds);
+    }
+
     private SettingsViewModel NewModel(bool mirrorDefault = false)
     {
         var store = new SettingsStore(_log, Path.Combine(_folder, "settings.json"));

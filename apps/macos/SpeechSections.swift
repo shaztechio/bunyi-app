@@ -196,11 +196,11 @@ enum SpeechSectionRecoveryError: Error {
     case exhausted
 }
 
-/// Applies the spec's fixed seam treatment while preserving raw samples for
+/// Applies the spec's configurable seam treatment while preserving raw samples for
 /// one final clipping-protection pass.
 enum SectionAudioJoiner {
     static func append(_ samples: [Float], to combined: inout [Float],
-                       sampleRate: Int = 24_000) {
+                       sampleRate: Int = 24_000, gapMilliseconds: Int = 300) {
         guard !samples.isEmpty else { return }
         var part = samples
         let fade = min(Int(Double(sampleRate) * 0.005), part.count / 2)
@@ -213,7 +213,7 @@ enum SectionAudioJoiner {
         }
         if !combined.isEmpty {
             combined.append(contentsOf: repeatElement(
-                0, count: Int(Double(sampleRate) * 0.120)))
+                0, count: sampleRate * min(5000, max(0, gapMilliseconds)) / 1000))
         }
         combined.append(contentsOf: part)
     }

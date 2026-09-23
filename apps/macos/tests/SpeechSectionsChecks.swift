@@ -55,10 +55,23 @@ struct SpeechSectionsChecks {
         var joined: [Float] = []
         SectionAudioJoiner.append(Array(repeating: 1, count: 480), to: &joined)
         SectionAudioJoiner.append(Array(repeating: 1, count: 480), to: &joined)
-        precondition(joined.count == 480 + 2_880 + 480)
+        precondition(joined.count == 480 + 7_200 + 480)
         precondition(joined[0] == 0 && joined[479] == 0)
-        precondition(joined[480..<3_360].allSatisfy { $0 == 0 })
-        precondition(joined[3_360] == 0 && joined.last == 0)
+        precondition(joined[480..<7_680].allSatisfy { $0 == 0 })
+        precondition(joined[7_680] == 0 && joined.last == 0)
+
+        // Exactly N-1 gaps, including custom/disabled values and clamping.
+        for (milliseconds, expected) in [(0, 0), (1, 24), (750, 18000),
+                                          (-1, 0), (5001, 120000)] {
+            var audio: [Float] = []
+            for _ in 0..<3 {
+                SectionAudioJoiner.append(Array(repeating: 1, count: 480),
+                    to: &audio, gapMilliseconds: milliseconds)
+            }
+            precondition(audio.count == 3 * 480 + 2 * expected)
+            precondition(audio[480..<(480 + expected)].allSatisfy { $0 == 0 })
+            precondition(audio[120] == 1 && audio[audio.count - 121] == 1)
+        }
 
         var recovered: [String] = []
         var attempts = 0

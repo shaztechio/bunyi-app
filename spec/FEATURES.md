@@ -117,7 +117,7 @@ A segmented picker selects one of three modes. macOS source:
   (seven attempts per original section). Exhaustion fails visibly; Stop remains
   available throughout. Only accepted sections enter the final recording. Progress separates
   completed audio from the current attempt and explicitly describes retries.
-  Join successful sections in order, with a short 120 ms pause and 5 ms edge fades;
+  Join successful sections in order, with the configured sentence gap (300 ms by default) and 5 ms edge fades;
   apply one uniform clipping-protection gain to the combined recording. Save one
   WAV and one History entry with the original full text, only after all sections
   finish. This bounds per-section inference state, not total recording length.
@@ -766,6 +766,14 @@ second reading of the same information.
   Also **"Free memory when switching modes"**, a checkbox, **on** by default
   and persisted under `unloadOnModeSwitch` — see §3e for what it does
   and what turning it off costs.
+  **Sentence gap (ms)** sets the additional silence between joined long-text
+  sections in all three modes: whole milliseconds, 0–5000, default **300**.
+  Zero disables added silence. This includes recovered subsections and the
+  designed opening; no gap is added before the first or after the last section.
+  Existing model pauses and 5 ms edge fades remain. Pauses inside a section are
+  model-controlled. Persist as `sentenceGapMilliseconds`; missing values use
+  300 and out-of-range values clamp to 0–5000. Snapshot at Generate so edits
+  affect the next recording, never change joins partway through a run.
 - **Models**: the three per-mode source fields (repo ID or base URL) + help.
 - **Storage**: models-folder location controls + pre-download commands.
 - **Backup**: back up / restore / stop + status.

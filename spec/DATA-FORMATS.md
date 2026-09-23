@@ -42,8 +42,10 @@ same distinction under different names.
 
 **macOS keeps settings in `UserDefaults`** rather than a file, which is the
 platform's own answer to the same question and stays as it is; the keys
-(`appearance`, `modelRepo.<Mode>`, `modelsFolder`, `unloadOnModeSwitch`) are
-the contract, not the storage.
+(`appearance`, `modelRepo.<Mode>`, `modelsFolder`, `unloadOnModeSwitch`, `sentenceGapMilliseconds`) are
+the contract, not the storage. `sentenceGapMilliseconds` is an integer from
+0 to 5000 (inclusive), default 300 when absent; values outside that range clamp
+to it. It controls added silence at long-text joins, in milliseconds.
 
 ## Models folder
 

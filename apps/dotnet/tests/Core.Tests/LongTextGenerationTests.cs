@@ -87,8 +87,30 @@ public sealed class LongTextGenerationTests
             Assert.Equal(request.ReferenceTranscript, r.ReferenceTranscript);
             Assert.InRange(r.SectionFrameLimit!.Value, 250, 563);
         });
-        Assert.Equal(requests.Count * 48000 + (requests.Count - 1) * 2880, result.Samples.Length);
+        Assert.Equal(requests.Count * 48000 + (requests.Count - 1) * 7200, result.Samples.Length);
         Assert.Equal(25 * requests.Count, result.Frames);
+    }
+
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(1, 24)]
+    [InlineData(750, 18000)]
+    [InlineData(-1, 0)]
+    [InlineData(5001, 120000)]
+    public async Task Joins_add_exactly_the_configured_silence(int milliseconds, int gapSamples)
+    {
+        var sections = 0;
+        var run = new LongTextGeneration((r, ct, p) =>
+        {
+            sections++;
+            return Task.FromResult(Audio());
+        }, _ => { }, new LogStore(), milliseconds);
+        var result = await run.GenerateAsync(new(TtsMode.PresetVoice, LongText), default);
+        Assert.True(sections > 1);
+        Assert.Equal(sections * 48000 + (sections - 1) * gapSamples, result.Samples.Length);
+        Assert.All(result.Samples.Skip(48000).Take(gapSamples), s => Assert.Equal((short)0, s));
+        Assert.True(result.Samples[120] > 0);
+        Assert.True(result.Samples[^121] > 0);
     }
 
     [Fact]
@@ -109,7 +131,7 @@ public sealed class LongTextGenerationTests
         Assert.Equal(LongText, string.Concat(acceptedText));
         Assert.Contains(statuses, s => s.Detail!.Contains("Retrying"));
         Assert.Equal(0, statuses[1].Frames);
-        Assert.Equal(acceptedText.Count * 48000 + (acceptedText.Count - 1) * 2880, result.Samples.Length);
+        Assert.Equal(acceptedText.Count * 48000 + (acceptedText.Count - 1) * 7200, result.Samples.Length);
     }
 
     [Fact]
@@ -175,6 +197,6 @@ public sealed class LongTextGenerationTests
             Task.FromResult(Audio(++attempts == 1 ? 2 : .5f)), _ => { }, new LogStore());
         var result = await run.GenerateAsync(new(TtsMode.PresetVoice, LongText), default);
         Assert.InRange(result.Samples[1000], 32110, 32113);
-        Assert.InRange(result.Samples[48000 + 2880 + 1000], 8026, 8029);
+        Assert.InRange(result.Samples[48000 + 7200 + 1000], 8026, 8029);
     }
 }
