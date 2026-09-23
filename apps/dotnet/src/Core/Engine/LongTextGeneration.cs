@@ -22,7 +22,8 @@ namespace Bunyi.Core.Engine;
 internal sealed class LongTextGeneration(
     Func<GenerateRequest, CancellationToken, IProgress<int>, Task<SynthesisResult>> synthesize,
     Action<EngineStatus> status,
-    ILogSink log)
+    ILogSink log,
+    int gapMilliseconds = 300)
 {
     private const int SampleRate = 24_000;
     private readonly List<float[]> _accepted = [];
@@ -144,7 +145,7 @@ internal sealed class LongTextGeneration(
     {
         ct.ThrowIfCancellationRequested();
         // Gentle edges without overlapping words. Existing model pauses remain;
-        // the fixed gap is recorded punctuation space, never a buffering wait.
+        // the configured gap is recorded punctuation space, never a buffering wait.
         var fade = Math.Min(120, audio.Length / 2);
         for (var i = 0; i < fade; i++)
         {
@@ -152,7 +153,7 @@ internal sealed class LongTextGeneration(
             audio[i] *= gain;
             audio[^(i + 1)] *= gain;
         }
-        if (_accepted.Count > 0) Add(new float[2880]);
+        if (_accepted.Count > 0) Add(new float[SampleRate * Math.Clamp(gapMilliseconds, 0, 5000) / 1000]);
         Add(audio);
         void Add(float[] part)
         {

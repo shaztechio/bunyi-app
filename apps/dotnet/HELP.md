@@ -158,6 +158,8 @@ Both show progress and can be stopped part way.
 Light, dark, or follow the system. It applies to every Bunyi window straight away.
 
 
+**Sentence gap (ms)** adds silence between joined sections of long text. The default is 300 ms. Set it in Settings → General to a whole number from 0 to 5000 ms; 0 adds no silence. Changes apply to the next recording. Pauses within a section are controlled by the voice model.
+
 **Free memory when switching modes** decides *when* Bunyi lets go of a model, not whether it does. Each mode uses its own model, and a model can be several gigabytes.
 
 - **On**, the default: the model goes as soon as you leave its tab. Coming back to that mode means loading it again.

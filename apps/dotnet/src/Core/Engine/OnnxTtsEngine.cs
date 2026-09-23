@@ -57,6 +57,7 @@ public sealed class OnnxTtsEngine : ITtsEngine
     private readonly Func<TtsMode, ModelLayout> _layoutFor;
     private readonly Func<string> _modelsRoot;
     private readonly Func<string> _outputFolder;
+    private readonly Func<int> _sentenceGapMilliseconds;
     private readonly string _appVersion;
     private readonly TimeProvider _time;
     private readonly Func<TtsMode, bool, CancellationToken, Task<DoctorReport>>? _doctor;
@@ -94,11 +95,12 @@ public sealed class OnnxTtsEngine : ITtsEngine
         TimeProvider? time = null,
         Func<TtsMode, bool, CancellationToken, Task<DoctorReport>>? doctor = null,
         Func<IDisposable>? acquireLease = null,
-        Action? validateOperation = null)
+        Action? validateOperation = null,
+        Func<int>? sentenceGapMilliseconds = null)
         : this(
             _ => synthesizer ?? throw new ArgumentNullException(nameof(synthesizer)),
             downloader, log, sourceFor, layoutFor, modelsRoot, outputFolder,
-            appVersion, time, doctor, acquireLease, validateOperation)
+            appVersion, time, doctor, acquireLease, validateOperation, sentenceGapMilliseconds)
     {
     }
 
@@ -120,7 +122,8 @@ public sealed class OnnxTtsEngine : ITtsEngine
         TimeProvider? time = null,
         Func<TtsMode, bool, CancellationToken, Task<DoctorReport>>? doctor = null,
         Func<IDisposable>? acquireLease = null,
-        Action? validateOperation = null)
+        Action? validateOperation = null,
+        Func<int>? sentenceGapMilliseconds = null)
     {
         _synthFor = synthesizerFor ?? throw new ArgumentNullException(nameof(synthesizerFor));
 
@@ -138,6 +141,7 @@ public sealed class OnnxTtsEngine : ITtsEngine
         _doctor = doctor;
         _acquireLease = acquireLease;
         _validateOperation = validateOperation;
+        _sentenceGapMilliseconds = sentenceGapMilliseconds ?? (() => 300);
     }
 
     /// <summary>
@@ -303,6 +307,7 @@ public sealed class OnnxTtsEngine : ITtsEngine
 
         try
         {
+            var gapMilliseconds = _sentenceGapMilliseconds();
             // Everything below is off the caller's thread. The window stays
             // responsive for the whole run, including the file write.
             var result = await Task.Run(async () =>
@@ -397,7 +402,7 @@ public sealed class OnnxTtsEngine : ITtsEngine
                 var supportsInstruct = _synth.SupportsInstruct;
                 string? continuationModelRepo = null;
                 var audio = SpeechDurationEstimate.ForText(request.Text, request.Language).NeedsSections
-                    ? await new LongTextGeneration(Section, s => Publish(s, progress), _log)
+                    ? await new LongTextGeneration(Section, s => Publish(s, progress), _log, gapMilliseconds)
                         .GenerateAsync(request, token).ConfigureAwait(false)
                     : await _synth.SynthesizeAsync(request, token, frames).ConfigureAwait(false);
                 token.ThrowIfCancellationRequested();

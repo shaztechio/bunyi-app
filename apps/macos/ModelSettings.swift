@@ -95,6 +95,17 @@ public extension TTSMode {
     }
 }
 
+// MARK: - Speech settings
+
+public enum SpeechSettings {
+    public static var sentenceGapMilliseconds: Int {
+        let stored = CLISettingsStore.isCLI
+            ? CLISettingsStore.loadLenient().sentenceGapMilliseconds
+            : UserDefaults.standard.object(forKey: "sentenceGapMilliseconds") as? Int
+        return min(5000, max(0, stored ?? 300))
+    }
+}
+
 // MARK: - Models folder
 
 /// Where model files live. Default is Application Support; the user can

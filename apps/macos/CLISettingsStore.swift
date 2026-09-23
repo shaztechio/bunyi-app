@@ -15,6 +15,7 @@
 import Foundation
 
 public struct CLISettings: Codable, Sendable {
+    public var sentenceGapMilliseconds: Int? = nil
     public var modelsFolder: String? = nil
     public var unloadOnModeSwitch: Bool? = nil
     public var modelSource: [String: String]? = nil

@@ -58,6 +58,7 @@ public sealed class BunyiRuntime : IAsyncDisposable
             () => AppPaths.Outputs,
             typeof(BunyiRuntime).Assembly.GetName().Version?.ToString(3) ?? "0.1.0",
             doctor: DoctorAsync, acquireLease: () => AcquireOperation("model"),
+            sentenceGapMilliseconds: () => Settings.Load().SentenceGapMilliseconds,
             validateOperation: () =>
             {
                 lock (_leaseGate) { if (_nonModelOperation) throw new BunyiBusyException(ModelsRoot); }

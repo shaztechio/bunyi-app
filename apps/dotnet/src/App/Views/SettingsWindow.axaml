@@ -48,33 +48,42 @@ limitations under the License.
   <TabControl Name="SettingsTabs" Margin="12" SelectionChanged="OnTabChanged">
 
     <TabItem Header="General">
-      <StackPanel Margin="12" Spacing="12">
-        <TextBlock Name="AppearanceLabel" Text="APPEARANCE" Classes="eyebrow" />
-        <!--
-          Named and announced the way the main window's pickers are — see the
-          comment on the Language box in MainWindow.axaml for why a ComboBox
-          needs ItemStatus to announce a change at all.
-        -->
-        <inf:AccessibleComboBox ItemsSource="{Binding Appearances}" SelectedItem="{Binding Appearance}"
-                  AutomationProperties.LabeledBy="{Binding #AppearanceLabel}"
-                  AutomationProperties.ItemStatus="{Binding Appearance}"
-                  AutomationProperties.HelpText="{Binding #AppearanceHelp.Text}"
-                  MinWidth="200" />
-        <Border Classes="callout">
-          <TextBlock Name="AppearanceHelp" TextWrapping="Wrap" FontSize="12" Opacity="0.8"
-                     Text="System follows your computer. Light and Dark keep Bunyi that way whatever your computer does. The change applies straight away, to every Bunyi window." />
-        </Border>
+      <ScrollViewer>
+        <StackPanel Margin="12" Spacing="12">
+          <TextBlock Name="AppearanceLabel" Text="APPEARANCE" Classes="eyebrow" />
+          <!--
+            Named and announced the way the main window's pickers are — see the
+            comment on the Language box in MainWindow.axaml for why a ComboBox
+            needs ItemStatus to announce a change at all.
+          -->
+          <inf:AccessibleComboBox ItemsSource="{Binding Appearances}" SelectedItem="{Binding Appearance}"
+                    AutomationProperties.LabeledBy="{Binding #AppearanceLabel}"
+                    AutomationProperties.ItemStatus="{Binding Appearance}"
+                    AutomationProperties.HelpText="{Binding #AppearanceHelp.Text}"
+                    MinWidth="200" />
+          <Border Classes="callout">
+            <TextBlock Name="AppearanceHelp" TextWrapping="Wrap" FontSize="12" Opacity="0.8"
+                       Text="System follows your computer. Light and Dark keep Bunyi that way whatever your computer does. The change applies straight away, to every Bunyi window." />
+          </Border>
 
-        <!-- §3e. On by default; the callout says what turning it off costs. -->
-        <TextBlock Text="MEMORY" Classes="eyebrow" Margin="0,8,0,0" />
-        <CheckBox IsChecked="{Binding UnloadOnModeSwitch}"
-                  Content="Free memory when switching modes"
-                  AutomationProperties.HelpText="{Binding #MemoryHelp.Text}" />
-        <Border Classes="callout">
-          <TextBlock Name="MemoryHelp" TextWrapping="Wrap" FontSize="12" Opacity="0.8"
-                     Text="Each mode uses its own model, and a model can be several gigabytes. Leave this on and Bunyi lets go of a mode&apos;s model as soon as you leave it. Turn it off to keep it loaded, so coming back to that mode starts straight away — at the cost of the memory it holds meanwhile." />
-        </Border>
-      </StackPanel>
+          <!-- §3e. On by default; the callout says what turning it off costs. -->
+          <TextBlock Text="MEMORY" Classes="eyebrow" Margin="0,8,0,0" />
+          <CheckBox IsChecked="{Binding UnloadOnModeSwitch}"
+                    Content="Free memory when switching modes"
+                    AutomationProperties.HelpText="{Binding #MemoryHelp.Text}" />
+          <Border Classes="callout">
+            <TextBlock Name="MemoryHelp" TextWrapping="Wrap" FontSize="12" Opacity="0.8"
+                       Text="Each mode uses its own model, and a model can be several gigabytes. Leave this on and Bunyi lets go of a mode&apos;s model as soon as you leave it. Turn it off to keep it loaded, so coming back to that mode starts straight away — at the cost of the memory it holds meanwhile." />
+          </Border>
+          <TextBlock Name="SentenceGapLabel" Text="Sentence gap (ms)" />
+          <NumericUpDown Name="SentenceGapInput" Value="{Binding SentenceGapMilliseconds}"
+                         Minimum="0" Maximum="5000" Increment="1" FormatString="0"
+                         AutomationProperties.LabeledBy="{Binding #SentenceGapLabel}"
+                         AutomationProperties.HelpText="{Binding #SentenceGapHelp.Text}" />
+          <TextBlock Name="SentenceGapHelp" TextWrapping="Wrap" FontSize="12" Opacity="0.8"
+                     Text="Silence between joined sections of long text. Default: 300 ms. Choose 0–5000 ms; 0 adds no silence. Applies to the next recording." />
+        </StackPanel>
+      </ScrollViewer>
     </TabItem>
 
     <TabItem Header="Models">

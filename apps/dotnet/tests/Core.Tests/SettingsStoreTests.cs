@@ -57,10 +57,24 @@ public class SettingsStoreTests : IDisposable
 
         var settings = store.Load();
 
+        Assert.Equal(300, settings.SentenceGapMilliseconds);
         Assert.Equal(Appearance.System, settings.Appearance);   // spec §7 default
         Assert.Empty(settings.ModelRepo);
         Assert.Null(settings.ModelsFolder);
         Assert.Empty(log.Lines);   // a missing file is not a problem worth reporting
+    }
+
+    [Theory]
+    [InlineData(-1, 0)]
+    [InlineData(0, 0)]
+    [InlineData(750, 750)]
+    [InlineData(5001, 5000)]
+    public void Sentence_gap_is_clamped_and_persisted(int value, int expected)
+    {
+        var (store, _) = NewStore();
+        store.Save(new AppSettings { SentenceGapMilliseconds = value });
+        Assert.Equal(expected, store.Load().SentenceGapMilliseconds);
+        Assert.Contains("sentenceGapMilliseconds", File.ReadAllText(SettingsPath));
     }
 
     [Fact]
@@ -178,6 +192,7 @@ public class SettingsStoreTests : IDisposable
 
         var settings = store.Load();
 
+        Assert.Equal(300, settings.SentenceGapMilliseconds);
         Assert.Equal(Appearance.System, settings.Appearance);
         // The user is about to see their preferences reset; the log is the only
         // place that can say why.

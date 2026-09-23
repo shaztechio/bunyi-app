@@ -57,6 +57,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     /// <summary>Spec §3e: whether leaving a mode unloads its model.</summary>
     [ObservableProperty] private bool _unloadOnModeSwitch = true;
+    [ObservableProperty] private int _sentenceGapMilliseconds = 300;
     [ObservableProperty] private string _presetVoiceSource = string.Empty;
     [ObservableProperty] private string _voiceDesignSource = string.Empty;
     [ObservableProperty] private string _voiceCloneSource = string.Empty;
@@ -205,6 +206,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         _settings = _store.Load();
         Appearance = _settings.Appearance;
         UnloadOnModeSwitch = _settings.UnloadOnModeSwitch;
+        SentenceGapMilliseconds = _settings.SentenceGapMilliseconds;
         PresetVoiceSource = _settings.SourceFor(TtsMode.PresetVoice);
         VoiceDesignSource = _settings.SourceFor(TtsMode.VoiceDesign);
         VoiceCloneSource = _settings.SourceFor(TtsMode.VoiceClone);
@@ -270,6 +272,15 @@ public sealed partial class SettingsViewModel : ObservableObject
     {
         if (_loading) return;
         Persist(_settings with { UnloadOnModeSwitch = value });
+    }
+
+    partial void OnSentenceGapMillisecondsChanged(int value)
+    {
+        if (_loading) return;
+        Persist(_settings with { SentenceGapMilliseconds = value });
+        _loading = true;
+        SentenceGapMilliseconds = _settings.SentenceGapMilliseconds;
+        _loading = false;
     }
 
     partial void OnPresetVoiceSourceChanged(string value) => PersistSource(TtsMode.PresetVoice, value);

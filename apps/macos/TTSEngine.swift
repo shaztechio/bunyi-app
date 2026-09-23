@@ -1123,10 +1123,15 @@ public final class TTSEngine {
     private final class SectionAccumulator {
         var samples: [Float] = []
         var frames = 0
+        let gapMilliseconds: Int
+
+        init(gapMilliseconds: Int) {
+            self.gapMilliseconds = gapMilliseconds
+        }
 
         func accept(_ take: SectionTake, sampleRate: Int) {
             SectionAudioJoiner.append(take.samples, to: &samples,
-                                      sampleRate: sampleRate)
+                                      sampleRate: sampleRate, gapMilliseconds: gapMilliseconds)
             frames += take.frames
         }
     }
@@ -1304,10 +1309,11 @@ public final class TTSEngine {
         language: String,
         referenceAudioURL: URL?,
         referenceText: String?,
-        referenceTranscriptAudioSeconds: TimeInterval?
+        referenceTranscriptAudioSeconds: TimeInterval?,
+        gapMilliseconds: Int
     ) async throws -> (samples: [Float], frames: Int,
                        continuationModelRepo: String?) {
-        let accumulator = SectionAccumulator()
+        let accumulator = SectionAccumulator(gapMilliseconds: gapMilliseconds)
         var continuationRepo: String?
 
         if mode == .voiceDesign {
@@ -1451,6 +1457,7 @@ public final class TTSEngine {
             log.log("Ignoring Generate — the previous job has not finished")
             return
         }
+        let gapMilliseconds = SpeechSettings.sentenceGapMilliseconds
         lastGenerationSummary = nil
         lastFailure = nil
         downloadRecovery = nil
@@ -1473,7 +1480,8 @@ public final class TTSEngine {
                     speaker: effectiveSpeaker, instruct: instruct, language: language,
                     referenceAudioURL: referenceAudioURL,
                     referenceText: referenceText,
-                    referenceTranscriptAudioSeconds: referenceTranscriptAudioSeconds)
+                    referenceTranscriptAudioSeconds: referenceTranscriptAudioSeconds,
+                    gapMilliseconds: gapMilliseconds)
                 let saved = try await saveLongText(
                     completed.samples, mode: mode, text: text,
                     speaker: effectiveSpeaker, instruct: instruct, language: language,
