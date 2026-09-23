@@ -278,6 +278,22 @@ public sealed class VoiceCloneUiTests : HeadlessWindows
     }
 
     [AvaloniaFact]
+    public async Task Unsafe_reference_boundary_keeps_its_actionable_explanation()
+    {
+        var engine = new FakeEngine();
+        using var model = New(engine);
+        model.Mode = TtsMode.VoiceClone;
+        model.Script = "New words";
+        model.ReferenceAudioPath = "clip.wav";
+        model.Transcribe = (_, _) => throw new InvalidDataException(
+            "No clear pause was found. Choose a shorter reference recording.");
+        await model.GenerateCommand.ExecuteAsync(null);
+        Assert.Null(engine.LastRequest);
+        Assert.Contains("Choose a shorter reference recording", model.Status);
+        Assert.False(model.IsBusy);
+    }
+
+    [AvaloniaFact]
     public async Task Generation_failure_after_transcription_preserves_the_engine_explanation()
     {
         var engine = new FakeEngine();

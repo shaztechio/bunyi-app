@@ -795,7 +795,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         catch (Exception ex) when (ex is not (OperationCanceledException or DownloadServiceException))
         {
             throw new InvalidOperationException(
-                "Could not transcribe the recording. " + ex.Message, ex);
+                ex is InvalidDataException
+                    ? "Could not transcribe the recording. " + ex.Message
+                    : "Could not transcribe the recording. Type what it says, or press Generate to try again.", ex);
         }
         finally
         {
