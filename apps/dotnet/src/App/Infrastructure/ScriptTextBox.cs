@@ -13,12 +13,40 @@
 // limitations under the License.
 
 using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.VisualTree;
 
 namespace Bunyi.App.Infrastructure;
 
 /// <summary>A scrolling script editor that can also live in a scrolling form.</summary>
 public sealed class ScriptTextBox : AccessibleTextBox
 {
+    private ScrollViewer? _scrollViewer;
+
+    protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
+    {
+        if (_scrollViewer is not null) _scrollViewer.TemplateApplied -= OnScrollTemplateApplied;
+        base.OnApplyTemplate(e);
+        _scrollViewer = e.NameScope.Find<ScrollViewer>("PART_ScrollViewer");
+        if (_scrollViewer is null) return;
+        _scrollViewer.TemplateApplied += OnScrollTemplateApplied;
+        _scrollViewer.ApplyTemplate();
+        ReserveGutter(_scrollViewer.GetVisualDescendants().OfType<ScrollBar>()
+            .FirstOrDefault(bar => bar.Name == "PART_VerticalScrollBar"));
+    }
+
+    private static void OnScrollTemplateApplied(object? sender, TemplateAppliedEventArgs e) =>
+        ReserveGutter(e.NameScope.Find<ScrollBar>("PART_VerticalScrollBar"));
+
+    private static void ReserveGutter(ScrollBar? bar)
+    {
+        // Keep the existing Fluent template's gutter even when its scrollbar
+        // hides, so the resize handle never overlaps text or changes wrapping.
+        if (bar?.GetVisualParent() is Grid grid && grid.ColumnDefinitions.Count > 1)
+            grid.ColumnDefinitions[1].MinWidth = 16;
+    }
+
     // The form's ScrollViewer measures with infinite height. Measure the editor
     // at its minimum in that pass so a long script does not grow the whole form.
     // The star row still stretches it to use spare room during arrangement.

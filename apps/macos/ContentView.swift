@@ -590,8 +590,12 @@ struct ContentView: View {
                 .accessibilityLabel("Script")
                 .font(.bunyiEditor)
                 .scrollContentBackground(.hidden)
+                // Keep the grabber in the scroller's gutter, with the scroller
+                // ending above it. Content retains its full vertical viewport.
+                .contentMargins(.trailing, 18, for: .scrollContent)
+                .contentMargins(.bottom, 18, for: .scrollIndicators)
                 .padding(EdgeInsets(top: Space.tight, leading: Space.tight,
-                                    bottom: Space.tight, trailing: 22))
+                                    bottom: Space.tight, trailing: 4))
                 // Fill available space until the user chooses a height.
                 .frame(minHeight: scriptHeight ?? 160, maxHeight: scriptHeight ?? .infinity)
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {

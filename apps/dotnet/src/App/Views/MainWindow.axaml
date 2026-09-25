@@ -54,6 +54,12 @@ limitations under the License.
     <Style Selector="TextBox#ScriptBox /template/ ScrollViewer#PART_ScrollViewer">
       <Setter Property="Padding" Value="0,0,8,0" />
     </Style>
+    <!-- One gutter for both scrollbar and grabber, including when no bar is needed.
+         Only shorten the bar: the text viewport keeps the editor's full height. -->
+    <Style Selector="TextBox#ScriptBox /template/ ScrollViewer#PART_ScrollViewer /template/ ScrollBar#PART_VerticalScrollBar">
+      <Setter Property="Width" Value="16" />
+      <Setter Property="Margin" Value="0,0,0,18" />
+    </Style>
     <Style Selector="TextBlock.eyebrow">
       <Setter Property="FontSize" Value="10" />
       <Setter Property="FontWeight" Value="Bold" />
@@ -265,7 +271,7 @@ limitations under the License.
                        Classes.needed="{Binding NeedsText}"
                        AutomationProperties.LabeledBy="{Binding #ScriptLabel}"
                        AcceptsReturn="True" AcceptsTab="False" TextWrapping="Wrap"
-                       Height="{Binding ScriptEditorHeight}" Padding="8,5,22,5"
+                       Height="{Binding ScriptEditorHeight}" Padding="8,5,4,5"
                        MinHeight="140" FontSize="15" ScrollViewer.AllowAutoHide="False"
                        PlaceholderText="Type or paste what you would like spoken." />
                 <Thumb Name="ScriptResizeHandle" Classes="editorResize"

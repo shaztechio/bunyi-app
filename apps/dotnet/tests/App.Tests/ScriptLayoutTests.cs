@@ -143,7 +143,7 @@ public sealed class ScriptLayoutTests : HeadlessWindows
         var form = window.FindControl<ScrollViewer>("GenerationScroller")!;
         window.UpdateLayout();
         AssertGrabberClear(editor, handle);
-        Assert.Equal(22, editor.Padding.Right);
+        Assert.Equal(4, editor.Padding.Right);
         editor.Focus();
         Press(PhysicalKey.Tab);
         Assert.Same(handle, window.FocusManager!.GetFocusedElement());
@@ -204,6 +204,35 @@ public sealed class ScriptLayoutTests : HeadlessWindows
         }
     }
 
+    [AvaloniaFact]
+    public void Script_gutter_stays_clear_when_scrollbar_appears_and_disappears()
+    {
+        using var model = new MainViewModel(new FakeEngine(), new FakePlayer(), new RecordingLog());
+        var window = Open(new MainWindow { DataContext = model, Width = 620, Height = 580 });
+        var editor = window.FindControl<TextBox>("ScriptBox")!;
+        var handle = window.FindControl<Thumb>("ScriptResizeHandle")!;
+        window.UpdateLayout();
+        var viewport = editor.GetVisualDescendants().OfType<ScrollViewer>().Single();
+        var bar = viewport.GetVisualDescendants().OfType<ScrollBar>()
+            .Single(b => b.Orientation == Orientation.Vertical);
+        var width = viewport.Viewport.Width;
+        foreach (var text in new[] { "", string.Join('\n', Enumerable.Repeat("Long script", 100)), "Short script", "" })
+        {
+            model.Script = text;
+            window.UpdateLayout();
+            Assert.Equal(text.Contains('\n'), bar.IsVisible);
+            Assert.Equal(width, viewport.Viewport.Width);
+            AssertGrabberClear(editor, handle);
+            if (text.Length == 0)
+            {
+                var placeholder = editor.GetVisualDescendants().OfType<TextBlock>()
+                    .Single(t => t.Name == "PART_Placeholder");
+                var right = placeholder.TranslatePoint(new Point(placeholder.Bounds.Width, 0), editor)!.Value.X;
+                Assert.True(right <= handle.TranslatePoint(default, editor)!.Value.X - 2);
+            }
+        }
+    }
+
     private static void AssertGrabberClear(TextBox editor, Thumb handle)
     {
         var corner = handle.TranslatePoint(default, editor)!.Value;
@@ -213,8 +242,26 @@ public sealed class ScriptLayoutTests : HeadlessWindows
         var textRight = presenter.TranslatePoint(new Point(presenter.Bounds.Width, 0), editor)!.Value.X;
         Assert.True(textRight <= corner.X - 2, $"Text ends at {textRight}; grabber starts at {corner.X}.");
         var viewport = editor.GetVisualDescendants().OfType<ScrollViewer>().Single();
-        var scrollRight = viewport.TranslatePoint(new Point(viewport.Bounds.Width, 0), editor)!.Value.X;
-        Assert.True(scrollRight <= corner.X, "Scrollbar overlaps the grabber.");
+        if (editor.Name == "ScriptBox")
+        {
+            var bar = viewport.GetVisualDescendants().OfType<ScrollBar>()
+                .Single(b => b.Orientation == Orientation.Vertical);
+            if (bar.IsVisible)
+            {
+                var barTop = bar.TranslatePoint(default, editor)!.Value;
+                Assert.InRange(Math.Abs(barTop.X - corner.X), 0, 1);
+                Assert.Equal(handle.Bounds.Width, bar.Bounds.Width);
+                Assert.True(barTop.Y + bar.Bounds.Height <= corner.Y - 2,
+                    "The scrollbar must end above the grabber.");
+                Assert.True(viewport.Viewport.Height > bar.Bounds.Height + 12,
+                    "Only the scrollbar should shrink, not the text viewport.");
+            }
+        }
+        else
+        {
+            var scrollRight = viewport.TranslatePoint(new Point(viewport.Bounds.Width, 0), editor)!.Value.X;
+            Assert.True(scrollRight <= corner.X, "Scrollbar overlaps the grabber.");
+        }
         var grip = handle.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Path>().Single();
         Assert.NotNull(grip.Stroke);
         Assert.InRange(grip.Opacity, 0.2, 0.4);

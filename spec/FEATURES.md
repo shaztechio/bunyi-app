@@ -59,7 +59,12 @@ A segmented picker selects one of three modes. macOS source:
   between the text and the scrollbar. Long scripts
   scroll within the editor. In all three modes, Script has the same inset
   bottom-right grabber, compact right padding, and keyboard resizing as the
-  instruction editors. It initially fills available space; resizing selects a
+  instruction editors. When Script has a vertical scrollbar, the handle sits
+  directly beneath it in the same right-hand gutter, and the scrollbar stops
+  above the handle. Do not reserve a second column beside the scrollbar. Keep
+  the text viewport at full height and reserve the gutter even without a
+  scrollbar so text and placeholder never overlap the handle.
+  It initially fills available space; resizing selects a
   window-local height independent of the instruction editor, retained across
   mode switches. Its minimum height remains 140 points on Windows/Linux and
   160 points on macOS; manual resizing is capped at 800 points (or its starting
