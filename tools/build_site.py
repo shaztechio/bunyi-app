@@ -154,11 +154,19 @@ def release_badge(label, version):
 '''
 
 
-def build(source, output, releases):
+def build(source, output, releases, required_release=None):
     source, output = Path(source).resolve(), Path(output).resolve()
     if output == source or source in output.parents:
         raise ValueError("Build output must be outside the docs source directory")
     versions = select_versions(releases)
+    if required_release:
+        match = TAG.fullmatch(required_release)
+        if not match:
+            raise ValueError("Unrecognized required release: " + required_release)
+        family = "dotnet" if match["prefix"] == "dotnet-v" else "macos"
+        if tuple(map(int, versions[family].split("."))) < tuple(map(int, match["version"].split("."))):
+            raise ValueError(f"Release refresh requires {required_release}, but the API's complete "
+                             f"stable releases only select {family} {versions[family]}. Retry with fresh metadata.")
     flat = [item for page in releases for item in page] if releases and isinstance(releases[0], list) else releases
     installers = any(release.get("tag_name") == "dotnet-v" + versions["dotnet"] and
                      has_installers(release, versions["dotnet"]) for release in flat)
@@ -186,10 +194,11 @@ def main():
     parser.add_argument("--releases-json", type=Path, required=True)
     parser.add_argument("--source", type=Path, default=Path("docs"))
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--require-release", help="Fail rather than publish a version older than this release tag")
     args = parser.parse_args()
     try:
         releases = json.loads(args.releases_json.read_text(encoding="utf-8-sig"))
-        versions = build(args.source, args.output, releases)
+        versions = build(args.source, args.output, releases, args.require_release)
     except (ValueError, OSError) as error:
         parser.exit(1, f"Site build failed: {error}\n")
     print(f"Site built: macOS {versions['macos']}; Windows/Linux {versions['dotnet']}")

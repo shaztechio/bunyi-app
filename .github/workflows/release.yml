@@ -53,6 +53,8 @@ jobs:
     # MLX compiles a large amount of C++ and Metal from source on a cold cache,
     # and notarization adds a wait on Apple's service after that.
     timeout-minutes: 120
+    outputs:
+      release_tag: ${{ steps.mode.outputs.tag }}
 
     steps:
       - uses: actions/checkout@v7
@@ -372,4 +374,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_REPOSITORY: ${{ github.repository }}
-        run: gh workflow run pages.yml --ref main --repo "$RELEASE_REPOSITORY"
+          RELEASE_TAG: ${{ needs.build.outputs.release_tag }}
+        run: gh workflow run pages.yml --ref main --repo "$RELEASE_REPOSITORY" -f release_tag="$RELEASE_TAG"
