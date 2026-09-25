@@ -22,6 +22,9 @@ public sealed record SpeechDurationEstimate(double LowerSeconds, double UpperSec
 {
     public bool NeedsSections => UpperSeconds > 20.0;
 
+    public static bool RequiresSections(string text, string language = "auto") =>
+        ForText(text, language).NeedsSections || SpeechSections.Paragraphs(text).Count > 1;
+
     /// <summary>
     /// Deterministic heuristic: space-delimited words at 120–180 per minute;
     /// Han, kana, and Hangul units at 3–5 per second. Pauses add a small allowance.

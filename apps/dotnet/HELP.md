@@ -44,7 +44,7 @@ If no data arrives, the message changes to **Waiting for more data**. After 30 s
 
 The audio plays automatically when the complete recording is saved. **Play** repeats it, and the folder button opens the folder where the file was saved.
 
-**Long text.** Bunyi generates longer scripts in shorter sections and joins them into one recording. If a section fails to finish, Bunyi retries it as smaller pieces, with a limited number of attempts. Playback starts after every section has finished and the complete recording is saved. Preset voice keeps its speaker, and Voice clone keeps its reference. Voice design creates a short opening, then uses that opening with the clone model to keep the voice consistent for the rest; the clone model downloads if needed. Your opening appears only once in the recording.
+**Long text and paragraphs.** Bunyi starts a new section at each newline and splits longer paragraphs into shorter sections and joins them into one recording. If a section fails to finish, Bunyi retries it as smaller pieces, with a limited number of attempts. Playback starts after every section has finished and the complete recording is saved. Preset voice keeps its speaker, and Voice clone keeps its reference. Voice design creates a short opening, then uses that opening with the clone model to keep the voice consistent for the rest; the clone model downloads if needed. Your opening appears only once in the recording.
 
 **Stop** cancels generation. A cancelled or failed take is not saved.
 
@@ -158,7 +158,7 @@ Both show progress and can be stopped part way.
 Light, dark, or follow the system. It applies to every Bunyi window straight away.
 
 
-**Sentence gap (ms)** adds silence between joined sections of long text. The default is 300 ms. Set it in Settings → General to a whole number from 0 to 5000 ms; 0 adds no silence. Changes apply to the next recording. Pauses within a section are controlled by the voice model.
+**Sentence gap (ms)** adds silence between paragraphs separated by a newline and between joined sections of long text. Blank lines do not add extra pauses. The default is 300 ms. Set it in Settings → General to a whole number from 0 to 5000 ms; 0 adds no silence. Changes apply to the next recording. Pauses within a section are controlled by the voice model.
 
 **Free memory when switching modes** decides *when* Bunyi lets go of a model, not whether it does. Each mode uses its own model, and a model can be several gigabytes.
 

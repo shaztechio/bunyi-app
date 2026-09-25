@@ -132,9 +132,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         get
         {
             var estimate = SpeechDurationEstimate.ForText(Script, Language);
+            var needsSections = SpeechDurationEstimate.RequiresSections(Script, Language);
             return $"Estimated speech: {Math.Ceiling(estimate.LowerSeconds):0}–{Math.Ceiling(estimate.UpperSeconds):0} seconds"
-                + (estimate.NeedsSections ? " · generated in shorter sections" : "")
-                + (estimate.NeedsSections && Mode == TtsMode.VoiceDesign
+                + (needsSections ? " · generated in shorter sections" : "")
+                + (needsSections && Mode == TtsMode.VoiceDesign
                     ? " · also uses the clone model to keep the designed voice consistent" : "");
         }
     }

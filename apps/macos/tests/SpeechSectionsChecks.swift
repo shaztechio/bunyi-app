@@ -25,6 +25,29 @@ struct SpeechSectionsChecks {
         precondition(SpeechDurationEstimate.forText(" ... ")
             == SpeechDurationEstimate(lowerSeconds: 0, upperSeconds: 0))
 
+        for separator in ["\n", "\r\n", "\r", "\n \t\n"] {
+            let first = " \n First paragraph" + separator + "  "
+            let second = "Second paragraph\n \n"
+            let paragraphs = SpeechSections.split(first + second)
+            precondition(paragraphs == [first, second])
+            precondition(SpeechDurationEstimate.requiresSections(first + second))
+            var audio: [Float] = []
+            for _ in paragraphs {
+                SectionAudioJoiner.append(Array(repeating: 1, count: 480),
+                                          to: &audio, gapMilliseconds: 750)
+            }
+            precondition(audio.count == 480 * 2 + 18_000)
+            precondition(audio[480..<18_480].allSatisfy { $0 == 0 })
+            precondition(audio[120] > 0 && audio[18_600] > 0)
+        }
+        for blank in ["", " \r\n\t\n "] {
+            precondition(SpeechSections.split(blank).isEmpty)
+            precondition(!SpeechDurationEstimate.requiresSections(blank))
+        }
+        let single = "\n Only one paragraph \r\n\n"
+        precondition(SpeechSections.split(single) == [single])
+        precondition(!SpeechDurationEstimate.requiresSections(single))
+
         let sentence = "Dr. Rivera counted one, two, and three. Then she stopped. "
         let text = String(repeating: sentence, count: 12)
         let sections = SpeechSections.split(text)
@@ -34,6 +57,13 @@ struct SpeechSectionsChecks {
             SpeechDurationEstimate.forText($0).upperSeconds <= 20
         })
         precondition(sections[0].contains("Dr."), "Abbreviation was split as a sentence")
+        let withParagraph = text + "\r\nA short final paragraph"
+        let boundedParagraphs = SpeechSections.split(withParagraph)
+        precondition(boundedParagraphs.joined() == withParagraph)
+        precondition(boundedParagraphs.last == "A short final paragraph")
+        precondition(boundedParagraphs.allSatisfy {
+            SpeechDurationEstimate.forText($0).upperSeconds <= 20
+        })
         let quoted = SpeechSections.split(
             "Dr. Smith paid 3.14 dollars. “Really?” she asked. " + sentence,
             maximumSeconds: 6)

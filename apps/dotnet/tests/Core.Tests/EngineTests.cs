@@ -719,6 +719,33 @@ public sealed class EngineTests : IAsyncLifetime
         Assert.Equal(1, synth.Releases);
     }
 
+    [Theory]
+    [InlineData(TtsMode.VoiceClone)]
+    [InlineData(TtsMode.PresetVoice)]
+    [InlineData(TtsMode.VoiceDesign)]
+    public async Task Short_paragraphs_save_one_recording_with_silence_between_them(TtsMode mode)
+    {
+        var synth = new FakeSynthesizer { Samples = Enumerable.Repeat((short)1000, 24000).ToArray() };
+        await using var engine = NewEngine(synth);
+        const string text = "First paragraph\r\n\r\nSecond paragraph\r\n";
+        var result = await engine.GenerateAsync(new(mode, text, Instruct: "warm voice"), null, default);
+        Assert.Equal(2, synth.Requests.Count);
+        Assert.Equal(text, string.Concat(synth.Requests.Select(r => r.Text)));
+        Assert.Single(Directory.GetFiles(Path.Combine(_root, "Outputs")));
+        Assert.Equal(text, WavMetadata.TryRead(result.OutputPath)!.Text);
+        var wav = await File.ReadAllBytesAsync(result.OutputPath);
+        Assert.Equal((24000 * 2 + 7200) * sizeof(short), BitConverter.ToInt32(wav, 40));
+        Assert.All(wav.Skip(44 + 24000 * sizeof(short)).Take(7200 * sizeof(short)), b => Assert.Equal((byte)0, b));
+        Assert.True(BitConverter.ToInt16(wav, 44 + 1000 * sizeof(short)) > 0);
+        Assert.True(BitConverter.ToInt16(wav, 44 + (24000 + 7200 + 1000) * sizeof(short)) > 0);
+        if (mode == TtsMode.VoiceDesign)
+        {
+            Assert.Equal(TtsMode.VoiceClone, synth.Requests[1].Mode);
+            Assert.Equal(synth.Requests[0].Text, synth.Requests[1].ReferenceTranscript);
+            Assert.False(File.Exists(synth.Requests[1].ReferenceAudioPath));
+        }
+    }
+
     /// <summary>A synthesizer that does everything except run a model.</summary>
     private sealed class FakeSynthesizer : ISpeechSynthesizer
     {

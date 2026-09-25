@@ -22,6 +22,17 @@ namespace Bunyi.App.Tests;
 
 public sealed class CompletedRecordingTests : HeadlessWindows
 {
+    [AvaloniaFact]
+    public void Short_multi_paragraph_design_discloses_the_clone_model_dependency()
+    {
+        using var model = new MainViewModel(new FakeEngine(), new FakePlayer(), new RecordingLog())
+            { Mode = TtsMode.VoiceDesign, Script = "Hello\nGoodbye" };
+        Assert.Contains("generated in shorter sections", model.SpeechEstimateText);
+        Assert.Contains("also uses the clone model", model.SpeechEstimateText);
+        model.Script = "\nHello\n";
+        Assert.DoesNotContain("also uses the clone model", model.SpeechEstimateText);
+    }
+
     [AvaloniaTheory]
     [InlineData(TtsMode.PresetVoice)]
     [InlineData(TtsMode.VoiceDesign)]
