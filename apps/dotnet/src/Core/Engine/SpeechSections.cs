@@ -23,6 +23,33 @@ internal static class SpeechSections
     {
         ArgumentNullException.ThrowIfNull(text);
         if (maximumSeconds <= 0) throw new ArgumentOutOfRangeException(nameof(maximumSeconds));
+        return Paragraphs(text).SelectMany(p => SplitParagraph(p, maximumSeconds)).ToArray();
+    }
+
+    // Keep separator whitespace with the preceding paragraph, and leading
+    // whitespace with the first. Never send a whitespace-only take to the model.
+    internal static IReadOnlyList<string> Paragraphs(string text)
+    {
+        var result = new List<string>();
+        var start = 0;
+        var hasContent = false;
+        for (var i = 0; i < text.Length; i++)
+        {
+            if (!char.IsWhiteSpace(text[i])) hasContent = true;
+            if (text[i] is not ('\r' or '\n') || !hasContent) continue;
+            var next = i + 1;
+            while (next < text.Length && char.IsWhiteSpace(text[next])) next++;
+            result.Add(text[start..next]);
+            start = next;
+            i = next - 1;
+            hasContent = false;
+        }
+        if (start < text.Length && hasContent) result.Add(text[start..]);
+        return result;
+    }
+
+    private static IReadOnlyList<string> SplitParagraph(string text, double maximumSeconds)
+    {
         var result = new List<string>();
         var remaining = text;
         while (SpeechDurationEstimate.ForText(remaining).UpperSeconds > maximumSeconds)

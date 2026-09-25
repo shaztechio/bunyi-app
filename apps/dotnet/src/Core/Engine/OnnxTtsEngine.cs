@@ -401,7 +401,7 @@ public sealed class OnnxTtsEngine : ITtsEngine
 
                 var supportsInstruct = _synth.SupportsInstruct;
                 string? continuationModelRepo = null;
-                var audio = SpeechDurationEstimate.ForText(request.Text, request.Language).NeedsSections
+                var audio = SpeechDurationEstimate.RequiresSections(request.Text, request.Language)
                     ? await new LongTextGeneration(Section, s => Publish(s, progress), _log, gapMilliseconds)
                         .GenerateAsync(request, token).ConfigureAwait(false)
                     : await _synth.SynthesizeAsync(request, token, frames).ConfigureAwait(false);

@@ -22,6 +22,10 @@ public struct SpeechDurationEstimate: Equatable {
 
     public var needsSections: Bool { upperSeconds > 20 }
 
+    public static func requiresSections(_ text: String, language: String = "auto") -> Bool {
+        forText(text, language: language).needsSections || SpeechSections.paragraphs(text).count > 1
+    }
+
     public static func forText(_ text: String, language _: String = "auto") -> Self {
         var words = 0
         var scriptUnits = 0
@@ -74,6 +78,35 @@ public struct SpeechDurationEstimate: Equatable {
 enum SpeechSections {
     static func split(_ text: String, maximumSeconds: Double = 20) -> [String] {
         precondition(maximumSeconds > 0)
+        return paragraphs(text).flatMap { splitParagraph($0, maximumSeconds: maximumSeconds) }
+    }
+
+    // Keep separator whitespace with the preceding paragraph, and leading
+    // whitespace with the first. Never send a whitespace-only take to the model.
+    static func paragraphs(_ text: String) -> [String] {
+        var result: [String] = []
+        var start = text.startIndex
+        var index = start
+        var hasContent = false
+        while index < text.endIndex {
+            let character = text[index]
+            if !character.isWhitespace { hasContent = true }
+            var next = text.index(after: index)
+            if (character == "\n" || character == "\r" || character == "\r\n"), hasContent {
+                while next < text.endIndex, text[next].isWhitespace {
+                    next = text.index(after: next)
+                }
+                result.append(String(text[start..<next]))
+                start = next
+                hasContent = false
+            }
+            index = next
+        }
+        if start < text.endIndex, hasContent { result.append(String(text[start...])) }
+        return result
+    }
+
+    private static func splitParagraph(_ text: String, maximumSeconds: Double) -> [String] {
         var result: [String] = []
         var remaining = text[...]
         while SpeechDurationEstimate.forText(String(remaining)).upperSeconds

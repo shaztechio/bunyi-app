@@ -1476,9 +1476,8 @@ public final class TTSEngine {
                 ? speaker ?? model.supportedSpeakers.first ?? "Ryan"
                 : speaker
 
-            if SpeechDurationEstimate.forText(
-                text, language: language).needsSections {
-                log.log("Generating long text in recoverable sections")
+            if SpeechDurationEstimate.requiresSections(text, language: language) {
+                log.log("Generating text in recoverable sections")
                 let completed = try await generateLongText(
                     initialModel: model, mode: mode, text: text,
                     speaker: effectiveSpeaker, instruct: instruct, language: language,
