@@ -129,6 +129,13 @@ struct ContentView: View {
     /// the visible first and last controls in the same loop as the form.
     @FocusState private var modePickerFocused: Bool
     @FocusState private var lastOptionFocused: Bool
+    @State private var instructionHeight: CGFloat = 52
+    @State private var instructionDragHeight: CGFloat?
+    @FocusState private var instructionResizeFocused: Bool
+    @State private var scriptHeight: CGFloat?
+    @State private var measuredScriptHeight: CGFloat = 160
+    @State private var scriptDragHeight: CGFloat?
+    @FocusState private var scriptResizeFocused: Bool
     @FocusState private var referenceClipFocused: Bool
     @FocusState private var actionButtonFocused: Bool
 
@@ -243,10 +250,13 @@ struct ContentView: View {
                     // the pickers around it correctly greyed out. Refusing hits
                     // is what actually stops typing; the opacity is what makes
                     // it look refused.
-                    if engine.downloadFeedback != nil {
-                        ScrollView { editableForm }
-                    } else {
-                        editableForm
+                    GeometryReader { viewport in
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: Space.tight) {
+                                editableForm
+                            }
+                            .frame(minHeight: viewport.size.height, alignment: .top)
+                        }
                     }
                 }
             }
@@ -307,7 +317,14 @@ struct ContentView: View {
         .onChange(of: engine.status.isBusy) { _, busy in
             // Resign first, then the disabled modifier keeps it from coming
             // back: a disabled view cannot take focus.
-            if busy { scriptFocused = false }
+            if busy {
+                scriptFocused = false
+                lastOptionFocused = false
+                instructionResizeFocused = false
+                instructionDragHeight = nil
+                scriptResizeFocused = false
+                scriptDragHeight = nil
+            }
         }
         .onChange(of: text) { _, _ in
             if validationIssue == .script, !scriptIsBlank {
@@ -549,66 +566,78 @@ struct ContentView: View {
     // MARK: Text input
 
     private var textCard: some View {
-        TextEditor(text: $text)
-            .focused($scriptFocused)
-            // NSTextView normally inserts a tab character. In this app that
-            // trapped focus in the editor on launch; the next visible control
-            // could only be reached with the little-known Control-Tab chord.
-            // Move through the window's key-view loop instead, in both
-            // directions, so Tab behaves like it does in the rest of the form.
-            .onKeyPress(keys: Self.tabNavigationKeys, phases: .down) { press in
-                guard !press.modifiers.contains(.command),
-                      !press.modifiers.contains(.control),
-                      !press.modifiers.contains(.option) else {
-                    return .ignored
+        VStack(alignment: .trailing, spacing: 4) {
+            TextEditor(text: $text)
+                .focused($scriptFocused)
+                // NSTextView normally inserts a tab character. In this app that
+                // trapped focus in the editor on launch; the next visible control
+                // could only be reached with the little-known Control-Tab chord.
+                // Move through the window's key-view loop instead, in both
+                // directions, so Tab behaves like it does in the rest of the form.
+                .onKeyPress(keys: Self.tabNavigationKeys, phases: .down) { press in
+                    guard !press.modifiers.contains(.command),
+                          !press.modifiers.contains(.control),
+                          !press.modifiers.contains(.option) else {
+                        return .ignored
+                    }
+                    moveFocusFromEditor(backward: press.modifiers.contains(.shift))
+                    return .handled
                 }
-                moveFocusFromScript(backward: press.modifiers.contains(.shift))
-                return .handled
-            }
-            // Otherwise it announces itself as "text entry area" — the role,
-            // not the field. This is the thing the whole window is for, and a
-            // screen reader had no way to say which of the two text inputs it
-            // had landed in.
-            .accessibilityLabel("Script")
-            .font(.bunyiEditor)
-            .scrollContentBackground(.hidden)
-            .padding(Space.tight)
-            // Grows instead of capping at 220. The options card below is
-            // intrinsically sized and the window is 580 pt tall at minimum, so
-            // a fixed cap left the bottom third of the window empty.
-            .frame(minHeight: 160, maxHeight: .infinity)
-            .background(Color(nsColor: .textBackgroundColor),
-                        in: RoundedRectangle(cornerRadius: Radius.card))
-            .overlay(RoundedRectangle(cornerRadius: Radius.card)
-                .strokeBorder(validationIssue == .script
-                    ? Color.red : Color.primary.opacity(0.08)))
-            .overlay(alignment: .topLeading) {
-                if text.isEmpty {
-                    // Derived, not hand-tuned. The old 16/13 were eyeballed
-                    // against TextEditor's internals and did not sit on the
-                    // caret. The real offset is the padding we applied plus
-                    // NSTextView's own container inset, which is 5 across and
-                    // 0 down — SwiftUI adds no further top inset of its own.
-                    Text("What should the voice say?")
-                        .font(.bunyiEditor)
-                        .foregroundStyle(.tertiary)
-                        .padding(.top, Space.tight)
-                        .padding(.leading, Space.tight + 5)
-                        .allowsHitTesting(false)
+                // Otherwise it announces itself as "text entry area" — the role,
+                // not the field. This is the thing the whole window is for, and a
+                // screen reader had no way to say which of the two text inputs it
+                // had landed in.
+                .accessibilityLabel("Script")
+                .font(.bunyiEditor)
+                .scrollContentBackground(.hidden)
+                // Keep the grabber in the scroller's gutter, with the scroller
+                // ending above it. Content retains its full vertical viewport.
+                .contentMargins(.trailing, 18, for: .scrollContent)
+                .contentMargins(.bottom, 18, for: .scrollIndicators)
+                .padding(EdgeInsets(top: Space.tight, leading: Space.tight,
+                                    bottom: Space.tight, trailing: 4))
+                // Fill available space until the user chooses a height.
+                .frame(minHeight: scriptHeight ?? 160, maxHeight: scriptHeight ?? .infinity)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
+                    measuredScriptHeight = $0
                 }
-            }
-            .overlay(alignment: .bottomTrailing) {
-                if !text.isEmpty {
-                    // monospacedDigit so the counter stops reflowing on every
-                    // keystroke as digits of different widths swap in.
-                    Text("\(text.count) characters")
-                        .font(.caption2)
-                        .monospacedDigit()
-                        .foregroundStyle(.tertiary)
-                        .padding(Space.row)
-                        .allowsHitTesting(false)
+                .background(Color(nsColor: .textBackgroundColor),
+                            in: RoundedRectangle(cornerRadius: Radius.card))
+                .overlay(RoundedRectangle(cornerRadius: Radius.card)
+                    .strokeBorder(validationIssue == .script
+                        ? Color.red : Color.primary.opacity(0.08)))
+                .overlay(alignment: .topLeading) {
+                    if text.isEmpty {
+                        // Derived, not hand-tuned. The old 16/13 were eyeballed
+                        // against TextEditor's internals and did not sit on the
+                        // caret. The real offset is the padding we applied plus
+                        // NSTextView's own container inset, which is 5 across and
+                        // 0 down — SwiftUI adds no further top inset of its own.
+                        Text("What should the voice say?")
+                            .font(.bunyiEditor)
+                            .foregroundStyle(.tertiary)
+                            .padding(.top, Space.tight)
+                            .padding(.leading, Space.tight + 5)
+                            .padding(.trailing, 22)
+                            .allowsHitTesting(false)
+                    }
                 }
+                .overlay(alignment: .bottomTrailing) {
+                    editorResizeHandle(label: "Script", height: measuredScriptHeight,
+                                       focused: $scriptResizeFocused, dragHeight: $scriptDragHeight) {
+                        scriptHeight = min(max(800, scriptDragHeight ?? measuredScriptHeight), max(160, $0))
+                    }
+                }
+            if !text.isEmpty {
+                // Keep the count outside the editor, clear of text and the handle.
+                Text("\(text.count) characters")
+                    .font(.caption2)
+                    .monospacedDigit()
+                    .foregroundStyle(.tertiary)
+                    .padding(.horizontal, Space.row)
+                    .allowsHitTesting(false)
             }
+        }
     }
 
     // MARK: First-run examples
@@ -712,30 +741,15 @@ struct ContentView: View {
                     .fixedSize()
                 }
                 rowDivider
-                optionRow(icon: "sparkles", label: "Style") {
-                    TextField("Optional — e.g. calm news anchor", text: $instruct)
-                        // The placeholder is a hint, not a name: it disappears
-                        // the moment anything is typed, taking the only clue
-                        // about what the field is with it.
-                        .accessibilityLabel("Style")
-                        .textFieldStyle(.roundedBorder)
-                        .focused($lastOptionFocused)
-                        .onKeyPress(keys: Self.tabNavigationKeys,
-                                    phases: .down, action: movePastForm)
+                optionRow(icon: "sparkles", label: "Style", alignment: .top) {
+                    instructionEditor(label: "Style", placeholder: "Optional — e.g. calm news anchor")
                 }
 
             case .voiceDesign:
                 rowDivider
-                optionRow(icon: "sparkles", label: "Voice") {
-                    TextField("Describe it — e.g. deep gravelly narrator in his 60s",
-                              text: $instruct)
-                        .textFieldStyle(.roundedBorder)
-                        .overlay(RoundedRectangle(cornerRadius: Radius.control)
-                            .stroke(validationIssue == .voiceDescription
-                                ? Color.red : Color.clear))
-                        .focused($lastOptionFocused)
-                        .onKeyPress(keys: Self.tabNavigationKeys,
-                                    phases: .down, action: movePastForm)
+                optionRow(icon: "sparkles", label: "Voice", alignment: .top) {
+                    instructionEditor(label: "Voice description",
+                                      placeholder: "Describe it — e.g. deep gravelly narrator in his 60s")
                 }
                 if validationIssue == .voiceDescription {
                     validationMessage(GenerationInputIssue.voiceDescription.message)
@@ -830,10 +844,10 @@ struct ContentView: View {
     /// which is 12 + 18 + 10 measured from a left-aligned row, then lined up
     /// with nothing.
     private func optionRow<Control: View>(
-        icon: String, label: String,
+        icon: String, label: String, alignment: VerticalAlignment = .center,
         @ViewBuilder control: () -> Control
     ) -> some View {
-        HStack(spacing: Space.tight) {
+        HStack(alignment: alignment, spacing: Space.tight) {
             Image(systemName: icon)
                 .foregroundStyle(.secondary)
                 .frame(width: OptionRow.iconColumn)
@@ -851,6 +865,92 @@ struct ContentView: View {
         .padding(.vertical, Space.tight)
     }
 
+    private func instructionEditor(label: String, placeholder: String) -> some View {
+        ZStack(alignment: .bottomTrailing) {
+            TextEditor(text: $instruct)
+                .font(.body)
+                .focused($lastOptionFocused)
+                .accessibilityLabel(label)
+                .onKeyPress(keys: Self.tabNavigationKeys, phases: .down) { press in
+                    guard isPlainTab(press) else { return .ignored }
+                    moveFocusFromEditor(backward: press.modifiers.contains(.shift))
+                    return .handled
+                }
+                .scrollContentBackground(.hidden)
+                .padding(EdgeInsets(top: 6, leading: 6, bottom: 6, trailing: 22))
+                .frame(height: instructionHeight)
+                .background(Color(nsColor: .textBackgroundColor),
+                            in: RoundedRectangle(cornerRadius: Radius.control))
+                .overlay(RoundedRectangle(cornerRadius: Radius.control)
+                    .stroke(validationIssue == .voiceDescription
+                        ? Color.red : Color.primary.opacity(0.15)))
+                .overlay(alignment: .topLeading) {
+                    if instruct.isEmpty {
+                        Text(placeholder)
+                            .font(.body)
+                            .foregroundStyle(.tertiary)
+                            .padding(.top, 6)
+                            .padding(.leading, 11)
+                            .padding(.trailing, 22)
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
+                    }
+                }
+            editorResizeHandle(label: label, height: instructionHeight,
+                               focused: $instructionResizeFocused, dragHeight: $instructionDragHeight) {
+                instructionHeight = min(320, max(52, $0))
+            }
+        }
+    }
+
+    private func editorResizeHandle(label: String, height: CGFloat,
+                                    focused: FocusState<Bool>.Binding,
+                                    dragHeight: Binding<CGFloat?>,
+                                    resize: @escaping (CGFloat) -> Void) -> some View {
+        Path { path in
+            path.move(to: CGPoint(x: 2, y: 12))
+            path.addLine(to: CGPoint(x: 12, y: 2))
+            path.move(to: CGPoint(x: 7, y: 12))
+            path.addLine(to: CGPoint(x: 12, y: 7))
+        }
+            .stroke(Color.primary.opacity(0.3), lineWidth: 1.5)
+            .frame(width: 16, height: 16)
+            .contentShape(Rectangle())
+            .overlay(RoundedRectangle(cornerRadius: 3)
+                .stroke(focused.wrappedValue ? Color.accentColor : Color.clear))
+            .focusable()
+            .focused(focused)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Resize \(label.lowercased()) editor")
+            .accessibilityValue("\(Int(height)) points high")
+            .accessibilityAdjustableAction { direction in
+                guard !engine.status.isBusy else { return }
+                switch direction {
+                case .increment: resize(height + 20)
+                case .decrement: resize(height - 20)
+                @unknown default: break
+                }
+            }
+            .onKeyPress(keys: [.upArrow, .downArrow]) { press in
+                guard !engine.status.isBusy else { return .ignored }
+                resize(height + (press.key == .downArrow ? 20 : -20))
+                return .handled
+            }
+            .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .global)
+                .onChanged { value in
+                    guard !engine.status.isBusy else { return }
+                    if dragHeight.wrappedValue == nil { dragHeight.wrappedValue = height }
+                    resize(dragHeight.wrappedValue! + value.translation.height)
+                }
+                .onEnded { _ in dragHeight.wrappedValue = nil })
+            .onHover { hovering in
+                (hovering ? NSCursor.resizeUpDown : NSCursor.arrow).set()
+            }
+            .help("Drag to resize, or focus here and use Up / Down")
+            .padding(.trailing, 4)
+            .padding(.bottom, 4)
+    }
+
     @ViewBuilder
     private var editableForm: some View {
         VStack(alignment: .leading, spacing: Space.tight) {
@@ -864,6 +964,7 @@ struct ContentView: View {
         .allowsHitTesting(!engine.status.isBusy)
         .opacity(engine.status.isBusy ? 0.6 : 1)
         optionsCard.disabled(engine.status.isBusy)
+            .allowsHitTesting(!engine.status.isBusy)
     }
 
     // MARK: Bottom bar (status + playback + generate)
@@ -970,10 +1071,10 @@ struct ContentView: View {
         .background(.bar)
     }
 
-    /// Advance from the script using AppKit's key-view loop. Dispatching to the
+    /// Advance from a multiline editor using AppKit's key-view loop. Dispatching to the
     /// next turn lets NSTextView finish the key event before first responder is
     /// changed; doing it synchronously can leave the editor focused anyway.
-    private func moveFocusFromScript(backward: Bool) {
+    private func moveFocusFromEditor(backward: Bool) {
         DispatchQueue.main.async {
             guard let window = NSApp.keyWindow else { return }
             if backward {

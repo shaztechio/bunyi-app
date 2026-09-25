@@ -26,9 +26,39 @@ limitations under the License.
         Icon="/Assets/bunyi.png">
 
   <Window.Styles>
+    <Style Selector="Thumb.editorResize">
+      <Setter Property="Width" Value="16" />
+      <Setter Property="Height" Value="16" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="HorizontalAlignment" Value="Right" />
+      <Setter Property="VerticalAlignment" Value="Bottom" />
+      <Setter Property="Margin" Value="0,0,4,4" />
+      <Setter Property="Focusable" Value="True" />
+      <Setter Property="Cursor" Value="SizeNorthSouth" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border Background="{TemplateBinding Background}" CornerRadius="3"
+                  BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1">
+            <Path Data="M 2,12 L 12,2 M 7,12 L 12,7"
+                  Stroke="{TemplateBinding Foreground}" StrokeThickness="1.5" Opacity="0.3"
+                  HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
+        </ControlTemplate>
+      </Setter>
+    </Style>
+    <Style Selector="Thumb.editorResize:focus-visible">
+      <Setter Property="BorderBrush" Value="{DynamicResource BunyiAccent}" />
+    </Style>
+
     <!-- TextBox padding surrounds the scrollbar too; inset its content separately. -->
     <Style Selector="TextBox#ScriptBox /template/ ScrollViewer#PART_ScrollViewer">
       <Setter Property="Padding" Value="0,0,8,0" />
+    </Style>
+    <!-- One gutter for both scrollbar and grabber, including when no bar is needed.
+         Only shorten the bar: the text viewport keeps the editor's full height. -->
+    <Style Selector="TextBox#ScriptBox /template/ ScrollViewer#PART_ScrollViewer /template/ ScrollBar#PART_VerticalScrollBar">
+      <Setter Property="Width" Value="16" />
+      <Setter Property="Margin" Value="0,0,0,18" />
     </Style>
     <Style Selector="TextBlock.eyebrow">
       <Setter Property="FontSize" Value="10" />
@@ -235,12 +265,22 @@ limitations under the License.
                 Found by walking the real tree for controls with no name, after the
                 same fault turned up on the dropdowns (#159, #192).
               -->
-              <infra:ScriptTextBox Grid.Row="1" Name="ScriptBox" Text="{Binding Script}"
+              <Grid Grid.Row="1" Height="{Binding ScriptEditorHeight}"
+                    VerticalAlignment="{Binding ScriptEditorAlignment}">
+                <infra:ScriptTextBox Name="ScriptBox" Text="{Binding Script}"
                        Classes.needed="{Binding NeedsText}"
                        AutomationProperties.LabeledBy="{Binding #ScriptLabel}"
-                       AcceptsReturn="True" TextWrapping="Wrap"
+                       AcceptsReturn="True" AcceptsTab="False" TextWrapping="Wrap"
+                       Height="{Binding ScriptEditorHeight}" Padding="8,5,4,5"
                        MinHeight="140" FontSize="15" ScrollViewer.AllowAutoHide="False"
                        PlaceholderText="Type or paste what you would like spoken." />
+                <Thumb Name="ScriptResizeHandle" Classes="editorResize"
+                       DragStarted="OnEditorResizeStarted" DragDelta="OnEditorResizeDelta"
+                       KeyDown="OnEditorResizeKeyDown"
+                       AutomationProperties.Name="Resize script editor"
+                       AutomationProperties.HelpText="Drag up or down to resize. Up shrinks the editor; Down grows it."
+                       ToolTip.Tip="Drag to resize, or focus here and use Up / Down" />
+              </Grid>
               <!--
                 The examples. They vanish once the script has anything in it and do
                 not return over a generated result — an invitation to try something
@@ -348,13 +388,27 @@ limitations under the License.
                   <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
                 <TextBlock Grid.Column="0" Name="InstructLabelText"
-                           Text="{Binding InstructLabel}" Classes="rowLabel" />
+                           Text="{Binding InstructLabel}" Classes="rowLabel" VerticalAlignment="Top" Margin="0,8,12,0" />
                 <StackPanel Grid.Column="1" Spacing="4">
                   <!-- Named by its row label; it changes per mode, so bind rather than repeat. -->
-                  <infra:AccessibleTextBox Name="InstructBox" Text="{Binding Instruct}"
-                           Classes.needed="{Binding NeedsInstruction}"
-                           AutomationProperties.LabeledBy="{Binding #InstructLabelText}"
-                           PlaceholderText="{Binding InstructPlaceholder}" />
+                  <Grid>
+                    <infra:AccessibleTextBox Name="InstructBox" Text="{Binding Instruct}"
+                             Classes.needed="{Binding NeedsInstruction}"
+                             AutomationProperties.LabeledBy="{Binding #InstructLabelText}"
+                             AcceptsReturn="True" AcceptsTab="False" TextWrapping="Wrap"
+                             Height="{Binding InstructionEditorHeight}"
+                             Padding="8,5,22,5"
+                             VerticalContentAlignment="Top"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto"
+                             PlaceholderText="{Binding InstructPlaceholder}" />
+                    <Thumb Name="InstructionResizeHandle" Classes="editorResize"
+                           DragStarted="OnEditorResizeStarted" DragDelta="OnEditorResizeDelta"
+                           KeyDown="OnEditorResizeKeyDown"
+                           AutomationProperties.Name="Resize instruction editor"
+                           AutomationProperties.HelpText="Drag up or down to resize. Up shrinks the editor; Down grows it."
+                           ToolTip.Tip="Drag to resize, or focus here and use Up / Down" />
+                  </Grid>
                   <TextBlock Classes="needed" Text="{Binding MissingReason}"
                              IsVisible="{Binding NeedsInstruction}" />
                 </StackPanel>

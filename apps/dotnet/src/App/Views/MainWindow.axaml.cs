@@ -13,6 +13,7 @@
 // limitations under the License.
 
 using System.Windows.Input;
+using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Automation.Peers;
 using Avalonia.Controls;
@@ -32,6 +33,47 @@ public partial class MainWindow : Window
 {
     private bool _closeConfirmed;
     private bool _waitingToClose;
+    private double _editorDragHeight;
+    private double _editorDragY;
+    private double _editorGrabOffset;
+    private double _editorMaximumHeight;
+
+    private TextBox ResizeTarget(Control handle) =>
+        this.FindControl<TextBox>(handle.Name == "ScriptResizeHandle" ? "ScriptBox" : "InstructBox")!;
+
+    private static void ResizeEditor(MainViewModel model, Control handle, double height, double maximumHeight)
+    {
+        if (handle.Name == "ScriptResizeHandle") model.ResizeScriptEditor(height, maximumHeight);
+        else model.ResizeInstructionEditor(height);
+    }
+
+    private void OnEditorResizeStarted(object? sender, VectorEventArgs e)
+    {
+        if (DataContext is not MainViewModel model || model.IsBusy || sender is not Control handle) return;
+        _editorDragHeight = ResizeTarget(handle).Bounds.Height;
+        _editorMaximumHeight = Math.Max(800, _editorDragHeight);
+        _editorGrabOffset = e.Vector.Y;
+        _editorDragY = handle.TranslatePoint(new Point(0, e.Vector.Y), this)!.Value.Y;
+    }
+
+    private void OnEditorResizeDelta(object? sender, VectorEventArgs e)
+    {
+        if (DataContext is not MainViewModel model || model.IsBusy || sender is not Control handle) return;
+        // Measure in window coordinates: the handle itself moves when the editor
+        // resizes or the containing form scrolls during the drag.
+        var pointerY = handle.TranslatePoint(new Point(0, _editorGrabOffset + e.Vector.Y), this)!.Value.Y;
+        ResizeEditor(model, handle, _editorDragHeight + pointerY - _editorDragY, _editorMaximumHeight);
+        e.Handled = true;
+    }
+
+    private void OnEditorResizeKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (DataContext is not MainViewModel model || model.IsBusy || e.KeyModifiers != KeyModifiers.None || sender is not Control handle) return;
+        if (e.Key is not (Key.Up or Key.Down)) return;
+        var height = ResizeTarget(handle).Bounds.Height;
+        ResizeEditor(model, handle, height + (e.Key == Key.Down ? 20 : -20), Math.Max(800, height));
+        e.Handled = true;
+    }
 
     public MainWindow()
     {
