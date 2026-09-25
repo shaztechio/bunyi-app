@@ -105,7 +105,12 @@ A segmented picker selects one of three modes. macOS source:
 ## 2. Generation output
 
 - Sample rate **24 kHz**, mono, WAV.
-- **Long text is generated in recoverable sections.** When the frozen upper
+- **Long or multi-paragraph text is generated in recoverable sections.** A newline
+  (LF, CRLF, or CR) between non-empty paragraphs always starts a new section,
+  even when the whole script is shorter than 20 estimated seconds. Consecutive
+  blank lines count as one boundary; leading/trailing blank lines create no
+  empty sections or extra pauses. Preserve the original text, including whitespace.
+  Within each paragraph, when the frozen upper
   speech estimate exceeds 20 seconds, split at sentence boundaries into sections
   of at most 20 estimated seconds (typically 15–20). Split oversized sentences
   at clauses, then whitespace or Unicode text-element boundaries; preserve all
@@ -117,7 +122,8 @@ A segmented picker selects one of three modes. macOS source:
   (seven attempts per original section). Exhaustion fails visibly; Stop remains
   available throughout. Only accepted sections enter the final recording. Progress separates
   completed audio from the current attempt and explicitly describes retries.
-  Join successful sections in order, with the configured sentence gap (300 ms by default) and 5 ms edge fades;
+  Join successful sections in order, including paragraph boundaries, with the
+  configured sentence gap (300 ms by default) and 5 ms edge fades;
   apply one uniform clipping-protection gain to the combined recording. Save one
   WAV and one History entry with the original full text, only after all sections
   finish. This bounds per-section inference state, not total recording length.
@@ -133,10 +139,10 @@ A segmented picker selects one of three modes. macOS source:
   and implemented in the native macOS app and .NET CLI/server. Cross-platform
   listening and long-passage acceptance remain tracked in
   [LONG-TEXT-PLAN.md](LONG-TEXT-PLAN.md).
-- **Short generation ends on the model's end-of-speech token or the user's Stop.**
+- **Short single-paragraph generation ends on the model's end-of-speech token or the user's Stop.**
   Do not impose a text-length-derived frame budget or apply the export's
   `max_new_tokens` default as an automatic app cutoff for short requests. The
-  bounded retry policy above is the explicit exception for long text. Frame and elapsed counters
+  bounded retry policy above is the explicit exception for sectioned text. Frame and elapsed counters
   remain visible while waiting for the model to finish; Stop remains available.
   Removing a cutoff is not a fix for a model that rambles or never emits EOS.
   ONNX logs periodic EOS sampling probability and the actual termination reason
@@ -780,7 +786,7 @@ second reading of the same information.
   Also **"Free memory when switching modes"**, a checkbox, **on** by default
   and persisted under `unloadOnModeSwitch` — see §3e for what it does
   and what turning it off costs.
-  **Sentence gap (ms)** sets the additional silence between joined long-text
+  **Sentence gap (ms)** sets the additional silence between paragraphs and joined long-text
   sections in all three modes: whole milliseconds, 0–5000, default **300**.
   Zero disables added silence. This includes recovered subsections and the
   designed opening; no gap is added before the first or after the last section.

@@ -32,7 +32,7 @@ The word is Malay and Indonesian for **sound**.
 
 The first time you use each mode, Bunyi downloads that mode's voice model — between about 1.5 GB and 4.5 GB — and shows a progress bar with an estimate of the time remaining. This happens once per mode. Every generation after that is offline and much faster.
 
-Long scripts are generated in shorter, recoverable sections and saved as one recording only after every section succeeds. The status separates audio already accepted from the current attempt. If a section reaches its safety limit, Bunyi discards that attempt and retries smaller sections; **Stop** leaves no partial recording. Long Voice Design scripts use one completed designed opening as the fixed reference for the rest, which may require a separate Voice clone model download.
+Scripts with multiple paragraphs or long text are generated in shorter, recoverable sections and saved as one recording only after every section succeeds. The status separates audio already accepted from the current attempt. If a section reaches its safety limit, Bunyi discards that attempt and retries smaller sections; **Stop** leaves no partial recording. Long or multi-paragraph Voice Design scripts use one completed designed opening as the fixed reference for the rest, which may require a separate Voice clone model download.
 
 **Downloading is setup for speech.** Bunyi keeps the stage name visible and says when speech has not started yet. After setup, it creates your speech automatically. Downloaded models are saved for reuse; changing or deleting a model can require another download.
 
@@ -131,7 +131,7 @@ Open Settings with **⌘,**, or the gear in the toolbar.
 
 **Appearance** is light, dark, or follow the system. It applies to every Bunyi window straight away.
 
-**Sentence gap (ms)** adds silence between joined sections of long text. The default is 300 ms. Set it in Settings → General to a whole number from 0 to 5000 ms; 0 adds no silence. Changes apply to the next recording. Pauses within a section are controlled by the voice model.
+**Sentence gap (ms)** adds silence between paragraphs separated by a newline and between joined sections of long text. Blank lines do not add extra pauses. The default is 300 ms. Set it in Settings → General to a whole number from 0 to 5000 ms; 0 adds no silence. Changes apply to the next recording. Pauses within a section are controlled by the voice model.
 
 **Free memory when switching modes** decides *when* Bunyi lets go of a model, not whether it does. Each mode uses its own model, and a model can be several gigabytes.
 

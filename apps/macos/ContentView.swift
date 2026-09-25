@@ -872,8 +872,8 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: Space.row) {
             if !engine.status.isBusy, tab != .history,
                mode == .voiceDesign,
-               SpeechDurationEstimate.forText(text, language: language).needsSections {
-                Text("Long Voice Design scripts create one short designed opening, then use the Voice clone model to keep that voice consistent. The clone model may need a separate download.")
+               SpeechDurationEstimate.requiresSections(text, language: language) {
+                Text("Long or multi-paragraph Voice Design scripts create one short designed opening, then use the Voice clone model to keep that voice consistent. The clone model may need a separate download.")
                     .font(.caption)
                     .fixedSize(horizontal: false, vertical: true)
             }

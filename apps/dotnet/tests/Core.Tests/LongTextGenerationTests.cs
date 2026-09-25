@@ -27,6 +27,62 @@ public sealed class LongTextGenerationTests
         { RawSamples = Enumerable.Repeat(level, 48000).ToArray() };
 
     [Theory]
+    [InlineData("\n")]
+    [InlineData("\r\n")]
+    [InlineData("\r")]
+    [InlineData("\n \t\n")]
+    public async Task Short_paragraphs_get_one_configured_gap_even_without_punctuation(string separator)
+    {
+        var first = " \n First paragraph" + separator + "  ";
+        var second = "Second paragraph\n \n";
+        var text = first + second;
+        Assert.True(SpeechDurationEstimate.RequiresSections(text));
+        Assert.Equal(new[] { first, second }, SpeechSections.Split(text));
+        var requests = new List<GenerateRequest>();
+        var run = new LongTextGeneration((r, ct, p) =>
+        {
+            requests.Add(r);
+            return Task.FromResult(Audio());
+        }, _ => { }, new LogStore(), 750);
+        var result = await run.GenerateAsync(new(TtsMode.VoiceClone, text,
+            ReferenceAudioPath: "reference.wav", ReferenceTranscript: "Reference words"), default);
+        Assert.Equal(2, requests.Count);
+        Assert.All(requests, r =>
+        {
+            Assert.Equal("reference.wav", r.ReferenceAudioPath);
+            Assert.Equal("Reference words", r.ReferenceTranscript);
+        });
+        Assert.Equal(48000 * 2 + 18000, result.Samples.Length);
+        Assert.All(result.Samples.Skip(48000).Take(18000), s => Assert.Equal((short)0, s));
+        Assert.True(result.Samples[1000] > 0);
+        Assert.True(result.Samples[48000 + 18000 + 1000] > 0);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" \r\n\t\n ")]
+    [InlineData("\n Only one paragraph \r\n\n")]
+    public void Blank_lines_alone_do_not_require_sections(string text)
+    {
+        Assert.False(SpeechDurationEstimate.RequiresSections(text));
+        var parts = SpeechSections.Split(text);
+        Assert.All(parts, p => Assert.False(string.IsNullOrWhiteSpace(p)));
+        if (!string.IsNullOrWhiteSpace(text)) Assert.Equal(text, Assert.Single(parts));
+        else Assert.Empty(parts);
+    }
+
+    [Fact]
+    public void Long_paragraphs_are_bounded_without_crossing_newlines()
+    {
+        var first = LongText + "\r\n";
+        var second = "A short final paragraph";
+        var sections = SpeechSections.Split(first + second);
+        Assert.Equal(first + second, string.Concat(sections));
+        Assert.Equal(second, sections[^1]);
+        Assert.All(sections, p => Assert.InRange(SpeechDurationEstimate.ForText(p).UpperSeconds, .01, 20));
+    }
+
+    [Theory]
     [InlineData(39, false)]
     [InlineData(40, false)]
     [InlineData(41, true)]
