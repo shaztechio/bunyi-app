@@ -23,6 +23,11 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Published release tag the website must include (or supersede)'
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -46,7 +51,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_REPOSITORY: ${{ github.repository }}
-        run: gh workflow run pages.yml --ref main --repo "$RELEASE_REPOSITORY"
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: gh workflow run pages.yml --ref main --repo "$RELEASE_REPOSITORY" -f release_tag="$RELEASE_TAG"
 
   build:
     name: Build website
@@ -62,13 +68,26 @@ jobs:
           persist-credentials: false
       - name: Test release selection and rendering
         run: python3 -m unittest discover -s tools -p 'test_build_site.py' -v
-      - name: Read published releases
+      - name: Read published releases and render current downloads
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_REPOSITORY: ${{ github.repository }}
-        run: gh api --paginate --slurp "repos/$RELEASE_REPOSITORY/releases?per_page=100" > "$RUNNER_TEMP/site-releases.json"
-      - name: Render website release references and README badges
-        run: python3 tools/build_site.py --releases-json "$RUNNER_TEMP/site-releases.json" --output _site
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          args=()
+          if [ -n "$RELEASE_TAG" ]; then args+=(--require-release "$RELEASE_TAG"); fi
+          for attempt in 1 2 3 4 5; do
+            gh api --paginate --slurp -H 'Cache-Control: no-cache' \
+              "repos/$RELEASE_REPOSITORY/releases?per_page=100" > "$RUNNER_TEMP/site-releases.json"
+            if python3 tools/build_site.py --releases-json "$RUNNER_TEMP/site-releases.json" \
+                --output _site "${args[@]}"; then
+              exit 0
+            fi
+            if [ -z "$RELEASE_TAG" ] || [ "$attempt" -eq 5 ]; then exit 1; fi
+            echo "Release metadata is not ready; retrying in 20 seconds ($attempt/5)."
+            sleep 20
+          done
       - uses: actions/upload-pages-artifact@v5
         with:
           path: _site

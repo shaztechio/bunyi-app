@@ -44,6 +44,32 @@ def release(family, version, build_number=4):
 
 
 class SiteBuildTests(unittest.TestCase):
+    def test_release_refresh_rejects_stale_or_incomplete_metadata_before_writing(self):
+        old = [release("dotnet", "1.3.2"), release("macos", "1.3.1")]
+        for family, version, tag in (("dotnet", "1.3.3", "dotnet-v1.3.3"),
+                                     ("macos", "1.3.2", "v1.3.2")):
+            incomplete = release(family, version)
+            incomplete["assets"].pop()
+            for metadata in (old, [incomplete] + old):
+                with self.subTest(tag=tag), tempfile.TemporaryDirectory() as temp:
+                    output = Path(temp) / "public"
+                    with self.assertRaisesRegex(ValueError, "Release refresh requires"):
+                        build(ROOT / "docs", output, metadata, tag)
+                    self.assertFalse(output.exists())
+
+    def test_release_refresh_accepts_expected_or_newer_versions(self):
+        releases = [release("dotnet", "1.3.3"), release("macos", "1.3.2")]
+        for tag in ("dotnet-v1.3.3", "v1.3.2", "dotnet-v1.3.2", "v1.3.1"):
+            with self.subTest(tag=tag), tempfile.TemporaryDirectory() as temp:
+                self.assertEqual(build(ROOT / "docs", temp, releases, tag),
+                                 {"dotnet": "1.3.3", "macos": "1.3.2"})
+
+    def test_release_refresh_rejects_invalid_tag(self):
+        with tempfile.TemporaryDirectory() as temp:
+            with self.assertRaisesRegex(ValueError, "Unrecognized required release"):
+                build(ROOT / "docs", temp,
+                      [release("dotnet", "1.3.3"), release("macos", "1.3.2")], "invalid")
+
     def signed_release(self, version="1.3.2"):
         candidate = release("dotnet", version)
         names = signed_windows_names(version) | installer_names(version)

@@ -20,6 +20,13 @@ before deployment. No browser-side GitHub API calls are needed.
 - **Actions -> Website -> Run workflow**, on `main`, refreshes it on demand.
 - Pull requests test and build a preview artifact; they never deploy it.
 
+Release dispatches pass the published tag as `release_tag`. The renderer refuses
+to publish an older version of that app, and the workflow refreshes API metadata
+up to five times, 20 seconds apart, before failing visibly. This guards against
+a release refresh reporting success while the release list still selects the
+previous version. Newer versions remain selected when an older maintenance
+release triggers the refresh. Manual refreshes may also supply `release_tag`.
+
 The build reads published GitHub releases and picks the highest complete stable
 version independently in `v*` (macOS) and `dotnet-v*` (Windows/Linux). It ignores
 drafts, prereleases, and incomplete asset uploads. macOS needs a matching DMG,
