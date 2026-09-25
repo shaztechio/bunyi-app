@@ -129,6 +129,7 @@ struct ContentView: View {
     /// the visible first and last controls in the same loop as the form.
     @FocusState private var modePickerFocused: Bool
     @FocusState private var lastOptionFocused: Bool
+    @State private var instructionExpanded = false
     @FocusState private var referenceClipFocused: Bool
     @FocusState private var actionButtonFocused: Bool
 
@@ -243,10 +244,13 @@ struct ContentView: View {
                     // the pickers around it correctly greyed out. Refusing hits
                     // is what actually stops typing; the opacity is what makes
                     // it look refused.
-                    if engine.downloadFeedback != nil {
-                        ScrollView { editableForm }
-                    } else {
-                        editableForm
+                    GeometryReader { viewport in
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: Space.tight) {
+                                editableForm
+                            }
+                            .frame(minHeight: viewport.size.height, alignment: .top)
+                        }
                     }
                 }
             }
@@ -307,7 +311,10 @@ struct ContentView: View {
         .onChange(of: engine.status.isBusy) { _, busy in
             // Resign first, then the disabled modifier keeps it from coming
             // back: a disabled view cannot take focus.
-            if busy { scriptFocused = false }
+            if busy {
+                scriptFocused = false
+                lastOptionFocused = false
+            }
         }
         .onChange(of: text) { _, _ in
             if validationIssue == .script, !scriptIsBlank {
@@ -562,7 +569,7 @@ struct ContentView: View {
                       !press.modifiers.contains(.option) else {
                     return .ignored
                 }
-                moveFocusFromScript(backward: press.modifiers.contains(.shift))
+                moveFocusFromEditor(backward: press.modifiers.contains(.shift))
                 return .handled
             }
             // Otherwise it announces itself as "text entry area" — the role,
@@ -712,30 +719,15 @@ struct ContentView: View {
                     .fixedSize()
                 }
                 rowDivider
-                optionRow(icon: "sparkles", label: "Style") {
-                    TextField("Optional — e.g. calm news anchor", text: $instruct)
-                        // The placeholder is a hint, not a name: it disappears
-                        // the moment anything is typed, taking the only clue
-                        // about what the field is with it.
-                        .accessibilityLabel("Style")
-                        .textFieldStyle(.roundedBorder)
-                        .focused($lastOptionFocused)
-                        .onKeyPress(keys: Self.tabNavigationKeys,
-                                    phases: .down, action: movePastForm)
+                optionRow(icon: "sparkles", label: "Style", alignment: .top) {
+                    instructionEditor(label: "Style", placeholder: "Optional — e.g. calm news anchor")
                 }
 
             case .voiceDesign:
                 rowDivider
-                optionRow(icon: "sparkles", label: "Voice") {
-                    TextField("Describe it — e.g. deep gravelly narrator in his 60s",
-                              text: $instruct)
-                        .textFieldStyle(.roundedBorder)
-                        .overlay(RoundedRectangle(cornerRadius: Radius.control)
-                            .stroke(validationIssue == .voiceDescription
-                                ? Color.red : Color.clear))
-                        .focused($lastOptionFocused)
-                        .onKeyPress(keys: Self.tabNavigationKeys,
-                                    phases: .down, action: movePastForm)
+                optionRow(icon: "sparkles", label: "Voice", alignment: .top) {
+                    instructionEditor(label: "Voice description",
+                                      placeholder: "Describe it — e.g. deep gravelly narrator in his 60s")
                 }
                 if validationIssue == .voiceDescription {
                     validationMessage(GenerationInputIssue.voiceDescription.message)
@@ -830,10 +822,10 @@ struct ContentView: View {
     /// which is 12 + 18 + 10 measured from a left-aligned row, then lined up
     /// with nothing.
     private func optionRow<Control: View>(
-        icon: String, label: String,
+        icon: String, label: String, alignment: VerticalAlignment = .center,
         @ViewBuilder control: () -> Control
     ) -> some View {
-        HStack(spacing: Space.tight) {
+        HStack(alignment: alignment, spacing: Space.tight) {
             Image(systemName: icon)
                 .foregroundStyle(.secondary)
                 .frame(width: OptionRow.iconColumn)
@@ -851,6 +843,43 @@ struct ContentView: View {
         .padding(.vertical, Space.tight)
     }
 
+    private func instructionEditor(label: String, placeholder: String) -> some View {
+        VStack(alignment: .trailing, spacing: Space.tight) {
+            TextEditor(text: $instruct)
+                .font(.body)
+                .focused($lastOptionFocused)
+                .accessibilityLabel(label)
+                .onKeyPress(keys: Self.tabNavigationKeys, phases: .down) { press in
+                    guard isPlainTab(press) else { return .ignored }
+                    moveFocusFromEditor(backward: press.modifiers.contains(.shift))
+                    return .handled
+                }
+                .scrollContentBackground(.hidden)
+                .padding(6)
+                .frame(height: instructionExpanded ? 200 : 80)
+                .background(Color(nsColor: .textBackgroundColor),
+                            in: RoundedRectangle(cornerRadius: Radius.control))
+                .overlay(RoundedRectangle(cornerRadius: Radius.control)
+                    .stroke(validationIssue == .voiceDescription
+                        ? Color.red : Color.primary.opacity(0.15)))
+                .overlay(alignment: .topLeading) {
+                    if instruct.isEmpty {
+                        Text(placeholder)
+                            .font(.body)
+                            .foregroundStyle(.tertiary)
+                            .padding(.top, 6)
+                            .padding(.leading, 11)
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
+                    }
+                }
+            Button(instructionExpanded ? "Collapse" : "Expand") {
+                instructionExpanded.toggle()
+            }
+            .help("Change the height of the instruction editor without changing its text.")
+        }
+    }
+
     @ViewBuilder
     private var editableForm: some View {
         VStack(alignment: .leading, spacing: Space.tight) {
@@ -864,6 +893,7 @@ struct ContentView: View {
         .allowsHitTesting(!engine.status.isBusy)
         .opacity(engine.status.isBusy ? 0.6 : 1)
         optionsCard.disabled(engine.status.isBusy)
+            .allowsHitTesting(!engine.status.isBusy)
     }
 
     // MARK: Bottom bar (status + playback + generate)
@@ -970,10 +1000,10 @@ struct ContentView: View {
         .background(.bar)
     }
 
-    /// Advance from the script using AppKit's key-view loop. Dispatching to the
+    /// Advance from a multiline editor using AppKit's key-view loop. Dispatching to the
     /// next turn lets NSTextView finish the key event before first responder is
     /// changed; doing it synchronously can leave the editor focused anyway.
-    private func moveFocusFromScript(backward: Bool) {
+    private func moveFocusFromEditor(backward: Bool) {
         DispatchQueue.main.async {
             guard let window = NSApp.keyWindow else { return }
             if backward {

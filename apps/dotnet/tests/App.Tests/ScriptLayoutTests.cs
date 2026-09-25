@@ -16,19 +16,87 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Presenters;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.VisualTree;
 using Avalonia.Threading;
 using Bunyi.App.ViewModels;
 using Bunyi.App.Views;
 using Bunyi.Core;
+using Bunyi.Core.Engine;
 using Xunit;
 
 namespace Bunyi.App.Tests;
 
 public sealed class ScriptLayoutTests : HeadlessWindows
 {
+    [AvaloniaTheory]
+    [InlineData(TtsMode.PresetVoice)]
+    [InlineData(TtsMode.VoiceDesign)]
+    public async Task Instructions_accept_newlines_and_expand_without_changing_generation_text(TtsMode mode)
+    {
+        var engine = new FakeEngine();
+        using var model = new MainViewModel(engine, new FakePlayer(), new RecordingLog())
+            { Mode = mode, Script = "Hello.", Instruct = "Calm delivery" };
+        var window = Open(new MainWindow { DataContext = model, Width = 620, Height = 580 });
+        var editor = window.FindControl<TextBox>("InstructBox")!;
+        var expand = window.FindControl<Button>("ExpandInstructionButton")!;
+        window.UpdateLayout();
+        Assert.True(editor.Bounds.Height >= 3 * editor.FontSize);
+        var compactHeight = editor.Bounds.Height;
+        editor.Focus();
+        editor.CaretIndex = editor.Text!.Length;
+        Press(PhysicalKey.Enter);
+        Assert.Equal("Calm delivery" + Environment.NewLine, model.Instruct);
+        Assert.Null(engine.LastRequest);
+        Press(PhysicalKey.Tab);
+        Assert.Same(expand, window.FocusManager!.GetFocusedElement());
+        Press(PhysicalKey.Space);
+        Assert.True(editor.Bounds.Height > compactHeight);
+        Assert.Equal("Collapse", expand.Content);
+        Press(PhysicalKey.Tab, RawInputModifiers.Shift);
+        Assert.Same(editor, window.FocusManager.GetFocusedElement());
+
+        var instruction = string.Join('\n', Enumerable.Repeat("Warm narrator, with clear and measured delivery.", 30));
+        model.Instruct = instruction;
+        window.UpdateLayout();
+        var scroll = editor.GetVisualDescendants().OfType<ScrollViewer>().Single();
+        Assert.True(scroll.Extent.Height > scroll.Viewport.Height);
+        scroll.ScrollToEnd();
+        window.UpdateLayout();
+        Assert.True(scroll.Offset.Y > 0);
+
+        var form = window.FindControl<ScrollViewer>("GenerationScroller")!;
+        var action = window.FindControl<Button>("GenerateButton")!;
+        var actionPosition = action.TranslatePoint(default, window);
+        form.ScrollToEnd();
+        window.UpdateLayout();
+        var toggleBottom = expand.TranslatePoint(new Point(0, expand.Bounds.Height), form)!.Value.Y;
+        Assert.InRange(toggleBottom, expand.Bounds.Height, form.Viewport.Height + 0.5);
+        Assert.Equal(actionPosition, action.TranslatePoint(default, window));
+        expand.Focus();
+        Press(PhysicalKey.Space);
+        Assert.Equal(compactHeight, editor.Bounds.Height);
+        Assert.Equal(instruction, model.Instruct);
+
+        var pending = model.GenerateCommand.ExecuteAsync(null);
+        Assert.Equal(instruction, engine.LastRequest!.Instruct);
+        engine.Publish(new(EngineState.Generating));
+        Assert.False(editor.IsEffectivelyEnabled);
+        Assert.False(expand.IsEffectivelyEnabled);
+        engine.Complete("output.wav");
+        await pending;
+
+        void Press(PhysicalKey key, RawInputModifiers modifiers = RawInputModifiers.None)
+        {
+            window.KeyPressQwerty(key, modifiers);
+            window.KeyReleaseQwerty(key, modifiers);
+            window.UpdateLayout();
+        }
+    }
+
     [AvaloniaTheory]
     [InlineData(TtsMode.PresetVoice, 760, 680)]
     [InlineData(TtsMode.VoiceDesign, 760, 680)]

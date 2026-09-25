@@ -348,13 +348,22 @@ limitations under the License.
                   <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
                 <TextBlock Grid.Column="0" Name="InstructLabelText"
-                           Text="{Binding InstructLabel}" Classes="rowLabel" />
+                           Text="{Binding InstructLabel}" Classes="rowLabel" VerticalAlignment="Top" Margin="0,8,12,0" />
                 <StackPanel Grid.Column="1" Spacing="4">
                   <!-- Named by its row label; it changes per mode, so bind rather than repeat. -->
                   <infra:AccessibleTextBox Name="InstructBox" Text="{Binding Instruct}"
                            Classes.needed="{Binding NeedsInstruction}"
                            AutomationProperties.LabeledBy="{Binding #InstructLabelText}"
+                           AcceptsReturn="True" AcceptsTab="False" TextWrapping="Wrap"
+                           Height="{Binding InstructionEditorHeight}"
+                           VerticalContentAlignment="Top"
+                           ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                           ScrollViewer.VerticalScrollBarVisibility="Auto"
                            PlaceholderText="{Binding InstructPlaceholder}" />
+                  <Button Name="ExpandInstructionButton" Content="{Binding InstructionExpansionLabel}"
+                          Command="{Binding ToggleInstructionExpansionCommand}"
+                          HorizontalAlignment="Right"
+                          AutomationProperties.HelpText="Change the height of the instruction editor without changing its text." />
                   <TextBlock Classes="needed" Text="{Binding MissingReason}"
                              IsVisible="{Binding NeedsInstruction}" />
                 </StackPanel>
