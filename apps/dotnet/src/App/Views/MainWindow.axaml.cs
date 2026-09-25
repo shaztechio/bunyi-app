@@ -13,6 +13,7 @@
 // limitations under the License.
 
 using System.Windows.Input;
+using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Automation.Peers;
 using Avalonia.Controls;
@@ -32,6 +33,35 @@ public partial class MainWindow : Window
 {
     private bool _closeConfirmed;
     private bool _waitingToClose;
+    private double _instructionDragHeight;
+    private double _instructionDragY;
+    private double _instructionGrabOffset;
+
+    private void OnInstructionResizeStarted(object? sender, VectorEventArgs e)
+    {
+        if (DataContext is not MainViewModel model || model.IsBusy || sender is not Control handle) return;
+        _instructionDragHeight = model.InstructionEditorHeight;
+        _instructionGrabOffset = e.Vector.Y;
+        _instructionDragY = handle.TranslatePoint(new Point(0, e.Vector.Y), this)!.Value.Y;
+    }
+
+    private void OnInstructionResizeDelta(object? sender, VectorEventArgs e)
+    {
+        if (DataContext is not MainViewModel model || model.IsBusy || sender is not Control handle) return;
+        // Measure in window coordinates: the handle itself moves when the editor
+        // resizes or the containing form scrolls during the drag.
+        var pointerY = handle.TranslatePoint(new Point(0, _instructionGrabOffset + e.Vector.Y), this)!.Value.Y;
+        model.ResizeInstructionEditor(_instructionDragHeight + pointerY - _instructionDragY);
+        e.Handled = true;
+    }
+
+    private void OnInstructionResizeKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (DataContext is not MainViewModel model || model.IsBusy || e.KeyModifiers != KeyModifiers.None) return;
+        if (e.Key is not (Key.Up or Key.Down)) return;
+        model.ResizeInstructionEditor(model.InstructionEditorHeight + (e.Key == Key.Down ? 20 : -20));
+        e.Handled = true;
+    }
 
     public MainWindow()
     {

@@ -92,15 +92,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string _speaker = FallbackSpeakers.Default;
     [ObservableProperty] private string _instruct = string.Empty;
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(InstructionEditorHeight))]
-    [NotifyPropertyChangedFor(nameof(InstructionExpansionLabel))]
-    private bool _isInstructionExpanded;
-    public double InstructionEditorHeight => IsInstructionExpanded ? 200 : 80;
-    public string InstructionExpansionLabel => IsInstructionExpanded ? "Collapse" : "Expand";
-
-    [RelayCommand]
-    private void ToggleInstructionExpansion() => IsInstructionExpanded = !IsInstructionExpanded;
+    [ObservableProperty] private double _instructionEditorHeight = 52;
+    public void ResizeInstructionEditor(double height) =>
+        InstructionEditorHeight = Math.Clamp(height, 52, 320);
 
     /// <summary>The recording a clone is taken from (spec §4).</summary>
     [ObservableProperty]

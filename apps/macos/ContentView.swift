@@ -129,7 +129,9 @@ struct ContentView: View {
     /// the visible first and last controls in the same loop as the form.
     @FocusState private var modePickerFocused: Bool
     @FocusState private var lastOptionFocused: Bool
-    @State private var instructionExpanded = false
+    @State private var instructionHeight: CGFloat = 52
+    @State private var instructionDragHeight: CGFloat?
+    @FocusState private var instructionResizeFocused: Bool
     @FocusState private var referenceClipFocused: Bool
     @FocusState private var actionButtonFocused: Bool
 
@@ -314,6 +316,8 @@ struct ContentView: View {
             if busy {
                 scriptFocused = false
                 lastOptionFocused = false
+                instructionResizeFocused = false
+                instructionDragHeight = nil
             }
         }
         .onChange(of: text) { _, _ in
@@ -856,7 +860,7 @@ struct ContentView: View {
                 }
                 .scrollContentBackground(.hidden)
                 .padding(6)
-                .frame(height: instructionExpanded ? 200 : 80)
+                .frame(height: instructionHeight)
                 .background(Color(nsColor: .textBackgroundColor),
                             in: RoundedRectangle(cornerRadius: Radius.control))
                 .overlay(RoundedRectangle(cornerRadius: Radius.control)
@@ -873,11 +877,52 @@ struct ContentView: View {
                             .accessibilityHidden(true)
                     }
                 }
-            Button(instructionExpanded ? "Collapse" : "Expand") {
-                instructionExpanded.toggle()
+            Path { path in
+                path.move(to: CGPoint(x: 7, y: 11))
+                path.addLine(to: CGPoint(x: 17, y: 1))
+                path.move(to: CGPoint(x: 13, y: 11))
+                path.addLine(to: CGPoint(x: 21, y: 3))
             }
-            .help("Change the height of the instruction editor without changing its text.")
+                .stroke(Color.accentColor, lineWidth: 1.5)
+                .frame(width: 22, height: 12)
+                .frame(width: 28, height: 16)
+                .contentShape(Rectangle())
+                .overlay(RoundedRectangle(cornerRadius: 3)
+                    .stroke(instructionResizeFocused ? Color.accentColor : Color.clear))
+                .focusable()
+                .focused($instructionResizeFocused)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Resize \(label.lowercased()) editor")
+                .accessibilityValue("\(Int(instructionHeight)) points high")
+                .accessibilityAdjustableAction { direction in
+                    guard !engine.status.isBusy else { return }
+                    switch direction {
+                    case .increment: resizeInstruction(to: instructionHeight + 20)
+                    case .decrement: resizeInstruction(to: instructionHeight - 20)
+                    @unknown default: break
+                    }
+                }
+                .onKeyPress(keys: [.upArrow, .downArrow]) { press in
+                    guard !engine.status.isBusy else { return .ignored }
+                    resizeInstruction(to: instructionHeight + (press.key == .downArrow ? 20 : -20))
+                    return .handled
+                }
+                .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .global)
+                    .onChanged { value in
+                        guard !engine.status.isBusy else { return }
+                        if instructionDragHeight == nil { instructionDragHeight = instructionHeight }
+                        resizeInstruction(to: instructionDragHeight! + value.translation.height)
+                    }
+                    .onEnded { _ in instructionDragHeight = nil })
+                .onHover { hovering in
+                    (hovering ? NSCursor.resizeUpDown : NSCursor.arrow).set()
+                }
+                .help("Drag to resize, or focus here and use Up / Down")
         }
+    }
+
+    private func resizeInstruction(to height: CGFloat) {
+        instructionHeight = min(320, max(52, height))
     }
 
     @ViewBuilder

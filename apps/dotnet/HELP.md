@@ -58,7 +58,7 @@ Choose a speaker from the list that comes with the model, and Bunyi reads your t
 
 There is a **style instruction** box — a short phrase describing how the text should be said, such as "cheerful and quick" or "calm, like a bedtime story". Leave it blank for a neutral reading.
 
-The **Style** and Voice design's **Voice** boxes accept multiple lines. Press Enter for a new line, or use **Expand** for more room. **Collapse** keeps all your text; long instructions scroll inside either size. Tab moves to the next control.
+The **Style** and Voice design's **Voice** boxes show two lines by default. Press Enter for a new line and drag the bottom-right grabber up or down to resize the box. Resizing keeps all your text; long instructions scroll inside the box. Tab moves to the next control. With the grabber focused, Up shrinks the box and Down grows it.
 
 The instruction reaches the model, as it does in the Mac version. It is a nudge rather than a command: the preset voice stays who it is, and the instruction changes how that voice delivers the line. Expect a clear difference from a short, concrete phrase and a subtler one from a vague mood. If you want a different *voice* rather than a different delivery, that is what **Voice design** is for.
 

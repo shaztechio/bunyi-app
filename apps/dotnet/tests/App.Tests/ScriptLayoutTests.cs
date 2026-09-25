@@ -35,49 +35,70 @@ public sealed class ScriptLayoutTests : HeadlessWindows
     [AvaloniaTheory]
     [InlineData(TtsMode.PresetVoice)]
     [InlineData(TtsMode.VoiceDesign)]
-    public async Task Instructions_accept_newlines_and_expand_without_changing_generation_text(TtsMode mode)
+    public async Task Instructions_accept_newlines_and_resize_without_changing_generation_text(TtsMode mode)
     {
         var engine = new FakeEngine();
         using var model = new MainViewModel(engine, new FakePlayer(), new RecordingLog())
             { Mode = mode, Script = "Hello.", Instruct = "Calm delivery" };
         var window = Open(new MainWindow { DataContext = model, Width = 620, Height = 580 });
         var editor = window.FindControl<TextBox>("InstructBox")!;
-        var expand = window.FindControl<Button>("ExpandInstructionButton")!;
+        var handle = window.FindControl<Thumb>("InstructionResizeHandle")!;
         window.UpdateLayout();
-        Assert.True(editor.Bounds.Height >= 3 * editor.FontSize);
+        Assert.Equal(52, editor.Bounds.Height);
         var compactHeight = editor.Bounds.Height;
+        var scroll = editor.GetVisualDescendants().OfType<ScrollViewer>().Single();
+        model.Instruct = "First line\nSecond line";
+        window.UpdateLayout();
+        Assert.True(scroll.Extent.Height <= scroll.Viewport.Height + 0.5);
+        model.Instruct += "\nThird line";
+        window.UpdateLayout();
+        Assert.True(scroll.Extent.Height > scroll.Viewport.Height);
+        model.Instruct = "Calm delivery";
         editor.Focus();
         editor.CaretIndex = editor.Text!.Length;
         Press(PhysicalKey.Enter);
         Assert.Equal("Calm delivery" + Environment.NewLine, model.Instruct);
         Assert.Null(engine.LastRequest);
         Press(PhysicalKey.Tab);
-        Assert.Same(expand, window.FocusManager!.GetFocusedElement());
-        Press(PhysicalKey.Space);
-        Assert.True(editor.Bounds.Height > compactHeight);
-        Assert.Equal("Collapse", expand.Content);
+        Assert.Same(handle, window.FocusManager!.GetFocusedElement());
+        Press(PhysicalKey.ArrowDown);
+        Assert.Equal(compactHeight + 20, editor.Bounds.Height);
         Press(PhysicalKey.Tab, RawInputModifiers.Shift);
         Assert.Same(editor, window.FocusManager.GetFocusedElement());
+
+        var form = window.FindControl<ScrollViewer>("GenerationScroller")!;
+        form.ScrollToEnd();
+        window.UpdateLayout();
+        var start = handle.TranslatePoint(new Point(14, 8), window)!.Value;
+        var beforeDrag = editor.Bounds.Height;
+        window.MouseDown(start, MouseButton.Left);
+        window.MouseMove(start + new Vector(0, 30));
+        window.UpdateLayout();
+        Assert.Equal(beforeDrag + 30, editor.Bounds.Height);
+        window.MouseMove(start + new Vector(0, 60));
+        window.UpdateLayout();
+        Assert.Equal(beforeDrag + 60, editor.Bounds.Height);
+        window.MouseUp(start + new Vector(0, 60), MouseButton.Left);
 
         var instruction = string.Join('\n', Enumerable.Repeat("Warm narrator, with clear and measured delivery.", 30));
         model.Instruct = instruction;
         window.UpdateLayout();
-        var scroll = editor.GetVisualDescendants().OfType<ScrollViewer>().Single();
         Assert.True(scroll.Extent.Height > scroll.Viewport.Height);
         scroll.ScrollToEnd();
         window.UpdateLayout();
         Assert.True(scroll.Offset.Y > 0);
 
-        var form = window.FindControl<ScrollViewer>("GenerationScroller")!;
         var action = window.FindControl<Button>("GenerateButton")!;
         var actionPosition = action.TranslatePoint(default, window);
         form.ScrollToEnd();
         window.UpdateLayout();
-        var toggleBottom = expand.TranslatePoint(new Point(0, expand.Bounds.Height), form)!.Value.Y;
-        Assert.InRange(toggleBottom, expand.Bounds.Height, form.Viewport.Height + 0.5);
+        var handleBottom = handle.TranslatePoint(new Point(0, handle.Bounds.Height), form)!.Value.Y;
+        Assert.InRange(handleBottom, handle.Bounds.Height, form.Viewport.Height + 0.5);
         Assert.Equal(actionPosition, action.TranslatePoint(default, window));
-        expand.Focus();
-        Press(PhysicalKey.Space);
+        handle.Focus();
+        for (var i = 0; i < 20; i++) Press(PhysicalKey.ArrowDown);
+        Assert.Equal(320, editor.Bounds.Height);
+        for (var i = 0; i < 20; i++) Press(PhysicalKey.ArrowUp);
         Assert.Equal(compactHeight, editor.Bounds.Height);
         Assert.Equal(instruction, model.Instruct);
 
@@ -85,7 +106,7 @@ public sealed class ScriptLayoutTests : HeadlessWindows
         Assert.Equal(instruction, engine.LastRequest!.Instruct);
         engine.Publish(new(EngineState.Generating));
         Assert.False(editor.IsEffectivelyEnabled);
-        Assert.False(expand.IsEffectivelyEnabled);
+        Assert.False(handle.IsEffectivelyEnabled);
         engine.Complete("output.wav");
         await pending;
 

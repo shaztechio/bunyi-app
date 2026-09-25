@@ -360,10 +360,29 @@ limitations under the License.
                            ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                            ScrollViewer.VerticalScrollBarVisibility="Auto"
                            PlaceholderText="{Binding InstructPlaceholder}" />
-                  <Button Name="ExpandInstructionButton" Content="{Binding InstructionExpansionLabel}"
-                          Command="{Binding ToggleInstructionExpansionCommand}"
-                          HorizontalAlignment="Right"
-                          AutomationProperties.HelpText="Change the height of the instruction editor without changing its text." />
+                  <Thumb Name="InstructionResizeHandle" Width="28" Height="16" Background="Transparent"
+                         HorizontalAlignment="Right" Focusable="True" Cursor="SizeNorthSouth"
+                         DragStarted="OnInstructionResizeStarted" DragDelta="OnInstructionResizeDelta"
+                         KeyDown="OnInstructionResizeKeyDown"
+                         AutomationProperties.Name="Resize instruction editor"
+                         AutomationProperties.HelpText="Drag up or down to resize. Up shrinks the editor; Down grows it."
+                         ToolTip.Tip="Drag to resize, or focus here and use Up / Down">
+                    <Thumb.Template>
+                      <ControlTemplate>
+                        <Border Background="{TemplateBinding Background}" CornerRadius="3"
+                                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1">
+                          <Path Data="M 7,11 L 17,1 M 13,11 L 21,3"
+                                Stroke="{DynamicResource BunyiAccent}" StrokeThickness="1.5"
+                                HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                      </ControlTemplate>
+                    </Thumb.Template>
+                    <Thumb.Styles>
+                      <Style Selector="Thumb:focus-visible">
+                        <Setter Property="BorderBrush" Value="{DynamicResource BunyiAccent}" />
+                      </Style>
+                    </Thumb.Styles>
+                  </Thumb>
                   <TextBlock Classes="needed" Text="{Binding MissingReason}"
                              IsVisible="{Binding NeedsInstruction}" />
                 </StackPanel>
