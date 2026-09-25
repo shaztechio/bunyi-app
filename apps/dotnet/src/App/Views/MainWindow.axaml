@@ -351,38 +351,42 @@ limitations under the License.
                            Text="{Binding InstructLabel}" Classes="rowLabel" VerticalAlignment="Top" Margin="0,8,12,0" />
                 <StackPanel Grid.Column="1" Spacing="4">
                   <!-- Named by its row label; it changes per mode, so bind rather than repeat. -->
-                  <infra:AccessibleTextBox Name="InstructBox" Text="{Binding Instruct}"
-                           Classes.needed="{Binding NeedsInstruction}"
-                           AutomationProperties.LabeledBy="{Binding #InstructLabelText}"
-                           AcceptsReturn="True" AcceptsTab="False" TextWrapping="Wrap"
-                           Height="{Binding InstructionEditorHeight}"
-                           VerticalContentAlignment="Top"
-                           ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                           ScrollViewer.VerticalScrollBarVisibility="Auto"
-                           PlaceholderText="{Binding InstructPlaceholder}" />
-                  <Thumb Name="InstructionResizeHandle" Width="28" Height="16" Background="Transparent"
-                         HorizontalAlignment="Right" Focusable="True" Cursor="SizeNorthSouth"
-                         DragStarted="OnInstructionResizeStarted" DragDelta="OnInstructionResizeDelta"
-                         KeyDown="OnInstructionResizeKeyDown"
-                         AutomationProperties.Name="Resize instruction editor"
-                         AutomationProperties.HelpText="Drag up or down to resize. Up shrinks the editor; Down grows it."
-                         ToolTip.Tip="Drag to resize, or focus here and use Up / Down">
-                    <Thumb.Template>
-                      <ControlTemplate>
-                        <Border Background="{TemplateBinding Background}" CornerRadius="3"
-                                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1">
-                          <Path Data="M 7,11 L 17,1 M 13,11 L 21,3"
-                                Stroke="{DynamicResource BunyiAccent}" StrokeThickness="1.5"
-                                HorizontalAlignment="Center" VerticalAlignment="Center" />
-                        </Border>
-                      </ControlTemplate>
-                    </Thumb.Template>
-                    <Thumb.Styles>
-                      <Style Selector="Thumb:focus-visible">
-                        <Setter Property="BorderBrush" Value="{DynamicResource BunyiAccent}" />
-                      </Style>
-                    </Thumb.Styles>
-                  </Thumb>
+                  <Grid>
+                    <infra:AccessibleTextBox Name="InstructBox" Text="{Binding Instruct}"
+                             Classes.needed="{Binding NeedsInstruction}"
+                             AutomationProperties.LabeledBy="{Binding #InstructLabelText}"
+                             AcceptsReturn="True" AcceptsTab="False" TextWrapping="Wrap"
+                             Height="{Binding InstructionEditorHeight}"
+                             Padding="8,5,36,5"
+                             VerticalContentAlignment="Top"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto"
+                             PlaceholderText="{Binding InstructPlaceholder}" />
+                    <Thumb Name="InstructionResizeHandle" Width="28" Height="16" Background="Transparent"
+                           HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,4,4"
+                           Focusable="True" Cursor="SizeNorthSouth"
+                           DragStarted="OnInstructionResizeStarted" DragDelta="OnInstructionResizeDelta"
+                           KeyDown="OnInstructionResizeKeyDown"
+                           AutomationProperties.Name="Resize instruction editor"
+                           AutomationProperties.HelpText="Drag up or down to resize. Up shrinks the editor; Down grows it."
+                           ToolTip.Tip="Drag to resize, or focus here and use Up / Down">
+                      <Thumb.Template>
+                        <ControlTemplate>
+                          <Border Background="{TemplateBinding Background}" CornerRadius="3"
+                                  BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1">
+                            <Path Data="M 7,11 L 17,1 M 13,11 L 21,3"
+                                  Stroke="{TemplateBinding Foreground}" StrokeThickness="1.5" Opacity="0.3"
+                                  HorizontalAlignment="Center" VerticalAlignment="Center" />
+                          </Border>
+                        </ControlTemplate>
+                      </Thumb.Template>
+                      <Thumb.Styles>
+                        <Style Selector="Thumb:focus-visible">
+                          <Setter Property="BorderBrush" Value="{DynamicResource BunyiAccent}" />
+                        </Style>
+                      </Thumb.Styles>
+                    </Thumb>
+                  </Grid>
                   <TextBlock Classes="needed" Text="{Binding MissingReason}"
                              IsVisible="{Binding NeedsInstruction}" />
                 </StackPanel>

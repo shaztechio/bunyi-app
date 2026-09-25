@@ -39,8 +39,11 @@ A segmented picker selects one of three modes. macOS source:
 - **Voice description and Style editors**: Voice design's **Voice** field and
   Preset voice's optional **Style** field are multiline, wrapping editors with
   space for two lines by default. Enter inserts a newline rather than generating
-  speech; Tab and Shift-Tab move between controls. A visible grabber at the
-  bottom-right resizes the editor vertically by dragging, without changing the
+  speech; Tab and Shift-Tab move between controls. A low-opacity grabber inside
+  the textbox's bottom-right corner resizes the editor vertically by dragging.
+  Reserve right padding for its hit area so text, placeholder, and scrollbar
+  do not overlap it. Keep the keyboard focus indicator clearly visible.
+  Resizing works without changing the
   text or its line breaks. There is no Expand / Collapse button. The grabber is
   keyboard-accessible: Up shrinks and Down grows the editor in 20-point steps.
   Height is bounded from the two-line default (52 logical pixels) to 320 logical

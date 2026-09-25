@@ -848,7 +848,7 @@ struct ContentView: View {
     }
 
     private func instructionEditor(label: String, placeholder: String) -> some View {
-        VStack(alignment: .trailing, spacing: Space.tight) {
+        ZStack(alignment: .bottomTrailing) {
             TextEditor(text: $instruct)
                 .font(.body)
                 .focused($lastOptionFocused)
@@ -859,7 +859,7 @@ struct ContentView: View {
                     return .handled
                 }
                 .scrollContentBackground(.hidden)
-                .padding(6)
+                .padding(EdgeInsets(top: 6, leading: 6, bottom: 6, trailing: 36))
                 .frame(height: instructionHeight)
                 .background(Color(nsColor: .textBackgroundColor),
                             in: RoundedRectangle(cornerRadius: Radius.control))
@@ -873,6 +873,7 @@ struct ContentView: View {
                             .foregroundStyle(.tertiary)
                             .padding(.top, 6)
                             .padding(.leading, 11)
+                            .padding(.trailing, 36)
                             .allowsHitTesting(false)
                             .accessibilityHidden(true)
                     }
@@ -883,7 +884,7 @@ struct ContentView: View {
                 path.move(to: CGPoint(x: 13, y: 11))
                 path.addLine(to: CGPoint(x: 21, y: 3))
             }
-                .stroke(Color.accentColor, lineWidth: 1.5)
+                .stroke(Color.primary.opacity(0.3), lineWidth: 1.5)
                 .frame(width: 22, height: 12)
                 .frame(width: 28, height: 16)
                 .contentShape(Rectangle())
@@ -918,6 +919,8 @@ struct ContentView: View {
                     (hovering ? NSCursor.resizeUpDown : NSCursor.arrow).set()
                 }
                 .help("Drag to resize, or focus here and use Up / Down")
+                .padding(.trailing, 4)
+                .padding(.bottom, 4)
         }
     }
 

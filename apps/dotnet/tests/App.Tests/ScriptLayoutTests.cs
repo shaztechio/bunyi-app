@@ -46,6 +46,7 @@ public sealed class ScriptLayoutTests : HeadlessWindows
         window.UpdateLayout();
         Assert.Equal(52, editor.Bounds.Height);
         var compactHeight = editor.Bounds.Height;
+        AssertGrabberClear();
         var scroll = editor.GetVisualDescendants().OfType<ScrollViewer>().Single();
         model.Instruct = "First line\nSecond line";
         window.UpdateLayout();
@@ -78,6 +79,7 @@ public sealed class ScriptLayoutTests : HeadlessWindows
         window.MouseMove(start + new Vector(0, 60));
         window.UpdateLayout();
         Assert.Equal(beforeDrag + 60, editor.Bounds.Height);
+        AssertGrabberClear();
         window.MouseUp(start + new Vector(0, 60), MouseButton.Left);
 
         var instruction = string.Join('\n', Enumerable.Repeat("Warm narrator, with clear and measured delivery.", 30));
@@ -87,6 +89,7 @@ public sealed class ScriptLayoutTests : HeadlessWindows
         scroll.ScrollToEnd();
         window.UpdateLayout();
         Assert.True(scroll.Offset.Y > 0);
+        AssertGrabberClear();
 
         var action = window.FindControl<Button>("GenerateButton")!;
         var actionPosition = action.TranslatePoint(default, window);
@@ -109,6 +112,22 @@ public sealed class ScriptLayoutTests : HeadlessWindows
         Assert.False(handle.IsEffectivelyEnabled);
         engine.Complete("output.wav");
         await pending;
+
+        void AssertGrabberClear()
+        {
+            var corner = handle.TranslatePoint(default, editor)!.Value;
+            Assert.InRange(corner.X, 0, editor.Bounds.Width - handle.Bounds.Width - 2);
+            Assert.InRange(corner.Y, 0, editor.Bounds.Height - handle.Bounds.Height - 2);
+            var presenter = editor.GetVisualDescendants().OfType<TextPresenter>().Single();
+            var textRight = presenter.TranslatePoint(new Point(presenter.Bounds.Width, 0), editor)!.Value.X;
+            Assert.True(textRight <= corner.X - 2, $"Text ends at {textRight}; grabber starts at {corner.X}.");
+            var viewport = editor.GetVisualDescendants().OfType<ScrollViewer>().Single();
+            var scrollRight = viewport.TranslatePoint(new Point(viewport.Bounds.Width, 0), editor)!.Value.X;
+            Assert.True(scrollRight <= corner.X, "Scrollbar overlaps the grabber.");
+            var grip = handle.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Path>().Single();
+            Assert.NotNull(grip.Stroke);
+            Assert.InRange(grip.Opacity, 0.2, 0.4);
+        }
 
         void Press(PhysicalKey key, RawInputModifiers modifiers = RawInputModifiers.None)
         {
