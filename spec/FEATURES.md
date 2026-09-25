@@ -41,8 +41,9 @@ A segmented picker selects one of three modes. macOS source:
   space for two lines by default. Enter inserts a newline rather than generating
   speech; Tab and Shift-Tab move between controls. A low-opacity grabber inside
   the textbox's bottom-right corner resizes the editor vertically by dragging.
-  Reserve right padding for its hit area so text, placeholder, and scrollbar
-  do not overlap it. Keep the keyboard focus indicator clearly visible.
+  Use a compact 16-point-wide handle at 30% opacity with 22 points of right
+  padding so text, placeholder, and scrollbar do not overlap it. Keep the
+  keyboard focus indicator clearly visible.
   Resizing works without changing the
   text or its line breaks. There is no Expand / Collapse button. The grabber is
   keyboard-accessible: Up shrinks and Down grows the editor in 20-point steps.
@@ -56,7 +57,15 @@ A segmented picker selects one of three modes. macOS source:
 - **Script layout**: in every generation mode, the heading stays above the
   editor and the editor's scrollbar stays inside its border, with space
   between the text and the scrollbar. Long scripts
-  scroll within the editor. If the form cannot fit in the window, its fields
+  scroll within the editor. In all three modes, Script has the same inset
+  bottom-right grabber, compact right padding, and keyboard resizing as the
+  instruction editors. It initially fills available space; resizing selects a
+  window-local height independent of the instruction editor, retained across
+  mode switches. Its minimum height remains 140 points on Windows/Linux and
+  160 points on macOS; manual resizing is capped at 800 points (or its starting
+  height if already taller). Resizing preserves all script text and line breaks,
+  and the editor and handle are disabled during generation. If the form cannot
+  fit in the window, its fields
   remain reachable without overlapping; the .NET app scrolls the form while
   keeping the mode picker and Generate/Stop bar in place.
 - Speaker list for preset voice comes from the loaded model

@@ -109,8 +109,10 @@ public class MainWindowTests : HeadlessWindows
         var script = window.GetLogicalDescendants().OfType<TextBox>()
             .First(t => t.Name == "ScriptBox");
 
-        var grid = Assert.IsType<Grid>(script.Parent);
-        var row = grid.RowDefinitions[Grid.GetRow(script)];
+        var editorOverlay = Assert.IsType<Grid>(script.Parent);
+        var grid = Assert.IsType<Grid>(editorOverlay.Parent);
+        var row = grid.RowDefinitions[Grid.GetRow(editorOverlay)];
+        Assert.Equal(Avalonia.Layout.HorizontalAlignment.Stretch, editorOverlay.HorizontalAlignment);
 
         Assert.True(row.Height.IsStar, "the script box no longer sits in the row that takes the space");
         Assert.Single(grid.RowDefinitions, r => r.Height.IsStar);

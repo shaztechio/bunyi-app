@@ -96,6 +96,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public void ResizeInstructionEditor(double height) =>
         InstructionEditorHeight = Math.Clamp(height, 52, 320);
 
+    // NaN keeps the original fill-available-space layout until the first resize.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ScriptEditorAlignment))]
+    private double _scriptEditorHeight = double.NaN;
+    public Avalonia.Layout.VerticalAlignment ScriptEditorAlignment => double.IsNaN(ScriptEditorHeight)
+        ? Avalonia.Layout.VerticalAlignment.Stretch : Avalonia.Layout.VerticalAlignment.Top;
+    public void ResizeScriptEditor(double height, double maximumHeight) =>
+        ScriptEditorHeight = Math.Clamp(height, 140, maximumHeight);
+
     /// <summary>The recording a clone is taken from (spec §4).</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ReferenceName))]

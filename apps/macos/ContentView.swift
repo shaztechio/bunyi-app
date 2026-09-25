@@ -132,6 +132,10 @@ struct ContentView: View {
     @State private var instructionHeight: CGFloat = 52
     @State private var instructionDragHeight: CGFloat?
     @FocusState private var instructionResizeFocused: Bool
+    @State private var scriptHeight: CGFloat?
+    @State private var measuredScriptHeight: CGFloat = 160
+    @State private var scriptDragHeight: CGFloat?
+    @FocusState private var scriptResizeFocused: Bool
     @FocusState private var referenceClipFocused: Bool
     @FocusState private var actionButtonFocused: Bool
 
@@ -318,6 +322,8 @@ struct ContentView: View {
                 lastOptionFocused = false
                 instructionResizeFocused = false
                 instructionDragHeight = nil
+                scriptResizeFocused = false
+                scriptDragHeight = nil
             }
         }
         .onChange(of: text) { _, _ in
@@ -560,66 +566,74 @@ struct ContentView: View {
     // MARK: Text input
 
     private var textCard: some View {
-        TextEditor(text: $text)
-            .focused($scriptFocused)
-            // NSTextView normally inserts a tab character. In this app that
-            // trapped focus in the editor on launch; the next visible control
-            // could only be reached with the little-known Control-Tab chord.
-            // Move through the window's key-view loop instead, in both
-            // directions, so Tab behaves like it does in the rest of the form.
-            .onKeyPress(keys: Self.tabNavigationKeys, phases: .down) { press in
-                guard !press.modifiers.contains(.command),
-                      !press.modifiers.contains(.control),
-                      !press.modifiers.contains(.option) else {
-                    return .ignored
+        VStack(alignment: .trailing, spacing: 4) {
+            TextEditor(text: $text)
+                .focused($scriptFocused)
+                // NSTextView normally inserts a tab character. In this app that
+                // trapped focus in the editor on launch; the next visible control
+                // could only be reached with the little-known Control-Tab chord.
+                // Move through the window's key-view loop instead, in both
+                // directions, so Tab behaves like it does in the rest of the form.
+                .onKeyPress(keys: Self.tabNavigationKeys, phases: .down) { press in
+                    guard !press.modifiers.contains(.command),
+                          !press.modifiers.contains(.control),
+                          !press.modifiers.contains(.option) else {
+                        return .ignored
+                    }
+                    moveFocusFromEditor(backward: press.modifiers.contains(.shift))
+                    return .handled
                 }
-                moveFocusFromEditor(backward: press.modifiers.contains(.shift))
-                return .handled
-            }
-            // Otherwise it announces itself as "text entry area" — the role,
-            // not the field. This is the thing the whole window is for, and a
-            // screen reader had no way to say which of the two text inputs it
-            // had landed in.
-            .accessibilityLabel("Script")
-            .font(.bunyiEditor)
-            .scrollContentBackground(.hidden)
-            .padding(Space.tight)
-            // Grows instead of capping at 220. The options card below is
-            // intrinsically sized and the window is 580 pt tall at minimum, so
-            // a fixed cap left the bottom third of the window empty.
-            .frame(minHeight: 160, maxHeight: .infinity)
-            .background(Color(nsColor: .textBackgroundColor),
-                        in: RoundedRectangle(cornerRadius: Radius.card))
-            .overlay(RoundedRectangle(cornerRadius: Radius.card)
-                .strokeBorder(validationIssue == .script
-                    ? Color.red : Color.primary.opacity(0.08)))
-            .overlay(alignment: .topLeading) {
-                if text.isEmpty {
-                    // Derived, not hand-tuned. The old 16/13 were eyeballed
-                    // against TextEditor's internals and did not sit on the
-                    // caret. The real offset is the padding we applied plus
-                    // NSTextView's own container inset, which is 5 across and
-                    // 0 down — SwiftUI adds no further top inset of its own.
-                    Text("What should the voice say?")
-                        .font(.bunyiEditor)
-                        .foregroundStyle(.tertiary)
-                        .padding(.top, Space.tight)
-                        .padding(.leading, Space.tight + 5)
-                        .allowsHitTesting(false)
+                // Otherwise it announces itself as "text entry area" — the role,
+                // not the field. This is the thing the whole window is for, and a
+                // screen reader had no way to say which of the two text inputs it
+                // had landed in.
+                .accessibilityLabel("Script")
+                .font(.bunyiEditor)
+                .scrollContentBackground(.hidden)
+                .padding(EdgeInsets(top: Space.tight, leading: Space.tight,
+                                    bottom: Space.tight, trailing: 22))
+                // Fill available space until the user chooses a height.
+                .frame(minHeight: scriptHeight ?? 160, maxHeight: scriptHeight ?? .infinity)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
+                    measuredScriptHeight = $0
                 }
-            }
-            .overlay(alignment: .bottomTrailing) {
-                if !text.isEmpty {
-                    // monospacedDigit so the counter stops reflowing on every
-                    // keystroke as digits of different widths swap in.
-                    Text("\(text.count) characters")
-                        .font(.caption2)
-                        .monospacedDigit()
-                        .foregroundStyle(.tertiary)
-                        .padding(Space.row)
-                        .allowsHitTesting(false)
+                .background(Color(nsColor: .textBackgroundColor),
+                            in: RoundedRectangle(cornerRadius: Radius.card))
+                .overlay(RoundedRectangle(cornerRadius: Radius.card)
+                    .strokeBorder(validationIssue == .script
+                        ? Color.red : Color.primary.opacity(0.08)))
+                .overlay(alignment: .topLeading) {
+                    if text.isEmpty {
+                        // Derived, not hand-tuned. The old 16/13 were eyeballed
+                        // against TextEditor's internals and did not sit on the
+                        // caret. The real offset is the padding we applied plus
+                        // NSTextView's own container inset, which is 5 across and
+                        // 0 down — SwiftUI adds no further top inset of its own.
+                        Text("What should the voice say?")
+                            .font(.bunyiEditor)
+                            .foregroundStyle(.tertiary)
+                            .padding(.top, Space.tight)
+                            .padding(.leading, Space.tight + 5)
+                            .padding(.trailing, 22)
+                            .allowsHitTesting(false)
+                    }
                 }
+                .overlay(alignment: .bottomTrailing) {
+                    editorResizeHandle(label: "Script", height: measuredScriptHeight,
+                                       focused: $scriptResizeFocused, dragHeight: $scriptDragHeight) {
+                        scriptHeight = min(max(800, scriptDragHeight ?? measuredScriptHeight), max(160, $0))
+                    }
+                }
+            if !text.isEmpty {
+                // Keep the count outside the editor, clear of text and the handle.
+                Text("\(text.count) characters")
+                    .font(.caption2)
+                    .monospacedDigit()
+                    .foregroundStyle(.tertiary)
+                    .padding(.horizontal, Space.row)
+                    .allowsHitTesting(false)
             }
+        }
     }
 
     // MARK: First-run examples
@@ -859,7 +873,7 @@ struct ContentView: View {
                     return .handled
                 }
                 .scrollContentBackground(.hidden)
-                .padding(EdgeInsets(top: 6, leading: 6, bottom: 6, trailing: 36))
+                .padding(EdgeInsets(top: 6, leading: 6, bottom: 6, trailing: 22))
                 .frame(height: instructionHeight)
                 .background(Color(nsColor: .textBackgroundColor),
                             in: RoundedRectangle(cornerRadius: Radius.control))
@@ -873,59 +887,64 @@ struct ContentView: View {
                             .foregroundStyle(.tertiary)
                             .padding(.top, 6)
                             .padding(.leading, 11)
-                            .padding(.trailing, 36)
+                            .padding(.trailing, 22)
                             .allowsHitTesting(false)
                             .accessibilityHidden(true)
                     }
                 }
-            Path { path in
-                path.move(to: CGPoint(x: 7, y: 11))
-                path.addLine(to: CGPoint(x: 17, y: 1))
-                path.move(to: CGPoint(x: 13, y: 11))
-                path.addLine(to: CGPoint(x: 21, y: 3))
+            editorResizeHandle(label: label, height: instructionHeight,
+                               focused: $instructionResizeFocused, dragHeight: $instructionDragHeight) {
+                instructionHeight = min(320, max(52, $0))
             }
-                .stroke(Color.primary.opacity(0.3), lineWidth: 1.5)
-                .frame(width: 22, height: 12)
-                .frame(width: 28, height: 16)
-                .contentShape(Rectangle())
-                .overlay(RoundedRectangle(cornerRadius: 3)
-                    .stroke(instructionResizeFocused ? Color.accentColor : Color.clear))
-                .focusable()
-                .focused($instructionResizeFocused)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Resize \(label.lowercased()) editor")
-                .accessibilityValue("\(Int(instructionHeight)) points high")
-                .accessibilityAdjustableAction { direction in
-                    guard !engine.status.isBusy else { return }
-                    switch direction {
-                    case .increment: resizeInstruction(to: instructionHeight + 20)
-                    case .decrement: resizeInstruction(to: instructionHeight - 20)
-                    @unknown default: break
-                    }
-                }
-                .onKeyPress(keys: [.upArrow, .downArrow]) { press in
-                    guard !engine.status.isBusy else { return .ignored }
-                    resizeInstruction(to: instructionHeight + (press.key == .downArrow ? 20 : -20))
-                    return .handled
-                }
-                .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .global)
-                    .onChanged { value in
-                        guard !engine.status.isBusy else { return }
-                        if instructionDragHeight == nil { instructionDragHeight = instructionHeight }
-                        resizeInstruction(to: instructionDragHeight! + value.translation.height)
-                    }
-                    .onEnded { _ in instructionDragHeight = nil })
-                .onHover { hovering in
-                    (hovering ? NSCursor.resizeUpDown : NSCursor.arrow).set()
-                }
-                .help("Drag to resize, or focus here and use Up / Down")
-                .padding(.trailing, 4)
-                .padding(.bottom, 4)
         }
     }
 
-    private func resizeInstruction(to height: CGFloat) {
-        instructionHeight = min(320, max(52, height))
+    private func editorResizeHandle(label: String, height: CGFloat,
+                                    focused: FocusState<Bool>.Binding,
+                                    dragHeight: Binding<CGFloat?>,
+                                    resize: @escaping (CGFloat) -> Void) -> some View {
+        Path { path in
+            path.move(to: CGPoint(x: 2, y: 12))
+            path.addLine(to: CGPoint(x: 12, y: 2))
+            path.move(to: CGPoint(x: 7, y: 12))
+            path.addLine(to: CGPoint(x: 12, y: 7))
+        }
+            .stroke(Color.primary.opacity(0.3), lineWidth: 1.5)
+            .frame(width: 16, height: 16)
+            .contentShape(Rectangle())
+            .overlay(RoundedRectangle(cornerRadius: 3)
+                .stroke(focused.wrappedValue ? Color.accentColor : Color.clear))
+            .focusable()
+            .focused(focused)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Resize \(label.lowercased()) editor")
+            .accessibilityValue("\(Int(height)) points high")
+            .accessibilityAdjustableAction { direction in
+                guard !engine.status.isBusy else { return }
+                switch direction {
+                case .increment: resize(height + 20)
+                case .decrement: resize(height - 20)
+                @unknown default: break
+                }
+            }
+            .onKeyPress(keys: [.upArrow, .downArrow]) { press in
+                guard !engine.status.isBusy else { return .ignored }
+                resize(height + (press.key == .downArrow ? 20 : -20))
+                return .handled
+            }
+            .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .global)
+                .onChanged { value in
+                    guard !engine.status.isBusy else { return }
+                    if dragHeight.wrappedValue == nil { dragHeight.wrappedValue = height }
+                    resize(dragHeight.wrappedValue! + value.translation.height)
+                }
+                .onEnded { _ in dragHeight.wrappedValue = nil })
+            .onHover { hovering in
+                (hovering ? NSCursor.resizeUpDown : NSCursor.arrow).set()
+            }
+            .help("Drag to resize, or focus here and use Up / Down")
+            .padding(.trailing, 4)
+            .padding(.bottom, 4)
     }
 
     @ViewBuilder
