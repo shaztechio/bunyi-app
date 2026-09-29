@@ -36,9 +36,9 @@ on:
         type: boolean
         default: false
       gemini-model:
-        description: "Gemini model override (blank = CLI default)"
+        description: "Gemini model (blank = CLI default)"
         type: string
-        default: ""
+        default: "gemini-3.1-pro-preview"
       draft:
         description: "Open PRs as drafts"
         type: boolean
