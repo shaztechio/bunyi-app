@@ -1,0 +1,63 @@
+# Copyright 2026 Shazron Abdullah
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Copy to .github/workflows/security-review.yml in any repo you want reviewed.
+# Needs repo secrets ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY (only for the
+# providers you use) and Settings → Actions → General →
+# "Allow GitHub Actions to create and approve pull requests".
+
+name: Security review
+
+on:
+  workflow_dispatch:
+    inputs:
+      anthropic:
+        description: "Anthropic (Claude Code)"
+        type: boolean
+        default: true
+      openai:
+        description: "OpenAI (Codex)"
+        type: boolean
+        default: true
+      gemini:
+        description: "Google (Gemini CLI)"
+        type: boolean
+        default: false
+      draft:
+        description: "Open PRs as drafts"
+        type: boolean
+        default: true
+      upload-sarif:
+        description: "Upload findings to code scanning (Security tab)"
+        type: boolean
+        default: true
+
+jobs:
+  security-review:
+    permissions:
+      contents: write
+      pull-requests: write
+      security-events: write # code scanning upload
+      actions: read          # needed by the SARIF upload on private repos
+    uses: shaztechio/multi-llm-security-review/.github/workflows/security-review.yml@main
+    with:
+      anthropic: ${{ inputs.anthropic }}
+      openai: ${{ inputs.openai }}
+      gemini: ${{ inputs.gemini }}
+      draft: ${{ inputs.draft }}
+      upload-sarif: ${{ inputs.upload-sarif }}
+      # claude-model: claude-sonnet-4-6
+      # tool-ref: main   # keep in step with the @ref on the uses: line
+    secrets: inherit
