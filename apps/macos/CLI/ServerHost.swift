@@ -369,7 +369,8 @@ final class ServerHost {
                 request, output: output, cancelled: cancelled,
                 engine: engine)
         case "models.remove":
-            if engine.loadedMode == ModelCommand.mode(request.value("mode")!) {
+            let removing = try ModelCommand.requiredMode(request)
+            if engine.loadedMode == removing {
                 throw CLIError(
                     "bunyi_busy", "Unload this model before removing it.",
                     exitCode: 4)
@@ -424,7 +425,7 @@ final class ServerHost {
         _ request: CLIRequest, output: CLIOutput,
         cancelled: CancellationState
     ) async throws -> CLIMessage {
-        let mode = ModelCommand.mode(request.value("mode")!)
+        let mode = try ModelCommand.requiredMode(request)
         output.event(CLIProtocol.event(
             request, type: "checking",
             ["detail": "Checking \(mode.rawValue)"]))
