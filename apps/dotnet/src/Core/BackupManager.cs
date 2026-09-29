@@ -244,6 +244,10 @@ public sealed class BackupManager(ILogSink log)
             $"Restoring {wanted.Count} of {contents.Repos.Count} model(s) ({Bytes(total)}); "
             + $"{skipped.Count} already here.");
 
+        // Before anything is written: a backup that declares more than the drive holds
+        // (a zip bomb, or just a full disk) is refused up front, not half-restored.
+        EnsureRoom(total, FreeSpaceOf(modelsFolder));
+
         var done = 0L;
         var restored = new List<string>();
 
@@ -266,11 +270,19 @@ public sealed class BackupManager(ILogSink log)
             var destination = Path.Combine(modelsFolder, ModelsEntry, safe);
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
 
-            await using (var source = entry.Open())
-            await using (var target = File.Create(destination))
+            try
             {
-                done = await CopyAsync(source, target, done, total, repo, progress, ct)
+                await using var source = entry.Open();
+                await using var target = File.Create(destination);
+                // An entry may not decompress to more than it declared, or the size check
+                // above means nothing.
+                done = await CopyAsync(source, target, done, total, repo, progress, ct, limit: entry.Length)
                     .ConfigureAwait(false);
+            }
+            catch (InvalidDataException)
+            {
+                Delete(destination);
+                throw;
             }
 
             if (!restored.Contains(repo)) restored.Add(repo);
@@ -343,19 +355,54 @@ public sealed class BackupManager(ILogSink log)
         return rest.Length >= 3 ? $"{rest[0]}/{rest[1]}" : null;
     }
 
+    /// <summary>
+    /// Refuses a restore that needs more room than the drive has.
+    /// </summary>
+    /// <param name="needed">What the backup declares it will write.</param>
+    /// <param name="free">Free space on the destination drive, or null when it cannot be told.</param>
+    internal static void EnsureRoom(long needed, long? free)
+    {
+        if (free is { } available && needed > available)
+        {
+            throw new IOException(
+                $"Restoring needs {Bytes(needed)}, but only {Bytes(available)} is free on that drive.");
+        }
+    }
+
+    private static long? FreeSpaceOf(string folder)
+    {
+        try
+        {
+            var root = System.IO.Path.GetPathRoot(System.IO.Path.GetFullPath(folder));
+            return string.IsNullOrEmpty(root) ? null : new DriveInfo(root).AvailableFreeSpace;
+        }
+        catch (Exception ex) when (ex is IOException or ArgumentException or UnauthorizedAccessException)
+        {
+            return null;   // a network share, say: let the copy find out
+        }
+    }
+
     /// <returns>The running total, since an async method cannot take it by ref.</returns>
     private static async Task<long> CopyAsync(
         Stream source, Stream target,
         long done, long total, string what,
-        IProgress<BackupProgress>? progress, CancellationToken ct)
+        IProgress<BackupProgress>? progress, CancellationToken ct,
+        long limit = long.MaxValue)
     {
         var buffer = new byte[81_920];
         var sinceReport = 0L;
         var running = done;
+        var copied = 0L;
 
         int read;
         while ((read = await source.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
         {
+            copied += read;
+            if (copied > limit)
+            {
+                throw new InvalidDataException($"{what} holds more data than the backup says it does, so it was not restored.");
+            }
+
             await target.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
 
             running += read;

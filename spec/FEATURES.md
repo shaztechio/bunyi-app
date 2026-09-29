@@ -764,7 +764,9 @@ macOS source: `BackupManager.swift`.
   and lets a determinate progress bar track the growing archive.
 - **Restore**: unpack a backup and merge per-repo into the models folder,
   **skipping repos already present** (never clobber). Validate the archive
-  actually contains a `models/` tree first.
+  actually contains a `models/` tree first, and refuse before writing anything
+  when the size the archive declares exceeds the free space of the volumes it
+  will be unpacked onto.
 - **Progress + Stop**: both show progress and a Stop button that truly
   cancels (terminating any child archiver process).
 - **Volume-aware save**: writing the finished zip to the destination is an

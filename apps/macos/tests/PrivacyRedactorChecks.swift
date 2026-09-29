@@ -25,5 +25,13 @@ enum PrivacyRedactorChecks {
         precondition(PrivacyRedactor.modelSource(
             "https://example.com/models/qwen?X-Amz-Signature=secret")
             == "https://example.com/models/qwen")
+        // Unparseable input must not come back with its secrets: a space makes
+        // URLComponents refuse the string, and a scheme-less one has no host.
+        precondition(PrivacyRedactor.modelSource(
+            "https://exa mple.com/models/qwen?token=abc") == "[redacted URL]")
+        precondition(PrivacyRedactor.modelSource(
+            "alice:secret@example.com/models/qwen") == "[redacted URL]")
+        precondition(PrivacyRedactor.modelSource(
+            "org/model#key") == "[redacted URL]")
     }
 }

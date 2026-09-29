@@ -162,21 +162,33 @@ enum ServerSocket {
         }
     }
 
+    /// Accepts the next verified connection. Trouble with one peer (it left
+    /// before the handshake, or belongs to another user) or a passing
+    /// resource shortage must not stop the whole server, so those are skipped
+    /// or waited out. Only an error on the listener itself, which is what
+    /// closing it for a stop looks like, is thrown.
     static func accept(from listener: Int32) throws -> Int32 {
         while true {
             let descriptor = Darwin.accept(listener, nil, nil)
             if descriptor >= 0 {
-                try configure(descriptor)
                 do {
+                    try configure(descriptor)
                     try verifyPeer(descriptor)
                     return descriptor
                 } catch {
                     Darwin.close(descriptor)
-                    throw error
+                    continue
                 }
             }
-            if errno == EINTR { continue }
-            throw posixError()
+            switch errno {
+            case EINTR, ECONNABORTED, EPROTO:
+                continue
+            case EMFILE, ENFILE, ENOBUFS, ENOMEM:
+                usleep(100_000)
+                continue
+            default:
+                throw posixError()
+            }
         }
     }
 

@@ -251,6 +251,31 @@ public sealed class ServerTests
     }
 
     [Fact]
+    public void The_server_directory_prefers_the_private_runtime_dir_and_falls_back_to_temp()
+    {
+        var temp = Path.GetTempPath();
+        var runtime = Path.Combine(Path.GetTempPath(), "bunyi-runtime-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(runtime);
+        try
+        {
+            const string name = "bunyi-0123456789abcdef01234567";
+            const int roomy = 10_000;   // the socket-path limit is exercised separately below
+            Assert.Equal(runtime, ServerEndpoint.RuntimeBase(runtime, name, roomy));
+            Assert.Equal(runtime, ServerEndpoint.RuntimeBase(runtime + Path.DirectorySeparatorChar, name, roomy));
+            Assert.Equal(temp, ServerEndpoint.RuntimeBase(null, name, roomy));
+            Assert.Equal(temp, ServerEndpoint.RuntimeBase("", name, roomy));
+            Assert.Equal(temp, ServerEndpoint.RuntimeBase("relative/run", name, roomy));
+            Assert.Equal(temp, ServerEndpoint.RuntimeBase(Path.Combine(runtime, "missing"), name, roomy));
+            // Too long for a Unix socket path once the endpoint's own segments are added.
+            Assert.Equal(temp, ServerEndpoint.RuntimeBase(runtime, name, maxSocketPathBytes: runtime.Length));
+        }
+        finally
+        {
+            Directory.Delete(runtime, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task LinuxRepairsStaleSocketAndRejectsPublicDirectory()
     {
         if (!OperatingSystem.IsLinux()) return;

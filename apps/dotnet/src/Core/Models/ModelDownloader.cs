@@ -42,6 +42,12 @@ public sealed partial class ModelDownloader(HttpClient http, ILogSink log, TimeP
     private readonly ILogSink _log = log ?? throw new ArgumentNullException(nameof(log));
     private readonly TimeProvider _time = time ?? TimeProvider.System;
     private readonly HttpFileDownloader _files = new(http, log, time);
+
+    /// <summary>
+    /// Sources the app endorses, where a checksum manifest is mandatory. Settable so tests can
+    /// stand a local server in for the mirror.
+    /// </summary>
+    internal Func<Uri, bool> RequiresChecksums { get; init; } = Settings.ModelConfigLibrary.IsBunyiMirrorUrl;
     private readonly object _transferGate = new();
     private CancellationTokenSource? _activeTransfer;
     private bool _restartRequested;
@@ -120,19 +126,49 @@ public sealed partial class ModelDownloader(HttpClient http, ILogSink log, TimeP
         IProgress<DownloadProgress>? progress,
         CancellationToken ct)
     {
-        if (source is not ModelSource.BaseUrl baseUrl) return layout.Files;
+        if (source is not ModelSource.BaseUrl baseUrl)
+        {
+            // A default Hub repository is checked against the digests the project mirror
+            // publishes for the same files; any other repo id has no pinned digests to use.
+            if (source is ModelSource.Repo repo && PinnedDigests.ForRepo(repo.Id) is { } pinned)
+            {
+                return layout.Files
+                    .Select(f => f.Sha256 is null && pinned.TryGetValue(f.RelativePath, out var sha) ? f with { Sha256 = sha } : f)
+                    .ToList();
+            }
+
+            return layout.Files;
+        }
 
         progress?.Report(new DownloadProgress(DownloadPhase.Manifest));
 
-        foreach (var name in new[] { "manifest.sha256", "manifest.txt" })
+        // A mirror the app endorses must publish checksums (spec: "Required of a mirror an app
+        // endorses"). Falling back to an unverified list when the checksum manifest is missing
+        // would let anyone who can break that one request downgrade the download.
+        var mustVerify = RequiresChecksums(baseUrl.Url);
+
+        foreach (var name in mustVerify ? new[] { "manifest.sha256" } : new[] { "manifest.sha256", "manifest.txt" })
         {
             var text = await TryGetStringAsync(Combine(baseUrl.Url, name), ct, wait =>
                 progress?.Report(new(wait is null ? DownloadPhase.Manifest : DownloadPhase.Waiting,
                     CurrentFile: name, ServiceWait: wait))).ConfigureAwait(false);
-            if (text is null) continue;
+            if (text is null)
+            {
+                if (mustVerify) throw ChecksumsRequired(baseUrl.Url, "could not be fetched");
+                continue;
+            }
 
             var result = ManifestParser.Parse(text);
-            if (result.Files.Count == 0) continue;
+            if (result.Files.Count == 0)
+            {
+                if (mustVerify) throw ChecksumsRequired(baseUrl.Url, "lists no files");
+                continue;
+            }
+
+            if (mustVerify && result.Files.Any(f => f.Sha256 is null))
+            {
+                throw ChecksumsRequired(baseUrl.Url, "has an entry without a checksum");
+            }
 
             foreach (var bad in result.Rejected)
             {
@@ -150,6 +186,10 @@ public sealed partial class ModelDownloader(HttpClient http, ILogSink log, TimeP
         _log.Log($"No manifest served — using the built-in file list for {layout.Id}.");
         return layout.Files;
     }
+
+    private static InvalidDataException ChecksumsRequired(Uri source, string problem) =>
+        new($"The manifest.sha256 for {source} {problem}, so nothing was downloaded: this source must be "
+            + "verified. Try again later, or switch the source to Hugging Face in Settings.");
 
     /// <summary>
     /// Carries the built-in list's notion of "required" onto a server's

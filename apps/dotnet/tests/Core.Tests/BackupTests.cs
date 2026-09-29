@@ -297,6 +297,20 @@ public sealed class BackupTests : IDisposable
     }
 
     [Fact]
+    public void A_restore_that_needs_more_than_the_drive_has_is_refused_up_front()
+    {
+        var error = Assert.Throws<IOException>(() => BackupManager.EnsureRoom(needed: 10_000_000_000, free: 5_000_000_000));
+        Assert.Contains("free on that drive", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_restore_that_fits_or_whose_free_space_is_unknown_is_not_refused()
+    {
+        BackupManager.EnsureRoom(needed: 5_000_000_000, free: 5_000_000_000);
+        BackupManager.EnsureRoom(needed: 5_000_000_000, free: null);
+    }
+
+    [Fact]
     public async Task A_backup_survives_the_round_trip_byte_for_byte()
     {
         Model("elbruno/Qwen3", "weights.bin", 250_000);

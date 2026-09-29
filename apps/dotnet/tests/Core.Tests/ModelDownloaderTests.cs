@@ -15,6 +15,7 @@
 using Bunyi.Core.Diagnostics;
 using Bunyi.Core.Models;
 using Bunyi.Core.Runtime;
+using Bunyi.Core.Settings;
 using Xunit;
 
 namespace Bunyi.Core.Tests;
@@ -415,6 +416,94 @@ public sealed class ModelDownloaderTests : IAsyncLifetime
         Assert.Contains(_log.Lines, l => l.Contains("manifest.sha256"));
         Assert.DoesNotContain(_log.Lines, l => l.Contains("Using manifest.txt"));
     }
+
+    [Theory]
+    [InlineData(TtsMode.PresetVoice)]
+    [InlineData(TtsMode.VoiceDesign)]
+    [InlineData(TtsMode.VoiceClone)]
+    public async Task Every_file_of_a_default_hub_repository_is_verified_by_a_pinned_digest(TtsMode mode)
+    {
+        var source = new ModelSource.Repo(BunyiRuntime.HuggingFaceSourceFor(mode));
+        var files = await NewDownloader().ResolveFileListAsync(source, ModelLayout.For(mode), null, default);
+
+        Assert.NotEmpty(files);
+        Assert.All(files, f => Assert.Matches("^[0-9a-f]{64}$", f.Sha256 ?? ""));
+    }
+
+    [Fact]
+    public async Task The_whisper_download_is_verified_by_a_pinned_digest()
+    {
+        var files = await NewDownloader().ResolveFileListAsync(
+            new ModelSource.Repo(ModelLayout.WhisperSource), ModelLayout.Whisper, null, default);
+
+        Assert.Equal("60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe", Assert.Single(files).Sha256);
+    }
+
+    [Fact]
+    public async Task A_repository_the_user_chose_is_not_held_to_the_default_repositorys_digests()
+    {
+        var files = await NewDownloader().ResolveFileListAsync(
+            new ModelSource.Repo("someone/their-own-export"), ModelLayout.For(TtsMode.PresetVoice), null, default);
+
+        Assert.All(files, f => Assert.Null(f.Sha256));
+    }
+
+    private ModelDownloader NewEndorsedMirrorDownloader() =>
+        new(_http, _log, null) { RequiresChecksums = _ => true };
+
+    [Fact]
+    public async Task An_endorsed_mirror_without_a_checksum_manifest_fails_instead_of_downloading_unverified()
+    {
+        // manifest.txt is served and would have worked for a self-hosted server.
+        _server.Add("manifest.txt", "embeddings/config.json\nmodel.onnx\nmodel.onnx.data");
+
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            NewEndorsedMirrorDownloader().EnsureModelAsync(Source, Layout, _root, null, default));
+
+        Assert.Contains("manifest.sha256", error.Message, StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(ModelFolder, "model.onnx")));
+    }
+
+    [Fact]
+    public async Task An_endorsed_mirror_manifest_with_an_entry_lacking_a_checksum_fails()
+    {
+        _server.Add("manifest.sha256", "embeddings/config.json\nmodel.onnx\nmodel.onnx.data");
+
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            NewEndorsedMirrorDownloader().EnsureModelAsync(Source, Layout, _root, null, default));
+
+        Assert.Contains("without a checksum", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task An_endorsed_mirror_with_a_complete_checksum_manifest_downloads_and_verifies()
+    {
+        _server.Add("manifest.sha256", _server.Sha256Manifest(
+            "embeddings/config.json", "model.onnx", "model.onnx.data"));
+
+        await NewEndorsedMirrorDownloader().EnsureModelAsync(Source, Layout, _root, null, default);
+
+        Assert.True(File.Exists(Path.Combine(ModelFolder, "model.onnx")));
+    }
+
+    [Fact]
+    public async Task A_self_hosted_server_may_still_publish_only_manifest_txt()
+    {
+        _server.Add("manifest.txt", "embeddings/config.json\nmodel.onnx\nmodel.onnx.data");
+
+        await NewDownloader().EnsureModelAsync(Source, Layout, _root, null, default);
+
+        Assert.True(File.Exists(Path.Combine(ModelFolder, "model.onnx")));
+    }
+
+    [Theory]
+    [InlineData("https://models.bunyi.app/onnx/customvoice", true)]
+    [InlineData("https://models.bunyi.app/onnx/voicedesign/", true)]
+    [InlineData("https://MODELS.bunyi.app/onnx/voiceclone", true)]
+    [InlineData("https://models.bunyi.app/onnx/other", false)]
+    [InlineData("https://example.com/onnx/customvoice", false)]
+    public void Only_the_built_in_mirror_urls_require_checksums(string url, bool expected) =>
+        Assert.Equal(expected, ModelConfigLibrary.IsBunyiMirrorUrl(new Uri(url)));
 
     [Fact]
     public async Task A_manifest_far_larger_than_any_real_one_is_refused_rather_than_read_into_memory()

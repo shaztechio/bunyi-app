@@ -67,16 +67,28 @@ enum ServerWire {
     }
 
     /// Reads one bounded newline-framed message. A negative timeout waits
-    /// indefinitely; a timeout is reported as ETIMEDOUT.
+    /// indefinitely; a non-negative one is a deadline for the whole message,
+    /// not for each byte (a client trickling one byte per interval would
+    /// otherwise hold the connection open indefinitely). A timeout is
+    /// reported as ETIMEDOUT.
     static func read(from descriptor: Int32, timeoutMilliseconds: Int32 = -1)
         throws -> Data? {
         var result = Data()
         var byte: UInt8 = 0
+        let deadline: UInt64? = timeoutMilliseconds >= 0
+            ? DispatchTime.now().uptimeNanoseconds
+                + UInt64(timeoutMilliseconds) * 1_000_000
+            : nil
         while true {
-            if timeoutMilliseconds >= 0 {
+            if let deadline {
+                let now = DispatchTime.now().uptimeNanoseconds
+                guard now < deadline else { throw POSIXError(.ETIMEDOUT) }
+                let remaining = Int32(min(
+                    (deadline - now + 999_999) / 1_000_000,
+                    UInt64(Int32.max)))
                 var item = pollfd(
                     fd: descriptor, events: Int16(POLLIN), revents: 0)
-                let ready = Darwin.poll(&item, 1, timeoutMilliseconds)
+                let ready = Darwin.poll(&item, 1, remaining)
                 if ready == 0 {
                     throw POSIXError(.ETIMEDOUT)
                 }

@@ -364,6 +364,9 @@ Stored in a `Voices` subfolder of app data, alongside copied audio clips.
   **skipping repos already present**.
 - Restored model trees contain only regular files and directories. A backup
   containing symbolic links or other special entries is rejected before merge.
+- A restore is refused up front when the uncompressed size the archive declares
+  is more than the free space available. On .NET an entry that decompresses to
+  more than it declared is also refused and its partial file removed.
 
 ## Packaged model-download defaults
 
