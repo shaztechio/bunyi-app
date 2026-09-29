@@ -14,7 +14,7 @@
 # limitations under the License.
 
 # Copy to .github/workflows/security-review.yml in any repo you want reviewed.
-# Needs repo secrets ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY (only for the
+# Needs repo secrets ANTHROPIC_API_KEY / OPENAI_API_KEY (only for the
 # providers you use) and Settings → Actions → General →
 # "Allow GitHub Actions to create and approve pull requests".
 
@@ -31,10 +31,6 @@ on:
         description: "OpenAI (Codex)"
         type: boolean
         default: true
-      gemini:
-        description: "Google (Gemini CLI)"
-        type: boolean
-        default: false
       claude-model:
         description: "Claude model (blank = CLI default)"
         type: string
@@ -43,10 +39,6 @@ on:
         description: "Codex model (blank = CLI default)"
         type: string
         default: "gpt-6-astra"
-      gemini-model:
-        description: "Gemini model (blank = CLI default)"
-        type: string
-        default: "gemini-3.1-pro-preview"
       draft:
         description: "Open PRs as drafts"
         type: boolean
@@ -67,10 +59,8 @@ jobs:
     with:
       anthropic: ${{ inputs.anthropic }}
       openai: ${{ inputs.openai }}
-      gemini: ${{ inputs.gemini }}
       claude-model: ${{ inputs.claude-model }}
       codex-model: ${{ inputs.codex-model }}
-      gemini-model: ${{ inputs.gemini-model }}
       draft: ${{ inputs.draft }}
       upload-sarif: ${{ inputs.upload-sarif }}
       # claude-model: claude-sonnet-4-6
