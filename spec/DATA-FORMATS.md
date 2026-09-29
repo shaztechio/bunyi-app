@@ -351,6 +351,8 @@ Stored in a `Voices` subfolder of app data, alongside copied audio clips.
   ten-second limit. Missing retains legacy behavior (full clip on macOS; the
   ONNX runtime still has its existing ten-second encoder limit).
 - Entries whose `fileName` is missing on disk are pruned on load.
+- `fileName` must be a single filename without path separators, a colon, or
+  control characters. Invalid entries are pruned on load.
 
 ## Backup archive
 

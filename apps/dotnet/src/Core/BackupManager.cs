@@ -323,7 +323,9 @@ public sealed class BackupManager(ILogSink log)
     {
         if (!entryPath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return null;
 
-        var rest = entryPath[prefix.Length..].Split('/');
+        var relative = entryPath[prefix.Length..];
+        if (!ManifestPath.TryNormalize(relative, out _)) return null;
+        var rest = relative.Split('/');
 
         // org/name/file at the least. A file sitting directly in models/
         // belongs to no repository and is not restored.

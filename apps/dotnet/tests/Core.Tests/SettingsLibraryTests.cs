@@ -401,6 +401,18 @@ public sealed class DownloadedModelsTests : IDisposable
     }
 
     [Fact]
+    public void The_pre_download_command_rejects_unsafe_repos_and_quotes_the_folder()
+    {
+        Assert.Null(DownloadedModels.PreDownloadCommand(
+            new ModelSource.Repo("org/repo;touch /tmp/unsafe"), _root));
+
+        var folder = Path.Combine(_root, "a' folder");
+        var command = DownloadedModels.PreDownloadCommand(new ModelSource.Repo("org/repo"), folder);
+        var escaped = OperatingSystem.IsWindows() ? "a'' folder" : "a'\\'' folder";
+        Assert.Contains(escaped, command);
+    }
+
+    [Fact]
     public void A_mode_on_your_own_server_gets_no_command_rather_than_a_broken_one()
     {
         // There is no repository name to give the tool. Emitting a line with a

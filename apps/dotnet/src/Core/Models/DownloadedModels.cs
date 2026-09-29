@@ -128,8 +128,13 @@ public static class DownloadedModels
 
         if (source is not ModelSource.Repo repo) return null;
 
-        var destination = Path.Combine(modelsRoot, "models", repo.Id.Replace('/', Path.DirectorySeparatorChar));
-        return $"hf download {repo.Id} --local-dir \"{destination}\"";
+        string destination;
+        try { destination = ModelDownloader.FolderFor(source, modelsRoot); }
+        catch (ArgumentException) { return null; }
+        var quotedDestination = "'" + (OperatingSystem.IsWindows()
+            ? destination.Replace("'", "''", StringComparison.Ordinal)
+            : destination.Replace("'", "'\\''", StringComparison.Ordinal)) + "'";
+        return $"hf download {repo.Id} --local-dir {quotedDestination}";
     }
 
     private static IEnumerable<string> SafeDirectories(string path)

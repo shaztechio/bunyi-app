@@ -353,6 +353,9 @@ Each mode has a configurable source (Settings → Models). A value is either:
 - an **`http(s)://` base URL** the user self-hosts (files fetched directly).
 
 Scheme decides: `http://`/`https://` ⇒ base URL, else repo ID.
+A repo ID used for a model download must be exactly `org/repo`; each component
+may contain only ASCII letters, digits, dots, hyphens, and underscores, and
+cannot be `.` or `..`. Invalid IDs are refused before network or disk access.
 Blank ⇒ the built-in default for that mode.
 
 **Configurations.** The three sources are saved and restored as a set, under a
