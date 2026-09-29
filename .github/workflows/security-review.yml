@@ -55,7 +55,7 @@ jobs:
       pull-requests: write
       security-events: write # code scanning upload
       actions: read          # needed by the SARIF upload on private repos
-    uses: shaztechio/multi-llm-security-review/.github/workflows/security-review.yml@main
+    uses: shaztechio/multi-llm-security-review/.github/workflows/security-review.yml@f744ef50f85e63e0373c94dfa49d2236678e379d # pinned; bump deliberately after reviewing the tool repo
     with:
       anthropic: ${{ inputs.anthropic }}
       openai: ${{ inputs.openai }}
@@ -64,5 +64,7 @@ jobs:
       draft: ${{ inputs.draft }}
       upload-sarif: ${{ inputs.upload-sarif }}
       # claude-model: claude-sonnet-4-6
-      # tool-ref: main   # keep in step with the @ref on the uses: line
-    secrets: inherit
+      tool-ref: f744ef50f85e63e0373c94dfa49d2236678e379d # keep in step with the @ref on the uses: line
+    secrets: # only what the review needs, not every secret in the repo
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
