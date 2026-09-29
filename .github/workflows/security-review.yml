@@ -38,11 +38,11 @@ on:
       claude-model:
         description: "Claude model (blank = CLI default)"
         type: string
-        default: ""
+        default: "claude-sonnet-5-5"
       codex-model:
         description: "Codex model (blank = CLI default)"
         type: string
-        default: ""
+        default: "gpt-6-astra"
       gemini-model:
         description: "Gemini model (blank = CLI default)"
         type: string
