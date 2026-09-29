@@ -351,6 +351,13 @@ public final class BackupManager {
         defer { if gotAccess { zip.stopAccessingSecurityScopedResource() } }
         try fm.copyItem(at: zip, to: localZip)
         try extractZip(localZip, to: extractDir, control: control)
+        // ditto recreates symlinks stored in the archive. Our own backups never
+        // contain any (zip follows links), so one here came from somewhere
+        // else — and moved into the models folder it would let the next
+        // download write or delete files outside it.
+        try rejectSymlinks(in: extractDir)
+        // The same tree must also hold nothing but regular files and folders
+        // (no sockets or devices); this is the stricter, tested check.
         try BackupFileTree.validateRegularTree(in: extractDir)
 
         guard let modelsRoot = findModelsRoot(in: extractDir) else {
@@ -416,6 +423,16 @@ public final class BackupManager {
             }
         }
         return nil
+    }
+
+    nonisolated private static func rejectSymlinks(in dir: URL) throws {
+        let keys: [URLResourceKey] = [.isSymbolicLinkKey]
+        guard let e = FileManager.default.enumerator(
+            at: dir, includingPropertiesForKeys: keys) else { return }
+        for case let url as URL in e
+        where (try? url.resourceValues(forKeys: Set(keys)).isSymbolicLink) == true {
+            throw BackupError.unsafeEntry(url.lastPathComponent)
+        }
     }
 
     nonisolated private static func subdirectories(of dir: URL) throws -> [URL] {
@@ -526,6 +543,7 @@ enum BackupError: LocalizedError {
     case notAModelsBackup
     case zipFailed(String)
     case extractFailed(String)
+    case unsafeEntry(String)
 
     var errorDescription: String? {
         switch self {
@@ -535,6 +553,8 @@ enum BackupError: LocalizedError {
             "Couldn't create the archive. \(detail)"
         case .extractFailed(let detail):
             "Couldn't unpack the backup. \(detail)"
+        case .unsafeEntry(let name):
+            "That backup contains a symbolic link (\(name)), which Bunyi never creates. Nothing was restored."
         }
     }
 }

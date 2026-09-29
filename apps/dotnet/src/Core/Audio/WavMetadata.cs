@@ -150,9 +150,12 @@ public static class WavMetadata
         while (position + 8 <= end)
         {
             var id = Encoding.ASCII.GetString(bytes, position, 4);
-            var size = (int)BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(position + 4, 4));
+            var rawSize = BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(position + 4, 4));
             var body = position + 8;
-            if (body + size > end) break;
+            // Checked as a long: a size near uint.MaxValue cast to int goes
+            // negative, passes the bound, and walks backwards forever.
+            if ((long)body + rawSize > end) break;
+            var size = (int)rawSize;
 
             if (id == wanted)
             {
