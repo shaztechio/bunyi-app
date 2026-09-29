@@ -77,7 +77,8 @@ struct SettingsView: View {
     /// is a normal state, not a corner case.
     private var hubModes: [(mode: TTSMode, repo: String)] {
         TTSMode.allCases.compactMap { mode in
-            guard case .repo(let repo) = mode.effectiveSource else { return nil }
+            guard case .repo(let repo) = mode.effectiveSource,
+                  ModelSource.isValidRepoID(repo) else { return nil }
             return (mode, repo)
         }
     }
@@ -86,8 +87,12 @@ struct SettingsView: View {
     /// models-folder path.
     private var preDownloadCommand: String {
         hubModes.map { _, repo in
-            "hf download \(repo) --local-dir \"\(folderPath)/models/\(repo)\""
+            "hf download \(repo) --local-dir \(Self.shellQuoted("\(folderPath)/models/\(repo)"))"
         }.joined(separator: "\n")
+    }
+
+    private static func shellQuoted(_ value: String) -> String {
+        "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 
     /// The modes this section cannot help with, named so their absence from

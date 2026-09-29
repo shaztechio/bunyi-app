@@ -97,6 +97,9 @@ public final class VoiceLibrary {
     }
 
     public func deleteStrict(_ voice: SavedVoice) throws {
+        guard SavedVoiceFile.validClipName(voice.fileName) else {
+            throw CocoaError(.fileReadInvalidFileName)
+        }
         try FileManager.default.removeItem(at: audioURL(for: voice))
         voices.removeAll { $0.id == voice.id }
         try persistStrict()
@@ -141,12 +144,9 @@ public final class VoiceLibrary {
         // Drop entries whose audio went missing so the picker never offers a
         // voice that can't be generated.
         let legacyDate = SavedVoiceFile.containsLegacyNumericDate(data)
-        // A bare file name only: voices.json can travel between machines, and
-        // an entry naming "../x" would make Delete remove a file outside the
-        // library.
         voices = decoded.filter {
-            Self.isPlainFileName($0.fileName)
-                && FileManager.default.fileExists(atPath: audioURL(for: $0).path)
+            SavedVoiceFile.validClipName($0.fileName) &&
+            FileManager.default.fileExists(atPath: audioURL(for: $0).path)
         }
         sortVoices()
         if legacyDate || voices.count != decoded.count {
@@ -160,11 +160,6 @@ public final class VoiceLibrary {
                     + error.localizedDescription)
             }
         }
-    }
-
-    private static func isPlainFileName(_ name: String) -> Bool {
-        !name.isEmpty && name != "." && name != ".."
-            && !name.contains("/") && !name.contains("\\") && !name.contains(":")
     }
 
     private func persistStrict() throws {

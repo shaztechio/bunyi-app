@@ -27,6 +27,14 @@ public struct SavedVoice: Identifiable, Codable, Hashable {
 /// earliest macOS builds used JSONEncoder's default numeric Date encoding, so
 /// the decoder accepts that legacy representation long enough to migrate it.
 enum SavedVoiceFile {
+    static func validClipName(_ name: String) -> Bool {
+        !name.isEmpty && name != "." && name != ".." &&
+        !name.unicodeScalars.contains { scalar in
+            scalar == "/" || scalar == "\\" || scalar == ":" ||
+            CharacterSet.controlCharacters.contains(scalar)
+        }
+    }
+
     private static var preciseDateFormatter: ISO8601DateFormatter {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
