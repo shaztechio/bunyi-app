@@ -35,6 +35,14 @@ on:
         description: "Google (Gemini CLI)"
         type: boolean
         default: false
+      claude-model:
+        description: "Claude model (blank = CLI default)"
+        type: string
+        default: ""
+      codex-model:
+        description: "Codex model (blank = CLI default)"
+        type: string
+        default: ""
       gemini-model:
         description: "Gemini model (blank = CLI default)"
         type: string
@@ -60,6 +68,8 @@ jobs:
       anthropic: ${{ inputs.anthropic }}
       openai: ${{ inputs.openai }}
       gemini: ${{ inputs.gemini }}
+      claude-model: ${{ inputs.claude-model }}
+      codex-model: ${{ inputs.codex-model }}
       gemini-model: ${{ inputs.gemini-model }}
       draft: ${{ inputs.draft }}
       upload-sarif: ${{ inputs.upload-sarif }}
