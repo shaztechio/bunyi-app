@@ -62,6 +62,11 @@ jobs:
 
       - name: Decide the version
         id: pick
+        # Inputs reach the shell as environment variables, never spliced into the
+        # script text: a dispatch version like `1.0.0$(cmd)` would otherwise run.
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_BUMP: ${{ inputs.bump }}
         run: |
           set -euo pipefail
           props="apps/dotnet/Directory.Build.props"
@@ -77,14 +82,14 @@ jobs:
               echo "Bump the file and tag the commit that changed it." >&2
               exit 1
             fi
-          elif [ -n "${{ inputs.version }}" ] || [ "${{ inputs.bump }}" != "none" ]; then
-            requested="${{ inputs.version }}"
+          elif [ -n "$INPUT_VERSION" ] || [ "$INPUT_BUMP" != "none" ]; then
+            requested="$INPUT_VERSION"
             if [ -n "$requested" ]; then
               version="${requested#v}"
             else
               major="${current%%.*}"; rest="${current#*.}"
               minor="${rest%%.*}"; patch="${rest#*.}"
-              case "${{ inputs.bump }}" in
+              case "$INPUT_BUMP" in
                 patch) version="$major.$minor.$((patch + 1))" ;;
                 minor) version="$major.$((minor + 1)).0" ;;
                 major) version="$((major + 1)).0.0" ;;
@@ -97,10 +102,10 @@ jobs:
             echo "publish=false" >> "$GITHUB_OUTPUT"
           fi
 
-          case "$version" in
-            [0-9]*.[0-9]*.[0-9]*) ;;
-            *) echo "$version is not a valid x.y.z version" >&2; exit 1 ;;
-          esac
+          # Strictly x.y.z: the glob [0-9]*.[0-9]*.[0-9]* also matches `1.2.3;cmd`.
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "$version is not a valid x.y.z version" >&2; exit 1
+          fi
 
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "tag=dotnet-v$version" >> "$GITHUB_OUTPUT"

@@ -78,30 +78,35 @@ jobs:
       - name: Bump the version and tag
         id: bump
         if: github.event_name == 'workflow_dispatch' && (inputs.bump != 'none' || inputs.version != '')
+        # Inputs reach the shell as environment variables, never spliced into the
+        # script text: a dispatch version like `1.0.0$(cmd)` would otherwise run.
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_BUMP: ${{ inputs.bump }}
         run: |
           set -euo pipefail
           project="apps/macos/project.yml"
           current="$(sed -n 's/^ *MARKETING_VERSION: *//p' "$project" | head -1)"
           build="$(sed -n 's/^ *CURRENT_PROJECT_VERSION: *//p' "$project" | head -1)"
 
-          requested="${{ inputs.version }}"
+          requested="$INPUT_VERSION"
           if [ -n "$requested" ]; then
             version="${requested#v}"
           else
             major="${current%%.*}"; rest="${current#*.}"
             minor="${rest%%.*}"; patch="${rest#*.}"
-            case "${{ inputs.bump }}" in
+            case "$INPUT_BUMP" in
               patch) version="$major.$minor.$((patch + 1))" ;;
               minor) version="$major.$((minor + 1)).0" ;;
               major) version="$((major + 1)).0.0" ;;
-              *) echo "unknown bump ${{ inputs.bump }}"; exit 1 ;;
+              *) echo "unknown bump $INPUT_BUMP"; exit 1 ;;
             esac
           fi
 
-          case "$version" in
-            [0-9]*.[0-9]*.[0-9]*) ;;
-            *) echo "$version is not a valid x.y.z version"; exit 1 ;;
-          esac
+          # Strictly x.y.z: the glob [0-9]*.[0-9]*.[0-9]* also matches `1.2.3;cmd`.
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "$version is not a valid x.y.z version"; exit 1
+          fi
 
           tag="v$version"
           if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
