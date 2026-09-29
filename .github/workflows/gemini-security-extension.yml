@@ -44,7 +44,10 @@ jobs:
           MODEL: ${{ inputs.model }}
         shell: bash
         run: |
-          args=(-p "/security:analyze ${SCOPE} Return the report in JSON format." --skip-trust)
+          # The extension reads its own files from ~/.gemini/extensions; tools are otherwise
+          # limited to the workspace, so allow that directory too.
+          args=(-p "/security:analyze ${SCOPE} Return the report in JSON format." --skip-trust
+                --include-directories "$HOME/.gemini/extensions/gemini-cli-security")
           [[ -n "$MODEL" ]] && args+=(--model "$MODEL")
           gemini "${args[@]}" 2>&1 | tee "$RUNNER_TEMP/gemini-security.txt"
           { echo '## Gemini security extension output'; echo '```'; head -c 60000 "$RUNNER_TEMP/gemini-security.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
