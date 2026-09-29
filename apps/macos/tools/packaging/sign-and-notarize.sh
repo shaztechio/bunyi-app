@@ -122,8 +122,11 @@ fi
 printf 'Sandbox and network entitlements present.\n'
 
 # A CI runner has no keychain profile, so credentials can be passed directly.
-# They are only ever read from the environment: putting an app-specific password
-# on the command line would expose it in the process list.
+# They are read from the environment, but notarytool takes the app-specific
+# password only as --password, so it is on the command line for the length of
+# --wait and visible in the process list to other processes of the same user.
+# That is acceptable on a single-tenant CI runner; on a shared machine, store a
+# keychain profile instead (the else branch below).
 notarize() {
   if [ -n "${BUNYI_APPLE_ID:-}" ] && [ -n "${BUNYI_TEAM_ID:-}" ] \
      && [ -n "${BUNYI_APP_PASSWORD:-}" ]; then

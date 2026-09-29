@@ -78,6 +78,9 @@ signed="$work/$name.zip"
 ditto -c -k --sequesterRsrc --keepParent "$package" "$signed"
 ditto "$signed" "$archive"
 
+# See sign-and-notarize.sh: --password puts the app-specific password on the
+# command line for the length of --wait. Fine on a single-tenant CI runner; use
+# a keychain profile (the else branch) on a shared machine.
 notarize() {
   if [ -n "${BUNYI_APPLE_ID:-}" ] && [ -n "${BUNYI_TEAM_ID:-}" ] \
      && [ -n "${BUNYI_APP_PASSWORD:-}" ]; then
