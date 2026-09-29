@@ -199,6 +199,19 @@ public sealed class ModelConfigLibrary
         SavedAt = DateTimeOffset.MinValue,
     };
 
+    /// <summary>Whether a base URL is one of the built-in Bunyi mirror's per-mode URLs.</summary>
+    /// <remarks>
+    /// Those are the sources the app itself endorses, so a download from one must be verified:
+    /// see <c>ModelDownloader.ResolveFileListAsync</c>.
+    /// </remarks>
+    public static bool IsBunyiMirrorUrl(Uri url)
+    {
+        ArgumentNullException.ThrowIfNull(url);
+        var candidate = url.AbsoluteUri.TrimEnd('/');
+        return new[] { BunyiMirror.PresetVoice, BunyiMirror.VoiceDesign, BunyiMirror.VoiceClone }
+            .Any(mirror => string.Equals(mirror!.TrimEnd('/'), candidate, StringComparison.OrdinalIgnoreCase));
+    }
+
     /// <summary>Whether a configuration is one the app ships rather than one saved here.</summary>
     /// <remarks>
     /// A built-in has no Delete button: there is nothing on disk to remove, and

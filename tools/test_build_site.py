@@ -22,7 +22,10 @@ import unittest
 from urllib.parse import urlparse, parse_qs
 import xml.etree.ElementTree as ET
 
-from build_site import (build, render, select_versions, release_badge, installer_names,
+import base64
+import hashlib
+
+from build_site import (add_csp, build, render, select_versions, release_badge, installer_names,
                         SIGNED_WINDOWS_MARKER, signed_windows_names)
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -242,6 +245,33 @@ class SiteBuildTests(unittest.TestCase):
                      "Bunyi 2.10.0 for Windows", "Bunyi 2.10.0 for Linux",
                      "Bunyi-2.10.0-linux-x64.tar.gz", "macOS 1.8.0", "Bunyi 1.8.0"):
             self.assertIn(text, html)
+
+    def test_csp_allows_exactly_the_inline_scripts_the_page_has(self):
+        template = (ROOT / "docs/index.html").read_text(encoding="utf-8")
+        html = add_csp(render(template, {"macos": "1.8.0", "dotnet": "2.10.0"}))
+        policy = re.search(r'<meta http-equiv="Content-Security-Policy" content="([^"]+)">', html)
+        self.assertIsNotNone(policy)
+        # Ahead of every script it governs: a meta policy only covers what follows it.
+        self.assertLess(policy.start(), html.index("<script"))
+        scripts = re.findall(r"<script(?![^>]*src=)[^>]*>(.*?)</script>", html, re.S)
+        self.assertEqual(len(scripts), 3)
+        for body in scripts:
+            digest = base64.b64encode(hashlib.sha256(body.encode("utf-8")).digest()).decode()
+            self.assertIn(f"'sha256-{digest}'", policy[1])
+        self.assertNotIn("'unsafe-inline' https", policy[1])
+        script_src = next(part for part in policy[1].split("; ") if part.startswith("script-src"))
+        self.assertNotIn("unsafe-inline", script_src)
+        self.assertNotIn("unsafe-eval", script_src)
+        self.assertIn("object-src 'none'", policy[1])
+
+    def test_csp_hash_follows_an_edited_inline_script(self):
+        before = add_csp("<html><head><script>a()</script></head></html>")
+        after = add_csp("<html><head><script>b()</script></head></html>")
+        self.assertNotEqual(before, after)
+
+    def test_csp_needs_a_head(self):
+        with self.assertRaises(ValueError):
+            add_csp("<html><script>a()</script></html>")
 
     def test_placeholder_errors_are_not_deployed(self):
         versions = {"macos": "1.8.0", "dotnet": "2.10.0"}

@@ -350,6 +350,17 @@ public final class BackupManager {
         let gotAccess = zip.startAccessingSecurityScopedResource()
         defer { if gotAccess { zip.stopAccessingSecurityScopedResource() } }
         try fm.copyItem(at: zip, to: localZip)
+        // Refuse a backup that declares more than the disk can hold before
+        // ditto starts writing it: a zip bomb, or just a full disk. The size is
+        // what the archive declares; unknown (zipinfo unavailable) skips this.
+        if let needed = declaredUncompressedSize(of: localZip) {
+            for volume in [tmp, target] {
+                if let available = availableSpace(at: volume), needed > available {
+                    throw BackupError.notEnoughSpace(
+                        needed: needed, available: available)
+                }
+            }
+        }
         try extractZip(localZip, to: extractDir, control: control)
         // ditto recreates symlinks stored in the archive. Our own backups never
         // contain any (zip follows links), so one here came from somewhere
@@ -384,6 +395,32 @@ public final class BackupManager {
             }
         }
         return result
+    }
+
+    /// The total uncompressed size the archive's own directory declares, from
+    /// `zipinfo -t` ("N files, X bytes uncompressed, Y bytes compressed: Z%").
+    nonisolated private static func declaredUncompressedSize(of zip: URL) -> Int64? {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/zipinfo")
+        process.arguments = ["-t", zip.path]
+        let output = Pipe()
+        process.standardOutput = output
+        process.standardError = Pipe()
+        do { try process.run() } catch { return nil }
+        let data = output.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0,
+              let text = String(data: data, encoding: .utf8),
+              let range = text.range(
+                of: #"[0-9]+ bytes uncompressed"#, options: .regularExpression)
+        else { return nil }
+        return Int64(text[range].prefix { $0.isNumber })
+    }
+
+    nonisolated private static func availableSpace(at url: URL) -> Int64? {
+        let values = try? url.resourceValues(
+            forKeys: [.volumeAvailableCapacityForImportantUsageKey])
+        return values?.volumeAvailableCapacityForImportantUsage
     }
 
     nonisolated private static func extractZip(
@@ -544,6 +581,7 @@ enum BackupError: LocalizedError {
     case zipFailed(String)
     case extractFailed(String)
     case unsafeEntry(String)
+    case notEnoughSpace(needed: Int64, available: Int64)
 
     var errorDescription: String? {
         switch self {
@@ -555,6 +593,8 @@ enum BackupError: LocalizedError {
             "Couldn't unpack the backup. \(detail)"
         case .unsafeEntry(let name):
             "That backup contains a symbolic link (\(name)), which Bunyi never creates. Nothing was restored."
+        case .notEnoughSpace(let needed, let available):
+            "Restoring needs \(ByteCountFormatter.string(fromByteCount: needed, countStyle: .file)) but only \(ByteCountFormatter.string(fromByteCount: available, countStyle: .file)) is free. Nothing was restored."
         }
     }
 }

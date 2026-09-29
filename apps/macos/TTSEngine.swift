@@ -485,7 +485,9 @@ public final class TTSEngine {
                 (files, base) = try await hubFiles(repoID: repoID)
             case .baseURL(let source):
                 base = source
-                files = try await fileList(base: source)
+                files = try await fileList(
+                    base: source,
+                    requireChecksums: mode.isUsingBuiltInMirror(source))
             }
             status = .downloading(0)
             downloadFeedback = ModelDownloadProgress(phase: .sizing)
@@ -636,7 +638,8 @@ public final class TTSEngine {
         let localDir = Self.modelDirectory(for: mode)
         if Self.hasCompleteModel(at: localDir) { return localDir }
         status = .checking
-        let files = try await fileList(base: base)
+        let files = try await fileList(
+            base: base, requireChecksums: mode.isUsingBuiltInMirror(base))
         try await downloadEntries(files, base: base, into: localDir)
         guard Self.hasCompleteModel(at: localDir) else { throw TTSError.selfHostIncomplete }
         return localDir
@@ -804,13 +807,24 @@ public final class TTSEngine {
     /// and — for a required file — fail the whole download. Old clients never
     /// ask for `manifest.sha256`, so a server can publish it whenever it likes
     /// and nothing in the field breaks.
-    private func fileList(base: URL) async throws -> [ManifestEntry] {
+    ///
+    /// `requireChecksums` is set for the built-in Bunyi mirror, which the app
+    /// itself endorses: there `manifest.sha256` must be served and must carry a
+    /// digest for every file. Falling back to an unverified list would let
+    /// anyone who can break that one request downgrade the download.
+    private func fileList(
+        base: URL, requireChecksums: Bool = false
+    ) async throws -> [ManifestEntry] {
         if let entries = try await manifest(at: base.appendingPathComponent("manifest.sha256")),
            !entries.isEmpty {
+            if requireChecksums, entries.contains(where: { $0.sha256 == nil }) {
+                throw TTSError.checksumManifestRequired
+            }
             let digests = entries.filter { $0.sha256 != nil }.count
             log.log("Using manifest.sha256 (\(entries.count) files, \(digests) with checksums)")
             return entries
         }
+        if requireChecksums { throw TTSError.checksumManifestRequired }
         if let entries = try await manifest(at: base.appendingPathComponent("manifest.txt")),
            !entries.isEmpty {
             log.log("Using manifest.txt (\(entries.count) files, no checksums)")
@@ -1033,6 +1047,11 @@ public final class TTSEngine {
     /// includes it.
     private static let tokenizerJSONURL = URL(string:
         "https://huggingface.co/AtomGradient/Qwen3-TTS-0.6B-CustomVoice-bf16-pruned-vocab-lite/resolve/main/tokenizer.json")!
+    /// SHA-256 of that file (5,364,038 bytes). It is a third-party repository's
+    /// `resolve/main`, a moving branch, and this file is parsed natively, so a
+    /// changed upstream fails verification here rather than being loaded.
+    private static let tokenizerJSONSHA256 =
+        "8ca8d13e0431faf04d07907bbc86f31cf492e93cbb930d9e636961da3f93005c"
 
     private func ensureTokenizerJSON(in dir: URL, source: ModelSource) async throws {
         let dest = dir.appendingPathComponent("tokenizer.json")
@@ -1040,16 +1059,18 @@ public final class TTSEngine {
         log.log("Model has no tokenizer.json — fetching a compatible one")
 
         // Prefer the self-hosted server's own copy, then the known HF URL.
-        var candidates: [URL] = []
+        // The self-hosted copy is the user's own server, so it carries no pinned
+        // digest; the Hub fallback does.
+        var candidates: [(url: URL, sha256: String?)] = []
         if case .baseURL(let base) = source {
-            candidates.append(base.appendingPathComponent("tokenizer.json"))
+            candidates.append((base.appendingPathComponent("tokenizer.json"), nil))
         }
-        candidates.append(Self.tokenizerJSONURL)
+        candidates.append((Self.tokenizerJSONURL, Self.tokenizerJSONSHA256))
 
         var serviceFailure: DownloadServiceError?
-        for url in candidates {
+        for (url, digest) in candidates {
             do {
-                try await downloadEntries([ManifestEntry(path: "tokenizer.json", sha256: nil)],
+                try await downloadEntries([ManifestEntry(path: "tokenizer.json", sha256: digest)],
                     base: url.deletingLastPathComponent(), into: dir, allRequired: true)
                 log.log("Added tokenizer.json to \(dir.path)")
                 return
@@ -1663,7 +1684,10 @@ public final class TTSEngine {
             await finishStopping()
         } catch let error as DownloadServiceError {
             if modelInfo == nil { modelLease = nil }
-            log.log("Error: \(String(describing: error))")
+            // Not String(describing:): a download error carries the full source
+            // URL, query string and credentials included.
+            log.log("Error (\(PrivacyRedactor.modelSource(mode.effectiveRepoID))): "
+                + error.localizedDescription)
             await releaseGenerationMemory()
             generationDetail = nil
             if case .unavailable(_, let paused, _) = error,
@@ -1683,7 +1707,8 @@ public final class TTSEngine {
             status = .error("Model download failed. \(error.localizedDescription)")
         } catch {
             if modelInfo == nil { modelLease = nil }
-            log.log("Error: \(String(describing: error))")
+            log.log("Error (\(PrivacyRedactor.modelSource(mode.effectiveRepoID))): "
+                + error.localizedDescription)
             // A run that threw allocated just as much as one that succeeded.
             // Releasing only on success left the cache held by exactly the runs
             // most likely to have been killed by memory pressure in the first
@@ -1958,12 +1983,11 @@ public final class TTSEngine {
         return "\(mode.rawValue.replacingOccurrences(of: " ", with: "-"))-\(stamp).wav"
     }
 
+    /// The transcript is what the user said, so it does not go in the log,
+    /// which reaches the unified system log and sysdiagnose. The UI shows it
+    /// from `lastReferenceTranscript`.
     private func logReferenceTranscription(_ text: String) {
-        if CLISettingsStore.isCLI {
-            log.log("Reference transcription completed")
-        } else {
-            log.log("Reference transcript: \"\(text)\"")
-        }
+        log.log("Reference transcription completed (\(text.count) characters)")
     }
 
     public func revealLastOutput() {
@@ -1977,6 +2001,7 @@ public enum TTSError: LocalizedError {
     case missingReference
     case noAudio
     case tokenizerDownloadFailed
+    case checksumManifestRequired
     case referenceAudioUnreadable
     case referenceAudioEmpty
     case transcriptionNotAuthorized
@@ -1997,6 +2022,8 @@ public enum TTSError: LocalizedError {
         case .noAudio: "The model finished without producing audio. Try again."
         case .tokenizerDownloadFailed:
             "Couldn't fetch the tokenizer file this model is missing. Check your connection and try again."
+        case .checksumManifestRequired:
+            "The Bunyi mirror's checksum list (manifest.sha256) was missing or incomplete, so nothing was downloaded: this source has to be verified. Try again later, or switch to Hugging Face in Settings."
         case .referenceAudioUnreadable:
             "Couldn't read that reference clip. Try a WAV, M4A, or MP3 file."
         case .referenceAudioEmpty:

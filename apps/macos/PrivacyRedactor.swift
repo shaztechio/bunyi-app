@@ -19,12 +19,18 @@ import Foundation
 public enum PrivacyRedactor {
     public static func modelSource(_ value: String) -> String {
         guard var parts = URLComponents(string: value), parts.scheme != nil else {
-            return value
+            // Not parseable as a URL: a repo id passes through, but anything
+            // that could carry credentials or a signed query does not.
+            return value.contains(where: { "@?#".contains($0) })
+                ? "[redacted URL]" : value
         }
         parts.user = nil
         parts.password = nil
         parts.query = nil
         parts.fragment = nil
-        return parts.string ?? "[redacted URL]"
+        // An '@' still present after the userinfo was dropped means credentials
+        // rode in somewhere else (a scheme-like prefix, the path), so refuse it.
+        let text = parts.string ?? "[redacted URL]"
+        return text.contains("@") ? "[redacted URL]" : text
     }
 }

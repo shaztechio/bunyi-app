@@ -43,7 +43,33 @@ public sealed class ServerEndpoint
         var config = Path.GetFullPath(Environment.GetEnvironmentVariable("BUNYI_CONFIG_FILE") ?? AppPaths.SettingsFile);
         if (OperatingSystem.IsWindows()) { scope = scope.ToUpperInvariant(); config = config.ToUpperInvariant(); }
         Name = "bunyi-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identity + ":" + scope + ":" + config)))[..24].ToLowerInvariant();
-        DirectoryPath = Path.Combine(Path.GetTempPath(), Name);
+        DirectoryPath = Path.Combine(
+            OperatingSystem.IsLinux() ? RuntimeBase(Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR"), Name) : Path.GetTempPath(),
+            Name);
+    }
+
+    // A sun_path holds 108 bytes on Linux, including the terminator.
+    private const int MaxSocketPathBytes = 100;
+
+    /// <summary>
+    /// Where the per-user server directory lives on Linux.
+    /// </summary>
+    /// <remarks>
+    /// <c>$XDG_RUNTIME_DIR</c> when it is set, absolute, present and short enough for a socket
+    /// path: it is private to the user by definition. <c>/tmp</c> is shared and sticky, so
+    /// another local user who guesses the directory name (it is a hash of guessable inputs)
+    /// can create it first, and <c>--require-server</c> and <c>--detach</c> then fail until reboot.
+    /// </remarks>
+    public static string RuntimeBase(string? xdgRuntimeDir, string name, int maxSocketPathBytes = MaxSocketPathBytes)
+    {
+        var temp = Path.GetTempPath();
+        if (string.IsNullOrWhiteSpace(xdgRuntimeDir) || !Path.IsPathRooted(xdgRuntimeDir)) return temp;
+
+        var directory = Path.TrimEndingDirectorySeparator(xdgRuntimeDir);
+        if (!Directory.Exists(directory)) return temp;
+
+        var longest = Path.Combine(directory, name, "server.sock");
+        return Encoding.UTF8.GetByteCount(longest) <= maxSocketPathBytes ? directory : temp;
     }
 
     internal void PrepareDirectory()

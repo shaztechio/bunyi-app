@@ -80,6 +80,10 @@ final class ServerHost {
     private var active: ServerJob?
     private var listener: Int32 = -1
     private var stopping = false
+    /// Connections being served. A same-user client that opens many sockets
+    /// and never speaks would otherwise hold one task and one descriptor each.
+    private var openConnections = 0
+    private static let maximumConnections = 32
     private var stopped = false
     private var stoppedWaiters: [CheckedContinuation<Void, Never>] = []
     private var stopReplyPending = false
@@ -147,9 +151,10 @@ final class ServerHost {
             }.value
             switch accepted {
             case .success(let descriptor):
-                if stopping {
+                if stopping || openConnections >= Self.maximumConnections {
                     ServerSocket.close(descriptor)
                 } else {
+                    openConnections += 1
                     Task { @MainActor [weak self] in
                         await self?.handleConnection(descriptor)
                     }
@@ -164,7 +169,10 @@ final class ServerHost {
     }
 
     private func handleConnection(_ descriptor: Int32) async {
-        defer { ServerSocket.close(descriptor) }
+        defer {
+            openConnections -= 1
+            ServerSocket.close(descriptor)
+        }
         var operation = "server.request"
         var operationID = OperationID.make()
         do {
