@@ -28,6 +28,19 @@ import Foundation
 public enum ModelSource: Equatable {
     case repo(String)
     case baseURL(URL)
+
+    /// A Hub identifier is also used as a local directory and in a copyable
+    /// command shown in Settings. Keep both path components unambiguous.
+    public static func isValidRepoID(_ id: String) -> Bool {
+        let parts = id.split(separator: "/", omittingEmptySubsequences: false)
+        return parts.count == 2 && parts.allSatisfy { part in
+            !part.isEmpty && part != "." && part != ".." &&
+            part.utf8.allSatisfy { byte in
+                (byte >= 65 && byte <= 90) || (byte >= 97 && byte <= 122) ||
+                (byte >= 48 && byte <= 57) || byte == 45 || byte == 46 || byte == 95
+            }
+        }
+    }
 }
 
 public struct DownloadRecoveryOffer: Equatable {

@@ -149,9 +149,7 @@ enum ConfigurationCommand {
             }
             return
         }
-        let parts = trimmed.split(separator: "/", omittingEmptySubsequences: false)
-        guard parts.count == 2,
-              parts.allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." }) else {
+        guard ModelSource.isValidRepoID(trimmed) else {
             throw CLICommandParser.invalid(
                 "A Hugging Face source must be an organization/repository ID.")
         }

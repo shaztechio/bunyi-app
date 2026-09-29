@@ -31,6 +31,10 @@ enum SavedVoiceFormatChecks {
         precondition(timestamp?.hasSuffix("Z") == true)
         let roundTrip = try SavedVoiceFile.decode(encoded)
         precondition(roundTrip == [voice])
+        precondition(SavedVoiceFile.validClipName("voice.wav"))
+        precondition(!SavedVoiceFile.validClipName("../outside.wav"))
+        precondition(!SavedVoiceFile.validClipName("..\\outside.wav"))
+        precondition(!SavedVoiceFile.validClipName("C:outside.wav"))
 
         // JSONEncoder's legacy default Date representation is seconds since
         // Apple's 2001 reference date, not Unix time.

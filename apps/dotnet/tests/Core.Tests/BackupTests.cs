@@ -181,6 +181,17 @@ public sealed class BackupTests : IDisposable
     }
 
     [Fact]
+    public void Archive_paths_cannot_define_a_repository_outside_models()
+    {
+        using (var archive = ZipFile.Open(Zip, ZipArchiveMode.Create))
+        {
+            archive.CreateEntry("models/../outside/repo/config.json");
+        }
+
+        Assert.Throws<InvalidDataException>(() => New().Inspect(Zip));
+    }
+
+    [Fact]
     public async Task A_backup_wrapped_in_a_folder_is_still_read()
     {
         // A zip made by a file manager often wraps everything in a folder named

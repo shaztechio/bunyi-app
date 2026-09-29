@@ -78,8 +78,14 @@ public sealed class VoiceLibrary
     public string ClipPath(SavedVoice voice)
     {
         ArgumentNullException.ThrowIfNull(voice);
+        if (!ValidClipName(voice.FileName))
+            throw new ArgumentException("A saved voice clip must be a file in the voices folder.", nameof(voice));
         return System.IO.Path.Combine(_folder, voice.FileName);
     }
+
+    private static bool ValidClipName(string? name) =>
+        !string.IsNullOrWhiteSpace(name) && name is not "." and not ".." &&
+        !name.Any(c => c is '/' or '\\' or ':' or '\0' || char.IsControl(c));
 
     /// <summary>
     /// Reads the library, dropping entries whose audio has gone (spec §5).
@@ -116,7 +122,13 @@ public sealed class VoiceLibrary
 
             foreach (var voice in read ?? [])
             {
-                if (voice is null || string.IsNullOrWhiteSpace(voice.FileName)) continue;
+                if (voice is null) continue;
+                if (!ValidClipName(voice.FileName))
+                {
+                    _log.Log($"The recording name for the saved voice “{voice.Name}” is invalid; removing it.");
+                    pruned++;
+                    continue;
+                }
 
                 if (File.Exists(System.IO.Path.Combine(_folder, voice.FileName)))
                 {
@@ -199,6 +211,7 @@ public sealed class VoiceLibrary
     public void Delete(SavedVoice voice)
     {
         ArgumentNullException.ThrowIfNull(voice);
+        var clip = ClipPath(voice);
 
         lock (_gate)
         {
@@ -210,7 +223,6 @@ public sealed class VoiceLibrary
         // nothing refers to, and §5 says delete removes both.
         try
         {
-            var clip = ClipPath(voice);
             if (File.Exists(clip)) File.Delete(clip);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

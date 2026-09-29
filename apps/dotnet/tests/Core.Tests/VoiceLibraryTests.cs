@@ -219,6 +219,31 @@ public sealed class VoiceLibraryTests : IDisposable
         Assert.Equal("clip.wav", voice.FileName);
     }
 
+    [Theory]
+    [InlineData("../outside.wav")]
+    [InlineData("..\\outside.wav")]
+    [InlineData("/tmp/outside.wav")]
+    [InlineData("C:outside.wav")]
+    public void Loaded_clip_names_cannot_escape_the_voices_folder(string fileName)
+    {
+        var outside = Path.Combine(Path.GetDirectoryName(_root)!, "outside.wav");
+        File.WriteAllText(outside, "keep");
+        try
+        {
+            File.WriteAllText(Path.Combine(_root, "voices.json"), JsonSerializer.Serialize(new[]
+            {
+                new SavedVoice(Guid.NewGuid(), "Unsafe", fileName, "Words", DateTimeOffset.UtcNow),
+            }));
+            var library = New();
+            library.Load();
+            Assert.Empty(library.Voices);
+            Assert.Equal("keep", File.ReadAllText(outside));
+            Assert.Throws<ArgumentException>(() => library.ClipPath(
+                new SavedVoice(Guid.NewGuid(), "Unsafe", fileName, "Words", DateTimeOffset.UtcNow)));
+        }
+        finally { File.Delete(outside); }
+    }
+
     // ---- Loading and pruning ----
 
     [Fact]

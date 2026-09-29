@@ -97,6 +97,9 @@ public final class VoiceLibrary {
     }
 
     public func deleteStrict(_ voice: SavedVoice) throws {
+        guard SavedVoiceFile.validClipName(voice.fileName) else {
+            throw CocoaError(.fileReadInvalidFileName)
+        }
         try FileManager.default.removeItem(at: audioURL(for: voice))
         voices.removeAll { $0.id == voice.id }
         try persistStrict()
@@ -142,6 +145,7 @@ public final class VoiceLibrary {
         // voice that can't be generated.
         let legacyDate = SavedVoiceFile.containsLegacyNumericDate(data)
         voices = decoded.filter {
+            SavedVoiceFile.validClipName($0.fileName) &&
             FileManager.default.fileExists(atPath: audioURL(for: $0).path)
         }
         sortVoices()

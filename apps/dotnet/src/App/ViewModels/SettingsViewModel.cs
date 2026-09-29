@@ -245,7 +245,9 @@ public sealed partial class SettingsViewModel : ObservableObject
             // A mode on the user's own server is named as such rather than
             // given a command with a URL where a repo id belongs.
             PreDownloadCommands.Add(new(mode.DisplayName(),
-                command ?? $"{mode.DisplayName()}: served from your own server."));
+                command ?? (source is ModelSource.Repo
+                    ? $"{mode.DisplayName()}: invalid repository ID."
+                    : $"{mode.DisplayName()}: served from your own server.")));
         }
 
         OnPropertyChanged(nameof(IsCustomModelsFolder));

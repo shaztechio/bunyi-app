@@ -428,6 +428,8 @@ public final class TTSEngine {
         var downloaded: [URL] = []
         for (offset, mode) in modes.enumerated() {
             try Task.checkCancellation()
+            if case .repo(let repoID) = mode.effectiveSource,
+               !ModelSource.isValidRepoID(repoID) { throw TTSError.invalidModelSource }
             downloadMode = mode
             downloadItemIndex = offset + 1
             status = .checking
@@ -459,6 +461,8 @@ public final class TTSEngine {
         }
         for (offset, mode) in modes.enumerated() {
             try Task.checkCancellation()
+            if case .repo(let repoID) = mode.effectiveSource,
+               !ModelSource.isValidRepoID(repoID) { throw TTSError.invalidModelSource }
             downloadMode = mode
             downloadItemIndex = offset + 1
             downloadItemCount = modes.count
@@ -530,7 +534,8 @@ public final class TTSEngine {
         let root = ModelsLocation.current()
         switch mode.effectiveSource {
         case .repo(let repoID):
-            return root.appendingPathComponent("models/\(repoID)", isDirectory: true)
+            let safe = ModelSource.isValidRepoID(repoID) ? repoID : "invalid-source"
+            return root.appendingPathComponent("models/\(safe)", isDirectory: true)
         case .baseURL(let base):
             return root.appendingPathComponent("models/self-hosted/\(slug(for: base))",
                                                isDirectory: true)
@@ -540,7 +545,9 @@ public final class TTSEngine {
     /// Whether that folder holds a model that can actually be loaded — the same
     /// test the download path uses to decide it has nothing to do.
     public static func isModelComplete(for mode: TTSMode) -> Bool {
-        hasCompleteModel(at: modelDirectory(for: mode))
+        if case .repo(let repoID) = mode.effectiveSource,
+           !ModelSource.isValidRepoID(repoID) { return false }
+        return hasCompleteModel(at: modelDirectory(for: mode))
     }
 
     /// The digests a self-hosted server publishes, if it publishes any.
@@ -555,6 +562,7 @@ public final class TTSEngine {
     }
 
     private func downloadFromHub(mode: TTSMode, repoID: String) async throws -> URL {
+        guard ModelSource.isValidRepoID(repoID) else { throw TTSError.invalidModelSource }
         let localDir = Self.modelDirectory(for: mode)
         if Self.hasCompleteModel(at: localDir) {
             log.log("Using existing model files at \(localDir.path)")
@@ -569,6 +577,7 @@ public final class TTSEngine {
 
     private func hubFiles(repoID: String) async throws
         -> (files: [ManifestEntry], base: URL) {
+        guard ModelSource.isValidRepoID(repoID) else { throw TTSError.invalidModelSource }
         // Discover through the public tree endpoint so its 429 response and
         // reset headers go through the same bounded policy as every file.
         var tree = URLComponents(string:
@@ -1964,6 +1973,7 @@ public final class TTSEngine {
 }
 
 public enum TTSError: LocalizedError {
+    case invalidModelSource
     case missingReference
     case noAudio
     case tokenizerDownloadFailed
@@ -1981,6 +1991,8 @@ public enum TTSError: LocalizedError {
 
     public var errorDescription: String? {
         switch self {
+        case .invalidModelSource:
+            "A Hugging Face source must be an organization/repository ID using letters, numbers, dots, hyphens, or underscores."
         case .missingReference: "Choose a reference audio clip first."
         case .noAudio: "The model finished without producing audio. Try again."
         case .tokenizerDownloadFailed:
