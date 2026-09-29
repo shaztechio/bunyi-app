@@ -78,8 +78,21 @@ public sealed class VoiceLibrary
     public string ClipPath(SavedVoice voice)
     {
         ArgumentNullException.ThrowIfNull(voice);
+        if (!IsPlainFileName(voice.FileName))
+            throw new InvalidDataException("A saved voice's recording must be a file in the Voices folder.");
         return System.IO.Path.Combine(_folder, voice.FileName);
     }
+
+    /// <summary>
+    /// A bare name with no directory part. <c>voices.json</c> travels between
+    /// machines, and an entry naming <c>../x</c> or an absolute path would make
+    /// Delete remove a file outside the library.
+    /// </summary>
+    private static bool IsPlainFileName(string? fileName) =>
+        !string.IsNullOrWhiteSpace(fileName)
+        && fileName is not ("." or "..")
+        && fileName.IndexOfAny(['/', '\\', ':']) < 0
+        && System.IO.Path.GetFileName(fileName) == fileName;
 
     /// <summary>
     /// Reads the library, dropping entries whose audio has gone (spec §5).
@@ -116,7 +129,7 @@ public sealed class VoiceLibrary
 
             foreach (var voice in read ?? [])
             {
-                if (voice is null || string.IsNullOrWhiteSpace(voice.FileName)) continue;
+                if (voice is null || !IsPlainFileName(voice.FileName)) continue;
 
                 if (File.Exists(System.IO.Path.Combine(_folder, voice.FileName)))
                 {

@@ -91,9 +91,9 @@ enum ModelCommand {
         _ request: CLIRequest, output: CLIOutput, cancelled: CancellationState,
         engine existingEngine: TTSEngine?
     ) async throws -> CLIMessage {
-        let modes = request.has("all")
+        let modes = try request.has("all")
             ? TTSMode.allCases
-            : [mode(request.value("mode")!)]
+            : [requiredMode(request)]
         let engine = existingEngine ?? TTSEngine()
         if engine.loadedMode != nil {
             await engine.unload(reason: "downloading model assets")
@@ -248,7 +248,7 @@ enum ModelCommand {
         _ request: CLIRequest, cancelled: CancellationState,
         engine existingEngine: TTSEngine?
     ) async throws -> CLIMessage {
-        let mode = mode(request.value("mode")!)
+        let mode = try requiredMode(request)
         let directory = TTSEngine.modelDirectory(for: mode)
         guard TTSEngine.isModelComplete(for: mode) else {
             throw CLIError(
@@ -309,7 +309,7 @@ enum ModelCommand {
     private static func remove(
         _ request: CLIRequest, ownsLease: Bool
     ) async throws -> CLIMessage {
-        let mode = mode(request.value("mode")!)
+        let mode = try requiredMode(request)
         let directory = TTSEngine.modelDirectory(for: mode)
         guard FileManager.default.fileExists(atPath: directory.path) else {
             throw CLIError(
@@ -481,6 +481,15 @@ enum ModelCommand {
         case "clone": .voiceClone
         default: .presetVoice
         }
+    }
+
+    /// The request's mode, checked again here: a raw socket client skips the
+    /// parser, and a missing value must be an error, not a crashed server.
+    static func requiredMode(_ request: CLIRequest) throws -> TTSMode {
+        guard let value = request.value("mode") else {
+            throw CLICommandParser.invalid("--mode preset|design|clone is required.")
+        }
+        return mode(try CLICommandParser.mode(value))
     }
 
     static func modeName(_ mode: TTSMode) -> String {

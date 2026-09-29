@@ -141,8 +141,12 @@ public final class VoiceLibrary {
         // Drop entries whose audio went missing so the picker never offers a
         // voice that can't be generated.
         let legacyDate = SavedVoiceFile.containsLegacyNumericDate(data)
+        // A bare file name only: voices.json can travel between machines, and
+        // an entry naming "../x" would make Delete remove a file outside the
+        // library.
         voices = decoded.filter {
-            FileManager.default.fileExists(atPath: audioURL(for: $0).path)
+            Self.isPlainFileName($0.fileName)
+                && FileManager.default.fileExists(atPath: audioURL(for: $0).path)
         }
         sortVoices()
         if legacyDate || voices.count != decoded.count {
@@ -156,6 +160,11 @@ public final class VoiceLibrary {
                     + error.localizedDescription)
             }
         }
+    }
+
+    private static func isPlainFileName(_ name: String) -> Bool {
+        !name.isEmpty && name != "." && name != ".."
+            && !name.contains("/") && !name.contains("\\") && !name.contains(":")
     }
 
     private func persistStrict() throws {
