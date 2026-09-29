@@ -36,6 +36,7 @@ internal static class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        Bunyi.Core.Platform.WindowsSearchPath.RemoveCurrentDirectory();
         // First statement, so nothing this app does lands in the phase that is
         // meant to hold only what happened before it got control.
         Startup = StartupTimeline.FromProcessStart();

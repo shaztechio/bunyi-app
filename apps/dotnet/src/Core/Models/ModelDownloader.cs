@@ -14,6 +14,7 @@
 
 using System.Diagnostics;
 using System.Security.Cryptography;
+using System.Text;
 using Bunyi.Core.Diagnostics;
 
 namespace Bunyi.Core.Models;
@@ -516,6 +517,29 @@ public sealed partial class ModelDownloader(HttpClient http, ILogSink log, TimeP
         return builder.Uri;
     }
 
+    /// <summary>Manifests are a few kilobytes; anything past this is not one.</summary>
+    internal const int MaxManifestBytes = 1 << 20;
+
+    private static async Task<string> ReadCappedAsync(HttpContent content, Uri uri, CancellationToken ct)
+    {
+        if (content.Headers.ContentLength > MaxManifestBytes) throw TooLarge(uri);
+
+        await using var body = await content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+        using var buffer = new MemoryStream();
+        var chunk = new byte[16 * 1024];
+        int read;
+        while ((read = await body.ReadAsync(chunk, ct).ConfigureAwait(false)) > 0)
+        {
+            if (buffer.Length + read > MaxManifestBytes) throw TooLarge(uri);
+            buffer.Write(chunk, 0, read);
+        }
+
+        return Encoding.UTF8.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
+    }
+
+    private static InvalidDataException TooLarge(Uri uri) =>
+        new($"The manifest at {uri} is larger than {MaxManifestBytes / 1024} KiB, so it is not being read.");
+
     private async Task<string?> TryGetStringAsync(Uri uri, CancellationToken ct, Action<DownloadWait?>? waiting = null)
     {
         try
@@ -523,7 +547,7 @@ public sealed partial class ModelDownloader(HttpClient http, ILogSink log, TimeP
             using var response = await DownloadHttp.SendAsync(_http,
                 () => new HttpRequestMessage(HttpMethod.Get, uri), ct, waiting, _time).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode) return null;
-            return await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            return await ReadCappedAsync(response.Content, uri, ct).ConfigureAwait(false);
         }
         catch (HttpRequestException)
         {

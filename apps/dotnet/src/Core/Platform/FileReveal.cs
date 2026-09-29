@@ -55,7 +55,7 @@ public static class FileReveal
             // No space after the comma: explorer parses "/select,<path>" as one
             // token, and a space makes it open Documents instead — a silent,
             // confusing wrong answer rather than an error.
-            return new RevealCommand("explorer.exe", [$"/select,{full}"]);
+            return new RevealCommand(WindowsSearchPath.Explorer, [$"/select,{full}"]);
         }
 
         if (OperatingSystem.IsMacOS())

@@ -53,7 +53,7 @@ jobs:
       tag: ${{ steps.pick.outputs.tag }}
       publish: ${{ steps.pick.outputs.publish }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: true
           # Release notes read the commits since the previous tag, so a shallow
@@ -186,20 +186,20 @@ jobs:
       # The tag when there is one — the bump commit may have landed a moment
       # ago, and building anything but the tagged tree would ship binaries the
       # tag does not describe.
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         if: needs.version.outputs.publish == 'true'
         with:
           ref: ${{ needs.version.outputs.tag }}
           fetch-depth: 0
 
       # A dry run has no tag to check out.
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         if: needs.version.outputs.publish == 'false'
 
-      - uses: actions/setup-dotnet@v6
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           dotnet-version: '10.0.x'
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.12'
 
@@ -239,7 +239,7 @@ jobs:
 
       - name: Upload MSIX for submission testing
         if: matrix.rid == 'win-x64' && matrix.cuda == false
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: Bunyi-MSIX-${{ needs.version.outputs.version }}
           path: |
@@ -263,7 +263,7 @@ jobs:
       # These are intermediate artifacts, never direct release downloads.
       - name: Upload Windows payloads for signing
         if: matrix.rid == 'win-x64'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: windows-payload${{ matrix.suffix }}
           path: apps/dotnet/publish/
@@ -317,7 +317,7 @@ jobs:
           # ship as a folder of nothing.
           test "$size" -gt 20000000
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         if: matrix.rid == 'linux-x64'
         with:
           # The suffix is part of the name, or the two builds of a platform
@@ -335,18 +335,18 @@ jobs:
       contents: read
     # Both flavors share one SimplySign session, avoiding concurrent OTP logins.
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ needs.version.outputs.publish == 'true' && needs.version.outputs.tag || github.sha }}
           persist-credentials: false
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.12'
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: windows-payload
           path: apps/dotnet/publish/cpu
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: windows-payload-cuda
           path: apps/dotnet/publish/cuda
@@ -392,7 +392,7 @@ jobs:
           ./packaging/windows/package-signed-release.ps1 -PublishRoot publish -OutputDirectory dist `
             -Version $env:RELEASE_VERSION -CompilerPath "$env:RUNNER_TEMP/inno/compiler/ISCC.exe"
       - name: Upload verified Windows downloads
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: windows-signed
           path: apps/dotnet/dist/*
@@ -410,18 +410,18 @@ jobs:
     if: needs.version.outputs.publish == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ needs.version.outputs.tag }}
           fetch-depth: 0
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           # Intermediate unsigned Windows payloads must never enter a release.
           pattern: linux-x64*
           path: dist
           merge-multiple: true
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: windows-signed
           path: dist
