@@ -18,6 +18,28 @@ import Foundation
 /// Regular files are streamed so Stop is observed between bounded chunks,
 /// including in the middle of a multi-gigabyte weight file.
 public enum BackupFileTree {
+    /// Reject links before an extracted repository can be moved into Models.
+    /// A later model read or download would otherwise follow it outside Models.
+    public static func validateRegularTree(in root: URL) throws {
+        let fm = FileManager.default
+        var pending = [root]
+        while let directory = pending.popLast() {
+            for item in try fm.contentsOfDirectory(
+                at: directory,
+                includingPropertiesForKeys: [.isDirectoryKey, .isRegularFileKey,
+                                             .isSymbolicLinkKey]) {
+                let values = try item.resourceValues(
+                    forKeys: [.isDirectoryKey, .isRegularFileKey,
+                              .isSymbolicLinkKey])
+                if values.isSymbolicLink == true ||
+                    (values.isDirectory != true && values.isRegularFile != true) {
+                    throw CocoaError(.fileReadInvalidFileName)
+                }
+                if values.isDirectory == true { pending.append(item) }
+            }
+        }
+    }
+
     public static func copyDirectory(
         from source: URL,
         to destination: URL,

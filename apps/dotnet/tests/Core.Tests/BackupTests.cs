@@ -154,6 +154,19 @@ public sealed class BackupTests : IDisposable
     // ---- Reading one ----
 
     [Fact]
+    public void A_backup_with_a_symbolic_link_is_rejected_before_restore()
+    {
+        using (var archive = ZipFile.Open(Zip, ZipArchiveMode.Create))
+        {
+            archive.CreateEntry("models/org/repo/config.json");
+            var link = archive.CreateEntry("models/org/repo/weights.bin");
+            link.ExternalAttributes = unchecked((int)0xA0000000);
+        }
+
+        Assert.Throws<InvalidDataException>(() => New().Inspect(Zip));
+    }
+
+    [Fact]
     public async Task It_says_what_a_backup_holds_without_writing_anything()
     {
         Model("elbruno/Qwen3", "config.json", 100);

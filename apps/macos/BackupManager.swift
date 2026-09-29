@@ -351,6 +351,7 @@ public final class BackupManager {
         defer { if gotAccess { zip.stopAccessingSecurityScopedResource() } }
         try fm.copyItem(at: zip, to: localZip)
         try extractZip(localZip, to: extractDir, control: control)
+        try BackupFileTree.validateRegularTree(in: extractDir)
 
         guard let modelsRoot = findModelsRoot(in: extractDir) else {
             throw BackupError.notAModelsBackup

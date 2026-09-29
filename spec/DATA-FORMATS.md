@@ -362,6 +362,8 @@ Stored in a `Voices` subfolder of app data, alongside copied audio clips.
 - Restore accepts an archive whose tree contains a `models/` directory at
   or near the root; merges per `<org>/<repo>` (or `self-hosted/<slug>`),
   **skipping repos already present**.
+- Restored model trees contain only regular files and directories. A backup
+  containing symbolic links or other special entries is rejected before merge.
 
 ## Packaged model-download defaults
 
