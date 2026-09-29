@@ -356,6 +356,9 @@ public final class BackupManager {
         // else — and moved into the models folder it would let the next
         // download write or delete files outside it.
         try rejectSymlinks(in: extractDir)
+        // The same tree must also hold nothing but regular files and folders
+        // (no sockets or devices); this is the stricter, tested check.
+        try BackupFileTree.validateRegularTree(in: extractDir)
 
         guard let modelsRoot = findModelsRoot(in: extractDir) else {
             throw BackupError.notAModelsBackup

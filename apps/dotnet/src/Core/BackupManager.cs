@@ -169,6 +169,9 @@ public sealed class BackupManager(ILogSink log)
 
         foreach (var entry in archive.Entries)
         {
+            if (entry.FullName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                && IsSpecialEntry(entry))
+                throw new InvalidDataException("The backup contains a symbolic link or special file and cannot be restored safely.");
             if (RepoOf(entry.FullName, prefix) is not { } repo) continue;
 
             repos.Add(repo);
@@ -182,6 +185,14 @@ public sealed class BackupManager(ILogSink log)
         }
 
         return new BackupContents([.. repos], bytes);
+    }
+
+    private static bool IsSpecialEntry(ZipArchiveEntry entry)
+    {
+        // Unix file type is stored in the high word of ZIP external attributes.
+        // Zero is common for archives made on Windows and means unspecified.
+        var type = (entry.ExternalAttributes >> 16) & 0xF000;
+        return type is not (0 or 0x4000 or 0x8000);
     }
 
     /// <summary>

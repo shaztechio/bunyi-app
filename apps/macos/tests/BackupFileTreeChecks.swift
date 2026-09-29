@@ -42,6 +42,19 @@ enum BackupFileTreeChecks {
             .appendingPathComponent("org/repo/config.json"))
         precondition(copiedPayload == payload)
 
+        try BackupFileTree.validateRegularTree(in: copied)
+        let link = copied.appendingPathComponent("org/repo/linked.bin")
+        try FileManager.default.createSymbolicLink(at: link,
+            withDestinationURL: root.appendingPathComponent("outside.bin"))
+        var rejectedLink = false
+        do {
+            try BackupFileTree.validateRegularTree(in: copied)
+        } catch {
+            rejectedLink = true
+        }
+        precondition(rejectedLink)
+        try FileManager.default.removeItem(at: link)
+
         let large = Data(repeating: 0x5a, count: 17 * 1024 * 1024)
         try large.write(to: nested.appendingPathComponent("weights.bin"))
         let partial = root.appendingPathComponent("partial")
