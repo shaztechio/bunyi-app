@@ -27,6 +27,7 @@ public static class Program
 {
     public static async Task<int> Main(string[] args)
     {
+        Bunyi.Core.Platform.WindowsSearchPath.RemoveCurrentDirectory();
         if (Environment.GetEnvironmentVariable("BUNYI_SERVER_BACKGROUND") == "1")
         {
             BackgroundStreams.Detach();

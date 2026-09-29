@@ -207,6 +207,32 @@ public sealed class ServerTests
     }
 
     [Fact]
+    public async Task A_33rd_simultaneous_connection_waits_instead_of_stopping_the_server()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        await using var server = await RunningServer.Start((request, _, _) => Task.FromResult(CliProtocol.Result(request)));
+        var held = new List<NamedPipeClientStream>();
+        try
+        {
+            // 32 idle connections use every pipe instance until each hits its handshake timeout.
+            for (var i = 0; i < 33; i++)
+            {
+                var client = new NamedPipeClientStream(".", server.Endpoint.Name, PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+                held.Add(client);
+                await client.ConnectAsync(15_000);
+            }
+            foreach (var client in held) await client.DisposeAsync();
+            held.Clear();
+            var status = await server.Client.StatusAsync(default);
+            Assert.Equal("preset", Text(status, "loadedMode"));
+        }
+        finally
+        {
+            foreach (var client in held) await client.DisposeAsync();
+        }
+    }
+
+    [Fact]
     public async Task LostAcceptedConnectionNeverBecomesUnavailableRetry()
     {
         if (!OperatingSystem.IsWindows()) return;

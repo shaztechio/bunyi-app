@@ -60,7 +60,7 @@ public static class WebLink
         // parser produced, not one a caller assembled.
         var safe = new Uri(url!).AbsoluteUri;
 
-        if (OperatingSystem.IsWindows()) return new LinkCommand("explorer.exe", [safe]);
+        if (OperatingSystem.IsWindows()) return new LinkCommand(WindowsSearchPath.Explorer, [safe]);
         if (OperatingSystem.IsMacOS()) return new LinkCommand("open", [safe]);
 
         return new LinkCommand("xdg-open", [safe]);

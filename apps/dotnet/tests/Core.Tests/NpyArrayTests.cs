@@ -106,6 +106,37 @@ public sealed class NpyArrayTests : IDisposable
     }
 
     [Fact]
+    public void A_header_declaring_more_values_than_the_file_holds_is_refused()
+    {
+        // Two values written, a hundred declared: reads would run off the end of the mapping.
+        var path = Write([1, 2], [100]);
+
+        var error = Assert.Throws<InvalidDataException>(() => NpyArray.Open(path));
+        Assert.Contains("more values", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_negative_dimension_is_refused()
+    {
+        var path = Write([1, 2], [-1]);
+
+        var error = Assert.Throws<InvalidDataException>(() => NpyArray.Open(path));
+        Assert.Contains("negative", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_header_length_far_past_any_real_header_is_refused_without_allocating_it()
+    {
+        // Version 2 stores the length in four bytes, so a hostile file can claim 2 GiB.
+        var path = Path.Combine(_root, "huge-header.npy");
+        byte[] bytes = [0x93, (byte)'N', (byte)'U', (byte)'M', (byte)'P', (byte)'Y', 2, 0, 0xFF, 0xFF, 0xFF, 0x7F];
+        File.WriteAllBytes(path, bytes);
+
+        var error = Assert.Throws<InvalidDataException>(() => NpyArray.Open(path));
+        Assert.Contains("header", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void A_dtype_that_is_not_float32_is_refused()
     {
         // The dangerous case: float64 read as float32 gives plausible garbage.

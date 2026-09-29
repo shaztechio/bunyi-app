@@ -32,7 +32,7 @@ public class FileRevealTests
         var command = FileReveal.CommandFor(Path.GetTempPath());
 
         var expected =
-            OperatingSystem.IsWindows() ? "explorer.exe" :
+            OperatingSystem.IsWindows() ? WindowsSearchPath.Explorer :
             OperatingSystem.IsMacOS() ? "open" :
             "dbus-send";
 

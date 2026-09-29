@@ -72,7 +72,7 @@ public sealed class WebLinkTests
 
         Assert.NotNull(command);
 
-        var expected = OperatingSystem.IsWindows() ? "explorer.exe"
+        var expected = OperatingSystem.IsWindows() ? WindowsSearchPath.Explorer
             : OperatingSystem.IsMacOS() ? "open"
             : "xdg-open";
 

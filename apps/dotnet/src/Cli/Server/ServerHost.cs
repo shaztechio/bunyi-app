@@ -77,8 +77,19 @@ public sealed class ServerHost(ServerEndpoint? endpoint = null)
         {
             while (!ct.IsCancellationRequested)
             {
-                var pipe = new NamedPipeServerStream(endpoint.Name, PipeDirection.InOut, 32, PipeTransmissionMode.Byte,
-                    PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+                NamedPipeServerStream pipe;
+                try
+                {
+                    pipe = new NamedPipeServerStream(endpoint.Name, PipeDirection.InOut, 32, PipeTransmissionMode.Byte,
+                        PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+                }
+                catch (IOException) when (ready is null && !ct.IsCancellationRequested)
+                {
+                    // All 32 instances are serving clients. Wait for one to free up rather
+                    // than letting a 33rd connection take the whole server (and its jobs) down.
+                    await Task.Delay(100, ct);
+                    continue;
+                }
                 ready?.Invoke();
                 ready = null;
                 try { await pipe.WaitForConnectionAsync(ct); }

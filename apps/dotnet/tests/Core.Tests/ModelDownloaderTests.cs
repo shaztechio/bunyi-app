@@ -417,6 +417,17 @@ public sealed class ModelDownloaderTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_manifest_far_larger_than_any_real_one_is_refused_rather_than_read_into_memory()
+    {
+        _server.Add("manifest.sha256", new string('a', ModelDownloader.MaxManifestBytes + 1));
+
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            NewDownloader().EnsureModelAsync(Source, Layout, _root, null, default));
+
+        Assert.Contains("larger than", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task A_checksum_mismatch_fails_and_the_bad_file_is_discarded()
     {
         // The file must not be left where a retry would find it and skip it.

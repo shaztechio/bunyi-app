@@ -121,6 +121,9 @@ public static class ReferenceAudio
         return temporary;
     }
 
+    /// <summary>The longest reference recording that will be decoded.</summary>
+    private const int MaxSeconds = 10 * 60;
+
     public static DecodedAudio Decode(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -136,6 +139,16 @@ public static class ReferenceAudio
             // and it is deliberately not called here.
             using var engine = new MiniAudioEngine();
             using var provider = new AssetDataProvider(engine, path, new ReadOptions());
+
+            // A reference clip is seconds long. Refuse a file that would decode to a huge buffer
+            // before allocating it, rather than after the process has run out of memory.
+            var expectedChannels = Math.Max(1, provider.FormatInfo?.ChannelCount ?? 1);
+            if (provider.SampleRate > 0
+                && provider.Length / ((double)expectedChannels * provider.SampleRate) > MaxSeconds)
+            {
+                throw new InvalidDataException(
+                    $"{Path.GetFileName(path)} is longer than {MaxSeconds / 60} minutes, which is too long for a reference clip.");
+            }
 
             var samples = new float[provider.Length];
             var read = 0;

@@ -169,6 +169,9 @@ public sealed class NpyArray : IDisposable
     private static ReadOnlySpan<byte> Magic =>
         [0x93, (byte)'N', (byte)'U', (byte)'M', (byte)'P', (byte)'Y'];
 
+    /// <summary>The largest header a real file has; the format's v1 limit is 65535.</summary>
+    private const int MaxHeaderBytes = 64 * 1024;
+
     /// <summary>Reads and validates the header.</summary>
     internal static NpyHeader ReadHeader(Stream stream, string path)
     {
@@ -196,7 +199,13 @@ public sealed class NpyArray : IDisposable
         {
             Span<byte> four = stackalloc byte[4];
             stream.ReadExactly(four);
-            headerLength = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(four));
+            var declared = BinaryPrimitives.ReadUInt32LittleEndian(four);
+            if (declared > MaxHeaderBytes)
+            {
+                throw new InvalidDataException($"{path} declares a {declared}-byte header, which is not a .npy header.");
+            }
+
+            headerLength = (int)declared;
             prefix = 12;
         }
         else
@@ -220,7 +229,26 @@ public sealed class NpyArray : IDisposable
             throw new InvalidDataException($"{path} is in Fortran order, which is not supported.");
         }
 
-        return new NpyHeader(ParseShape(dict, path), prefix + headerLength);
+        var shape = ParseShape(dict, path);
+
+        // The header is trusted for nothing: the values it declares have to fit in the file,
+        // or a truncated or hostile one would map a view the reads run off the end of.
+        long elements = 1;
+        try
+        {
+            foreach (var dimension in shape) elements = checked(elements * dimension);
+        }
+        catch (OverflowException)
+        {
+            throw new InvalidDataException($"{path} declares a shape too large to hold.");
+        }
+
+        if (stream.CanSeek && prefix + (long)headerLength + elements * sizeof(float) > stream.Length)
+        {
+            throw new InvalidDataException($"{path} declares more values than the file holds.");
+        }
+
+        return new NpyHeader(shape, prefix + headerLength);
     }
 
     private static List<int> ParseShape(string dict, string path)
@@ -242,6 +270,8 @@ public sealed class NpyArray : IDisposable
             {
                 throw new InvalidDataException($"{path} has a malformed shape: '{part}'.");
             }
+
+            if (value < 0) throw new InvalidDataException($"{path} has a negative dimension in its shape.");
 
             shape.Add(value);
         }
