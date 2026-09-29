@@ -38,7 +38,7 @@ on:
       codex-model:
         description: "Codex model (blank = CLI default)"
         type: string
-        default: "gpt-6-astra"
+        default: "gpt-6-sol"
       draft:
         description: "Open PRs as drafts"
         type: boolean
