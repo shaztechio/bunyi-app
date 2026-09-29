@@ -35,6 +35,10 @@ on:
         description: "Google (Gemini CLI)"
         type: boolean
         default: false
+      gemini-model:
+        description: "Gemini model (blank = CLI default)"
+        type: string
+        default: "gemini-3.1-pro-preview"
       draft:
         description: "Open PRs as drafts"
         type: boolean
@@ -56,6 +60,7 @@ jobs:
       anthropic: ${{ inputs.anthropic }}
       openai: ${{ inputs.openai }}
       gemini: ${{ inputs.gemini }}
+      gemini-model: ${{ inputs.gemini-model }}
       draft: ${{ inputs.draft }}
       upload-sarif: ${{ inputs.upload-sarif }}
       # claude-model: claude-sonnet-4-6
