@@ -38,7 +38,7 @@ on:
       claude-model:
         description: "Claude model (blank = CLI default)"
         type: string
-        default: "claude-sonnet-5-5"
+        default: "claude-opus-5-5"
       codex-model:
         description: "Codex model (blank = CLI default)"
         type: string
