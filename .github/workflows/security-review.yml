@@ -14,7 +14,7 @@
 # limitations under the License.
 
 # Copy to .github/workflows/security-review.yml in any repo you want reviewed.
-# Needs repo secrets ANTHROPIC_API_KEY / OPENAI_API_KEY (only for the
+# Needs repo secrets ANTHROPIC_API_KEY / OPENAI_API_KEY / OPENROUTER_API_KEY (only for the
 # providers you use) and Settings → Actions → General →
 # "Allow GitHub Actions to create and approve pull requests".
 
@@ -31,6 +31,14 @@ on:
         description: "OpenAI (Codex)"
         type: boolean
         default: true
+      openrouter:
+        description: "OpenRouter model via Claude Code (experimental; needs OPENROUTER_API_KEY)"
+        type: boolean
+        default: false
+      openrouter-model:
+        description: "OpenRouter model slug, e.g. vendor/model"
+        type: string
+        default: "z-ai/glm-5.3"
       claude-model:
         description: "Claude model (blank = CLI default)"
         type: string
@@ -55,16 +63,18 @@ jobs:
       pull-requests: write
       security-events: write # code scanning upload
       actions: read          # needed by the SARIF upload on private repos
-    uses: shaztechio/multi-llm-security-review/.github/workflows/security-review.yml@f744ef50f85e63e0373c94dfa49d2236678e379d # pinned; bump deliberately after reviewing the tool repo
+    uses: shaztechio/multi-llm-security-review/.github/workflows/security-review.yml@c7a91d5922b6fc14488052cb73be654c179e3014 # 1.0.0, pinned by commit; bump deliberately after reviewing the tool repo
     with:
       anthropic: ${{ inputs.anthropic }}
       openai: ${{ inputs.openai }}
+      openrouter: ${{ inputs.openrouter }}
+      openrouter-model: ${{ inputs.openrouter-model }}
       claude-model: ${{ inputs.claude-model }}
       codex-model: ${{ inputs.codex-model }}
       draft: ${{ inputs.draft }}
       upload-sarif: ${{ inputs.upload-sarif }}
-      # claude-model: claude-sonnet-4-6
-      tool-ref: f744ef50f85e63e0373c94dfa49d2236678e379d # keep in step with the @ref on the uses: line
+      tool-ref: c7a91d5922b6fc14488052cb73be654c179e3014 # 1.0.0; keep in step with the @ref on the uses: line
     secrets: # only what the review needs, not every secret in the repo
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
