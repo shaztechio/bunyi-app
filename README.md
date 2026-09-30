@@ -146,6 +146,49 @@ notarizes, staples, and publishes the macOS app — tags and manual runs only.
 See [`apps/macos/AGENTS.md`](apps/macos/AGENTS.md) for the release and help-book
 details.
 
+## Security review
+
+Alongside the usual CI, the repo runs an on-demand, AI-assisted security
+review, defined in
+[`.github/workflows/security-review.yml`](.github/workflows/security-review.yml).
+It calls the reusable workflow from
+[shaztechio/multi-llm-security-review](https://github.com/shaztechio/multi-llm-security-review),
+which reviews the code with more than one model and reports what they find.
+
+**How it runs.** Manually only (`workflow_dispatch`), never on push or PR. The
+maintainer picks the reviewers:
+
+- **Anthropic** (Claude Code): on by default.
+- **OpenAI** (Codex): on by default.
+- **OpenRouter**: off by default and experimental. It runs an OpenRouter model
+  through Claude Code; the model is chosen per run.
+
+**What it produces.** Findings are uploaded as SARIF to the repository's code
+scanning (Security tab). The workflow can also open pull requests with proposed
+fixes, as drafts by default, so a human reviews every change before it merges.
+
+**How the workflow is locked down.**
+
+- The reusable workflow is pinned to a full commit SHA, not a moving tag, and is
+  only bumped deliberately after reviewing the tool repo.
+- Token permissions are limited to `contents`, `pull-requests`,
+  `security-events` and `actions: read`.
+- Only the three provider API keys are passed to it, not every repo secret.
+
+**What it isn't.** It is an extra review layer, not an audit or a guarantee.
+Model output can miss real issues or report false ones, so each finding is
+checked by hand. The
+[security fixes](https://github.com/shaztechio/bunyi-app/pulls?q=is%3Apr+security)
+merged so far came out of this process.
+
+**Data.** Running it sends the repository's source to the providers you enable,
+so it needs their API keys in the repo secrets. The app itself is unaffected:
+the privacy statement above still holds for the shipped program.
+
+**Reporting a vulnerability.** Please don't open a public issue. Use
+[GitHub's private vulnerability reporting](https://github.com/shaztechio/bunyi-app/security/advisories/new),
+or contact the maintainer, [@shazron](https://github.com/shazron), directly.
+
 ## License
 
 [Apache-2.0](LICENSE). Every source file carries the license header at the top.
