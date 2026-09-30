@@ -21,9 +21,13 @@ using Bunyi.Cli.Protocol;
 
 namespace Bunyi.Cli.Server;
 
-public sealed class ServerHost(ServerEndpoint? endpoint = null)
+/// <param name="endpoint">Where to listen; the current user's endpoint when null.</param>
+/// <param name="handshakeTimeout">How long a client gets to say hello and send its request (5 seconds when null).
+/// Only tests pass one, to allow a loaded CI machine more time or to make idle connections expire quickly.</param>
+public sealed class ServerHost(ServerEndpoint? endpoint = null, TimeSpan? handshakeTimeout = null)
 {
     private readonly ServerEndpoint endpoint = endpoint ?? new();
+    private readonly TimeSpan handshakeTimeout = handshakeTimeout ?? TimeSpan.FromSeconds(5);
     private readonly ConcurrentDictionary<string, Job> jobs = new();
     private readonly Channel<Job> queue = Channel.CreateBounded<Job>(new BoundedChannelOptions(32) { SingleReader = true, FullMode = BoundedChannelFullMode.Wait });
     private readonly TaskCompletionSource stop = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -93,6 +97,15 @@ public sealed class ServerHost(ServerEndpoint? endpoint = null)
                 ready?.Invoke();
                 ready = null;
                 try { await pipe.WaitForConnectionAsync(ct); }
+                catch (IOException) when (!ct.IsCancellationRequested)
+                {
+                    // A client connected and left before this instance accepted it ("The pipe is
+                    // being closed"). That is one client's business: listen on a fresh instance.
+                    // Letting it escape ended the loop, and a server that no longer accepts is
+                    // silent, not stopped, so every later client timed out at the handshake.
+                    pipe.Dispose();
+                    continue;
+                }
                 catch { pipe.Dispose(); throw; }
                 TrackConnection(ServeAsync(pipe, status, ct));
             }
@@ -110,7 +123,15 @@ public sealed class ServerHost(ServerEndpoint? endpoint = null)
             ready?.Invoke();
             while (!ct.IsCancellationRequested)
             {
-                var socket = await listener.AcceptAsync(ct);
+                Socket socket;
+                try { socket = await listener.AcceptAsync(ct); }
+                catch (SocketException) when (!ct.IsCancellationRequested)
+                {
+                    // One connection that aborted before it was accepted (ECONNABORTED and the like)
+                    // must not end the loop, for the same reason as the pipe case above.
+                    await Task.Delay(50, ct);
+                    continue;
+                }
                 try { ServerEndpoint.VerifyPeer(socket); }
                 catch { socket.Dispose(); continue; }
                 TrackConnection(ServeAsync(new NetworkStream(socket, ownsSocket: true), status, ct));
@@ -131,16 +152,16 @@ public sealed class ServerHost(ServerEndpoint? endpoint = null)
         {
             try
             {
-                using var handshakeTimeout = CancellationTokenSource.CreateLinkedTokenSource(accepting);
-                handshakeTimeout.CancelAfter(TimeSpan.FromSeconds(5));
-                var hello = JsonSerializer.Deserialize<WireRequest>(await ServerWire.ReadAsync(stream, handshakeTimeout.Token) ?? "null", ServerWire.Json);
+                using var handshakeCancellation = CancellationTokenSource.CreateLinkedTokenSource(accepting);
+                handshakeCancellation.CancelAfter(handshakeTimeout);
+                var hello = JsonSerializer.Deserialize<WireRequest>(await ServerWire.ReadAsync(stream, handshakeCancellation.Token) ?? "null", ServerWire.Json);
                 if (hello?.Action != "hello" || hello.ProtocolVersion != ServerWire.Version)
                 {
-                    await ServerWire.WriteAsync(stream, ServerWire.Error("server.handshake", null, "server_protocol_mismatch", "Client and server protocol versions differ."), handshakeTimeout.Token);
+                    await ServerWire.WriteAsync(stream, ServerWire.Error("server.handshake", null, "server_protocol_mismatch", "Client and server protocol versions differ."), handshakeCancellation.Token);
                     return;
                 }
-                await ServerWire.WriteAsync(stream, new { protocolVersion = ServerWire.Version }, handshakeTimeout.Token);
-                var request = JsonSerializer.Deserialize<WireRequest>(await ServerWire.ReadAsync(stream, handshakeTimeout.Token) ?? "null", ServerWire.Json)
+                await ServerWire.WriteAsync(stream, new { protocolVersion = ServerWire.Version }, handshakeCancellation.Token);
+                var request = JsonSerializer.Deserialize<WireRequest>(await ServerWire.ReadAsync(stream, handshakeCancellation.Token) ?? "null", ServerWire.Json)
                     ?? throw new ServerException("invalid_arguments", "Missing server request.");
                 if (request.ProtocolVersion != ServerWire.Version) throw new ServerException("server_protocol_mismatch", "Client and server protocol versions differ.");
                 Dictionary<string, object?> response;

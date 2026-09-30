@@ -210,7 +210,9 @@ public sealed class ServerTests
     public async Task A_33rd_simultaneous_connection_waits_instead_of_stopping_the_server()
     {
         if (!OperatingSystem.IsWindows()) return;
-        await using var server = await RunningServer.Start((request, _, _) => Task.FromResult(CliProtocol.Result(request)));
+        // Idle connections free their instance when the server's handshake timeout expires, so make that short.
+        await using var server = await RunningServer.Start((request, _, _) => Task.FromResult(CliProtocol.Result(request)),
+            serverHandshakeTimeout: TimeSpan.FromSeconds(2));
         var held = new List<NamedPipeClientStream>();
         try
         {
@@ -307,15 +309,21 @@ public sealed class ServerTests
 
     private sealed class RunningServer : IAsyncDisposable
     {
+        // The product waits 5 seconds for a handshake. A busy 2-CPU CI runner has stalled that long, so
+        // these tests give both ends far longer; a test that needs idle connections to expire says so.
+        private static readonly TimeSpan Patient = TimeSpan.FromSeconds(30);
+
         public ServerEndpoint Endpoint { get; } = new(Guid.NewGuid().ToString("N"));
-        public ServerClient Client => new(Endpoint);
+        public ServerClient Client => new(Endpoint, Patient);
+        private TimeSpan handshakeTimeout = Patient;
         private readonly CancellationTokenSource cancellation = new();
         private Task run = Task.CompletedTask;
-        public static async Task<RunningServer> Start(Func<CommandRequest, Action<Dictionary<string, object?>>, CancellationToken, Task<Dictionary<string, object?>>> dispatch, Func<Task>? unload = null)
+        public static async Task<RunningServer> Start(Func<CommandRequest, Action<Dictionary<string, object?>>, CancellationToken, Task<Dictionary<string, object?>>> dispatch, Func<Task>? unload = null, TimeSpan? serverHandshakeTimeout = null)
         {
             var server = new RunningServer();
+            if (serverHandshakeTimeout is { } shortened) server.handshakeTimeout = shortened;
             var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            server.run = new ServerHost(server.Endpoint).RunAsync(dispatch, () => new { loadedMode = "preset" }, unload ?? (() => Task.CompletedTask), server.cancellation.Token, () => ready.SetResult());
+            server.run = new ServerHost(server.Endpoint, server.handshakeTimeout).RunAsync(dispatch, () => new { loadedMode = "preset" }, unload ?? (() => Task.CompletedTask), server.cancellation.Token, () => ready.SetResult());
             await ready.Task.WaitAsync(TimeSpan.FromSeconds(5));
             return server;
         }
