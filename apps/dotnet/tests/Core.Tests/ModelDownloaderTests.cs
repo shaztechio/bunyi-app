@@ -506,6 +506,23 @@ public sealed class ModelDownloaderTests : IAsyncLifetime
         Assert.Equal(expected, ModelConfigLibrary.IsBunyiMirrorUrl(new Uri(url)));
 
     [Fact]
+    public async Task The_source_recorded_for_a_download_carries_no_credentials()
+    {
+        _server.Add("manifest.sha256", _server.Sha256Manifest(
+            "embeddings/config.json", "model.onnx", "model.onnx.data"));
+        var withCredentials = new ModelSource.BaseUrl(
+            new UriBuilder(_server.BaseUrl) { UserName = "alice", Password = "hunter2" }.Uri);
+
+        var result = await NewDownloader().DownloadAssetsAsync(
+            [new("clone", withCredentials, Layout)], _root, null, default);
+
+        var recorded = Assert.Single(result).Source;
+        Assert.Equal(_server.BaseUrl.AbsoluteUri, recorded);
+        Assert.DoesNotContain("alice", recorded, StringComparison.Ordinal);
+        Assert.DoesNotContain("hunter2", recorded, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task A_manifest_far_larger_than_any_real_one_is_refused_rather_than_read_into_memory()
     {
         _server.Add("manifest.sha256", new string('a', ModelDownloader.MaxManifestBytes + 1));
