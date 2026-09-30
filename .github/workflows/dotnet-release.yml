@@ -425,6 +425,13 @@ jobs:
         with:
           name: windows-signed
           path: dist
+      # Unsigned by design: Partner Center signs it on submission. It is attached
+      # so the Store package sits beside the other downloads, not only in the
+      # run's artifacts, which expire.
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: Bunyi-MSIX-${{ needs.version.outputs.version }}
+          path: dist
 
       - name: Create the GitHub Release
         env:
