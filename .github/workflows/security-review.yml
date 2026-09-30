@@ -36,9 +36,9 @@ on:
         type: boolean
         default: false
       openrouter-model:
-        description: "OpenRouter model slug, e.g. vendor/model"
+        description: "OpenRouter model slug, e.g. vendor/model. The :floor suffix routes to the cheapest provider; the default routing picked Mistral at ~10x the price."
         type: string
-        default: "z-ai/glm-5.3"
+        default: "z-ai/glm-5.3:floor"
       openrouter-max-turns:
         description: "Stop the OpenRouter agent after this many turns (blank = no limit). Hitting it fails the run; no PR if the report is not written yet."
         type: string
