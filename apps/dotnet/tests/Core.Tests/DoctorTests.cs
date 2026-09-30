@@ -309,6 +309,30 @@ public sealed class DoctorTests : IDisposable
         Assert.DoesNotContain("/config.json", probe.AbsoluteUri.Replace("embeddings/config.json", ""));
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task The_source_finding_never_shows_credentials_or_a_signed_query(bool reachable)
+    {
+        // The Doctor report exists to be copied into a bug report, so a self-hosted URL
+        // that carries basic-auth credentials or a signed query must not appear in it.
+        var source = new ModelSource.BaseUrl(new Uri(
+            "https://alice:hunter2@models.example.com/customvoice?X-Amz-Signature=s3cret#frag"));
+
+        var report = await Doctor.RunAsync(
+            TtsMode.PresetVoice, source, Layout, _root, Outputs,
+            new FakeProbe(32_000_000_000, 500_000_000_000),
+            (_, _) => Task.FromResult(reachable),
+            null, false, ExecutionProviderChoice.Cpu);
+
+        var detail = Finding(report, "Model source").Detail;
+        Assert.Contains("https://models.example.com/customvoice", detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("alice", detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("hunter2", detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("s3cret", detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("frag", detail, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void The_source_probe_for_a_self_hosted_server_hangs_off_its_base()
     {
