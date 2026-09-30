@@ -308,7 +308,8 @@ public static class Doctor
         var where = source switch
         {
             ModelSource.Repo repo => repo.Id,
-            ModelSource.BaseUrl url => url.Url.AbsoluteUri,
+            ModelSource.BaseUrl url => new UriBuilder(url.Url)
+                { UserName = "", Password = "", Query = "", Fragment = "" }.Uri.AbsoluteUri,
             _ => "the configured source",
         };
 

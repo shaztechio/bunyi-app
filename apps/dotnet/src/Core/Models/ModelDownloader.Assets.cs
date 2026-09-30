@@ -111,7 +111,8 @@ public sealed partial class ModelDownloader
             results.Add(new(plan.Asset.Id, plan.Folder, plan.Asset.Source switch
             {
                 ModelSource.Repo repo => repo.Id,
-                ModelSource.BaseUrl url => url.Url.AbsoluteUri,
+                ModelSource.BaseUrl url => new UriBuilder(url.Url)
+                    { UserName = "", Password = "", Query = "", Fragment = "" }.Uri.AbsoluteUri,
                 _ => throw new InvalidOperationException("Unknown source."),
             }, true));
         }
