@@ -20,9 +20,12 @@ using Bunyi.Cli.Protocol;
 
 namespace Bunyi.Cli.Server;
 
-public sealed class ServerClient(ServerEndpoint? endpoint = null)
+/// <param name="endpoint">Which server to talk to; the current user's when null.</param>
+/// <param name="handshakeTimeout">How long the server gets to answer hello (5 seconds when null). Only tests pass one.</param>
+public sealed class ServerClient(ServerEndpoint? endpoint = null, TimeSpan? handshakeTimeout = null)
 {
     private readonly ServerEndpoint endpoint = endpoint ?? new();
+    private readonly TimeSpan handshakeTimeout = handshakeTimeout ?? TimeSpan.FromSeconds(5);
 
     public Task<Dictionary<string, object?>> ExecuteAsync(CommandRequest request, bool detach, Action<Dictionary<string, object?>> emit, CancellationToken ct) =>
         SendAsync(new(ServerWire.Version, "execute", request, Detached: detach), emit, ct);
@@ -108,7 +111,7 @@ public sealed class ServerClient(ServerEndpoint? endpoint = null)
         await using (stream)
         {
             using var handshake = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            handshake.CancelAfter(TimeSpan.FromSeconds(5));
+            handshake.CancelAfter(handshakeTimeout);
             try
             {
                 await ServerWire.WriteAsync(stream, new WireRequest(ServerWire.Version, "hello"), handshake.Token);
