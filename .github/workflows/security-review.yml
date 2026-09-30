@@ -39,6 +39,14 @@ on:
         description: "OpenRouter model slug, e.g. vendor/model. The :floor suffix routes to the cheapest provider; the default routing picked Mistral at ~10x the price."
         type: string
         default: "z-ai/glm-5.3:floor"
+      openrouter-max-turns:
+        description: "Stop the OpenRouter agent after this many turns (blank = no limit). Hitting it fails the run; no PR if the report is not written yet."
+        type: string
+        default: ""
+      openrouter-auto-compact-window:
+        description: "Compact the OpenRouter agent's conversation at this many tokens, 100000-1000000 (blank = 100000). Smaller = cheaper turns."
+        type: string
+        default: ""
       stream-logs:
         description: "Live progress: one line per tool call (tool and path only) in the job log. The job log of a public repo is public."
         type: boolean
@@ -67,18 +75,20 @@ jobs:
       pull-requests: write
       security-events: write # code scanning upload
       actions: read          # needed by the SARIF upload on private repos
-    uses: shaztechio/multi-llm-security-review/.github/workflows/security-review.yml@62f5198ab2e59119db3a7114c470869f58d18a91 # 1.0.3, pinned by commit; bump deliberately after reviewing the tool repo
+    uses: shaztechio/multi-llm-security-review/.github/workflows/security-review.yml@018e1b237b0eb1acb15912aa440978997a65aea4 # 1.0.4, pinned by commit; bump deliberately after reviewing the tool repo
     with:
       anthropic: ${{ inputs.anthropic }}
       openai: ${{ inputs.openai }}
       openrouter: ${{ inputs.openrouter }}
       openrouter-model: ${{ inputs.openrouter-model }}
+      openrouter-max-turns: ${{ inputs.openrouter-max-turns }}
+      openrouter-auto-compact-window: ${{ inputs.openrouter-auto-compact-window }}
       stream-logs: ${{ inputs.stream-logs }}
       claude-model: ${{ inputs.claude-model }}
       codex-model: ${{ inputs.codex-model }}
       draft: ${{ inputs.draft }}
       upload-sarif: ${{ inputs.upload-sarif }}
-      tool-ref: 62f5198ab2e59119db3a7114c470869f58d18a91 # 1.0.3; keep in step with the @ref on the uses: line
+      tool-ref: 018e1b237b0eb1acb15912aa440978997a65aea4 # 1.0.4; keep in step with the @ref on the uses: line
     secrets: # only what the review needs, not every secret in the repo
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
