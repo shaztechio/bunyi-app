@@ -1249,11 +1249,9 @@ a portable archive; macOS retains its MLX runtime.
   uninstall ask the user to close Bunyi; they never force-close an active run.
 - winget: the Store build installs by ID (`winget install --id 9PD4BBXZ3948
   --source msstore`), because name search in the `msstore` source does not find
-  it. The setup installers are published to the community repository as
-  `Shazron.Bunyi` (standard) and `Shazron.Bunyi.CUDA`, each matching exactly one
-  Installed Apps entry, so `winget list` and `winget upgrade` attribute an
-  install to the right package. Manifest text comes from the same listing text
-  as the Store (below).
+  it. The setup installers are not published to the winget community repository.
+  Doing so is separate work; the two editions' separate Installed Apps entries
+  would let one package each match exactly one entry.
 - Linux packages install into `/usr/lib/bunyi`, with a `bunyi-desktop` launcher,
   application-menu entry, icons and AppStream metadata. The `bunyi` command
   remains reserved for the separate CLI. Native dependencies are declared by
@@ -1265,8 +1263,8 @@ a portable archive; macOS retains its MLX runtime.
   locations (DATA-FORMATS, "Per-user app data"). A portable user starts with the
   same existing data after installing. Installers do not migrate Store data.
 - Re-running setup upgrades/reinstalls the application. Automatic application
-  updates, Store certification and Linux CUDA installers are separate work.
-  Windows package-manager entries are described in the next bullet. Direct downloads have SHA-256 sidecars, computed after signing.
+  updates, package repositories, Store certification and Linux CUDA installers
+  are separate work. Direct downloads have SHA-256 sidecars, computed after signing.
 - Windows release builds use Certum Authenticode signing with SHA-256 and an
   RFC 3161 timestamp: desktop `Bunyi.App.exe`, `Bunyi.App.dll`, `Bunyi.Core.dll`;
   CLI `bunyi.exe`, `bunyi.dll`, `Bunyi.Core.dll`; and setup/uninstall executables,
