@@ -673,6 +673,11 @@
 
       <div class="os-panel os-win" id="download-win">
         <p><a href="https://apps.microsoft.com/detail/9pd4bbxz3948?ocid=webpdpshare"><img class="store-badge" src="assets/microsoft-store-badge.svg" width="161" height="44" alt="Get Bunyi from the Microsoft Store"></a></p>
+        <p>
+          From a terminal, install the Microsoft Store build with winget. It has to be installed by ID,
+          because winget cannot find Bunyi by name in the Store source:
+          <code>winget install --id 9PD4BBXZ3948 --source msstore</code>
+        </p>
         <h3>Direct downloads</h3>
         <!-- PORTABLE:START -->
         <p>
@@ -688,11 +693,6 @@
           Setup installs for your account and offers an optional desktop shortcut. No .NET runtime installation is needed.
         </p>
         <p><a class="btn" href="https://github.com/shaztechio/bunyi-app/releases/download/dotnet-v{{DOTNET_VERSION}}/Bunyi-{{DOTNET_VERSION}}-win-x64-setup.exe">Download Windows installer</a></p>
-        <p>
-          From a terminal, install the Microsoft Store build with winget. It has to be installed by ID,
-          because winget cannot find Bunyi by name in the Store source:
-          <code>winget install --id 9PD4BBXZ3948 --source msstore</code>
-        </p>
         <p>Run a newer installer to upgrade. Remove Bunyi through Windows Settings → Apps.
           Your models, voices, recordings and settings are retained. A portable ZIP is also available on the release page.</p>
         <!-- INSTALLERS:END -->
