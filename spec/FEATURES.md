@@ -1226,8 +1226,13 @@ these are permitted platform-specific distribution formats, not inference change
 The unsigned Store MSIX remains submission preparation (§13).
 
 Windows also offers `Bunyi-<version>-win-x64-cuda-setup.exe` for the opt-in
-CUDA build. It uses the same installation identity, directory, shortcuts and
-data as the standard installer: installing either flavor replaces the other.
+CUDA build. It registers as its own Installed Apps entry, "Bunyi CUDA"
+(the standard one is "Bunyi", and neither name carries a version), so package
+managers can tell the two apart. It shares the standard installer's directory,
+shortcuts and data: installing either flavor first removes the other, keeps
+the install directory and any desktop shortcut, and never touches user data.
+A CUDA install that predates the split is replaced the same way. If the other
+flavor cannot be removed, for example because Bunyi is running, setup stops.
 Returning to CPU removes the installer-owned GPU provider DLLs. CUDA setup
 explains that compatible NVIDIA/CUDA/cuDNN dependencies are user-installed;
 it does not download drivers/toolkits or require a GPU merely to install.
@@ -1242,6 +1247,13 @@ a portable archive; macOS retains its MLX runtime.
   elevation, adds a Start menu entry and optional desktop shortcut, and registers
   in Installed Apps. A stable identity permits in-place upgrades. Setup and
   uninstall ask the user to close Bunyi; they never force-close an active run.
+- winget: the Store build installs by ID (`winget install --id 9PD4BBXZ3948
+  --source msstore`), because name search in the `msstore` source does not find
+  it. The setup installers are published to the community repository as
+  `Shazron.Bunyi` (standard) and `Shazron.Bunyi.CUDA`, each matching exactly one
+  Installed Apps entry, so `winget list` and `winget upgrade` attribute an
+  install to the right package. Manifest text comes from the same listing text
+  as the Store (below).
 - Linux packages install into `/usr/lib/bunyi`, with a `bunyi-desktop` launcher,
   application-menu entry, icons and AppStream metadata. The `bunyi` command
   remains reserved for the separate CLI. Native dependencies are declared by
@@ -1253,8 +1265,8 @@ a portable archive; macOS retains its MLX runtime.
   locations (DATA-FORMATS, "Per-user app data"). A portable user starts with the
   same existing data after installing. Installers do not migrate Store data.
 - Re-running setup upgrades/reinstalls the application. Automatic application
-  updates, package repositories, Store certification and Linux CUDA installers are
-  separate work. Direct downloads have SHA-256 sidecars, computed after signing.
+  updates, Store certification and Linux CUDA installers are separate work.
+  Windows package-manager entries are described in the next bullet. Direct downloads have SHA-256 sidecars, computed after signing.
 - Windows release builds use Certum Authenticode signing with SHA-256 and an
   RFC 3161 timestamp: desktop `Bunyi.App.exe`, `Bunyi.App.dll`, `Bunyi.Core.dll`;
   CLI `bunyi.exe`, `bunyi.dll`, `Bunyi.Core.dll`; and setup/uninstall executables,

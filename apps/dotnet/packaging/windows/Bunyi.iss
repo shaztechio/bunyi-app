@@ -13,19 +13,29 @@
 ; limitations under the License.
 
 ; build-installer.ps1 supplies paths, version and Store metadata.
+;
+; The two editions are separate Installed Apps entries (separate AppIds) so that
+; package managers can tell them apart, but they share one directory, one set of
+; shortcuts and all user data, and installing either removes the other first.
+; The uninstall display names carry no version and no parentheses on purpose:
+; winget normalises both away when it matches an installed app by name.
 [Setup]
-AppId=app.bunyi.Bunyi.Desktop
-AppName={#ProductName}
-AppVersion={#ProductVersion}
 #ifdef CudaBuild
+AppId=app.bunyi.Bunyi.Desktop.Cuda
+UninstallDisplayName={#ProductName} CUDA
 AppVerName={#ProductName} {#ProductVersion} (CUDA)
 InfoBeforeFile=cuda-info.txt
+#else
+AppId=app.bunyi.Bunyi.Desktop
+UninstallDisplayName={#ProductName}
 #endif
+AppName={#ProductName}
+AppVersion={#ProductVersion}
 AppPublisher={#PublisherName}
 AppPublisherURL=https://bunyi.app/
 AppSupportURL=https://github.com/shaztechio/bunyi-app/issues
 VersionInfoDescription={#ProductDescription}
-DefaultDirName={localappdata}\Programs\Bunyi
+DefaultDirName={code:GetDefaultDir}
 DisableDirPage=yes
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
@@ -73,7 +83,91 @@ Source: "{#LicensePath}"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{userprograms}\{#ProductName}"; Filename: "{app}\Bunyi.App.exe"; IconFilename: "{app}\bunyi.ico"
-Name: "{userdesktop}\{#ProductName}"; Filename: "{app}\Bunyi.App.exe"; IconFilename: "{app}\bunyi.ico"; Tasks: desktopicon
+Name: "{userdesktop}\{#ProductName}"; Filename: "{app}\Bunyi.App.exe"; IconFilename: "{app}\bunyi.ico"; Check: WantDesktopIcon
 
 [Run]
 Filename: "{app}\Bunyi.App.exe"; Description: "Launch {#ProductName}"; Flags: nowait postinstall skipifsilent
+
+[Code]
+const
+#ifdef CudaBuild
+  OtherAppId = 'app.bunyi.Bunyi.Desktop';
+#else
+  OtherAppId = 'app.bunyi.Bunyi.Desktop.Cuda';
+#endif
+  UninstallRoot = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\';
+
+var
+  CarryDesktopIcon: Boolean;
+
+function OtherEditionKey: String;
+begin
+  Result := UninstallRoot + OtherAppId + '_is1';
+end;
+
+{ Inno only reuses the previous directory for the same AppId, so adopt the other
+  edition's. An explicit /DIR still wins over this default. }
+function GetDefaultDir(Param: String): String;
+var
+  Location: String;
+begin
+  Result := ExpandConstant('{localappdata}\Programs\Bunyi');
+  if RegQueryStringValue(HKCU, OtherEditionKey, 'Inno Setup: App Path', Location) then
+  begin
+    Location := RemoveBackslashUnlessRoot(Location);
+    if (Location <> '') and DirExists(Location) then
+      Result := Location;
+  end;
+end;
+
+{ Remember, before the other edition's uninstaller removes it, whether the user
+  had a desktop shortcut. WizardSelectTasks does not take effect in a silent
+  install, so the shortcut is created by a Check rather than by the task alone. }
+function InitializeSetup: Boolean;
+begin
+  Result := True;
+  CarryDesktopIcon := RegKeyExists(HKCU, OtherEditionKey) and
+    FileExists(ExpandConstant('{userdesktop}\{#ProductName}.lnk'));
+end;
+
+procedure InitializeWizard;
+begin
+  if CarryDesktopIcon then
+    WizardSelectTasks('desktopicon');
+end;
+
+{ The task still decides on its own; a silent switch with no /TASKS keeps the
+  shortcut the other edition had. }
+function WantDesktopIcon: Boolean;
+begin
+  Result := WizardIsTaskSelected('desktopicon') or
+            (CarryDesktopIcon and WizardSilent and (ExpandConstant('{param:TASKS|}') = ''));
+end;
+
+{ Removes the other edition, which also migrates a CUDA install that predates
+  the split and is registered under the standard AppId. Its uninstaller leaves
+  models, voices, recordings and settings alone. Setup stops if it fails. }
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  Command: String;
+  ResultCode, Attempt: Integer;
+begin
+  Result := '';
+  if not RegQueryStringValue(HKCU, OtherEditionKey, 'UninstallString', Command) then
+    Exit;
+  Command := RemoveQuotes(Command);
+  if not Exec(Command, '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART', '', SW_HIDE,
+              ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
+  begin
+    Result := 'Setup could not remove the other Bunyi edition. Close Bunyi, then try again.';
+    Exit;
+  end;
+  { The uninstaller finishes deleting itself just after it exits. }
+  for Attempt := 1 to 40 do
+  begin
+    if not RegKeyExists(HKCU, OtherEditionKey) then
+      Exit;
+    Sleep(250);
+  end;
+  Result := 'The other Bunyi edition is still registered after its uninstaller ran.';
+end;

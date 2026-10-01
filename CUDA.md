@@ -93,7 +93,8 @@ contains development tools, but Bunyi uses its runtime libraries.
 6. Follow [Verify acceleration](#verify-acceleration) below.
 
 The CUDA installer replaces the standard edition in the same location and
-preserves models, voices, recordings and settings. To switch back, download
+preserves models, voices, recordings and settings. It appears in Windows
+Settings → Apps as **Bunyi CUDA**, separately from the standard **Bunyi**. To switch back, download
 and run the standard **`Bunyi-<version>-win-x64-setup.exe`**. No uninstall is
 needed. Neither installer downloads NVIDIA drivers, CUDA or cuDNN.
 

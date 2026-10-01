@@ -48,8 +48,12 @@ For CUDA, publish with `-p:BunyiCuda=true` into a separate directory and pass
 `Bunyi-<version>-win-x64-cuda-setup.exe`. The builder checks the dependency
 manifest and provider payload, refusing a CPU/CUDA mismatch.
 
-Both installers use the same Bunyi identity and path. Installing one replaces
-the other while retaining user data. CPU setup removes the exact GPU-provider
+The installers have separate Installed Apps identities (`app.bunyi.Bunyi.Desktop`
+for standard, `app.bunyi.Bunyi.Desktop.Cuda` for CUDA, displayed as "Bunyi" and
+"Bunyi CUDA") and share one install path. Setup removes the other edition
+before installing, adopting its directory and desktop shortcut, so installing
+one replaces the other while retaining user data. The display names carry no
+version and no parentheses because winget strips both when it matches by name. CPU setup removes the exact GPU-provider
 DLLs owned by the CUDA package. Pass the other flavor's installer as
 `-AlternativeInstaller` to exercise a full flavor round trip; CI tests CUDA
 over an older CPU fixture, CUDA → CPU → CUDA, repair, startup and uninstall.

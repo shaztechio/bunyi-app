@@ -462,7 +462,7 @@ jobs:
             printf '\n---\n\n'
             printf '### Installing\n\n'
             printf '**Windows** — run `Bunyi-%s-win-x64-setup.exe`, then open Bunyi from Start.\n' "$version"
-            printf '**Windows with NVIDIA acceleration** — use `Bunyi-%s-win-x64-cuda-setup.exe`. It replaces the standard edition and retains your data; run the standard installer to switch back. Compatible CUDA and cuDNN libraries must be installed separately.\n' "$version"
+            printf '**Windows with NVIDIA acceleration** — use `Bunyi-%s-win-x64-cuda-setup.exe`. It replaces the standard edition (it appears as Bunyi CUDA in Installed Apps) and retains your data; run the standard installer to switch back. If you installed the CUDA build with an older installer, winget sees it as the standard edition, so winget upgrade moves it to the standard build once; run the CUDA installer again to return. Compatible CUDA and cuDNN libraries must be installed separately.\n' "$version"
             printf '**Ubuntu/Debian** — install `bunyi_%s_amd64.deb` with your package installer.\n' "$version"
             printf '**Fedora** — install `bunyi-%s-1.x86_64.rpm` with your package installer.\n' "$version"
             printf 'Linux packages add Bunyi to your application menu and install native dependencies.\n\n'
