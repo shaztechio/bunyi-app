@@ -539,3 +539,23 @@ jobs:
           RELEASE_REPOSITORY: ${{ github.repository }}
           RELEASE_TAG: ${{ needs.version.outputs.tag }}
         run: gh workflow run pages.yml --ref main --repo "$RELEASE_REPOSITORY" -f release_tag="$RELEASE_TAG"
+
+  submit-winget:
+    name: Queue winget submission
+    needs: [version, release]
+    if: needs.release.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      # Queued like the website refresh: a workflow started with GITHUB_TOKEN
+      # cannot be triggered by the release event, but can be dispatched. It runs
+      # in its own workflow, so a failed submission never fails or undoes the
+      # release, and it can be re-run by hand. Dry runs never reach this job.
+      - name: Queue the winget submission
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_REPOSITORY: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.version.outputs.tag }}
+        run: gh workflow run winget.yml --ref main --repo "$RELEASE_REPOSITORY" -f release_tag="$RELEASE_TAG"

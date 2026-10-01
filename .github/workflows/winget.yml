@@ -1,0 +1,123 @@
+# Copyright 2026 Shazron Abdullah and Bunyi contributors
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Opens the winget-pkgs pull requests for a published Windows release. It is
+# queued by dotnet-release.yml after the release exists (a release created with
+# GITHUB_TOKEN would not fire an `on: release` workflow), and can be re-run by
+# hand for a tag whose submission failed.
+name: winget
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Published dotnet-v release tag to submit to winget-pkgs'
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: winget-${{ inputs.release_tag }}
+  cancel-in-progress: false
+
+jobs:
+  submit:
+    name: Submit ${{ matrix.id }}
+    runs-on: windows-latest
+    timeout-minutes: 20
+    # The token that can open pull requests from the maintainer's winget-pkgs
+    # fork lives in this environment's secrets and nowhere else.
+    environment: winget
+    strategy:
+      # One package failing must not stop the other.
+      fail-fast: false
+      matrix:
+        include:
+          - id: Shazron.Bunyi
+            asset: 'Bunyi-{0}-win-x64-setup.exe'
+          - id: Shazron.Bunyi.CUDA
+            asset: 'Bunyi-{0}-win-x64-cuda-setup.exe'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install the pinned wingetcreate
+        shell: pwsh
+        run: ./apps/dotnet/packaging/windows/install-wingetcreate.ps1 -Destination "$env:RUNNER_TEMP/wingetcreate"
+
+      # No secret in this step. wingetcreate only updates a manifest that already
+      # exists in winget-pkgs, so a package's first submission is manual and its
+      # leg skips until that has merged.
+      - name: Prepare the manifest
+        id: prepare
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          PACKAGE_ID: ${{ matrix.id }}
+          ASSET_PATTERN: ${{ matrix.asset }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:RELEASE_TAG -notmatch '^dotnet-v(\d+\.\d+\.\d+)$') { throw "Unexpected tag: $env:RELEASE_TAG" }
+          $version = $Matches[1]
+          $release = gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --json url,publishedAt,isDraft,isPrerelease | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw "Release $env:RELEASE_TAG was not found." }
+          if ($release.isDraft -or $release.isPrerelease) { throw 'Only published, non-prerelease releases go to winget.' }
+
+          $parts = $env:PACKAGE_ID.Split('.')
+          $directory = "manifests/$($parts[0].Substring(0, 1).ToLowerInvariant())/$($parts -join '/')"
+          $listing = gh api "repos/microsoft/winget-pkgs/contents/$directory" 2>$null | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or -not @($listing | Where-Object { $_.type -eq 'dir' -and $_.name -match '^\d' })) {
+              Write-Host "::notice title=winget::$env:PACKAGE_ID has no manifest in winget-pkgs yet; its first submission is manual. Skipping."
+              "skip=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+              return
+          }
+
+          $asset = $env:ASSET_PATTERN -f $version
+          $url = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$env:RELEASE_TAG/$asset"
+          $date = ([datetime]$release.publishedAt).ToUniversalTime().ToString('yyyy-MM-dd')
+          $out = Join-Path $env:RUNNER_TEMP "manifest-$env:PACKAGE_ID"
+          & "$env:RUNNER_TEMP/wingetcreate/wingetcreate.exe" update $env:PACKAGE_ID `
+            --version $version --urls "$url|x64" `
+            --release-notes-url $release.url --release-date $date --out $out
+          if ($LASTEXITCODE -ne 0) { throw "wingetcreate could not update $env:PACKAGE_ID." }
+
+          # The manifest pins the installer hash. Compare it with the checksum the
+          # release published, so a corrupted download is never submitted.
+          gh release download $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --pattern "$asset.sha256" --dir $env:RUNNER_TEMP --clobber
+          if ($LASTEXITCODE -ne 0) { throw "The release has no $asset.sha256." }
+          $published = ((Get-Content -LiteralPath (Join-Path $env:RUNNER_TEMP "$asset.sha256") -Raw).Trim() -split '\s+')[0]
+          $installerManifest = Get-ChildItem -LiteralPath $out -Filter '*.installer.yaml' -Recurse | Select-Object -First 1
+          $manifestHash = [regex]::Match((Get-Content -LiteralPath $installerManifest.FullName -Raw), '(?m)^\s*InstallerSha256:\s*(\S+)').Groups[1].Value
+          if ($manifestHash.ToLowerInvariant() -ne $published.ToLowerInvariant()) {
+              throw "Manifest hash $manifestHash does not match the published checksum $published."
+          }
+          "skip=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "manifest=$out" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Submit to winget-pkgs
+        if: steps.prepare.outputs.skip == 'false'
+        shell: pwsh
+        env:
+          PACKAGE_ID: ${{ matrix.id }}
+          PACKAGE_VERSION: ${{ steps.prepare.outputs.version }}
+          MANIFEST_DIRECTORY: ${{ steps.prepare.outputs.manifest }}
+          WINGET_CREATE_GITHUB_TOKEN: ${{ secrets.WINGET_CREATE_GITHUB_TOKEN }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & "$env:RUNNER_TEMP/wingetcreate/wingetcreate.exe" submit --no-open `
+            --prtitle "New version: $env:PACKAGE_ID version $env:PACKAGE_VERSION" $env:MANIFEST_DIRECTORY
+          if ($LASTEXITCODE -ne 0) { throw "wingetcreate failed to submit $env:PACKAGE_ID." }

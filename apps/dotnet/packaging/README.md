@@ -122,6 +122,42 @@ System32 DLLs. App-local deployment keeps setup non-administrative; runtime
 updates ship with Bunyi releases. See Microsoft's
 [local deployment guidance](https://learn.microsoft.com/en-us/cpp/windows/choosing-a-deployment-method?view=msvc-170).
 
+### winget
+
+Windows is installable three ways from a terminal:
+
+| Channel | Command |
+|---|---|
+| Microsoft Store (standard) | `winget install --id 9PD4BBXZ3948 --source msstore` |
+| Setup EXE, standard | `winget install Shazron.Bunyi` |
+| Setup EXE, CUDA | `winget install Shazron.Bunyi.CUDA` |
+
+The Store build installs by ID only: name search in the `msstore` source does
+not find it ([winget-cli#4010](https://github.com/microsoft/winget-cli/issues/4010)).
+The two setup packages live in
+[winget-pkgs](https://github.com/microsoft/winget-pkgs) under
+`manifests/s/Shazron/Bunyi/` and `.../Bunyi/CUDA/`. Their `ProductCode`s are the
+two editions' uninstall keys (`app.bunyi.Bunyi.Desktop_is1` and
+`app.bunyi.Bunyi.Desktop.Cuda_is1`); winget finds no match at all when two
+packages claim the same one, which is why the editions have separate AppIds.
+
+Publishing a release queues `.github/workflows/winget.yml` (job `submit-winget`
+in `dotnet-release.yml`). For each package it runs the pinned `wingetcreate`
+(`install-wingetcreate.ps1`), checks the manifest's installer hash against the
+release's `.sha256` file, and opens the winget-pkgs pull request. A failed
+submission never fails the release; re-run the workflow with the release tag.
+A package with no manifest in winget-pkgs yet is skipped, because
+`wingetcreate update` needs one to start from: the first version of each
+package is submitted by hand (`wingetcreate submit <manifest directory>`).
+Release assets must never be replaced after publishing, since the manifest pins
+their hash.
+
+One-time setup: a `winget` environment holding `WINGET_CREATE_GITHUB_TOKEN`, a
+classic personal access token (scopes in
+[winget-create's token guide](https://github.com/microsoft/winget-create/blob/main/doc/token.md))
+for an account that owns a winget-pkgs fork. The token reaches only this
+workflow's submit step; signing credentials stay in the signing job.
+
 ## Linux
 
 Needs Python 3.11+, `dpkg-deb` and `rpmbuild`. Build on Linux after publishing:
