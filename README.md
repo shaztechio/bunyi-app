@@ -40,6 +40,15 @@ installers once they are published. No .NET runtime installation is needed.
 Upgrades and uninstall retain models, voices, recordings and settings.
 See the code signing policy below for Windows publisher and signature details.
 
+**Windows Store, from a terminal:** the Microsoft Store build can be installed
+with winget by its Store ID. Searching `msstore` by name does not find Bunyi (a
+known winget limitation, [winget-cli#4010](https://github.com/microsoft/winget-cli/issues/4010)),
+so use the ID:
+
+```powershell
+winget install --id 9PD4BBXZ3948 --source msstore
+```
+
 **NVIDIA GPU acceleration:** follow the [CUDA setup guide](CUDA.md) for the
 Windows CUDA installer or Linux CUDA archive. It covers the NVIDIA driver,
 CUDA 13 and cuDNN versions, library paths, verifying acceleration in Bunyi,
