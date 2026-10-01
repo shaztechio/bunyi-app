@@ -83,7 +83,7 @@ Source: "{#LicensePath}"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{userprograms}\{#ProductName}"; Filename: "{app}\Bunyi.App.exe"; IconFilename: "{app}\bunyi.ico"
-Name: "{userdesktop}\{#ProductName}"; Filename: "{app}\Bunyi.App.exe"; IconFilename: "{app}\bunyi.ico"; Tasks: desktopicon
+Name: "{userdesktop}\{#ProductName}"; Filename: "{app}\Bunyi.App.exe"; IconFilename: "{app}\bunyi.ico"; Check: WantDesktopIcon
 
 [Run]
 Filename: "{app}\Bunyi.App.exe"; Description: "Launch {#ProductName}"; Flags: nowait postinstall skipifsilent
@@ -96,6 +96,9 @@ const
   OtherAppId = 'app.bunyi.Bunyi.Desktop.Cuda';
 #endif
   UninstallRoot = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\';
+
+var
+  CarryDesktopIcon: Boolean;
 
 function OtherEditionKey: String;
 begin
@@ -117,15 +120,28 @@ begin
   end;
 end;
 
-{ Keep the desktop shortcut across an edition switch, unless /TASKS says otherwise. }
-procedure InitializeWizard;
-var
-  Tasks: String;
+{ Remember, before the other edition's uninstaller removes it, whether the user
+  had a desktop shortcut. WizardSelectTasks does not take effect in a silent
+  install, so the shortcut is created by a Check rather than by the task alone. }
+function InitializeSetup: Boolean;
 begin
-  if (ExpandConstant('{param:TASKS|}') = '') and
-     RegQueryStringValue(HKCU, OtherEditionKey, 'Inno Setup: Selected Tasks', Tasks) and
-     (Pos('desktopicon', Tasks) > 0) then
+  Result := True;
+  CarryDesktopIcon := RegKeyExists(HKCU, OtherEditionKey) and
+    FileExists(ExpandConstant('{userdesktop}\{#ProductName}.lnk'));
+end;
+
+procedure InitializeWizard;
+begin
+  if CarryDesktopIcon then
     WizardSelectTasks('desktopicon');
+end;
+
+{ The task still decides on its own; a silent switch with no /TASKS keeps the
+  shortcut the other edition had. }
+function WantDesktopIcon: Boolean;
+begin
+  Result := WizardIsTaskSelected('desktopicon') or
+            (CarryDesktopIcon and WizardSilent and (ExpandConstant('{param:TASKS|}') = ''));
 end;
 
 { Removes the other edition, which also migrates a CUDA install that predates
