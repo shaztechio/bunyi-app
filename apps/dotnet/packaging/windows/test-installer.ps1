@@ -17,8 +17,12 @@
 param([Parameter(Mandatory)][string]$Installer, [string]$PreviousInstaller,
       [switch]$Cuda, [string]$AlternativeInstaller, [string]$SigningThumbprint)
 $ErrorActionPreference = 'Stop'
-$key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\app.bunyi.Bunyi.Desktop_is1'
-if (Test-Path $key) { throw 'Bunyi is already installed; use a clean test account.' }
+$uninstallRoot = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall'
+# The editions are separate Installed Apps entries, so winget and Windows can tell them apart.
+$cpuKey = "$uninstallRoot\app.bunyi.Bunyi.Desktop_is1"
+$cudaKey = "$uninstallRoot\app.bunyi.Bunyi.Desktop.Cuda_is1"
+$key = if ($Cuda) { $cudaKey } else { $cpuKey }
+if ((Test-Path $cpuKey) -or (Test-Path $cudaKey)) { throw 'Bunyi is already installed; use a clean test account.' }
 $installerPath = (Resolve-Path -LiteralPath $Installer).Path
 $expectedHash = ((Get-Content -LiteralPath "$installerPath.sha256" -Raw).Trim() -split '\s+')[0]
 if ((Get-FileHash -LiteralPath $installerPath -Algorithm SHA256).Hash -ne $expectedHash) {
@@ -39,6 +43,16 @@ function Invoke-Setup([string]$Path, [string[]]$Extra = @()) {
         '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', ('/LOG="' + $work + '/' + [guid]::NewGuid() + '.log"')) + $Extra)
     if (-not $process.WaitForExit(120000)) { throw 'Installer did not finish within two minutes.' }
     return $process.ExitCode
+}
+# Exactly one edition is registered, under its own key and name, never both.
+function Assert-Registration([bool]$ExpectedCuda) {
+    $expectedKey = if ($ExpectedCuda) { $cudaKey } else { $cpuKey }
+    $otherKey = if ($ExpectedCuda) { $cpuKey } else { $cudaKey }
+    $expectedName = if ($ExpectedCuda) { 'Bunyi CUDA' } else { 'Bunyi' }
+    if (-not (Test-Path $expectedKey)) { throw "Installed Apps registration missing: $expectedKey" }
+    if (Test-Path $otherKey) { throw "The other edition is still registered: $otherKey" }
+    $displayName = (Get-ItemProperty $expectedKey).DisplayName
+    if ($displayName -ne $expectedName) { throw "Unexpected display name '$displayName', wanted '$expectedName'." }
 }
 function Assert-Flavor([bool]$ExpectedCuda) {
     $deps = Get-Content -LiteralPath (Join-Path $install 'Bunyi.App.deps.json') -Raw | ConvertFrom-Json
@@ -62,8 +76,11 @@ try {
     if ($PreviousInstaller) {
         $previous = (Resolve-Path -LiteralPath $PreviousInstaller).Path
         if ((Invoke-Setup $previous @('/DIR="' + $install + '"')) -ne 0) { throw 'Previous version install failed.' }
-        $oldVersion = (Get-ItemProperty $key).DisplayVersion
+        # The previous-version fixture is always the standard edition.
+        Assert-Registration $false
+        $oldVersion = (Get-ItemProperty $cpuKey).DisplayVersion
         if ((Invoke-Setup $installerPath) -ne 0) { throw 'Version upgrade failed.' }
+        Assert-Registration $Cuda.IsPresent
         $newVersion = (Get-ItemProperty $key).DisplayVersion
         if ([version]$newVersion -le [version]$oldVersion) { throw 'Upgrade did not advance the registered version.' }
         Write-Host "Version upgrade verified: $oldVersion -> $newVersion"
@@ -71,13 +88,15 @@ try {
             [version]"$newVersion.0") { throw 'Upgrade left an old application binary.' }
     }
     if ((Invoke-Setup $installerPath @('/DIR="' + $install + '"', '/TASKS=desktopicon')) -ne 0) { throw 'Install failed.' }
-    if (-not (Test-Path $key)) { throw 'Installed Apps registration missing.' }
+    Assert-Registration $Cuda.IsPresent
     Assert-Flavor $Cuda.IsPresent
     if ($AlternativeInstaller) {
         $alternative = (Resolve-Path -LiteralPath $AlternativeInstaller).Path
         if ((Invoke-Setup $alternative) -ne 0) { throw 'Flavor switch failed.' }
+        Assert-Registration (-not $Cuda.IsPresent)
         Assert-Flavor (-not $Cuda.IsPresent)
         if ((Invoke-Setup $installerPath) -ne 0) { throw 'Switching back to original flavor failed.' }
+        Assert-Registration $Cuda.IsPresent
         Assert-Flavor $Cuda.IsPresent
         Write-Host 'CPU/CUDA flavor round trip verified in the same installation.'
     }
@@ -130,7 +149,9 @@ try {
         }
         $app.Dispose()
     }
-    $uninstaller = Join-Path $install 'unins000.exe'
+    # A switch can leave a numbered uninstaller (unins001.exe), so ask the registration.
+    $uninstaller = ((Get-ItemProperty $key).UninstallString).Trim('"')
+    if ((Split-Path -Parent $uninstaller) -ne $install) { throw "Uninstaller is not in the install directory: $uninstaller" }
     if ($SigningThumbprint) {
         & (Join-Path $PSScriptRoot 'sign-files.ps1') -VerifyOnly -Thumbprint $SigningThumbprint -Path @(
             $installerPath, $uninstaller, (Join-Path $install 'Bunyi.App.exe'),
