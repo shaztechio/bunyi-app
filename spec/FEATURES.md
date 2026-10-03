@@ -751,6 +751,13 @@ macOS source: `VoiceLibrary.swift`.
   optional sampled-audio window that transcript covers. Delete removes the
   entry and its copied clip.
 - Persisted as `voices.json` + copied audio (schema in `DATA-FORMATS.md`).
+- **Saved voice names must be unique across the voice library**, ignoring
+  case and leading/trailing whitespace. Reject saving a clone recipe whose
+  name matches an existing voice; show a clear validation message asking for
+  a different name and preserve the entered recipe. Do not overwrite the
+  existing voice or create another entry or copied clip. This requirement
+  applies to macOS, Windows and Linux; implementation is tracked in
+  [#298](https://github.com/shaztechio/bunyi-app/issues/298).
 - On load, entries whose audio is missing are pruned.
 - Not a real model "preset" — presets are trained speaker tokens; this just
   re-runs the clone path with saved inputs.
