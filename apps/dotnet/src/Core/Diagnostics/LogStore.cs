@@ -15,6 +15,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
+using Bunyi.Core.Infrastructure;
 
 namespace Bunyi.Core.Diagnostics;
 
@@ -196,9 +197,7 @@ public sealed partial class LogStore : ILogSink
             lock (gate)
             {
                 Directory.CreateDirectory(folder);
-                File.AppendAllText(path, line);
-                if (!OperatingSystem.IsWindows())
-                    File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+                PrivateFile.AppendAllText(path, line);
             }
 
             Console.Error.Write(line);

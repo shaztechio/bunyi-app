@@ -47,6 +47,11 @@ the contract, not the storage. `sentenceGapMilliseconds` is an integer from
 0 to 5000 (inclusive), default 300 when absent; values outside that range clamp
 to it. It controls added silence at long-text joins, in milliseconds.
 
+On Unix, settings files, saved model configurations, and diagnostic logs must
+be private to the user before sensitive contents are written: create files with
+mode `0600` (or inside an owner-only `0700` directory), and restrict existing
+files before writing or appending. Windows uses the per-user profile ACLs.
+
 ## Models folder
 
 Root is the models folder (default per-user app data; user-relocatable).
