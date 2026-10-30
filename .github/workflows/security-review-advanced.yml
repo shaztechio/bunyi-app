@@ -58,7 +58,7 @@ on:
       stream-logs:
         description: "Live progress: one line per tool call (tool and path only) in the job log. The job log of a public repo is public."
         type: boolean
-        default: false
+        default: true
       claude-model:
         description: "Claude model (blank = CLI default)"
         type: string

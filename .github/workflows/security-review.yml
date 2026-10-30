@@ -42,7 +42,7 @@ on:
       stream-logs:
         description: "Stream tool activity to the job log (public in public repos)"
         type: boolean
-        default: false
+        default: true
       draft:
         description: "Open PRs as drafts"
         type: boolean
