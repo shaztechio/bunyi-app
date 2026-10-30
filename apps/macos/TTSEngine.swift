@@ -487,7 +487,7 @@ public final class TTSEngine {
                 base = source
                 files = try await fileList(
                     base: source,
-                    requireChecksums: mode.isUsingBuiltInMirror(source))
+                    requireChecksums: TTSMode.isBunyiMirrorURL(source))
             }
             status = .downloading(0)
             downloadFeedback = ModelDownloadProgress(phase: .sizing)
@@ -639,7 +639,7 @@ public final class TTSEngine {
         if Self.hasCompleteModel(at: localDir) { return localDir }
         status = .checking
         let files = try await fileList(
-            base: base, requireChecksums: mode.isUsingBuiltInMirror(base))
+            base: base, requireChecksums: TTSMode.isBunyiMirrorURL(base))
         try await downloadEntries(files, base: base, into: localDir)
         guard Self.hasCompleteModel(at: localDir) else { throw TTSError.selfHostIncomplete }
         return localDir

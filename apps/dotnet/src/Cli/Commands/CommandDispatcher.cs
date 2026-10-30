@@ -278,6 +278,11 @@ public sealed class CommandDispatcher(ILogSink log)
         }
         else throw CommandParser.Invalid("Unknown configuration key.");
         runtime.Settings.SaveStrict(settings);
-        return CliProtocol.Result(request, ("key", key), ("value", key == "modelsFolder" ? settings.ModelsFolder : value));
+        var returnedValue = key == "modelsFolder"
+            ? settings.ModelsFolder
+            : key.StartsWith("modelSource.", StringComparison.Ordinal)
+                ? CliLog.Redact(value)
+                : value;
+        return CliProtocol.Result(request, ("key", key), ("value", returnedValue));
     }
 }

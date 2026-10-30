@@ -173,10 +173,27 @@ public class LogStoreTests
             var files = Directory.GetFiles(folder, "bunyi-*.log");
             Assert.Single(files);
             Assert.Contains("written to disk", File.ReadAllText(files[0]));
+            if (!OperatingSystem.IsWindows())
+                Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(files[0]));
         }
         finally
         {
             if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true);
         }
+    }
+
+    [Fact]
+    public void Logged_lines_redact_url_credentials_queries_and_authorization_headers()
+    {
+        var log = new LogStore();
+
+        log.Log("Failed https://alice:hunter2@models.example.com/customvoice?token=secret#frag Authorization: Bearer topsecret");
+
+        var message = Assert.Single(log.Snapshot()).Message;
+        Assert.Contains("https://models.example.com/customvoice", message, StringComparison.Ordinal);
+        Assert.DoesNotContain("alice", message, StringComparison.Ordinal);
+        Assert.DoesNotContain("hunter2", message, StringComparison.Ordinal);
+        Assert.DoesNotContain("secret", message, StringComparison.Ordinal);
+        Assert.DoesNotContain("topsecret", message, StringComparison.Ordinal);
     }
 }

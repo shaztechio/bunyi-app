@@ -97,9 +97,24 @@ public extension TTSMode {
         return URL(string: "https://models.bunyi.app/\(path)")!
     }
 
+    static func isBunyiMirrorURL(_ url: URL) -> Bool {
+        let candidate = url.absoluteString.replacingOccurrences(
+            of: #"/+$"#, with: "", options: .regularExpression)
+        return allCases.contains { mode in
+            mode.bunyiMirrorURL.absoluteString.caseInsensitiveCompare(candidate)
+                == .orderedSame
+        }
+    }
+
     func isUsingBuiltInMirror(_ source: URL) -> Bool {
-        source.absoluteString == bunyiMirrorURL.absoluteString
-            && effectiveRepoID == source.absoluteString
+        let normalizedSource = source.absoluteString.replacingOccurrences(
+            of: #"/+$"#, with: "", options: .regularExpression)
+        let normalizedConfigured = effectiveRepoID.replacingOccurrences(
+            of: #"/+$"#, with: "", options: .regularExpression)
+        return bunyiMirrorURL.absoluteString.caseInsensitiveCompare(normalizedSource)
+                == .orderedSame
+            && normalizedConfigured.caseInsensitiveCompare(normalizedSource)
+                == .orderedSame
     }
 
     /// Recovery is an explicit persisted choice, not a one-run override.
