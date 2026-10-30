@@ -108,9 +108,7 @@ public sealed class SettingsStore
                 // another volume would make this a copy, which is exactly the
                 // half-written file this avoids.
                 var temp = _path + ".tmp";
-                File.WriteAllText(temp, json);
-                if (!OperatingSystem.IsWindows())
-                    File.SetUnixFileMode(temp, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+                PrivateFile.WriteAllText(temp, json);
                 File.Move(temp, _path, overwrite: true);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -131,9 +129,7 @@ public sealed class SettingsStore
             var temp = _path + "." + Guid.NewGuid().ToString("N") + ".tmp";
             try
             {
-                File.WriteAllText(temp, JsonSerializer.Serialize(settings, Json));
-                if (!OperatingSystem.IsWindows())
-                    File.SetUnixFileMode(temp, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+                PrivateFile.WriteAllText(temp, JsonSerializer.Serialize(settings, Json));
                 File.Move(temp, _path, overwrite: true);
             }
             finally { if (File.Exists(temp)) File.Delete(temp); }

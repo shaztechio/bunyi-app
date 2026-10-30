@@ -55,7 +55,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          persist-credentials: true
+          persist-credentials: false
           # Release notes read the commits since the previous tag, so a shallow
           # clone would produce an empty changelog.
           fetch-depth: 0
@@ -115,6 +115,8 @@ jobs:
       # already sitting on the commit that carries the version.
       - name: Bump the version and tag
         if: github.event_name == 'workflow_dispatch' && steps.pick.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           version="${{ steps.pick.outputs.version }}"
@@ -146,7 +148,7 @@ jobs:
 
           # Pushing with GITHUB_TOKEN raises no workflow events, so this does
           # not start a second run of this file.
-          git push origin HEAD:"${GITHUB_REF_NAME}" "$tag"
+          git -c credential.helper= -c 'credential.helper=!f() { echo username=x-access-token; echo "password=$GH_TOKEN"; }; f' push origin HEAD:"${GITHUB_REF_NAME}" "$tag"
 
   build:
     needs: version
@@ -189,11 +191,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         if: needs.version.outputs.publish == 'true'
         with:
+          persist-credentials: false
           ref: ${{ needs.version.outputs.tag }}
           fetch-depth: 0
 
       # A dry run has no tag to check out.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
         if: needs.version.outputs.publish == 'false'
 
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
@@ -412,6 +417,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           ref: ${{ needs.version.outputs.tag }}
           fetch-depth: 0
 
