@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Five-option form. Use Security review (advanced) for model and tuning overrides.
+# Basic form. Use Security review (advanced) for model and tuning overrides.
 # Needs repo secrets ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY / OPENROUTER_API_KEY (only for the
 # providers you use) and Settings → Actions → General →
 # "Allow GitHub Actions to create and approve pull requests".
@@ -39,6 +39,10 @@ on:
         description: "OpenRouter (experimental)"
         type: boolean
         default: false
+      stream-logs:
+        description: "Stream tool activity to the job log (public in public repos)"
+        type: boolean
+        default: false
       draft:
         description: "Open PRs as drafts"
         type: boolean
@@ -61,7 +65,7 @@ jobs:
       openrouter-model: "z-ai/glm-5.3:floor"
       openrouter-max-turns: ""
       openrouter-auto-compact-window: ""
-      stream-logs: false
+      stream-logs: ${{ inputs.stream-logs }}
       claude-model: "claude-opus-5-5"
       codex-model: "gpt-6-sol"
       draft: ${{ inputs.draft }}

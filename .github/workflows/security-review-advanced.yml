@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Advanced model and tuning controls. Use Security review for the five-option form.
+# Advanced model and tuning controls. Use Security review for the basic form.
 # Needs repo secrets ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY / OPENROUTER_API_KEY (only for the
 # providers you use) and Settings → Actions → General →
 # "Allow GitHub Actions to create and approve pull requests".
