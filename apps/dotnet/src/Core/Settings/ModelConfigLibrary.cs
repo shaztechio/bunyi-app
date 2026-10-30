@@ -348,6 +348,8 @@ public sealed class ModelConfigLibrary
             // every configuration rather than the one being changed.
             var temp = _path + ".tmp";
             File.WriteAllText(temp, JsonSerializer.Serialize(_configs, Json));
+            if (!OperatingSystem.IsWindows())
+                File.SetUnixFileMode(temp, UnixFileMode.UserRead | UnixFileMode.UserWrite);
             File.Move(temp, _path, overwrite: true);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

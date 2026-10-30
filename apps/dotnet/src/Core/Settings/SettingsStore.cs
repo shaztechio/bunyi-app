@@ -109,6 +109,8 @@ public sealed class SettingsStore
                 // half-written file this avoids.
                 var temp = _path + ".tmp";
                 File.WriteAllText(temp, json);
+                if (!OperatingSystem.IsWindows())
+                    File.SetUnixFileMode(temp, UnixFileMode.UserRead | UnixFileMode.UserWrite);
                 File.Move(temp, _path, overwrite: true);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -130,6 +132,8 @@ public sealed class SettingsStore
             try
             {
                 File.WriteAllText(temp, JsonSerializer.Serialize(settings, Json));
+                if (!OperatingSystem.IsWindows())
+                    File.SetUnixFileMode(temp, UnixFileMode.UserRead | UnixFileMode.UserWrite);
                 File.Move(temp, _path, overwrite: true);
             }
             finally { if (File.Exists(temp)) File.Delete(temp); }

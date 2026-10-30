@@ -14,6 +14,7 @@
 
 using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace Bunyi.Core.Diagnostics;
 
@@ -49,7 +50,7 @@ public sealed record LogEntry(DateTimeOffset Time, string Message)
 /// also lose the ordering guarantee the lock gives.
 /// </para>
 /// </remarks>
-public sealed class LogStore : ILogSink
+public sealed partial class LogStore : ILogSink
 {
     private static readonly Lazy<LogStore> SharedStore = new(CreateShared);
 
@@ -115,7 +116,7 @@ public sealed class LogStore : ILogSink
     /// <inheritdoc />
     public void Log(string message)
     {
-        var entry = new LogEntry(DateTimeOffset.Now, message ?? string.Empty);
+        var entry = new LogEntry(DateTimeOffset.Now, Redact(message ?? string.Empty));
 
         lock (_gate)
         {
@@ -128,6 +129,16 @@ public sealed class LogStore : ILogSink
         Safely(() => _mirror?.Invoke(entry));
         Safely(() => Appended?.Invoke(this, entry));
     }
+
+    /// <summary>Redacts URL credentials, queries, fragments and authorization headers from log text.</summary>
+    public static string Redact(string text) => Authorization().Replace(Url().Replace(text, match =>
+    {
+        if (!Uri.TryCreate(match.Value, UriKind.Absolute, out var uri)) return "[redacted URL]";
+        return uri.GetLeftPart(UriPartial.Authority).Replace(uri.UserInfo + "@", "", StringComparison.Ordinal) + uri.AbsolutePath;
+    }), "[redacted authorization]");
+
+    [GeneratedRegex(@"https?://[^\s\""<>]+", RegexOptions.IgnoreCase)] private static partial Regex Url();
+    [GeneratedRegex(@"(?:authorization\s*[:=]\s*|\bBearer\s+)[^\r\n]+", RegexOptions.IgnoreCase)] private static partial Regex Authorization();
 
     /// <summary>Empties the log (spec §8: Clear).</summary>
     public void Clear()
@@ -186,6 +197,8 @@ public sealed class LogStore : ILogSink
             {
                 Directory.CreateDirectory(folder);
                 File.AppendAllText(path, line);
+                if (!OperatingSystem.IsWindows())
+                    File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
             }
 
             Console.Error.Write(line);

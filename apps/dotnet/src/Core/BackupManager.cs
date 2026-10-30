@@ -173,6 +173,8 @@ public sealed class BackupManager(ILogSink log)
                 && IsSpecialEntry(entry))
                 throw new InvalidDataException("The backup contains a symbolic link or special file and cannot be restored safely.");
             if (RepoOf(entry.FullName, prefix) is not { } repo) continue;
+            if (entry.Length < 0 || bytes > long.MaxValue - entry.Length)
+                throw new InvalidDataException("The backup declares an invalid file size and cannot be restored safely.");
 
             repos.Add(repo);
             bytes += entry.Length;

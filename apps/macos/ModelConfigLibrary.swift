@@ -110,7 +110,10 @@ final class ModelConfigLibrary {
                                            in: .userDomainMask)[0]
             .appendingPathComponent("Bunyi/ModelConfigs", isDirectory: true)
         try? FileManager.default.createDirectory(
-            at: dir, withIntermediateDirectories: true)
+            at: dir, withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700])
+        try? FileManager.default.setAttributes(
+            [.posixPermissions: 0o700], ofItemAtPath: dir.path)
         return dir
     }()
 
@@ -165,9 +168,16 @@ final class ModelConfigLibrary {
     }
 
     private func persist() throws {
+        try FileManager.default.createDirectory(
+            at: dir, withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700])
+        try? FileManager.default.setAttributes(
+            [.posixPermissions: 0o700], ofItemAtPath: dir.path)
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         try encoder.encode(configs).write(to: indexURL, options: .atomic)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o600], ofItemAtPath: indexURL.path)
     }
 }
