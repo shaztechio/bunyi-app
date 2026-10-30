@@ -14,7 +14,7 @@
 # limitations under the License.
 
 # Copy to .github/workflows/security-review.yml in any repo you want reviewed.
-# Needs repo secrets ANTHROPIC_API_KEY / OPENAI_API_KEY / OPENROUTER_API_KEY (only for the
+# Needs repo secrets ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY / OPENROUTER_API_KEY (only for the
 # providers you use) and Settings → Actions → General →
 # "Allow GitHub Actions to create and approve pull requests".
 
@@ -31,6 +31,14 @@ on:
         description: "OpenAI (Codex)"
         type: boolean
         default: true
+      gemini:
+        description: "Gemini Argon (experimental; needs GEMINI_API_KEY)"
+        type: boolean
+        default: false
+      gemini-model:
+        description: "Gemini model"
+        type: string
+        default: "gemini-4-argon"
       openrouter:
         description: "OpenRouter model via Claude Code (experimental; needs OPENROUTER_API_KEY)"
         type: boolean
@@ -75,10 +83,12 @@ jobs:
       pull-requests: write
       security-events: write # code scanning upload
       actions: read          # needed by the SARIF upload on private repos
-    uses: shaztechio/multi-llm-security-review/.github/workflows/security-review.yml@018e1b237b0eb1acb15912aa440978997a65aea4 # 1.0.4, pinned by commit; bump deliberately after reviewing the tool repo
+    uses: shaztechio/multi-llm-security-review/.github/workflows/security-review.yml@2a76fc206478db96c51d42389e4f18775ec0cb28 # 1.1.0, pinned by commit; bump deliberately after reviewing the tool repo
     with:
       anthropic: ${{ inputs.anthropic }}
       openai: ${{ inputs.openai }}
+      gemini: ${{ inputs.gemini }}
+      gemini-model: ${{ inputs.gemini-model }}
       openrouter: ${{ inputs.openrouter }}
       openrouter-model: ${{ inputs.openrouter-model }}
       openrouter-max-turns: ${{ inputs.openrouter-max-turns }}
@@ -88,8 +98,9 @@ jobs:
       codex-model: ${{ inputs.codex-model }}
       draft: ${{ inputs.draft }}
       upload-sarif: ${{ inputs.upload-sarif }}
-      tool-ref: 018e1b237b0eb1acb15912aa440978997a65aea4 # 1.0.4; keep in step with the @ref on the uses: line
+      tool-ref: 2a76fc206478db96c51d42389e4f18775ec0cb28 # 1.1.0; keep in step with the @ref on the uses: line
     secrets: # only what the review needs, not every secret in the repo
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
