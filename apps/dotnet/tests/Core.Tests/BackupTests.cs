@@ -45,6 +45,39 @@ public sealed class BackupTests : IDisposable
         if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true);
     }
 
+    [Theory]
+    [InlineData(-1L, 0L)]
+    [InlineData(long.MaxValue, 1L)]
+    public void Inspect_rejects_negative_or_overflowing_zip64_sizes(long first, long second)
+    {
+        // Inspection reads the central directory, not file contents. Supply ZIP64
+        // size fields directly so no huge allocation or decompression is needed.
+        using (var file = File.Create(Zip))
+        using (var writer = new BinaryWriter(file))
+        {
+            foreach (var (name, length) in new[] { ("models/org/repo/a", first), ("models/org/repo/b", second) })
+            {
+                var bytes = System.Text.Encoding.UTF8.GetBytes(name);
+                writer.Write(0x02014b50u); // central directory entry
+                writer.Write((ushort)45); writer.Write((ushort)45);
+                writer.Write((ushort)0); writer.Write((ushort)0);
+                writer.Write(0u); writer.Write(0u); // timestamp, CRC
+                writer.Write(0u); writer.Write(uint.MaxValue); // compressed, ZIP64 size
+                writer.Write((ushort)bytes.Length); writer.Write((ushort)12);
+                writer.Write((ushort)0); writer.Write((ushort)0); writer.Write((ushort)0);
+                writer.Write(0u); writer.Write(0u); // attributes, local header offset
+                writer.Write(bytes);
+                writer.Write((ushort)1); writer.Write((ushort)8); writer.Write(length);
+            }
+            var directorySize = (uint)file.Position;
+            writer.Write(0x06054b50u); // end of central directory
+            writer.Write((ushort)0); writer.Write((ushort)0);
+            writer.Write((ushort)2); writer.Write((ushort)2);
+            writer.Write(directorySize); writer.Write(0u); writer.Write((ushort)0);
+        }
+        Assert.Throws<InvalidDataException>(() => New().Inspect(Zip));
+    }
+
     // ---- The archive ----
 
     [Fact]

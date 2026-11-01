@@ -59,9 +59,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          # The bump step pushes a commit and a tag, which needs the token the
-          # checkout leaves behind.
-          persist-credentials: true
+          # Only the bump step receives push credentials.
+          persist-credentials: false
           # Release notes are built from the commits since the previous tag, so
           # the default shallow clone would produce an empty changelog.
           fetch-depth: 0
@@ -81,6 +80,7 @@ jobs:
         # Inputs reach the shell as environment variables, never spliced into the
         # script text: a dispatch version like `1.0.0$(cmd)` would otherwise run.
         env:
+          GH_TOKEN: ${{ github.token }}
           INPUT_VERSION: ${{ inputs.version }}
           INPUT_BUMP: ${{ inputs.bump }}
         run: |
@@ -124,8 +124,8 @@ jobs:
           git add "$project"
           git commit -m "Release $tag"
           git tag -a "$tag" -m "Bunyi $version"
-          git push origin HEAD:"${GITHUB_REF_NAME}"
-          git push origin "$tag"
+          git -c credential.helper= -c 'credential.helper=!f() { echo username=x-access-token; echo "password=$GH_TOKEN"; }; f' push origin HEAD:"${GITHUB_REF_NAME}"
+          git -c credential.helper= -c 'credential.helper=!f() { echo username=x-access-token; echo "password=$GH_TOKEN"; }; f' push origin "$tag"
 
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "Cut $tag from $current ($build)"

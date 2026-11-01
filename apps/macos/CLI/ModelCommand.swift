@@ -219,7 +219,7 @@ enum ModelCommand {
         let assets: [CLIMessage] = zip(modes, directories).map { mode, directory in
             [
                 "id": modeName(mode),
-                "source": mode.effectiveRepoID,
+                "source": PrivacyRedactor.modelSource(mode.effectiveRepoID),
                 "folder": directory.path,
                 "bytes": ModelStore.size(of: directory),
                 "complete": TTSEngine.isModelComplete(for: mode),
@@ -318,7 +318,7 @@ enum ModelCommand {
         let source = mode.effectiveSource
         let model = DownloadedModel(
             url: directory,
-            name: mode.effectiveRepoID,
+            name: PrivacyRedactor.modelSource(mode.effectiveRepoID),
             byteCount: ModelStore.size(of: directory),
             isSelfHosted: {
                 if case .baseURL = source { return true }
@@ -394,7 +394,7 @@ enum ModelCommand {
         let inspection = inspect(directory)
         return [
             "id": modeName(mode),
-            "source": mode.effectiveRepoID,
+            "source": PrivacyRedactor.modelSource(mode.effectiveRepoID),
             "folder": directory.path,
             "complete": TTSEngine.isModelComplete(for: mode),
             "missingFiles": inspection.missing,

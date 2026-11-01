@@ -54,12 +54,15 @@ enum ConfigurationCommand {
                 ?? CLISettingsStore.dataRoot
                     .appendingPathComponent("Models", isDirectory: true).path,
             "unloadOnModeSwitch": settings.unloadOnModeSwitch ?? true,
-            "modelSource.preset": settings.modelSource?["preset"]
-                ?? TTSMode.presetVoice.repoID,
-            "modelSource.design": settings.modelSource?["design"]
-                ?? TTSMode.voiceDesign.repoID,
-            "modelSource.clone": settings.modelSource?["clone"]
-                ?? TTSMode.voiceClone.repoID,
+            "modelSource.preset": PrivacyRedactor.modelSource(
+                settings.modelSource?["preset"]
+                    ?? TTSMode.presetVoice.repoID),
+            "modelSource.design": PrivacyRedactor.modelSource(
+                settings.modelSource?["design"]
+                    ?? TTSMode.voiceDesign.repoID),
+            "modelSource.clone": PrivacyRedactor.modelSource(
+                settings.modelSource?["clone"]
+                    ?? TTSMode.voiceClone.repoID),
         ]
     }
 

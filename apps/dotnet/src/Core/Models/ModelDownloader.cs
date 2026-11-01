@@ -188,8 +188,11 @@ public sealed partial class ModelDownloader(HttpClient http, ILogSink log, TimeP
     }
 
     private static InvalidDataException ChecksumsRequired(Uri source, string problem) =>
-        new($"The manifest.sha256 for {source} {problem}, so nothing was downloaded: this source must be "
+        new($"The manifest.sha256 for {SanitizeUri(source)} {problem}, so nothing was downloaded: this source must be "
             + "verified. Try again later, or switch the source to Hugging Face in Settings.");
+
+    private static string SanitizeUri(Uri uri) =>
+        new UriBuilder(uri) { UserName = "", Password = "", Query = "", Fragment = "" }.Uri.AbsoluteUri;
 
     /// <summary>
     /// Carries the built-in list's notion of "required" onto a server's
@@ -578,7 +581,7 @@ public sealed partial class ModelDownloader(HttpClient http, ILogSink log, TimeP
     }
 
     private static InvalidDataException TooLarge(Uri uri) =>
-        new($"The manifest at {uri} is larger than {MaxManifestBytes / 1024} KiB, so it is not being read.");
+        new($"The manifest at {SanitizeUri(uri)} is larger than {MaxManifestBytes / 1024} KiB, so it is not being read.");
 
     private async Task<string?> TryGetStringAsync(Uri uri, CancellationToken ct, Action<DownloadWait?>? waiting = null)
     {

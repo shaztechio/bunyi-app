@@ -117,6 +117,11 @@ to it. It controls added silence at long-text joins, in milliseconds.
 Desktop setting `experimentalSrtEnabled` is a boolean, default false when absent.
 It controls experimental SRT availability, not project contents or cached takes.
 
+On Unix, settings files, saved model configurations, and diagnostic logs must
+be private to the user before sensitive contents are written: create files with
+mode `0600` (or inside an owner-only `0700` directory), and restrict existing
+files before writing or appending. Windows uses the per-user profile ACLs.
+
 ## Models folder
 
 Root is the models folder (default per-user app data; user-relocatable).

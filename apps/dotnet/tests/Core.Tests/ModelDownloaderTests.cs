@@ -526,11 +526,20 @@ public sealed class ModelDownloaderTests : IAsyncLifetime
     public async Task A_manifest_far_larger_than_any_real_one_is_refused_rather_than_read_into_memory()
     {
         _server.Add("manifest.sha256", new string('a', ModelDownloader.MaxManifestBytes + 1));
+        var withCredentials = new ModelSource.BaseUrl(new UriBuilder(_server.BaseUrl)
+        {
+            UserName = "alice",
+            Password = "hunter2",
+            Query = "X-Amz-Signature=s3cret",
+        }.Uri);
 
         var error = await Assert.ThrowsAsync<InvalidDataException>(() =>
-            NewDownloader().EnsureModelAsync(Source, Layout, _root, null, default));
+            NewDownloader().EnsureModelAsync(withCredentials, Layout, _root, null, default));
 
         Assert.Contains("larger than", error.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("alice", error.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("hunter2", error.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("s3cret", error.Message, StringComparison.Ordinal);
     }
 
     [Fact]

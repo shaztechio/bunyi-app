@@ -81,7 +81,8 @@ enum SpeakersCommand {
         }
         let response = CLIProtocol.result(request, [
             "speakers": engine.speakers,
-            "modelSource": TTSMode.presetVoice.effectiveRepoID,
+            "modelSource": PrivacyRedactor.modelSource(
+                TTSMode.presetVoice.effectiveRepoID),
         ])
         await unloadOneShot()
         return response

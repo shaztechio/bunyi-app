@@ -36,7 +36,9 @@ jobs:
     timeout-minutes: 5
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       # The checker has no test project to live in, so it carries its own
       # cases. Running them here first means a broken checker fails as a

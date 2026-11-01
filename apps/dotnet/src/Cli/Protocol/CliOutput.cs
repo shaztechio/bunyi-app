@@ -92,7 +92,7 @@ public sealed partial class CliLog : ILogSink
             lock (gate)
             {
                 Directory.CreateDirectory(AppPaths.LogsFolder);
-                File.AppendAllText(Path, $"{DateTimeOffset.UtcNow:O} {Redact(message)}{Environment.NewLine}");
+                PrivateFile.AppendAllText(Path, $"{DateTimeOffset.UtcNow:O} {Redact(message)}{Environment.NewLine}");
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* Logging must not fail an operation. */ }

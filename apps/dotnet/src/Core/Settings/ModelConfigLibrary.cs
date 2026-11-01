@@ -347,7 +347,8 @@ public sealed class ModelConfigLibrary
             // therefore atomic — a crash cannot leave malformed JSON that loses
             // every configuration rather than the one being changed.
             var temp = _path + ".tmp";
-            File.WriteAllText(temp, JsonSerializer.Serialize(_configs, Json));
+            PrivateFile.WriteAllText(temp, JsonSerializer.Serialize(_configs, Json));
+
             File.Move(temp, _path, overwrite: true);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

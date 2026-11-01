@@ -13,8 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Copy to .github/workflows/security-review.yml in any repo you want reviewed.
-# Needs repo secrets ANTHROPIC_API_KEY / OPENAI_API_KEY / OPENROUTER_API_KEY (only for the
+# Basic form. Use Security review (advanced) for model and tuning overrides.
+# Needs repo secrets ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY / OPENROUTER_API_KEY (only for the
 # providers you use) and Settings → Actions → General →
 # "Allow GitHub Actions to create and approve pull requests".
 
@@ -31,40 +31,20 @@ on:
         description: "OpenAI (Codex)"
         type: boolean
         default: true
+      gemini:
+        description: "Gemini Argon (experimental)"
+        type: boolean
+        default: false
       openrouter:
-        description: "OpenRouter model via Claude Code (experimental; needs OPENROUTER_API_KEY)"
+        description: "OpenRouter (experimental)"
         type: boolean
         default: false
-      openrouter-model:
-        description: "OpenRouter model slug, e.g. vendor/model. The :floor suffix routes to the cheapest provider; the default routing picked Mistral at ~10x the price."
-        type: string
-        default: "z-ai/glm-5.3:floor"
-      openrouter-max-turns:
-        description: "Stop the OpenRouter agent after this many turns (blank = no limit). Hitting it fails the run; no PR if the report is not written yet."
-        type: string
-        default: ""
-      openrouter-auto-compact-window:
-        description: "Compact the OpenRouter agent's conversation at this many tokens, 100000-1000000 (blank = 100000). Smaller = cheaper turns."
-        type: string
-        default: ""
       stream-logs:
-        description: "Live progress: one line per tool call (tool and path only) in the job log. The job log of a public repo is public."
-        type: boolean
-        default: false
-      claude-model:
-        description: "Claude model (blank = CLI default)"
-        type: string
-        default: "claude-opus-5-5"
-      codex-model:
-        description: "Codex model (blank = CLI default)"
-        type: string
-        default: "gpt-6-sol"
-      draft:
-        description: "Open PRs as drafts"
+        description: "Stream tool activity to the job log (public in public repos)"
         type: boolean
         default: true
-      upload-sarif:
-        description: "Upload findings to code scanning (Security tab)"
+      draft:
+        description: "Open PRs as drafts"
         type: boolean
         default: true
 
@@ -75,21 +55,24 @@ jobs:
       pull-requests: write
       security-events: write # code scanning upload
       actions: read          # needed by the SARIF upload on private repos
-    uses: shaztechio/multi-llm-security-review/.github/workflows/security-review.yml@018e1b237b0eb1acb15912aa440978997a65aea4 # 1.0.4, pinned by commit; bump deliberately after reviewing the tool repo
+    uses: shaztechio/multi-llm-security-review/.github/workflows/security-review.yml@668f58104c6efff1ac9407fceaac609186931768 # 1.1.2, pinned by commit; bump deliberately after reviewing the tool repo
     with:
       anthropic: ${{ inputs.anthropic }}
       openai: ${{ inputs.openai }}
+      gemini: ${{ inputs.gemini }}
+      gemini-model: "gemini-4-argon"
       openrouter: ${{ inputs.openrouter }}
-      openrouter-model: ${{ inputs.openrouter-model }}
-      openrouter-max-turns: ${{ inputs.openrouter-max-turns }}
-      openrouter-auto-compact-window: ${{ inputs.openrouter-auto-compact-window }}
+      openrouter-model: "z-ai/glm-5.3:floor"
+      openrouter-max-turns: ""
+      openrouter-auto-compact-window: ""
       stream-logs: ${{ inputs.stream-logs }}
-      claude-model: ${{ inputs.claude-model }}
-      codex-model: ${{ inputs.codex-model }}
+      claude-model: "claude-opus-5-5"
+      codex-model: "gpt-6-sol"
       draft: ${{ inputs.draft }}
-      upload-sarif: ${{ inputs.upload-sarif }}
-      tool-ref: 018e1b237b0eb1acb15912aa440978997a65aea4 # 1.0.4; keep in step with the @ref on the uses: line
+      upload-sarif: true
+      tool-ref: 668f58104c6efff1ac9407fceaac609186931768 # 1.1.2; keep in step with the @ref on the uses: line
     secrets: # only what the review needs, not every secret in the repo
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}

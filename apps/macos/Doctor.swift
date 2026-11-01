@@ -298,7 +298,7 @@ public enum Doctor {
             where_ = "Hugging Face"
         case .baseURL(let base):
             probe = base.appendingPathComponent("config.json")
-            where_ = base.host ?? base.absoluteString
+            where_ = base.host ?? PrivacyRedactor.modelSource(base.absoluteString)
         }
 
         guard await isReachable(probe) else {
