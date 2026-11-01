@@ -123,3 +123,27 @@ deterministic persistence checks cover different parts of the feature.
 The updated self-contained build is published separately under
 `tmp/srt-projects/win-x64/`, preserving the older running test build. Native
 macOS project persistence is part of #310 along with the rest of SRT parity.
+
+## Cue correction and resume fix
+
+An internal speaker-list refresh can change `Ryan` to `ryan` after a run's
+settings are frozen. The old cache compared those strings literally, so the
+next selected regeneration could invalidate every take. The cache now compares
+speaker identifiers case-insensitively, including opaque cache configurations
+from existing saved projects. UI changes in capitalization alone do not clear
+takes. Closing Settings invalidates only when source/folder identity changed.
+
+The main action now says Generate cues, Resume (missing count), Check timing,
+or Export track, with ready/missing/error counts. Regenerate cue returns to
+review without exporting. A regression generates two cues, edits and regenerates
+one after the internal spelling change, then exports with exactly three total
+synthesizer calls. Existing saved-cache capitalization is tested separately.
+Engine integration also checks that selected regeneration publishes no final
+track, and the explicit resume/export adds no synthesis calls. Reuse and
+configuration invalidation are logged without cue text.
+
+Latest Windows suite results: 948 core, 406 UI and 98 CLI passes (1,452 total),
+with eight existing model-gated skips. The updated app is separately published
+at `tmp/srt-resume/win-x64/`; existing running instances were not closed or
+modified. This build can reuse projects saved with the old speaker spelling,
+but it cannot reconstruct takes already deleted by the old invalidation bug.

@@ -691,7 +691,7 @@ limitations under the License.
             screen reader skips it — so it was purple, unpressable and silent.
             It stays live and says what is missing when pressed.
           -->
-          <Button Name="GenerateButton" Classes="primary" AutomationProperties.Name="Generate"
+          <Button Name="GenerateButton" Classes="primary" AutomationProperties.Name="{Binding GenerateActionText}"
                   Command="{Binding GenerateCommand}"
                   IsVisible="{Binding ShowGenerate}"
                   ToolTip.Tip="{Binding BlockedReason}"
@@ -699,7 +699,7 @@ limitations under the License.
             <StackPanel Orientation="Horizontal" Spacing="6">
               <Path Data="{DynamicResource IconWaveform16}" Stretch="None"
                     Width="16" Height="16" VerticalAlignment="Center" />
-              <TextBlock Text="Generate" VerticalAlignment="Center" />
+              <TextBlock Text="{Binding GenerateActionText}" VerticalAlignment="Center" />
             </StackPanel>
           </Button>
           <!--

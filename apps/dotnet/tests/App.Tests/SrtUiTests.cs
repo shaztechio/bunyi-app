@@ -49,6 +49,10 @@ public sealed class SrtUiTests : HeadlessWindows
             Assert.False(model.SrtUnsaved);
             Assert.True(File.Exists(project));
             Assert.Contains("saved", model.SrtProjectLabel);
+            model.RefreshModelNotice();
+            Assert.False(model.SrtUnsaved); // Closing unchanged Settings must not clear takes.
+            model.Speaker = "AIDEN";
+            Assert.False(model.SrtUnsaved); // Model/UI capitalization is the same voice.
             model.SrtRows[0].End = "00:00:03,000";
             Assert.True(model.SrtUnsaved);
             await model.SaveSrtProjectCommand.ExecuteAsync(null);
@@ -67,7 +71,7 @@ public sealed class SrtUiTests : HeadlessWindows
             Assert.Equal("Original words.", model.SrtRows[0].Text);
             Assert.Equal("00:00:03,000", model.SrtRows[0].End);
             Assert.Equal("english", model.Language);
-            Assert.Equal("aiden", model.Speaker);
+            Assert.Equal("AIDEN", model.Speaker);
             Assert.Equal("calm", model.Instruct);
             await File.WriteAllTextAsync(project, "not a project");
             await model.OpenSrtProjectCommand.ExecuteAsync(null);

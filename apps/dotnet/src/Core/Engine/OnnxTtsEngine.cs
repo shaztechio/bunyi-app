@@ -414,6 +414,8 @@ public sealed class OnnxTtsEngine : ITtsEngine
                         Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal)
                             .Select(p => { var f = new FileInfo(p); return $"{f.Name}:{f.Length}:{f.LastWriteTimeUtc.Ticks}"; }));
                     await srt.GenerateAsync(srtRequest, identity, Section, s => Publish(s, progress), Release, _log, token).ConfigureAwait(false);
+                    if (request.SrtCueId is not null)
+                        return new GenerateResult("", TimeSpan.Zero, 0, started.Elapsed);
                     Publish(new EngineStatus(EngineState.Finalizing, Detail: "Assembling the timed audio track"), progress);
                     return WriteSrtOutput(srtRequest, srt, folder, source, started, token);
                 }

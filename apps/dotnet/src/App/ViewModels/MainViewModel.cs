@@ -54,7 +54,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public DownloadViewModel Download { get; } = new();
     public void RefreshModelNotice()
     {
-        InvalidateSrtVoice();
+        RefreshSrtModelContext();
         _downloadFailure = null;
         OnPropertyChanged(nameof(NeedsModel));
         OnPropertyChanged(nameof(CanUseHuggingFace));
@@ -867,6 +867,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             cancellation.Token.ThrowIfCancellationRequested();
             engineStarted = true;
             await _engine.GenerateAsync(request, null, cancellation.Token);
+            if (request.SrtCueId is not null)
+            {
+                RefreshSrtRows();
+                Status = "Cue regenerated. Review its status, then use Resume or Export track below. Other completed takes are kept.";
+                return;
+            }
             var path = _engine.LastOutputPath;
             LastOutputPath = path;
 
@@ -1188,7 +1194,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     partial void OnIsBusyChanged(bool value) => Refresh();
     partial void OnLastOutputPathChanged(string? value) => Refresh();
     partial void OnLanguageChanged(string value) { InvalidateSrtVoice(); Refresh(); }
-    partial void OnSpeakerChanged(string value) { InvalidateSrtVoice(); Refresh(); }
+    partial void OnSpeakerChanged(string? oldValue, string newValue)
+    {
+        if (!string.Equals(oldValue?.Trim(), newValue?.Trim(), StringComparison.OrdinalIgnoreCase)) InvalidateSrtVoice();
+        Refresh();
+    }
     partial void OnReferenceAudioPathChanged(string? value)
     {
         ReferenceTranscriptAudioSeconds = null;

@@ -190,11 +190,52 @@ public sealed class SrtTests : IDisposable
     }
 
     [Fact]
+    public async Task Resume_after_edit_and_selected_regeneration_keeps_takes_when_model_lowercases_speaker()
+    {
+        var a = Cue(); var b = Cue("00:00:03,000", "00:00:04,000");
+        using var session = new SrtSession([a, b]);
+        var calls = new List<string>();
+        Task<SynthesisResult> Count(GenerateRequest r, CancellationToken ct, IProgress<int> p)
+        { calls.Add(r.Text); return Audio(r, ct, p); }
+        await Generate(session, Request(session) with { Speaker = "Ryan" }, Count);
+        var unchangedPreview = session.PreviewPath(b.Id);
+        session.Update([a with { Text = "Corrected words." }, b]);
+        await Generate(session, Request(session) with { Speaker = "ryan", SrtCueId = a.Id }, Count);
+        Assert.Equal(3, calls.Count);
+        Assert.Equal(unchangedPreview, session.PreviewPath(b.Id));
+        await Generate(session, Request(session) with { Speaker = "ryan" }, Count);
+        Assert.Equal(3, calls.Count);
+    }
+
+    [Fact]
+    public async Task Existing_projects_with_capitalized_cache_speakers_reuse_their_takes()
+    {
+        Directory.CreateDirectory(_root);
+        var path = Path.Combine(_root, "old-cache.bunyi-srt");
+        using var session = new SrtSession([Cue()]);
+        await Generate(session);
+        await session.SaveProjectAsync(path, Request(session));
+        using (var zip = ZipFile.Open(path, ZipArchiveMode.Update))
+        {
+            JsonNode manifest;
+            using (var reader = new StreamReader(zip.GetEntry("project.json")!.Open())) manifest = JsonNode.Parse(reader.ReadToEnd())!;
+            var configuration = JsonNode.Parse(manifest["configuration"]!.GetValue<string>())!;
+            configuration["Speaker"] = "Ryan";
+            manifest["configuration"] = configuration.ToJsonString();
+            zip.GetEntry("project.json")!.Delete();
+            using var writer = new StreamWriter(zip.CreateEntry("project.json").Open()); writer.Write(manifest.ToJsonString());
+        }
+        var loaded = await SrtSession.OpenProjectAsync(path);
+        using (loaded.Session)
+            await Generate(loaded.Session, loaded.Request with { Speaker = "ryan" }, (_, _, _) => throw new Exception("Existing take must be reused"));
+    }
+
+    [Fact]
     public async Task Regenerating_one_cue_does_not_generate_other_missing_cues()
     {
         var a = Cue(); var b = Cue("00:00:03,000", "00:00:04,000");
         using var session = new SrtSession([a, b]);
-        await Assert.ThrowsAsync<SrtTimingException>(() => Generate(session, Request(session) with { SrtCueId = a.Id }));
+        await Generate(session, Request(session) with { SrtCueId = a.Id });
         Assert.NotNull(session.PreviewPath(a.Id));
         Assert.Null(session.PreviewPath(b.Id));
         await Generate(session);

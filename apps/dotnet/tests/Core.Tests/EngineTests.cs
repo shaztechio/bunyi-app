@@ -68,6 +68,25 @@ public sealed class EngineTests : IAsyncLifetime
         doctor: doctor, acquireLease: acquireLease);
 
     [Fact]
+    public async Task Srt_selected_regeneration_returns_to_review_then_resume_exports_without_more_inference()
+    {
+        var synth = new FakeSynthesizer();
+        await using var engine = NewEngine(synth);
+        using var session = new SrtSession(SrtDocument.Parse("1\n00:00:01,000 --> 00:00:02,000\nHello.\n\n2\n00:00:03,000 --> 00:00:04,000\nWorld."));
+        var request = Request() with { Srt = session, Speaker = "Ryan" };
+        await engine.GenerateAsync(request, null, default);
+        var corrected = session.Cues[0] with { Text = "Corrected." };
+        session.Update([corrected, session.Cues[1]]);
+        await engine.GenerateAsync(request with { Speaker = "ryan", SrtCueId = corrected.Id }, null, default);
+        Assert.Equal(3, synth.Requests.Count);
+        Assert.Null(engine.LastOutputPath);
+        Assert.Single(GeneratedOutputs.Read(Path.Combine(_root, "Outputs")));
+        await engine.GenerateAsync(request with { Speaker = "ryan" }, null, default);
+        Assert.Equal(3, synth.Requests.Count);
+        Assert.Equal(2, GeneratedOutputs.Read(Path.Combine(_root, "Outputs" )).Count);
+    }
+
+    [Fact]
     public async Task Srt_publishes_one_track_and_sidecar_and_reuses_clips_after_time_edits()
     {
         var synth = new FakeSynthesizer();

@@ -105,6 +105,16 @@ replace them. Changed model files or reference content can also require new
 takes. Keep a copy of your project file for backup; the app's model backup does
 not include it.
 
+**Fixing a cue and resuming.** A timestamp change needs no new speech. If you
+change the words or want a different take, use that row's **Regenerate cue**,
+then review its status. The other completed takes are kept. The main button
+says **Resume (N cues)** when audio is still missing, **Check timing** when all
+takes exist but errors remain, or **Export track** when everything fits. Export
+reuses completed audio; it does not regenerate the whole script. The table
+shows ready, missing and error counts. A warning does not block export; an
+overlap does. Opening unchanged Settings or the model changing a speaker name's
+capitalization does not discard takes.
+
 ## The three modes (voice settings)
 
 ### Preset voice

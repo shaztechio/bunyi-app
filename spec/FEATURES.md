@@ -160,6 +160,16 @@ completed cue clips for the session, including after Stop or timing errors.
 Text edits invalidate only their cue, timestamps/inclusion reuse clips, voice
 or model-source/reference changes invalidate dependent clips. Offer preview and
 per-cue regeneration. Continue after timing conflicts to report every conflict.
+The main SRT action describes its work: Generate cues initially, Resume with
+the missing cue count when some takes exist, Check timing when all takes exist
+but errors remain, and Export track when all included cues fit. Show ready,
+missing and error counts. Editing timestamps never requires regeneration;
+Regenerate cue makes only that selected take and returns to the table without
+implicitly exporting a track. Resume/Export is the explicit final action.
+Speaker identifier capitalization changes and opening/closing unchanged Settings
+must not invalidate takes. Existing saved projects with differently capitalized
+speaker identifiers retain their reusable audio. Log reuse versus invalidation
+without logging cue text.
 Estimates are advisory. Actual complete sample counts decide fit: past own end
 warns; past next included start errors and blocks publication; equality passes.
 Subtitle display overlaps warn even before generation. Final duration is the

@@ -27,6 +27,28 @@ public sealed partial class MainViewModel
     private string? _srtCueId;
     private string? _srtProjectPath;
     private long _srtSavedVersion;
+    private (string? Source, string? Folder) _srtModelContext;
+    private (string? Source, string? Folder) CurrentSrtModelContext => (SrtSourceFor?.Invoke(Mode), Settings?.ModelsFolder);
+    public string GenerateActionText
+    {
+        get
+        {
+            if (!HasSrt) return "Generate";
+            var included = SrtRows.Where(r => r.Included).ToArray();
+            if (included.Length == 0) return "Check cues";
+            var missing = included.Count(r => !r.HasPreview);
+            if (included.Any(r => r.HasError) && missing == 0) return "Check timing";
+            if (missing == 0) return "Export track";
+            return included.Length == missing ? "Generate cues" : $"Resume ({missing} {(missing == 1 ? "cue" : "cues")})";
+        }
+    }
+    public string SrtResumeSummary => $"{SrtRows.Count(r => r.Included && r.HasPreview)} cues ready · "
+        + $"{SrtRows.Count(r => r.Included && !r.HasPreview)} missing · {SrtRows.Count(r => r.Included && r.HasError)} errors. "
+        + "Timestamp edits reuse audio. Regenerate only when the spoken text or take must change.";
+    private void RefreshSrtModelContext()
+    {
+        if (CurrentSrtModelContext != _srtModelContext) InvalidateSrtVoice();
+    }
     public bool SrtUnsaved => _srt is not null && (_srtProjectPath is null || _srt.Version != _srtSavedVersion);
     public string SrtProjectLabel => _srtProjectPath is null ? "Unsaved SRT project"
         : Path.GetFileName(_srtProjectPath) + (SrtUnsaved ? " · unsaved changes" : " · saved");
@@ -68,6 +90,7 @@ public sealed partial class MainViewModel
         _srt = session;
         _srtProjectPath = projectPath;
         _srtSavedVersion = session.Version;
+        _srtModelContext = CurrentSrtModelContext;
         SrtRows.Clear();
         foreach (var cue in session.Cues) SrtRows.Add(new SrtCueRow(cue, SyncSrt));
         session.Changed += (_, _) => UiThread.Post(RefreshSrtRows);
@@ -162,6 +185,8 @@ public sealed partial class MainViewModel
         OnPropertyChanged(nameof(HasSrtWork));
         OnPropertyChanged(nameof(SrtUnsaved));
         OnPropertyChanged(nameof(SrtProjectLabel));
+        OnPropertyChanged(nameof(GenerateActionText));
+        OnPropertyChanged(nameof(SrtResumeSummary));
         Refresh();
     }
     private void SyncSrt()
@@ -185,10 +210,13 @@ public sealed partial class MainViewModel
         OnPropertyChanged(nameof(HasSrtWork));
         OnPropertyChanged(nameof(SrtUnsaved));
         OnPropertyChanged(nameof(SrtProjectLabel));
+        OnPropertyChanged(nameof(GenerateActionText));
+        OnPropertyChanged(nameof(SrtResumeSummary));
     }
     private void InvalidateSrtVoice()
     {
         if (IsBusy || _srt is null) return;
+        _srtModelContext = CurrentSrtModelContext;
         StopPlayback();
         _srt.InvalidateAll();
         LastOutputPath = null;

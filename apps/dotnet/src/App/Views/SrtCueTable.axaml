@@ -25,6 +25,7 @@ limitations under the License.
         <Button Content="Save as…" Command="{Binding SaveSrtProjectAsCommand}" />
       </WrapPanel>
       <TextBlock Text="{Binding SrtProjectLabel}" FontSize="12" TextWrapping="Wrap" />
+      <TextBlock Text="{Binding SrtResumeSummary}" FontSize="12" TextWrapping="Wrap" />
       <TextBlock Text="Review captions before generating. Excluded cues are silent. Complete clips start at timestamps; model silence can delay words by about half a second."
                  TextWrapping="Wrap" FontSize="12" />
     </StackPanel>

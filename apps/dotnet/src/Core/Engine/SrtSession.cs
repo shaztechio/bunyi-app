@@ -17,6 +17,7 @@ using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Bunyi.Core.Audio;
 using Bunyi.Core.Diagnostics;
 using Bunyi.Core.Qwen;
@@ -93,10 +94,15 @@ public sealed partial class SrtSession : IDisposable
             await using var file = File.OpenRead(reference);
             referenceHash = Convert.ToHexString(await SHA256.HashDataAsync(file, ct));
         }
-        var configuration = JsonSerializer.Serialize(new { request.Mode, request.Language, request.Speaker,
+        var configuration = JsonSerializer.Serialize(new { request.Mode, request.Language, Speaker = request.Speaker?.Trim().ToLowerInvariant(),
             request.Instruct, request.ReferenceTranscript,
             request.ReferenceTranscriptAudioSeconds, source, referenceHash });
-        if (_configuration != configuration) { InvalidateAll(); _configuration = configuration; }
+        if (NormalizeSpeakerConfiguration(_configuration) != configuration)
+        {
+            if (HasClips) log.Log("SRT cache: voice, model or reference identity changed; existing takes must be regenerated.");
+            InvalidateAll();
+        }
+        _configuration = configuration;
         var revision = Interlocked.Read(ref _revision);
         Directory.CreateDirectory(_folder);
         var included = cues.Where(c => c.Included && (request.SrtCueId is null || c.Id == request.SrtCueId)).ToArray();
@@ -104,7 +110,7 @@ public sealed partial class SrtSession : IDisposable
         {
             ct.ThrowIfCancellationRequested();
             var cue = included[i];
-            if (Get(cue) is not null) continue;
+            if (Get(cue) is not null) { log.Log($"SRT cache: reusing cue {cue.Number}."); continue; }
             var prefix = $"Cue {cue.Number} ({i + 1} of {included.Length})";
             var frames = new CallbackProgress(n => status(new EngineStatus(EngineState.Generating,
                 Detail: $"{prefix} · {OnnxTtsEngine.FramesSoFar(n)}", Frames: n)));
@@ -143,7 +149,7 @@ public sealed partial class SrtSession : IDisposable
             finally { release(); }
         }
         Recheck();
-        if (Diagnostics.Any(d => d.Status == "error" || d.SampleCount is null)) throw new SrtTimingException(Diagnostics);
+        if (request.SrtCueId is null && Diagnostics.Any(d => d.Status == "error" || d.SampleCount is null)) throw new SrtTimingException(Diagnostics);
     }
 
     internal (long Samples, int Frames) WriteTrack(string path, ILogSink log, CancellationToken ct)
@@ -209,6 +215,18 @@ public sealed partial class SrtSession : IDisposable
     }
 
     public static string SidecarPath(string wav) => Path.ChangeExtension(wav, ".srt.json");
+    private static string? NormalizeSpeakerConfiguration(string? configuration)
+    {
+        if (configuration is null) return null;
+        try
+        {
+            if (JsonNode.Parse(configuration) is not JsonObject json) return configuration;
+            if (json["Speaker"] is JsonValue speaker && speaker.TryGetValue<string>(out var name))
+                json["Speaker"] = name.Trim().ToLowerInvariant();
+            return json.ToJsonString();
+        }
+        catch (JsonException) { return configuration; }
+    }
     internal void WriteSidecar(string path, OutputMetadata metadata)
     {
         var json = JsonSerializer.SerializeToUtf8Bytes(new
