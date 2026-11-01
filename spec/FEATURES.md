@@ -144,6 +144,10 @@ Preset voice and Voice clone. Voice design remains excluded. Disabling retains
 the loaded project and cached takes, with a notice to re-enable. Save project
 and Use plain text remain available, but cue editing, generation, playback and
 speed adjustment are disabled. Re-enabling resumes without regeneration.
+After relaunch, enable the preference if needed, then use **Open project** to
+resume a saved `.bunyi-srt` project. Opening restores matching generated takes;
+only missing or invalidated cues require generation. The preference belongs to
+the app's settings, not the project: opening a project never enables it silently.
 An already running operation finishes normally. This desktop preference does
 not change the explicitly invoked CLI SRT interface. Native macOS parity,
 including this Advanced tab and gate, remains tracked in #310.
