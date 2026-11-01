@@ -19,6 +19,7 @@ using Avalonia.LogicalTree;
 using Bunyi.App.ViewModels;
 using Bunyi.App.Views;
 using Bunyi.Core;
+using Bunyi.Core.Settings;
 using Xunit;
 using System.IO.Compression;
 using System.Security.Cryptography;
@@ -62,12 +63,24 @@ public sealed class SrtUiTests : HeadlessWindows
             }
             var engine = new FakeEngine();
             var player = new FakePlayer();
-            using var model = new MainViewModel(engine, player, new RecordingLog()) { SrtSourceFor = _ => "test-model" };
+            using var model = new MainViewModel(engine, player, new RecordingLog()) { Settings = EnabledSettings(Path.Combine(directory, "settings.json")), SrtSourceFor = _ => "test-model" };
             Open(new MainWindow { DataContext = model });
             model.ConfirmDiscardSrt = () => Task.FromResult(true);
             model.ChooseSrtProject = () => Task.FromResult<string?>(project);
             await model.OpenSrtProjectCommand.ExecuteAsync(null);
             var row = model.SrtRows[0];
+            var previewBeforeDisable = row.Preview;
+            model.Settings!.ExperimentalSrtEnabled = false;
+            Assert.True(model.HasSrt);
+            Assert.True(model.SrtDisabledWithProject);
+            Assert.False(model.CanGenerate);
+            await model.SpeedUpSrtCommand.ExecuteAsync(row);
+            await model.GenerateCommand.ExecuteAsync(null);
+            Assert.Equal(previewBeforeDisable, row.Preview);
+            Assert.Null(engine.LastRequest);
+            model.Settings.ExperimentalSrtEnabled = true;
+            Assert.False(model.SrtDisabledWithProject);
+            Assert.Equal(previewBeforeDisable, row.Preview);
             Assert.True(row.HasError);
             Assert.True(row.CanSpeedUp);
             var original = row.Preview;
@@ -115,7 +128,7 @@ public sealed class SrtUiTests : HeadlessWindows
         {
             await File.WriteAllTextAsync(source, "1\n00:00:01,000 --> 00:00:02,000\nOriginal words.");
             using var model = new MainViewModel(new FakeEngine(), new FakePlayer(), new RecordingLog())
-            { SrtSourceFor = _ => "test-model", Language = "english", Speaker = "aiden", Instruct = "calm" };
+            { Settings = EnabledSettings(Path.Combine(directory, "settings.json")), SrtSourceFor = _ => "test-model", Language = "english", Speaker = "aiden", Instruct = "calm" };
             Open(new MainWindow { DataContext = model });
             model.ConfirmDiscardSrt = () => Task.FromResult(true);
             model.ChooseSrt = () => Task.FromResult<string?>(source);
@@ -169,7 +182,7 @@ public sealed class SrtUiTests : HeadlessWindows
         {
             await File.WriteAllTextAsync(file, "1\nbad --> 00:00:02,000\n<i>Hello.</i>\n\n2\n00:00:03,000 --> 00:00:04,000\n[music]");
             var engine = new FakeEngine();
-            using var model = new MainViewModel(engine, new FakePlayer(), new RecordingLog()) { Script = "Ordinary text" };
+            using var model = new MainViewModel(engine, new FakePlayer(), new RecordingLog()) { Settings = EnabledSettings(file + ".settings"), Script = "Ordinary text" };
             var window = Open(new MainWindow { DataContext = model });
             model.ConfirmDiscardSrt = () => Task.FromResult(true);
             model.ChooseSrt = () => Task.FromResult<string?>(file);
@@ -205,6 +218,14 @@ public sealed class SrtUiTests : HeadlessWindows
             await model.ClearSrtCommand.ExecuteAsync(null);
             Assert.False(model.HasSrt);
         }
-        finally { File.Delete(file); }
+        finally { File.Delete(file); File.Delete(file + ".settings"); }
     }
+    private static SettingsViewModel EnabledSettings(string path)
+    {
+        var log = new RecordingLog();
+        return new SettingsViewModel(new SettingsStore(log, path),
+            new ModelConfigLibrary(log, path + ".configs"), log, _ => { }, _ => "test-model")
+            { ExperimentalSrtEnabled = true };
+    }
+
 }

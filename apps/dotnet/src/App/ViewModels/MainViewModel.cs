@@ -309,8 +309,25 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>History (spec §2a).</summary>
     public HistoryViewModel History { get; }
 
+    private SettingsViewModel? _settings;
+
     /// <summary>Settings (spec §7), or null when the app did not supply one.</summary>
-    public SettingsViewModel? Settings { get; init; }
+    public SettingsViewModel? Settings
+    {
+        get => _settings;
+        init
+        {
+            _settings = value;
+            if (_settings is not null) _settings.PropertyChanged += OnSettingsPropertyChanged;
+        }
+    }
+
+    private void OnSettingsPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(SettingsViewModel.ExperimentalSrtEnabled)) return;
+        if (!SrtEnabled && !IsBusy) StopPlayback();
+        SrtChanged();
+    }
 
     /// <summary>
     /// Runs every check on demand, including the slow one (spec §11).
@@ -484,12 +501,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// hovered for its own tooltip, and a screen reader skips it entirely. This
     /// still says whether a run would start.
     /// </remarks>
-    public bool CanGenerate => !IsBusy && GenerationReadiness.CanGenerate(CurrentRequest(), Transcribe is not null);
+    public bool CanGenerate => !IsBusy && (!HasSrt || SrtEnabled) && GenerationReadiness.CanGenerate(CurrentRequest(), Transcribe is not null);
 
     /// <summary>
     /// Why it cannot, for the tooltip §1 requires.
     /// </summary>
-    public string? BlockedReason => GenerationReadiness.BlockedReason(CurrentRequest(), Transcribe is not null);
+    public string? BlockedReason => HasSrt && !SrtEnabled
+        ? "Enable Experimental SRT support in Settings → Advanced to resume this project."
+        : GenerationReadiness.BlockedReason(CurrentRequest(), Transcribe is not null);
 
     /// <summary>The examples an unused window offers (spec §1).</summary>
     public IReadOnlyList<string> Examples => ExamplePrompts.For(Mode);
@@ -823,7 +842,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private async Task GenerateAsync()
     {
-        if (IsBusy) return;
+        if (IsBusy || (HasSrt && !SrtEnabled)) return;
         _downloadFailure = null;
         OnPropertyChanged(nameof(CanUseHuggingFace));
 
@@ -1294,6 +1313,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _engine.StatusChanged -= OnEngineStatusChanged;
         History.Dispose();
         _player.Dispose();
+        if (_settings is not null) _settings.PropertyChanged -= OnSettingsPropertyChanged;
         _srt?.Dispose();
     }
 }

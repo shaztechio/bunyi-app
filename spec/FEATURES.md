@@ -135,7 +135,19 @@ A segmented picker selects one of three modes. macOS source:
 
 ## 2. Generation output
 
-### SRT timed scripts (staged implementation)
+### SRT timed scripts (experimental, staged implementation)
+
+Desktop SRT support is opt-in under **Preferences / Settings → Advanced →
+Experimental SRT support**, off by default, including existing installations.
+The checkbox persists and immediately enables Import SRT and Open project for
+Preset voice and Voice clone. Voice design remains excluded. Disabling retains
+the loaded project and cached takes, with a notice to re-enable. Save project
+and Use plain text remain available, but cue editing, generation, playback and
+speed adjustment are disabled. Re-enabling resumes without regeneration.
+An already running operation finishes normally. This desktop preference does
+not change the explicitly invoked CLI SRT interface. Native macOS parity,
+including this Advanced tab and gate, remains tracked in #310.
+
 
 Preset voice and Voice clone accept UTF-8 SRT files, with optional BOM and any
 standard newline. Voice design does not. See [SRT-PLAN.md](SRT-PLAN.md) for the
@@ -956,6 +968,8 @@ second reading of the same information.
 - **Models**: the three per-mode source fields (repo ID or base URL) + help.
 - **Storage**: models-folder location controls + pre-download commands.
 - **Backup**: back up / restore / stop + status.
+- **Advanced**: **Experimental SRT support**, a persisted checkbox, default
+  **off**. Enables desktop timed scripts for Preset voice and Voice clone; see §2.
 - **About** (.NET only): name, version, platform, licence and copyright —
   see §9a. macOS has no such tab; AppKit's About panel covers it there.
 

@@ -52,7 +52,8 @@ If the download is a lot to ask for before hearing anything, the **Storage** tab
 
 ## Timed speech from subtitles
 
-In Preset voice or Voice clone, choose **Import SRT** instead of typing an
+First enable **Experimental SRT support** under **Settings → Advanced** (off by
+default). In Preset voice or Voice clone, choose **Import SRT** instead of typing an
 ordinary script. Voice design does not support subtitle scripts. Use a UTF-8
 `.srt` file. The original file is never changed.
 

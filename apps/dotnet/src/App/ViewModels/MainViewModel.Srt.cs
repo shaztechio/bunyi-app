@@ -59,7 +59,9 @@ public sealed partial class MainViewModel
     public Func<string?, Task<string?>>? ChooseSrtProjectSave { get; set; }
     public ObservableCollection<SrtCueRow> SrtRows { get; } = [];
     public bool HasSrt => _srt is not null && Mode != TtsMode.VoiceDesign;
-    public bool CanImportSrt => Mode != TtsMode.VoiceDesign;
+    public bool SrtEnabled => Settings?.ExperimentalSrtEnabled == true;
+    public bool SrtDisabledWithProject => HasSrt && !SrtEnabled;
+    public bool CanImportSrt => SrtEnabled && Mode != TtsMode.VoiceDesign;
     public bool HasSrtWork => _srt?.HasClips == true;
     public Func<Task<string?>>? ChooseSrt { get; set; }
     public Func<Task<bool>>? ConfirmDiscardSrt { get; set; }
@@ -130,7 +132,7 @@ public sealed partial class MainViewModel
     [RelayCommand]
     private async Task OpenSrtProjectAsync()
     {
-        if (IsBusy || ChooseSrtProject is null) return;
+        if (IsBusy || !CanImportSrt || ChooseSrtProject is null) return;
         var path = await ChooseSrtProject();
         if (path is null) return;
         using var cancellation = new CancellationTokenSource();
@@ -182,6 +184,8 @@ public sealed partial class MainViewModel
 
     private void SrtChanged()
     {
+        OnPropertyChanged(nameof(SrtEnabled));
+        OnPropertyChanged(nameof(SrtDisabledWithProject));
         OnPropertyChanged(nameof(HasSrt));
         OnPropertyChanged(nameof(CanImportSrt));
         OnPropertyChanged(nameof(HasSrtWork));
@@ -236,7 +240,7 @@ public sealed partial class MainViewModel
     [RelayCommand]
     private void PreviewSrt(SrtCueRow? row)
     {
-        if (IsBusy || row?.Preview is not { } path) return;
+        if (IsBusy || !SrtEnabled || row?.Preview is not { } path) return;
         StopPlayback();
         _player.Play(path);
     }
@@ -244,7 +248,7 @@ public sealed partial class MainViewModel
     [RelayCommand]
     private async Task RegenerateSrtAsync(SrtCueRow? row)
     {
-        if (IsBusy || row is null || !row.Included || _srt is null) return;
+        if (IsBusy || !SrtEnabled || row is null || !row.Included || _srt is null) return;
         StopPlayback();
         _srt.Invalidate(row.Cue.Id);
         _srtCueId = row.Cue.Id;
@@ -255,7 +259,7 @@ public sealed partial class MainViewModel
     [RelayCommand]
     private async Task SpeedUpSrtAsync(SrtCueRow? row)
     {
-        if (IsBusy || row is null || _srt is null) return;
+        if (IsBusy || !SrtEnabled || row is null || _srt is null) return;
         StopPlayback();
         using var cancellation = new CancellationTokenSource();
         _generateCancellation = cancellation;
@@ -277,7 +281,7 @@ public sealed partial class MainViewModel
     [RelayCommand]
     private void ResetSrtSpeed(SrtCueRow? row)
     {
-        if (IsBusy || row is null || _srt is null) return;
+        if (IsBusy || !SrtEnabled || row is null || _srt is null) return;
         StopPlayback();
         _srt.ResetSpeed(row.Cue.Id);
         LastOutputPath = null;

@@ -256,7 +256,7 @@ limitations under the License.
                       ToolTip.Tip="Import an SRT subtitle script" AutomationProperties.Name="Import SRT" AutomationProperties.HelpText="">
                     <Path Data="{DynamicResource IconImportSrt}" />
                   </infra:AccessibleButton>
-                  <infra:AccessibleButton Classes="icon" Name="OpenSrtProjectButton" Command="{Binding OpenSrtProjectCommand}"
+                  <infra:AccessibleButton Classes="icon" Name="OpenSrtProjectButton" Command="{Binding OpenSrtProjectCommand}" IsVisible="{Binding CanImportSrt}"
                       ToolTip.Tip="Open a saved SRT project and its cue takes" AutomationProperties.Name="Open project" AutomationProperties.HelpText="">
                     <Path Data="{DynamicResource IconFolder}" />
                   </infra:AccessibleButton>
@@ -275,7 +275,11 @@ limitations under the License.
                 </StackPanel>
                 <TextBlock Name="ScriptLabel" Text="SCRIPT" Classes="eyebrow" VerticalAlignment="Center" />
               </DockPanel>
-              <views:SrtCueTable Grid.Row="1" IsVisible="{Binding HasSrt}" />
+              <StackPanel Grid.Row="1" IsVisible="{Binding HasSrt}" Spacing="8">
+                <TextBlock IsVisible="{Binding SrtDisabledWithProject}" TextWrapping="Wrap"
+                           Text="Experimental SRT support is off. Your project and generated cues are retained. Re-enable it in Settings → Advanced to resume, or use Save project." />
+                <views:SrtCueTable IsEnabled="{Binding SrtEnabled}" />
+              </StackPanel>
 
 
               <TextBlock Grid.Row="2" Classes="needed" Margin="0,6,0,0"

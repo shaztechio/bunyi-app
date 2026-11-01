@@ -59,6 +59,40 @@ public sealed class SettingsTests : HeadlessWindows
         Assert.Equal(0, NewModel().SentenceGapMilliseconds);
     }
 
+    [AvaloniaFact]
+    public async Task Experimental_srt_is_default_off_persisted_and_gates_entry_points_immediately()
+    {
+        var settings = NewModel();
+        Assert.False(settings.ExperimentalSrtEnabled);
+        using var model = new MainViewModel(new FakeEngine(), new FakePlayer(), _log) { Settings = settings };
+        var main = Open(new MainWindow { DataContext = model });
+        var preferences = Open(new SettingsWindow { DataContext = settings });
+        var tabs = preferences.FindControl<TabControl>("SettingsTabs")!;
+        tabs.SelectedIndex = 5;
+        preferences.UpdateLayout();
+        var checkbox = preferences.FindControl<CheckBox>("ExperimentalSrtCheckBox")!;
+        Assert.False(checkbox.IsChecked);
+        Assert.False(main.FindControl<Button>("ImportSrtButton")!.IsVisible);
+        Assert.False(main.FindControl<Button>("OpenSrtProjectButton")!.IsVisible);
+        var picks = 0;
+        model.ChooseSrt = () => { picks++; return Task.FromResult<string?>(null); };
+        model.ChooseSrtProject = model.ChooseSrt;
+        await model.ImportSrtCommand.ExecuteAsync(null);
+        await model.OpenSrtProjectCommand.ExecuteAsync(null);
+        Assert.Equal(0, picks);
+        checkbox.IsChecked = true;
+        Assert.True(NewModel().ExperimentalSrtEnabled);
+        Assert.True(main.FindControl<Button>("ImportSrtButton")!.IsVisible);
+        Assert.True(main.FindControl<Button>("OpenSrtProjectButton")!.IsVisible);
+        model.Mode = TtsMode.VoiceDesign;
+        Assert.False(model.CanImportSrt);
+        model.Mode = TtsMode.VoiceClone;
+        Assert.True(model.CanImportSrt);
+        checkbox.IsChecked = false;
+        Assert.False(NewModel().ExperimentalSrtEnabled);
+        Assert.False(model.CanImportSrt);
+    }
+
     private SettingsViewModel NewModel(bool mirrorDefault = false)
     {
         var store = new SettingsStore(_log, Path.Combine(_folder, "settings.json"));
@@ -130,7 +164,7 @@ public sealed class SettingsTests : HeadlessWindows
 
         var tabs = window.GetLogicalDescendants().OfType<TabItem>().ToList();
         Assert.Equal(
-            ["General", "Models", "Storage", "Backup", "About"],
+            ["General", "Models", "Storage", "Backup", "About", "Advanced"],
             tabs.Select(t => t.Header as string));
     }
 
@@ -533,7 +567,7 @@ public sealed class SettingsTests : HeadlessWindows
 
         var tabControl = window.GetLogicalDescendants().OfType<TabControl>().First();
 
-        foreach (var (index, tab) in new[] { "General", "Models", "Storage", "Backup", "About" }.Index())
+        foreach (var (index, tab) in new[] { "General", "Models", "Storage", "Backup", "About", "Advanced" }.Index())
         {
             tabControl.SelectedIndex = index;
             Assert.Equal($"Settings — {tab}", window.Title);

@@ -204,3 +204,10 @@ Required checks:
   warning-only export, overlap correction, and alignment against a known
   timeline. Record any model limitations rather than treating duration checks
   as proof of speech accuracy.
+
+### Experimental desktop rollout
+
+SRT is off by default. Enable **Experimental SRT support** in Preferences /
+Settings → Advanced. Disabling retains the open project and cached takes, allows
+saving or returning to plain text, and pauses SRT actions until re-enabled.
+The explicit CLI interface is unchanged. Native macOS parity remains #310.
