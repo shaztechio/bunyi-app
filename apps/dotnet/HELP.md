@@ -115,6 +115,21 @@ shows ready, missing and error counts. A warning does not block export; an
 overlap does. Opening unchanged Settings or the model changing a speaker name's
 capitalization does not discard takes.
 
+**Speed up to fit.** On a generated cue, this adjusts the existing take to
+finish before the next included cue starts. For the last cue it targets its
+own end timestamp. It preserves pitch and does not regenerate speech, trim
+silence, or cut off the ending. The maximum is **1.25×**; if more is needed,
+the required speed is shown and your take stays unchanged. Shorten the words,
+edit the timestamps, or regenerate that cue instead.
+
+The cue shows its applied speed and adjusted duration. **Preview cue** plays
+the adjusted version: faster speech can sound different, so listen before
+exporting. **Reset speed** restores the original take. Applying the operation
+again starts from the original, so adjustments do not build on each other.
+Timestamp edits do not automatically change speed; use Speed up to fit again
+or Reset speed. Save project preserves both versions. Projects containing speed
+adjustments require this newer build to open correctly.
+
 ## The three modes (voice settings)
 
 ### Preset voice

@@ -30,7 +30,8 @@ public sealed partial class SrtSession
     private static readonly JsonSerializerOptions ProjectJson = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
     private sealed record ProjectVoice(TtsMode Mode, string Language, string? Speaker, string? Instruct,
         string? ReferenceTranscript, double? ReferenceTranscriptAudioSeconds, string? ModelSource);
-    private sealed record ProjectClip(string Id, string Key, long Samples, int Frames, string Sha256);
+    private sealed record ProjectAdjustment(long Samples, double Speed, string Sha256);
+    private sealed record ProjectClip(string Id, string Key, long Samples, int Frames, string Sha256, ProjectAdjustment? Adjustment = null);
     private sealed record ProjectManifest(int SchemaVersion, string Normalization, ProjectVoice Voice,
         SrtCue[] Cues, string? Configuration, ProjectClip[] Clips, string? ReferenceEntry, string? ReferenceSha256);
 
@@ -72,9 +73,22 @@ public sealed partial class SrtSession
                             throw new InvalidDataException("A cue take is missing or too large to save as a project.");
                         total = checked(total + input.Length);
                         CheckProjectSize(total);
-                        await using var output = archive.CreateEntry($"clips/{item.Cue.Id}.f32", CompressionLevel.NoCompression).Open();
-                        var hash = await CopyBounded(input, output, MaximumClipBytes, ct).ConfigureAwait(false);
-                        descriptors.Add(new(item.Cue.Id, clip.Key, clip.Samples, clip.Frames, hash));
+                        string hash;
+                        await using (var output = archive.CreateEntry($"clips/{item.Cue.Id}.f32", CompressionLevel.NoCompression).Open())
+                            hash = await CopyBounded(input, output, MaximumClipBytes, ct).ConfigureAwait(false);
+                        ProjectAdjustment? adjustment = null;
+                        if (clip.Adjustment is { } adjusted)
+                        {
+                            await using var adjustedInput = File.OpenRead(adjusted.RawPath);
+                            if (adjustedInput.Length != adjusted.Samples * 4 || adjustedInput.Length > MaximumClipBytes)
+                                throw new InvalidDataException("The adjusted cue audio has an invalid length.");
+                            total = checked(total + adjustedInput.Length);
+                            CheckProjectSize(total);
+                            await using var adjustedOutput = archive.CreateEntry($"adjusted/{item.Cue.Id}.f32", CompressionLevel.NoCompression).Open();
+                            var adjustedHash = await CopyBounded(adjustedInput, adjustedOutput, MaximumClipBytes, ct).ConfigureAwait(false);
+                            adjustment = new ProjectAdjustment(adjusted.Samples, adjusted.Speed, adjustedHash);
+                        }
+                        descriptors.Add(new(item.Cue.Id, clip.Key, clip.Samples, clip.Frames, hash, adjustment));
                     }
                     string? referenceEntry = null;
                     string? referenceHash = null;
@@ -92,7 +106,7 @@ public sealed partial class SrtSession
                     }
                     var voice = new ProjectVoice(request.Mode, request.Language, request.Speaker, request.Instruct,
                         request.ReferenceTranscript, request.ReferenceTranscriptAudioSeconds, SafeModelSource(modelSource));
-                    var manifest = new ProjectManifest(1, "srt-basic-v1", voice, cues, configuration,
+                    var manifest = new ProjectManifest(descriptors.Any(c => c.Adjustment is not null) ? 2 : 1, "srt-basic-v1", voice, cues, configuration,
                         descriptors.ToArray(), referenceEntry, referenceHash);
                     var bytes = JsonSerializer.SerializeToUtf8Bytes(manifest, ProjectJson);
                     if (bytes.Length > SrtDocument.MaximumBytes) throw new InvalidDataException("The project manifest exceeds 16 MiB.");
@@ -114,7 +128,7 @@ public sealed partial class SrtSession
         try
         {
             using var archive = ZipFile.OpenRead(path);
-            if (archive.Entries.Count > SrtDocument.MaximumCues + 2) throw new InvalidDataException("This project has too many files.");
+            if (archive.Entries.Count > SrtDocument.MaximumCues * 2 + 2) throw new InvalidDataException("This project has too many files.");
             var entries = new Dictionary<string, ZipArchiveEntry>(StringComparer.Ordinal);
             long total = 0;
             foreach (var entry in archive.Entries)
@@ -129,7 +143,7 @@ public sealed partial class SrtSession
             await using (var input = metadata.Open()) await CopyBounded(input, bytes, SrtDocument.MaximumBytes, ct).ConfigureAwait(false);
             var manifest = JsonSerializer.Deserialize<ProjectManifest>(bytes.ToArray(), ProjectJson)
                 ?? throw new InvalidDataException("The project manifest is empty.");
-            if (manifest.SchemaVersion != 1 || manifest.Normalization != "srt-basic-v1")
+            if (manifest.SchemaVersion is not (1 or 2) || manifest.Normalization != "srt-basic-v1")
                 throw new InvalidDataException("This project format is not supported by this version of Bunyi.");
             if (manifest.Voice is null || manifest.Cues is null || manifest.Clips is null)
                 throw new InvalidDataException("The project manifest is incomplete.");
@@ -150,6 +164,16 @@ public sealed partial class SrtSession
                 if (!entries.TryGetValue(name, out var entry) || entry.Length != clip.Samples * 4)
                     throw new InvalidDataException($"Cue {cue.Number}'s audio is missing or has the wrong length.");
                 allowed.Add(name);
+                if (clip.Adjustment is { } adjusted)
+                {
+                    var adjustedName = $"adjusted/{clip.Id}.f32";
+                    if (manifest.SchemaVersion != 2 || adjusted.Samples < 128 || adjusted.Samples >= clip.Samples
+                        || clip.Samples * 4 > adjusted.Samples * 5 || !double.IsFinite(adjusted.Speed)
+                        || Math.Abs(adjusted.Speed - clip.Samples / (double)adjusted.Samples) > 1e-9
+                        || !entries.TryGetValue(adjustedName, out var adjustedEntry) || adjustedEntry.Length != adjusted.Samples * 4)
+                        throw new InvalidDataException("The saved speed adjustment is invalid or missing.");
+                    allowed.Add(adjustedName);
+                }
             }
             if (manifest.ReferenceEntry is { } reference)
             {
@@ -169,7 +193,17 @@ public sealed partial class SrtSession
                 var peak = ValidateRaw(rawPath, clip.Samples, ct);
                 var preview = Path.ChangeExtension(rawPath, ".wav");
                 WritePreview(rawPath, preview, clip.Samples, peak, ct);
-                session._clips[clip.Id] = new Clip(clip.Key, rawPath, preview, clip.Samples, clip.Frames, peak);
+                var restored = new Clip(clip.Key, rawPath, preview, clip.Samples, clip.Frames, peak);
+                if (clip.Adjustment is { } adjusted)
+                {
+                    var adjustedRaw = Path.Combine(session._folder, Guid.NewGuid().ToString("N") + ".f32");
+                    await ExtractChecked(entries[$"adjusted/{clip.Id}.f32"], adjustedRaw, MaximumClipBytes, adjusted.Sha256, ct).ConfigureAwait(false);
+                    var adjustedPeak = ValidateRaw(adjustedRaw, adjusted.Samples, ct);
+                    var adjustedPreview = Path.ChangeExtension(adjustedRaw, ".wav");
+                    WritePreview(adjustedRaw, adjustedPreview, adjusted.Samples, adjustedPeak, ct);
+                    restored = restored with { Adjustment = new AdjustedClip(adjustedRaw, adjustedPreview, adjusted.Samples, adjustedPeak, adjusted.Speed) };
+                }
+                session._clips[clip.Id] = restored;
             }
             string? referencePath = null;
             if (manifest.ReferenceEntry is { } referenceName)
@@ -258,7 +292,11 @@ public sealed partial class SrtSession
         {
             ct.ThrowIfCancellationRequested();
             var count = (int)Math.Min(buffer.Length / 2, samples - offset);
-            for (var i = 0; i < count; i++) BinaryPrimitives.WriteInt16LittleEndian(buffer.AsSpan(i * 2), (short)Math.Round(input.ReadSingle() * gain * short.MaxValue));
+            for (var i = 0; i < count; i++)
+            {
+                var sample = (float)(input.ReadSingle() * gain);
+                BinaryPrimitives.WriteInt16LittleEndian(buffer.AsSpan(i * 2), (short)Math.Round(sample * short.MaxValue));
+            }
             output.Write(buffer, 0, count * 2);
             offset += count;
         }

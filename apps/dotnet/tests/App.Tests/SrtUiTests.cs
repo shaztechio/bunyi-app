@@ -20,12 +20,78 @@ using Bunyi.App.ViewModels;
 using Bunyi.App.Views;
 using Bunyi.Core;
 using Xunit;
+using System.IO.Compression;
+using System.Security.Cryptography;
+using System.Text.Json;
 
 namespace Bunyi.App.Tests;
 
 /// <summary>Headless controls and automation names only; not a Narrator/Orca listening test.</summary>
 public sealed class SrtUiTests : HeadlessWindows
 {
+    [AvaloniaFact]
+    public async Task Speed_controls_fit_preview_and_reset_cached_audio_without_generating()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "bunyi-speed-ui-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        var project = Path.Combine(directory, "speed.bunyi-srt");
+        try
+        {
+            var cues = new[]
+            {
+                new Bunyi.Core.Engine.SrtCue(Guid.NewGuid().ToString("N"), "1", "Hello.", "Hello.", "00:00:00,000", "00:00:00,800"),
+                new Bunyi.Core.Engine.SrtCue(Guid.NewGuid().ToString("N"), "2", "Hello.", "Hello.", "00:00:01,000", "00:00:02,000")
+            };
+            byte[] raw;
+            using (var memory = new MemoryStream())
+            {
+                using var writer = new BinaryWriter(memory);
+                for (var i = 0; i < 28800; i++) writer.Write((float)(0.5 * Math.Sin(2 * Math.PI * 440 * i / 24000)));
+                raw = memory.ToArray();
+            }
+            using (var zip = ZipFile.Open(project, ZipArchiveMode.Create))
+            {
+                foreach (var cue in cues) { using var stream = zip.CreateEntry($"clips/{cue.Id}.f32").Open(); stream.Write(raw); }
+                using var manifest = zip.CreateEntry("project.json").Open();
+                JsonSerializer.Serialize(manifest, new
+                {
+                    schemaVersion = 1, normalization = "srt-basic-v1", configuration = "{}",
+                    voice = new { mode = 0, language = "english", speaker = "ryan", modelSource = "test-model" },
+                    cues, clips = cues.Select(c => new { id = c.Id, key = "Hello.", samples = 28800, frames = 15, sha256 = Convert.ToHexString(SHA256.HashData(raw)) })
+                }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+            }
+            var engine = new FakeEngine();
+            var player = new FakePlayer();
+            using var model = new MainViewModel(engine, player, new RecordingLog()) { SrtSourceFor = _ => "test-model" };
+            Open(new MainWindow { DataContext = model });
+            model.ConfirmDiscardSrt = () => Task.FromResult(true);
+            model.ChooseSrtProject = () => Task.FromResult<string?>(project);
+            await model.OpenSrtProjectCommand.ExecuteAsync(null);
+            var row = model.SrtRows[0];
+            Assert.True(row.HasError);
+            Assert.True(row.CanSpeedUp);
+            var original = row.Preview;
+            await model.SpeedUpSrtCommand.ExecuteAsync(row);
+            Assert.Null(engine.LastRequest);
+            Assert.False(row.HasError);
+            Assert.True(row.HasSpeedAdjustment);
+            Assert.False(row.CanSpeedUp);
+            Assert.Contains("1.200", row.SpeedDescription);
+            Assert.NotEqual(original, row.Preview);
+            Assert.Equal("Export track", model.GenerateActionText);
+            model.PreviewSrtCommand.Execute(row);
+            Assert.Equal(row.Preview, player.CurrentPath);
+            model.ResetSrtSpeedCommand.Execute(row);
+            Assert.True(row.HasError);
+            Assert.False(row.HasSpeedAdjustment);
+            Assert.Equal(original, row.Preview);
+            Assert.Equal("Check timing", model.GenerateActionText);
+            Assert.True(model.SrtUnsaved);
+            await model.ClearSrtCommand.ExecuteAsync(null);
+        }
+        finally { Directory.Delete(directory, recursive: true); }
+    }
+
     [AvaloniaFact]
     public async Task Save_and_open_restore_voice_and_edits_and_guard_unsaved_drafts()
     {

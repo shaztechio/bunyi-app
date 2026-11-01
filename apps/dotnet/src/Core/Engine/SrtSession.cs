@@ -38,9 +38,18 @@ public sealed partial class SrtSession : IDisposable
     public IReadOnlyList<SrtDiagnostic> Diagnostics { get; private set; } = [];
     public bool HasClips => _clips.Count > 0;
     public event EventHandler? Changed;
-    internal sealed record Clip(string Key, string RawPath, string PreviewPath, long Samples, int Frames, float Peak);
+    internal sealed record AdjustedClip(string RawPath, string PreviewPath, long Samples, float Peak, double Speed);
+    internal sealed record Clip(string Key, string RawPath, string PreviewPath, long Samples, int Frames, float Peak)
+    {
+        public AdjustedClip? Adjustment { get; init; }
+        public string EffectiveRawPath => Adjustment?.RawPath ?? RawPath;
+        public string EffectivePreviewPath => Adjustment?.PreviewPath ?? PreviewPath;
+        public long EffectiveSamples => Adjustment?.Samples ?? Samples;
+        public float EffectivePeak => Adjustment?.Peak ?? Peak;
+        public double Speed => Adjustment?.Speed ?? 1;
+    }
     internal Clip? Get(SrtCue cue) => _clips.TryGetValue(cue.Id, out var clip) && clip.Key == cue.SpokenText ? clip : null;
-    public string? PreviewPath(string id) => _clips.TryGetValue(id, out var clip) ? clip.PreviewPath : null;
+    public string? PreviewPath(string id) => _clips.TryGetValue(id, out var clip) ? clip.EffectivePreviewPath : null;
 
     public SrtSession(IReadOnlyList<SrtCue> cues) { Cues = Array.AsReadOnly(cues.ToArray()); Recheck(); }
     public void Update(IReadOnlyList<SrtCue> cues)
@@ -63,7 +72,11 @@ public sealed partial class SrtSession : IDisposable
     }
     private void RemoveClip(string id)
     {
-        if (_clips.TryRemove(id, out var old)) { File.Delete(old.RawPath); File.Delete(old.PreviewPath); }
+        if (_clips.TryRemove(id, out var old))
+        {
+            File.Delete(old.RawPath); File.Delete(old.PreviewPath);
+            if (old.Adjustment is { } adjusted) { File.Delete(adjusted.RawPath); File.Delete(adjusted.PreviewPath); }
+        }
     }
     public void InvalidateAll()
     {
@@ -75,7 +88,7 @@ public sealed partial class SrtSession : IDisposable
     }
     internal void Recheck()
     {
-        Diagnostics = SrtDocument.Check(Cues, id => _clips.TryGetValue(id, out var clip) ? clip.Samples : null);
+        Diagnostics = SrtDocument.Check(Cues, id => _clips.TryGetValue(id, out var clip) ? clip.EffectiveSamples : null);
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
@@ -161,10 +174,10 @@ public sealed partial class SrtSession : IDisposable
         var clips = cues.Select(c => Get(c)!).ToArray();
         SrtDocument.TrySamples(cues[^1].Start, out var lastStart);
         SrtDocument.TrySamples(cues[^1].End, out var lastEnd);
-        var total = Math.Max(lastEnd, checked(lastStart + clips[^1].Samples));
+        var total = Math.Max(lastEnd, checked(lastStart + clips[^1].EffectiveSamples));
         // Leave space for standard RIFF metadata; WAV has a 32-bit length field.
         if (total > (uint.MaxValue - 1024 * 1024) / 2) throw new InvalidDataException("The timeline exceeds the WAV size limit. Use a shorter SRT file.");
-        var peak = clips.Max(c => c.Peak);
+        var peak = clips.Max(c => c.EffectivePeak);
         var gain = peak > 1 ? 0.98 / peak : 1;
         if (gain < 1) log.Log($"SRT output level reduced uniformly by {-20 * Math.Log10(gain):F1} dB to prevent clipping.");
         using var file = File.Create(path);
@@ -175,11 +188,11 @@ public sealed partial class SrtSession : IDisposable
         {
             SrtDocument.TrySamples(cues[i].Start, out var start);
             Silence(start - position);
-            using var reader = new BinaryReader(File.OpenRead(clips[i].RawPath));
-            for (long offset = 0; offset < clips[i].Samples;)
+            using var reader = new BinaryReader(File.OpenRead(clips[i].EffectiveRawPath));
+            for (long offset = 0; offset < clips[i].EffectiveSamples;)
             {
                 ct.ThrowIfCancellationRequested();
-                var count = (int)Math.Min(buffer.Length / 2, clips[i].Samples - offset);
+                var count = (int)Math.Min(buffer.Length / 2, clips[i].EffectiveSamples - offset);
                 for (var n = 0; n < count; n++)
                 {
                     var sample = reader.ReadSingle();
@@ -189,7 +202,7 @@ public sealed partial class SrtSession : IDisposable
                 file.Write(buffer, 0, count * 2);
                 offset += count;
             }
-            position = start + clips[i].Samples;
+            position = start + clips[i].EffectiveSamples;
         }
         Silence(total - position);
         file.Position = 4;
@@ -233,7 +246,8 @@ public sealed partial class SrtSession : IDisposable
         {
             schemaVersion = 1, sourceKind = "srt", normalization = "srt-basic-v1", metadata,
             cues = Cues.Select(c => new { c.Id, c.Number, c.OriginalText, c.Text, c.SpokenText,
-                c.Start, c.End, c.Included, sampleCount = Get(c)?.Samples,
+                c.Start, c.End, c.Included, sampleCount = Get(c)?.EffectiveSamples,
+                originalSampleCount = Get(c)?.Samples, speed = Get(c)?.Speed,
                 diagnostic = Diagnostics.FirstOrDefault(d => d.Id == c.Id) })
         }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true });
         if (json.Length > SrtDocument.MaximumBytes) throw new InvalidDataException("The timeline metadata exceeds 16 MiB.");

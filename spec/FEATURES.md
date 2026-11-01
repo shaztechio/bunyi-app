@@ -170,6 +170,27 @@ Speaker identifier capitalization changes and opening/closing unchanged Settings
 must not invalidate takes. Existing saved projects with differently capitalized
 speaker identifiers retain their reusable audio. Log reuse versus invalidation
 without logging cue text.
+
+**Speed up to fit** is an explicit per-cue operation for Preset/Clone SRT takes.
+Use pitch-preserving time compression of the original accepted take, never new
+inference, silence trimming, or changed sample rate. Target the next included
+cue's start; for the final cue target its own end. Only offer it when audio
+exists, timestamps are valid and the original take exceeds that window. Disable
+the action when the current adjusted length already matches it. Display the
+required speed and actual adjusted duration. Maximum 1.25×: if that is not
+enough, explain the required speed and keep the original/current audio and
+timing error unchanged. Do not silently apply the cap and claim a fit. Preview
+and export use the adjusted take; preserve the original and offer Reset speed.
+Always derive a replacement adjustment from the original, avoiding repeated
+processing. Timestamp/inclusion edits recheck the current adjusted audio rather
+than applying new speed automatically; the user can refit or reset. Text/voice
+changes and regeneration discard the old adjustment with the affected take.
+Operations run off the UI thread, support Stop, and commit only complete valid
+audio. Save/Open projects preserve both original and adjusted audio plus speed;
+exports record the adjustment. Warn that time compression can affect quality
+and encourage preview. Older project readers must reject adjusted projects
+rather than silently dropping speed or original audio. macOS parity is tracked
+in #310 with the rest of SRT; Windows is the proving implementation.
 Estimates are advisory. Actual complete sample counts decide fit: past own end
 warns; past next included start errors and blocks publication; equality passes.
 Subtitle display overlaps warn even before generation. Final duration is the

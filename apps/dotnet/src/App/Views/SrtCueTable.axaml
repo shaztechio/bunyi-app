@@ -69,10 +69,15 @@ limitations under the License.
                 <TextBlock Grid.Column="1" Text="{Binding StatusText}" TextWrapping="Wrap" FontSize="12"
                            AutomationProperties.Name="{Binding StatusText}" />
               </Grid>
-              <StackPanel Orientation="Horizontal" Spacing="8">
-                <Button Content="Preview cue" IsEnabled="{Binding HasPreview}" Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).PreviewSrtCommand}" CommandParameter="{Binding}" />
-                <Button Content="Regenerate cue" IsEnabled="{Binding Included}" Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).RegenerateSrtCommand}" CommandParameter="{Binding}" />
-              </StackPanel>
+              <TextBlock Text="{Binding SpeedDescription}" TextWrapping="Wrap" FontSize="12" />
+              <WrapPanel>
+                <Button Content="Preview cue" IsEnabled="{Binding HasPreview}" Margin="0,0,6,4" Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).PreviewSrtCommand}" CommandParameter="{Binding}" />
+                <Button Content="Regenerate cue" IsEnabled="{Binding Included}" Margin="0,0,0,4" Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).RegenerateSrtCommand}" CommandParameter="{Binding}" />
+                <Button Content="Speed up to fit" IsEnabled="{Binding CanSpeedUp}" Margin="6,0,0,4"
+                        ToolTip.Tip="{Binding SpeedDescription}" Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).SpeedUpSrtCommand}" CommandParameter="{Binding}" />
+                <Button Content="Reset speed" IsEnabled="{Binding HasSpeedAdjustment}" Margin="6,0,0,4"
+                        Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).ResetSrtSpeedCommand}" CommandParameter="{Binding}" />
+              </WrapPanel>
             </StackPanel>
           </Border>
         </DataTemplate>

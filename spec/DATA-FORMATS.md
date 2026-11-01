@@ -53,6 +53,18 @@ voice recordings/transcripts but no model weights and no model credentials.
 They are user-managed files, outside the model-only app backup. Output sidecars
 are not accepted as project archives. Native macOS parity follows #310.
 
+Projects with sped-up takes use schemaVersion 2. A clip descriptor retains its
+original fields and adds optional `adjustment` (`samples`, `speed`, `sha256`),
+with current audio in `adjusted/<cue-id>.f32`. Both original and adjusted files
+are included; validate both hashes, finite samples and exact lengths. Speed is
+the original/adjusted sample-count ratio, greater than 1 and at most 1.25.
+Adjusted takes use the same 512 MiB per-file and shared 8 GiB archive limits;
+allow at most 20,002 entries. No-adjustment projects continue to use version 1;
+new readers accept both versions and old readers reject version 2. Export
+sidecars add per-cue `originalSampleCount` and `speed`, with `sampleCount` and
+diagnostics describing the actual audio used in the track. Reset restores the
+original exactly and removes the adjustment; Save can then use version 1 again.
+
 ### Data roots
 
 Everything the app keeps for a user lives under one root, with fixed subfolder

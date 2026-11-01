@@ -201,12 +201,14 @@ public sealed partial class MainViewModel
     {
         if (_disposed || _srt is null) return;
         var diagnostics = _srt.Diagnostics.ToDictionary(d => d.Id);
+        var speeds = _srt.SpeedInfos();
         var included = SrtRows.Where(r => r.Included).ToArray();
         var nextStarts = new Dictionary<string, long?>();
         for (var i = 0; i < included.Length; i++)
             nextStarts[included[i].Cue.Id] = i + 1 < included.Length && SrtDocument.TrySamples(included[i + 1].Start, out var start) ? start : null;
         foreach (var row in SrtRows)
-            row.Refresh(diagnostics.GetValueOrDefault(row.Cue.Id), _srt.PreviewPath(row.Cue.Id), Language, nextStarts.GetValueOrDefault(row.Cue.Id));
+            row.Refresh(diagnostics.GetValueOrDefault(row.Cue.Id), _srt.PreviewPath(row.Cue.Id), Language,
+                nextStarts.GetValueOrDefault(row.Cue.Id), speeds.GetValueOrDefault(row.Cue.Id));
         OnPropertyChanged(nameof(HasSrtWork));
         OnPropertyChanged(nameof(SrtUnsaved));
         OnPropertyChanged(nameof(SrtProjectLabel));
@@ -243,6 +245,39 @@ public sealed partial class MainViewModel
     }
 
     [RelayCommand]
+    private async Task SpeedUpSrtAsync(SrtCueRow? row)
+    {
+        if (IsBusy || row is null || _srt is null) return;
+        StopPlayback();
+        using var cancellation = new CancellationTokenSource();
+        _generateCancellation = cancellation;
+        IsBusy = true;
+        _engine.ClearLastOutput();
+        LastOutputPath = null;
+        Status = $"Speeding up cue {row.Number} without regenerating speech…";
+        try
+        {
+            await _srt.SpeedUpToFitAsync(row.Cue.Id, cancellation.Token);
+            Status = $"Cue {row.Number} adjusted to {_srt.SpeedInfo(row.Cue.Id)!.Speed:0.000}×. Preview it, then export when all cues fit.";
+        }
+        catch (OperationCanceledException) { Status = "Speed adjustment stopped. The previous take is unchanged."; }
+        catch (Exception ex) when (ex is InvalidOperationException or InvalidDataException or IOException or UnauthorizedAccessException)
+        { Status = ex.Message; }
+        finally { _generateCancellation = null; IsBusy = false; RefreshSrtRows(); }
+    }
+
+    [RelayCommand]
+    private void ResetSrtSpeed(SrtCueRow? row)
+    {
+        if (IsBusy || row is null || _srt is null) return;
+        StopPlayback();
+        _srt.ResetSpeed(row.Cue.Id);
+        LastOutputPath = null;
+        Status = $"Cue {row.Number} restored to its original speed. Timing has been rechecked.";
+        RefreshSrtRows();
+    }
+
+    [RelayCommand]
     private void FirstSrtError()
     {
         SelectedSrtCue = SrtRows.FirstOrDefault(r => r.HasError);
@@ -274,6 +309,9 @@ public sealed partial class SrtCueRow : ObservableObject
     private string? _preview;
     public bool HasPreview => Preview is not null;
     [ObservableProperty] private bool _hasError;
+    [ObservableProperty] private bool _canSpeedUp;
+    [ObservableProperty] private bool _hasSpeedAdjustment;
+    [ObservableProperty] private string _speedDescription = "";
     public SrtCueRow(SrtCue cue, Action changed)
     {
         _original = cue; _changed = changed;
@@ -287,10 +325,17 @@ public sealed partial class SrtCueRow : ObservableObject
     partial void OnStartChanged(string value) => Changed();
     partial void OnEndChanged(string value) => Changed();
     partial void OnTextChanged(string value) => Changed();
-    public void Refresh(SrtDiagnostic? diagnostic, string? preview, string language, long? nextStart = null)
+    public void Refresh(SrtDiagnostic? diagnostic, string? preview, string language, long? nextStart = null, SrtSpeedInfo? speed = null)
     {
         Preview = preview;
         HasError = diagnostic?.Status == "error";
+        CanSpeedUp = speed?.CanFit == true;
+        HasSpeedAdjustment = speed?.Adjusted == true;
+        SpeedDescription = speed is null ? "" : speed.Adjusted
+            ? $"Speed {speed.Speed:0.000}× · {speed.OriginalSamples / 24000d:0.000}s original → {speed.CurrentSamples / 24000d:0.000}s current. Preview to check quality."
+            : "Original speed (1×)";
+        if (speed?.RequiredSpeed > 1.25) SpeedDescription += $" · Needs {speed.RequiredSpeed:0.##########}× to fit, above the 1.25× limit.";
+        else if (speed?.CanFit == true) SpeedDescription += $" · Fit requires {speed.RequiredSpeed:0.000}× (maximum 1.25×).";
         StatusText = !Included ? "Excluded — no speech" : diagnostic is null ? "Not generated"
             : $"{diagnostic.Status}: {diagnostic.Message}" + (diagnostic.DurationSeconds is { } d ? $" · {d:0.000}s complete audio" : "");
         var estimate = SpeechDurationEstimate.ForText(SpokenText, language);
