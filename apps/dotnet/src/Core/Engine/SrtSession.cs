@@ -60,7 +60,10 @@ public sealed partial class SrtSession : IDisposable
         Cues = Array.AsReadOnly(cues.ToArray());
         var current = Cues.ToDictionary(c => c.Id);
         foreach (var id in _clips.Keys.ToArray())
+        {
             if (!current.TryGetValue(id, out var cue) || _clips[id].Key != cue.SpokenText) RemoveClip(id);
+            else if (!cue.AllowSpeedLimitOverride && _clips[id].Speed > 1.25) ResetSpeed(id);
+        }
         Recheck();
     }
     public void Invalidate(string id)
@@ -246,7 +249,7 @@ public sealed partial class SrtSession : IDisposable
         {
             schemaVersion = 1, sourceKind = "srt", normalization = "srt-basic-v1", metadata,
             cues = Cues.Select(c => new { c.Id, c.Number, c.OriginalText, c.Text, c.SpokenText,
-                c.Start, c.End, c.Included, sampleCount = Get(c)?.EffectiveSamples,
+                c.Start, c.End, c.Included, c.AllowSpeedLimitOverride, sampleCount = Get(c)?.EffectiveSamples,
                 originalSampleCount = Get(c)?.Samples, speed = Get(c)?.Speed,
                 diagnostic = Diagnostics.FirstOrDefault(d => d.Id == c.Id) })
         }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true });

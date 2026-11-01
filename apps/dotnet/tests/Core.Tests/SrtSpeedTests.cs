@@ -148,6 +148,102 @@ public sealed class SrtSpeedTests : IDisposable
     }
 
     [Fact]
+    public async Task Override_is_per_cue_and_disabling_it_restores_an_over_limit_take()
+    {
+        var a = Cue("00:00:00,000", "00:00:00,500");
+        var b = Cue("00:00:00,500", "00:00:01,000");
+        using var session = new SrtSession([a, b]);
+        await Generate(session);
+        var original = session.PreviewPath(a.Id);
+        Assert.False(session.SpeedInfo(a.Id)!.CanFit);
+        session.Update([a with { AllowSpeedLimitOverride = true }, b]);
+        Assert.True(session.SpeedInfo(a.Id)!.CanFit);
+        Assert.False(session.SpeedInfo(b.Id)!.CanFit);
+        await session.SpeedUpToFitAsync(a.Id);
+        Assert.Equal(2.4, session.SpeedInfo(a.Id)!.Speed);
+        Assert.Equal(12000, session.Diagnostics[0].SampleCount);
+        Assert.False(session.Diagnostics[0].Status == "error");
+        session.Update([a, b]);
+        Assert.Equal(original, session.PreviewPath(a.Id));
+        Assert.Equal(1, session.SpeedInfo(a.Id)!.Speed);
+        Assert.Equal("error", session.Diagnostics[0].Status);
+    }
+
+    [Theory]
+    [InlineData(2.4)]
+    [InlineData(4.0)]
+    [InlineData(10.0)]
+    public void Explicit_high_rate_processing_remains_finite_exact_and_pitch_preserving(double speed)
+    {
+        var source = FilePath("high.f32"); var target = FilePath("high-fit.f32");
+        var audio = Tone((int)(24000 * speed));
+        using (var writer = new BinaryWriter(File.Create(source))) foreach (var sample in audio) writer.Write(sample);
+        SpeechTimeCompression.Write(source, target, audio.Length, 24000, default, allowAboveLimit: true);
+        var result = ReadRaw(target);
+        Assert.Equal(24000, result.Length);
+        Assert.All(result, sample => Assert.True(float.IsFinite(sample)));
+        var middle = result.Skip(2400).Take(19200).ToArray();
+        var crossings = Enumerable.Range(0, middle.Length - 1).Count(i => middle[i] <= 0 && middle[i + 1] > 0);
+        Assert.InRange(crossings / 0.8, 430, 450);
+    }
+
+    [Fact]
+    public async Task Save_open_preserves_high_rate_permission_and_audio_without_regeneration()
+    {
+        var cue = Cue("00:00:00,000", "00:00:00,500") with { AllowSpeedLimitOverride = true };
+        using var session = new SrtSession([cue]);
+        await Generate(session);
+        await session.SpeedUpToFitAsync(cue.Id);
+        var project = FilePath("override.bunyi-srt");
+        await session.SaveProjectAsync(project, Request(session));
+        using (var zip = ZipFile.OpenRead(project))
+        using (var manifest = new StreamReader(zip.GetEntry("project.json")!.Open()))
+            Assert.Equal(3, JsonNode.Parse(manifest.ReadToEnd())!["schemaVersion"]!.GetValue<int>());
+        var loaded = await SrtSession.OpenProjectAsync(project);
+        using var restored = loaded.Session;
+        Assert.True(restored.Cues[0].AllowSpeedLimitOverride);
+        Assert.Equal(2.4, restored.SpeedInfo(cue.Id)!.Speed);
+        await restored.GenerateAsync(loaded.Request, "test-model", (_, _, _) => throw new Exception("Reuse the saved adjusted take"),
+            _ => { }, () => { }, Log, default);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Projects_cannot_bypass_the_per_cue_permission_or_schema(bool downgrade)
+    {
+        var cue = Cue("00:00:00,000", "00:00:00,500") with { AllowSpeedLimitOverride = true };
+        using var session = new SrtSession([cue]);
+        await Generate(session);
+        await session.SpeedUpToFitAsync(cue.Id);
+        var project = FilePath("tampered-override.bunyi-srt");
+        await session.SaveProjectAsync(project, Request(session));
+        using (var zip = ZipFile.Open(project, ZipArchiveMode.Update))
+        {
+            JsonNode manifest;
+            using (var input = new StreamReader(zip.GetEntry("project.json")!.Open())) manifest = JsonNode.Parse(input.ReadToEnd())!;
+            if (downgrade) manifest["schemaVersion"] = 2;
+            else manifest["cues"]![0]!["allowSpeedLimitOverride"] = false;
+            zip.GetEntry("project.json")!.Delete();
+            using var writer = new StreamWriter(zip.CreateEntry("project.json").Open()); writer.Write(manifest.ToJsonString());
+        }
+        await Assert.ThrowsAsync<InvalidDataException>(() => SrtSession.OpenProjectAsync(project));
+    }
+
+    [Fact]
+    public async Task Turning_off_permission_keeps_an_adjustment_that_is_within_the_normal_limit()
+    {
+        var cue = Cue("00:00:00,000", "00:00:01,000") with { AllowSpeedLimitOverride = true };
+        using var session = new SrtSession([cue]);
+        await Generate(session);
+        await session.SpeedUpToFitAsync(cue.Id);
+        var adjusted = session.PreviewPath(cue.Id);
+        session.Update([cue with { AllowSpeedLimitOverride = false }]);
+        Assert.Equal(adjusted, session.PreviewPath(cue.Id));
+        Assert.Equal(1.2, session.SpeedInfo(cue.Id)!.Speed);
+    }
+
+    [Fact]
     public async Task Export_sidecar_records_effective_duration_original_duration_and_speed()
     {
         var cue = Cue("00:00:00,000", "00:00:01,000");

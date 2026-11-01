@@ -106,7 +106,8 @@ public sealed partial class SrtSession
                     }
                     var voice = new ProjectVoice(request.Mode, request.Language, request.Speaker, request.Instruct,
                         request.ReferenceTranscript, request.ReferenceTranscriptAudioSeconds, SafeModelSource(modelSource));
-                    var manifest = new ProjectManifest(descriptors.Any(c => c.Adjustment is not null) ? 2 : 1, "srt-basic-v1", voice, cues, configuration,
+                    var schema = cues.Any(c => c.AllowSpeedLimitOverride) ? 3 : descriptors.Any(c => c.Adjustment is not null) ? 2 : 1;
+                    var manifest = new ProjectManifest(schema, "srt-basic-v1", voice, cues, configuration,
                         descriptors.ToArray(), referenceEntry, referenceHash);
                     var bytes = JsonSerializer.SerializeToUtf8Bytes(manifest, ProjectJson);
                     if (bytes.Length > SrtDocument.MaximumBytes) throw new InvalidDataException("The project manifest exceeds 16 MiB.");
@@ -143,11 +144,13 @@ public sealed partial class SrtSession
             await using (var input = metadata.Open()) await CopyBounded(input, bytes, SrtDocument.MaximumBytes, ct).ConfigureAwait(false);
             var manifest = JsonSerializer.Deserialize<ProjectManifest>(bytes.ToArray(), ProjectJson)
                 ?? throw new InvalidDataException("The project manifest is empty.");
-            if (manifest.SchemaVersion is not (1 or 2) || manifest.Normalization != "srt-basic-v1")
+            if (manifest.SchemaVersion is not (1 or 2 or 3) || manifest.Normalization != "srt-basic-v1")
                 throw new InvalidDataException("This project format is not supported by this version of Bunyi.");
             if (manifest.Voice is null || manifest.Cues is null || manifest.Clips is null)
                 throw new InvalidDataException("The project manifest is incomplete.");
             ValidateDraft(manifest.Cues);
+            if (manifest.SchemaVersion < 3 && manifest.Cues.Any(c => c.AllowSpeedLimitOverride))
+                throw new InvalidDataException("This project version does not support per-cue speed overrides.");
             ValidateVoice(manifest.Voice.Mode, manifest.Voice.Language, manifest.Voice.ReferenceTranscriptAudioSeconds);
             if (manifest.Clips.Length > manifest.Cues.Length || manifest.Clips.Any(c => c is null)
                 || manifest.Clips.Select(c => c.Id).Distinct().Count() != manifest.Clips.Length
@@ -167,8 +170,8 @@ public sealed partial class SrtSession
                 if (clip.Adjustment is { } adjusted)
                 {
                     var adjustedName = $"adjusted/{clip.Id}.f32";
-                    if (manifest.SchemaVersion != 2 || adjusted.Samples < 128 || adjusted.Samples >= clip.Samples
-                        || clip.Samples * 4 > adjusted.Samples * 5 || !double.IsFinite(adjusted.Speed)
+                    if (manifest.SchemaVersion < 2 || adjusted.Samples < 128 || adjusted.Samples >= clip.Samples
+                        || (!cue.AllowSpeedLimitOverride && clip.Samples * 4 > adjusted.Samples * 5) || !double.IsFinite(adjusted.Speed)
                         || Math.Abs(adjusted.Speed - clip.Samples / (double)adjusted.Samples) > 1e-9
                         || !entries.TryGetValue(adjustedName, out var adjustedEntry) || adjustedEntry.Length != adjusted.Samples * 4)
                         throw new InvalidDataException("The saved speed adjustment is invalid or missing.");

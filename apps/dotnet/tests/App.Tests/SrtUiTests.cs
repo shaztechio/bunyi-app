@@ -87,6 +87,18 @@ public sealed class SrtUiTests : HeadlessWindows
             Assert.Equal(original, row.Preview);
             Assert.Equal("Check timing", model.GenerateActionText);
             Assert.True(model.SrtUnsaved);
+            model.SrtRows[1].Start = "00:00:00,500";
+            Assert.False(row.CanSpeedUp);
+            row.AllowSpeedLimitOverride = true;
+            Assert.True(row.CanSpeedUp);
+            Assert.Contains("unintelligible", row.SpeedDescription);
+            await model.SpeedUpSrtCommand.ExecuteAsync(row);
+            Assert.Contains("2.40×", row.SpeedDescription);
+            Assert.False(row.HasError);
+            Assert.Null(engine.LastRequest);
+            row.AllowSpeedLimitOverride = false;
+            Assert.Equal(original, row.Preview);
+            Assert.True(row.HasError);
             await model.ClearSrtCommand.ExecuteAsync(null);
         }
         finally { Directory.Delete(directory, recursive: true); }

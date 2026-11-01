@@ -118,7 +118,7 @@ capitalization does not discard takes.
 **Speed up to fit.** On a generated cue, this adjusts the existing take to
 finish before the next included cue starts. For the last cue it targets its
 own end timestamp. It preserves pitch and does not regenerate speech, trim
-silence, or cut off the ending. The maximum is **1.25×**; if more is needed,
+silence, or cut off the ending. The default maximum is **1.25×**; if more is needed,
 the required speed is shown and your take stays unchanged. Shorten the words,
 edit the timestamps, or regenerate that cue instead.
 
@@ -129,6 +129,15 @@ again starts from the original, so adjustments do not build on each other.
 Timestamp edits do not automatically change speed; use Speed up to fit again
 or Reset speed. Save project preserves both versions. Projects containing speed
 adjustments require this newer build to open correctly.
+
+To exceed the normal limit for one cue, check **Override 1.25× limit** on that
+row, then choose **Speed up to fit**. Other cues keep their normal limit. This
+can make speech sound unnatural or unintelligible, so preview it carefully.
+Checking the box does not change audio by itself. Unchecking it restores the
+original take if the current speed is above 1.25×. Save project retains the
+per-cue option and both audio versions; older builds cannot open projects with
+overrides enabled. Speed calculations use full precision, with two decimals
+shown in the interface.
 
 ## The three modes (voice settings)
 

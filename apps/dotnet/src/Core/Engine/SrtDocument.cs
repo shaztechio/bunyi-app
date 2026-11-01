@@ -21,6 +21,7 @@ namespace Bunyi.Core.Engine;
 public sealed record SrtCue(string Id, string Number, string OriginalText, string Text,
     string Start, string End, bool Included = true)
 {
+    public bool AllowSpeedLimitOverride { get; init; }
     public string SpokenText => SrtDocument.Normalize(Text);
     public string Flags => string.Join(" · ", new[]
     {

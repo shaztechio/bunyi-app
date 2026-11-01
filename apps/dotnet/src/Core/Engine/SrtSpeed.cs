@@ -17,7 +17,7 @@ using Bunyi.Core.Audio;
 namespace Bunyi.Core.Engine;
 
 public sealed record SrtSpeedInfo(double Speed, double RequiredSpeed, long OriginalSamples, long CurrentSamples,
-    long? AvailableSamples, bool CanFit, bool Adjusted);
+    long? AvailableSamples, bool CanFit, bool Adjusted, bool LimitOverridden = false);
 
 public sealed partial class SrtSession
 {
@@ -36,7 +36,8 @@ public sealed partial class SrtSession
                 && SrtDocument.TrySamples(deadlines[cue.Id], out var deadline) && deadline > start) available = deadline - start;
             var required = available is { } length ? clip.Samples / (double)length : 1;
             result[cue.Id] = new(clip.Speed, required, clip.Samples, clip.EffectiveSamples, available,
-                available is >= 128 && required > 1 && required <= 1.25 && clip.EffectiveSamples != available, clip.Adjustment is not null);
+                available is >= 128 && required > 1 && (required <= 1.25 || cue.AllowSpeedLimitOverride)
+                    && clip.EffectiveSamples != available, clip.Adjustment is not null, cue.AllowSpeedLimitOverride);
         }
         return result;
     }
@@ -47,7 +48,7 @@ public sealed partial class SrtSession
         SrtDocument.Validate(Cues);
         var info = SpeedInfo(id) ?? throw new InvalidOperationException("Generate this included cue before adjusting its speed.");
         if (!info.CanFit)
-            throw new InvalidOperationException(info.RequiredSpeed > 1.25
+            throw new InvalidOperationException(info.RequiredSpeed > 1.25 && !info.LimitOverridden
                 ? $"This cue needs {info.RequiredSpeed:0.00}× speed, above the 1.25× limit. Shorten the text or change its timestamps. The take is unchanged."
                 : "This cue does not need speeding up, or its time window is invalid. The take is unchanged.");
         var original = _clips[id];
@@ -60,7 +61,7 @@ public sealed partial class SrtSession
             var committed = false;
             try
             {
-                var peak = SpeechTimeCompression.Write(original.RawPath, raw, original.Samples, target, ct);
+                var peak = SpeechTimeCompression.Write(original.RawPath, raw, original.Samples, target, ct, info.LimitOverridden);
                 WritePreview(raw, preview, target, peak, ct);
                 ct.ThrowIfCancellationRequested();
                 if (revision != Interlocked.Read(ref _revision)

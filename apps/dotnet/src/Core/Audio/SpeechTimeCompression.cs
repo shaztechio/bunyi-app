@@ -20,16 +20,19 @@ namespace Bunyi.Core.Audio;
 /// unchanged sample rate. Bounded buffers regardless of clip length.</summary>
 internal static class SpeechTimeCompression
 {
-    public static float Write(string source, string destination, long samples, long target, CancellationToken ct)
+    public static float Write(string source, string destination, long samples, long target, CancellationToken ct, bool allowAboveLimit = false)
     {
-        if (target < 128 || target >= samples || samples * 4 > target * 5)
-            throw new InvalidOperationException("Pitch-preserving fitting needs a valid window and a speed between 1× and 1.25×.");
+        if (target < 128 || target >= samples || (!allowAboveLimit && samples * 4 > target * 5))
+            throw new InvalidOperationException("Pitch-preserving fitting needs a valid window; speeds above 1.25× require this cue's override.");
         using var input = File.OpenRead(source);
         if (input.Length != checked(samples * 4)) throw new InvalidDataException("The original cue audio has the wrong length.");
         using var writer = new BinaryWriter(File.Create(destination));
         var window = (int)Math.Min(1024, target / 2) & ~1;
-        var hop = window / 4;
         var search = window / 8;
+        // Smaller hops keep neighboring input grains overlapping at higher
+        // explicitly requested rates. Extremely high rates remain lossy and
+        // cannot guarantee intelligible speech; the UI warns before use.
+        var hop = Math.Max(1, Math.Min(window / 4, (int)((window - 2 * search - 1) / (samples / (double)target))));
         var sum = new float[window];
         var weights = new float[window];
         var taper = new float[window];

@@ -74,3 +74,25 @@ The Windows regression run passed 960 core, 407 headless UI and 98 CLI tests
 Release build and self-contained publication succeeded. Targeted speed/UI
 checks also cover disabling Fit when its current duration already matches the
 deadline, and enabling refit after a timestamp change.
+
+## Per-cue limit override
+
+Each cue now has an opt-in `allowSpeedLimitOverride` flag. Default behavior
+still refuses speeds above 1.25x. Enabling the flag only permits fitting; it
+does not process audio until Speed up to fit is pressed. Other cues remain
+limited. The waveform overlap hop adapts to the requested rate, while output
+length stays exact and processing remains bounded. Tests exercise 2.4x, 4x,
+and 10x tone compression with finite output and retained pitch. This does not
+establish intelligibility of speech at those rates; the UI warns explicitly.
+
+Core tests cover cue isolation, disabling a high-rate adjustment restoring its
+original, retaining an adjustment within the normal cap, schema-3 save/open
+without synthesis, and rejection of a downgraded schema or absent permission
+for saved high-rate audio. Headless UI tests enable the checkbox on an actual
+loaded take, fit at 2.40x without invoking TTS, and uncheck it to restore the
+original and its timing error. Project readers still validate hashes, lengths,
+finite audio, and the original/adjusted ratio.
+
+Override regression results: 968 core, 407 UI and 98 CLI tests passed (1,473
+total), with eight existing model-gated skips. The separate Windows package is
+in `tmp/srt-speed-override/win-x64/`. Existing running builds were not changed.

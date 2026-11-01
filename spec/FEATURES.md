@@ -179,7 +179,7 @@ exists, timestamps are valid and the original take exceeds that window. Disable
 the action when the current adjusted length already matches it. Display the
 required speed and actual adjusted duration. Display speed multipliers to two
 decimal places (for example, 2.41×), while using unrounded sample counts for
-fitting and limit checks. Maximum 1.25×: if that is not enough, explain the
+fitting and limit checks. Default maximum 1.25×: if that is not enough, explain the
 required speed and keep the original/current audio and
 timing error unchanged. Do not silently apply the cap and claim a fit. Preview
 and export use the adjusted take; preserve the original and offer Reset speed.
@@ -193,6 +193,19 @@ exports record the adjustment. Warn that time compression can affect quality
 and encourage preview. Older project readers must reject adjusted projects
 rather than silently dropping speed or original audio. macOS parity is tracked
 in #310 with the rest of SRT; Windows is the proving implementation.
+
+Each cue offers **Override 1.25× limit**, off by default. Enabling it permits
+that cue's required fitting speed above 1.25×; no other cue is affected. Show a
+persistent warning that high speeds may sound unnatural or unintelligible.
+Fitting still requires a valid time window and complete, finite output, keeps
+the original, and does not apply automatically when the option is checked.
+Unchecking restores the original if the active adjustment exceeds 1.25×;
+otherwise it leaves the current take unchanged. Preview/reset and timestamp
+rechecks behave as before. Save/Open retains the per-cue option and adjusted
+audio, and export sidecars record the override. Projects using the option have
+a new schema so older readers reject them. Display speeds to two decimals;
+calculation uses full precision. High rates cannot guarantee intelligibility
+or content accuracy; encourage preview.
 Estimates are advisory. Actual complete sample counts decide fit: past own end
 warns; past next included start errors and blocks publication; equality passes.
 Subtitle display overlaps warn even before generation. Final duration is the

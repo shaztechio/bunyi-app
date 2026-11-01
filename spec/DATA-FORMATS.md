@@ -65,6 +65,14 @@ sidecars add per-cue `originalSampleCount` and `speed`, with `sampleCount` and
 diagnostics describing the actual audio used in the track. Reset restores the
 original exactly and removes the adjustment; Save can then use version 1 again.
 
+Projects with any cue's `allowSpeedLimitOverride` set true use schemaVersion 3.
+Readers accept versions 1–3; versions 1/2 must not contain enabled overrides.
+The cue flag defaults false when absent. Adjustments above 1.25× are accepted
+only in version 3 and only for that cue with its override enabled. Length,
+checksum, finite-sample, ratio and archive-size checks still apply. Saving
+without overrides uses version 2 if adjustments remain, otherwise version 1.
+Output sidecars also record `allowSpeedLimitOverride` per cue.
+
 ### Data roots
 
 Everything the app keeps for a user lives under one root, with fixed subfolder

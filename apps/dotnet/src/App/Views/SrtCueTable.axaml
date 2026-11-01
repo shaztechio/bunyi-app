@@ -85,6 +85,9 @@ limitations under the License.
                            AutomationProperties.Name="{Binding StatusText}" />
               </Grid>
               <TextBlock Text="{Binding SpeedDescription}" TextWrapping="Wrap" FontSize="12" />
+              <CheckBox Content="Override 1.25× limit" IsChecked="{Binding AllowSpeedLimitOverride}" FontSize="12"
+                        AutomationProperties.Name="{Binding Number, StringFormat='Override speed limit for cue {0}'}"
+                        ToolTip.Tip="Allow this cue's required speed above 1.25×. High speeds can reduce clarity. Turning off restores the original if its speed exceeds the limit." />
               <WrapPanel>
                 <Button Content="Preview cue" IsEnabled="{Binding HasPreview}" Margin="0,0,6,4" Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).PreviewSrtCommand}" CommandParameter="{Binding}" />
                 <Button Content="Regenerate cue" IsEnabled="{Binding Included}" Margin="0,0,0,4" Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).RegenerateSrtCommand}" CommandParameter="{Binding}" />

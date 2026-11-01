@@ -303,10 +303,12 @@ public sealed partial class SrtCueRow : ObservableObject
     private readonly Action _changed;
     public string Number => _original.Number;
     public override string ToString() => $"Cue {Number}";
-    public SrtCue Cue => _original with { Start = Start, End = End, Text = Text, Included = Included };
+    public SrtCue Cue => _original with { Start = Start, End = End, Text = Text, Included = Included,
+        AllowSpeedLimitOverride = AllowSpeedLimitOverride };
     public string SpokenText => Cue.SpokenText;
     public string Flags => Cue.Flags;
     [ObservableProperty] private bool _included;
+    [ObservableProperty] private bool _allowSpeedLimitOverride;
     [ObservableProperty] private string _start;
     [ObservableProperty] private string _end;
     [ObservableProperty] private string _text;
@@ -324,12 +326,14 @@ public sealed partial class SrtCueRow : ObservableObject
     {
         _original = cue; _changed = changed;
         _included = cue.Included; _start = cue.Start; _end = cue.End; _text = cue.Text;
+        _allowSpeedLimitOverride = cue.AllowSpeedLimitOverride;
     }
     private void Changed()
     {
         OnPropertyChanged(nameof(SpokenText)); OnPropertyChanged(nameof(Flags)); _changed();
     }
     partial void OnIncludedChanged(bool value) => Changed();
+    partial void OnAllowSpeedLimitOverrideChanged(bool value) => Changed();
     partial void OnStartChanged(string value) => Changed();
     partial void OnEndChanged(string value) => Changed();
     partial void OnTextChanged(string value) => Changed();
@@ -342,7 +346,12 @@ public sealed partial class SrtCueRow : ObservableObject
         SpeedDescription = speed is null ? "" : speed.Adjusted
             ? $"Speed {speed.Speed:0.00}× · {speed.OriginalSamples / 24000d:0.000}s original → {speed.CurrentSamples / 24000d:0.000}s current. Preview to check quality."
             : "Original speed (1×)";
-        if (speed?.RequiredSpeed > 1.25) SpeedDescription += $" · Needs {speed.RequiredSpeed:0.00}× to fit, above the 1.25× limit.";
+        if (AllowSpeedLimitOverride)
+        {
+            SpeedDescription += " · Override enabled. High speeds may sound unnatural or unintelligible. Preview before exporting.";
+            if (speed?.CanFit == true) SpeedDescription += $" Fit requires {speed.RequiredSpeed:0.00}×.";
+        }
+        else if (speed?.RequiredSpeed > 1.25) SpeedDescription += $" · Needs {speed.RequiredSpeed:0.00}× to fit. Enable this cue's override to exceed 1.25×.";
         else if (speed?.CanFit == true) SpeedDescription += $" · Fit requires {speed.RequiredSpeed:0.00}× (maximum 1.25×).";
         StatusText = !Included ? "Excluded — no speech" : diagnostic is null ? "Not generated"
             : $"{diagnostic.Status}: {diagnostic.Message}" + (diagnostic.DurationSeconds is { } d ? $" · {d:0.000}s complete audio" : "");

@@ -21,7 +21,8 @@ voice and one set of voice settings for the entire file. Multiple speakers, vide
 rewriting, automatic speed changes, and truncated speech are outside v1.
 
 An explicit **Speed up to fit** operation is now supported after generation,
-using pitch-preserving compression up to 1.25x without inference. Preserve the
+using pitch-preserving compression up to 1.25x by default, with an explicit
+per-cue override for higher rates, without inference. Preserve the
 original, support preview/reset, and store both versions in saved projects.
 See FEATURES.md, DATA-FORMATS.md and [SRT-SPEED-VALIDATION.md](SRT-SPEED-VALIDATION.md).
 
