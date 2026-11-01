@@ -48,7 +48,7 @@ public sealed partial class SrtSession
         var info = SpeedInfo(id) ?? throw new InvalidOperationException("Generate this included cue before adjusting its speed.");
         if (!info.CanFit)
             throw new InvalidOperationException(info.RequiredSpeed > 1.25
-                ? $"This cue needs {info.RequiredSpeed:0.##########}× speed, above the 1.25× limit. Shorten the text or change its timestamps. The take is unchanged."
+                ? $"This cue needs {info.RequiredSpeed:0.00}× speed, above the 1.25× limit. Shorten the text or change its timestamps. The take is unchanged."
                 : "This cue does not need speeding up, or its time window is invalid. The take is unchanged.");
         var original = _clips[id];
         var target = info.AvailableSamples!.Value;

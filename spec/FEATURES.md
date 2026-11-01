@@ -177,8 +177,10 @@ inference, silence trimming, or changed sample rate. Target the next included
 cue's start; for the final cue target its own end. Only offer it when audio
 exists, timestamps are valid and the original take exceeds that window. Disable
 the action when the current adjusted length already matches it. Display the
-required speed and actual adjusted duration. Maximum 1.25×: if that is not
-enough, explain the required speed and keep the original/current audio and
+required speed and actual adjusted duration. Display speed multipliers to two
+decimal places (for example, 2.41×), while using unrounded sample counts for
+fitting and limit checks. Maximum 1.25×: if that is not enough, explain the
+required speed and keep the original/current audio and
 timing error unchanged. Do not silently apply the cap and claim a fit. Preview
 and export use the adjusted take; preserve the original and offer Reset speed.
 Always derive a replacement adjustment from the original, avoiding repeated

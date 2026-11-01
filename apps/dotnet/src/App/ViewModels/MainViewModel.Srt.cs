@@ -266,7 +266,7 @@ public sealed partial class MainViewModel
         try
         {
             await _srt.SpeedUpToFitAsync(row.Cue.Id, cancellation.Token);
-            Status = $"Cue {row.Number} adjusted to {_srt.SpeedInfo(row.Cue.Id)!.Speed:0.000}×. Preview it, then export when all cues fit.";
+            Status = $"Cue {row.Number} adjusted to {_srt.SpeedInfo(row.Cue.Id)!.Speed:0.00}×. Preview it, then export when all cues fit.";
         }
         catch (OperationCanceledException) { Status = "Speed adjustment stopped. The previous take is unchanged."; }
         catch (Exception ex) when (ex is InvalidOperationException or InvalidDataException or IOException or UnauthorizedAccessException)
@@ -340,10 +340,10 @@ public sealed partial class SrtCueRow : ObservableObject
         CanSpeedUp = speed?.CanFit == true;
         HasSpeedAdjustment = speed?.Adjusted == true;
         SpeedDescription = speed is null ? "" : speed.Adjusted
-            ? $"Speed {speed.Speed:0.000}× · {speed.OriginalSamples / 24000d:0.000}s original → {speed.CurrentSamples / 24000d:0.000}s current. Preview to check quality."
+            ? $"Speed {speed.Speed:0.00}× · {speed.OriginalSamples / 24000d:0.000}s original → {speed.CurrentSamples / 24000d:0.000}s current. Preview to check quality."
             : "Original speed (1×)";
-        if (speed?.RequiredSpeed > 1.25) SpeedDescription += $" · Needs {speed.RequiredSpeed:0.##########}× to fit, above the 1.25× limit.";
-        else if (speed?.CanFit == true) SpeedDescription += $" · Fit requires {speed.RequiredSpeed:0.000}× (maximum 1.25×).";
+        if (speed?.RequiredSpeed > 1.25) SpeedDescription += $" · Needs {speed.RequiredSpeed:0.00}× to fit, above the 1.25× limit.";
+        else if (speed?.CanFit == true) SpeedDescription += $" · Fit requires {speed.RequiredSpeed:0.00}× (maximum 1.25×).";
         StatusText = !Included ? "Excluded — no speech" : diagnostic is null ? "Not generated"
             : $"{diagnostic.Status}: {diagnostic.Message}" + (diagnostic.DurationSeconds is { } d ? $" · {d:0.000}s complete audio" : "");
         var estimate = SpeechDurationEstimate.ForText(SpokenText, language);

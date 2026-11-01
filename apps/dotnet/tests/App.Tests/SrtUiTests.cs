@@ -76,7 +76,7 @@ public sealed class SrtUiTests : HeadlessWindows
             Assert.False(row.HasError);
             Assert.True(row.HasSpeedAdjustment);
             Assert.False(row.CanSpeedUp);
-            Assert.Contains("1.200", row.SpeedDescription);
+            Assert.Contains("1.20×", row.SpeedDescription);
             Assert.NotEqual(original, row.Preview);
             Assert.Equal("Export track", model.GenerateActionText);
             model.PreviewSrtCommand.Execute(row);
