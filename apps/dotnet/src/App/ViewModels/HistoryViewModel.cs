@@ -231,7 +231,7 @@ public sealed partial class HistoryViewModel : ObservableObject, IDisposable
         if (!await ConfirmTrash(row)) return;
 
         if (Playing == row) StopPlayback();
-        if (Core.Platform.Trash.TryMoveToTrash(row.Path, _log)) Refresh();
+        if (OutputFiles.TryTrash(row.Path, _log)) Refresh();
     }
 
     /// <summary>
@@ -252,7 +252,7 @@ public sealed partial class HistoryViewModel : ObservableObject, IDisposable
 
         try
         {
-            File.Copy(row.Path, destination, overwrite: true);
+            OutputFiles.Copy(row.Path, destination);
             _log.Log($"Saved a copy to {destination}.");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

@@ -84,7 +84,8 @@ internal sealed class LongTextGeneration(
                 part.CopyTo(combined, offset);
                 offset += part.Length;
             }
-            return new SynthesisResult(DesignSpeechSynthesizer.ToPcm16(combined, log), SampleRate, _frames);
+            return new SynthesisResult(original.KeepRawSamples ? [] : DesignSpeechSynthesizer.ToPcm16(combined, log), SampleRate, _frames)
+                { RawSamples = original.KeepRawSamples ? combined : null };
         }
         finally
         {

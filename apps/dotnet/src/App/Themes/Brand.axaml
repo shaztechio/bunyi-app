@@ -65,6 +65,7 @@ limitations under the License.
         These are the system's own reds, light and dark.
       -->
       <SolidColorBrush x:Key="BunyiDanger" Color="#FF3B30" />
+      <SolidColorBrush x:Key="BunyiWarning" Color="#9A5700" />
       <!-- A recessed panel: the log reads as something the window contains. -->
       <SolidColorBrush x:Key="BunyiSurface" Color="#08000000" />
     </ResourceDictionary>
@@ -72,6 +73,7 @@ limitations under the License.
       <SolidColorBrush x:Key="BunyiAccent" Color="#7B72F0" />
       <SolidColorBrush x:Key="BunyiCardBorder" Color="#33FFFFFF" />
       <SolidColorBrush x:Key="BunyiDanger" Color="#FF453A" />
+      <SolidColorBrush x:Key="BunyiWarning" Color="#FFBF47" />
       <SolidColorBrush x:Key="BunyiSurface" Color="#14FFFFFF" />
     </ResourceDictionary>
   </ResourceDictionary.ThemeDictionaries>

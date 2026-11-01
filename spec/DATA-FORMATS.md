@@ -8,6 +8,73 @@ differ (MLX `.safetensors` on macOS vs ONNX on the .NET app).
 
 ## Per-user app data
 
+### Timed output sidecar (SRT)
+
+An SRT output has `<wav-stem>.srt.json` beside its WAV. Schema version 1 stores
+`schemaVersion`, `sourceKind` (`srt`), `normalization` (`srt-basic-v1`), standard
+output `metadata`, and `cues`: stable `id`, original `number`, `originalText`,
+edited `text`, normalized `spokenText`, `start`/`end` timestamp strings,
+`included`, optional `sampleCount`, and a `diagnostic` object containing measured
+`status`, `message`, `durationSeconds`, `overrunSeconds`, and `overlapSeconds`.
+Keep full text in the sidecar; embedded standard metadata identifies SRT output
+with a bounded cue-count summary rather than the full timeline. No reference
+audio is copied into the output. UTF-8, at most 16 MiB, at most 10,000 cues;
+larger inputs fail clearly. RIFF PCM output is limited to its 32-bit size range
+and fails before publication if exceeded. Silence is streamed, not allocated.
+
+Publish the sidecar first and the completed WAV last under unique names using
+same-directory temporary files. A failed WAV commit removes the new sidecar;
+History discovers only WAVs, so a crash leaving a sidecar alone creates no
+successful History entry. Missing or invalid sidecars never prevent WAV
+playback. History copy/trash include an existing sidecar;
+never trust paths from JSON to find companion files. Invalid sidecars are
+treated as opaque companions, not automatically imported projects. Back up
+output folders with both files. The app's existing model-only backup/restore
+does not include Outputs or sidecars; SRT does not expand that archive's scope.
+
+### Editable SRT projects
+
+`.bunyi-srt` is a ZIP archive with `project.json` (schemaVersion 1,
+normalization `srt-basic-v1`, voice settings, recorded model source, cue records,
+opaque runtime cache configuration, and clip descriptors) plus
+`clips/<cue-id>.f32` and an optional `reference.wav|mp3|flac`. Clips are 24 kHz
+mono little-endian float32, including the existing fades, with sample count,
+frame count and SHA-256 in the manifest. Recompute peaks and previews on Open;
+reject non-finite samples, missing/duplicate/unexpected entries, invalid cue
+identities, wrong lengths/checksums and unsupported versions. Never extract
+archive-supplied paths: copy only expected entries to a new temporary workspace.
+Limits: 16 MiB manifest, 10,000 cues, 512 MiB per clip, 256 MiB reference, 8 GiB
+total uncompressed content. Bound actual reads as well as declared lengths.
+Write a unique temporary archive beside the destination and rename only after
+completion. The original reference file is copied, so moving the project does
+not depend on its old path. Model identity changes may require regeneration;
+moving the reference alone must not invalidate identical audio. Projects contain
+voice recordings/transcripts but no model weights and no model credentials.
+They are user-managed files, outside the model-only app backup. Output sidecars
+are not accepted as project archives. Native macOS parity follows #310.
+
+Projects with sped-up takes use schemaVersion 2. A clip descriptor retains its
+original fields and adds optional `adjustment` (`samples`, `speed`, `sha256`),
+with current audio in `adjusted/<cue-id>.f32`. Both original and adjusted files
+are included; validate both hashes, finite samples and exact lengths. Speed is
+the original/adjusted sample-count ratio, greater than 1 and at most 1.25.
+Adjusted takes use the same 512 MiB per-file and shared 8 GiB archive limits;
+allow at most 20,002 entries. No-adjustment projects continue to use version 1;
+new readers accept both versions and old readers reject version 2. Export
+sidecars add per-cue `originalSampleCount` and `speed`, with `sampleCount` and
+diagnostics describing the actual audio used in the track. Reset restores the
+original exactly and removes the adjustment; Save can then use version 1 again.
+
+Projects with any cue's `allowSpeedLimitOverride` set true use schemaVersion 3.
+Readers accept versions 1–3; versions 1/2 must not contain enabled overrides.
+The cue flag defaults false when absent. Adjustments above 1.25× are accepted
+only in version 3 and only for that cue with its override enabled. Length,
+checksum, finite-sample, ratio and archive-size checks still apply. Saving
+without overrides uses version 2 if adjustments remain, otherwise version 1.
+Output sidecars also record `allowSpeedLimitOverride` per cue.
+
+### Data roots
+
 Everything the app keeps for a user lives under one root, with fixed subfolder
 names so a folder is recognisable across platforms:
 
@@ -42,10 +109,13 @@ same distinction under different names.
 
 **macOS keeps settings in `UserDefaults`** rather than a file, which is the
 platform's own answer to the same question and stays as it is; the keys
-(`appearance`, `modelRepo.<Mode>`, `modelsFolder`, `unloadOnModeSwitch`, `sentenceGapMilliseconds`) are
+(`appearance`, `modelRepo.<Mode>`, `modelsFolder`, `unloadOnModeSwitch`, `sentenceGapMilliseconds`, `experimentalSrtEnabled`) are
 the contract, not the storage. `sentenceGapMilliseconds` is an integer from
 0 to 5000 (inclusive), default 300 when absent; values outside that range clamp
 to it. It controls added silence at long-text joins, in milliseconds.
+
+Desktop setting `experimentalSrtEnabled` is a boolean, default false when absent.
+It controls experimental SRT availability, not project contents or cached takes.
 
 On Unix, settings files, saved model configurations, and diagnostic logs must
 be private to the user before sensitive contents are written: create files with

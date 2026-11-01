@@ -1,0 +1,106 @@
+<!--
+Copyright 2026 Shazron Abdullah and Bunyi contributors
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:Bunyi.App.ViewModels"
+             xmlns:infra="clr-namespace:Bunyi.App.Infrastructure"
+             x:Class="Bunyi.App.Views.SrtCueTable" x:DataType="vm:MainViewModel">
+  <UserControl.Styles>
+    <Style Selector="TextBlock.errorCount.hasErrors">
+      <Setter Property="Foreground" Value="{DynamicResource BunyiWarning}" />
+    </Style>
+  </UserControl.Styles>
+  <Grid RowDefinitions="Auto,*,Auto" MinHeight="240">
+    <StackPanel Spacing="6" Margin="0,4,0,8">
+      <TextBlock Text="{Binding SrtProjectLabel}" FontSize="12" TextWrapping="Wrap" />
+      <WrapPanel>
+        <TextBlock Text="{Binding SrtResumeSummary}" FontSize="12" VerticalAlignment="Center" />
+        <TextBlock Text=" · " FontSize="12" VerticalAlignment="Center" />
+        <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center"
+                    AutomationProperties.Name="{Binding SrtErrorCount, StringFormat='Cue errors: {0}'}">
+          <Viewbox Width="15" Height="15" IsVisible="{Binding HasSrtErrors}">
+            <Canvas Width="20" Height="20">
+              <Path Data="M 10,1 L 19,18 L 1,18 Z" Stroke="{DynamicResource BunyiWarning}" StrokeThickness="1.8" />
+              <Path Data="M 10,6 L 10,11 M 10,13 L 10,15" Stroke="{DynamicResource BunyiWarning}" StrokeThickness="2" />
+            </Canvas>
+          </Viewbox>
+          <TextBlock Text="{Binding SrtErrorSummary}" FontSize="12" FontWeight="SemiBold"
+                     Classes="errorCount" Classes.hasErrors="{Binding HasSrtErrors}" />
+        </StackPanel>
+      </WrapPanel>
+      <TextBlock Text="Review captions before generating. Excluded cues are silent. Complete clips start at timestamps; model silence can delay words by about half a second."
+                 TextWrapping="Wrap" FontSize="12" />
+    </StackPanel>
+    <ListBox Grid.Row="1" Name="CueList" ItemsSource="{Binding SrtRows}" MaxHeight="420"
+             SelectedItem="{Binding SelectedSrtCue}" SelectionChanged="OnSelectionChanged"
+             AutomationProperties.Name="Editable subtitle cues">
+      <ListBox.Styles>
+        <Style Selector="ListBoxItem"><Setter Property="HorizontalContentAlignment" Value="Stretch" /></Style>
+      </ListBox.Styles>
+      <ListBox.ItemTemplate>
+        <DataTemplate x:DataType="vm:SrtCueRow">
+          <Border BorderThickness="0,0,0,1" BorderBrush="#40808080" Padding="4,8">
+            <StackPanel Spacing="5">
+              <Grid ColumnDefinitions="Auto,*,*">
+                <CheckBox Content="{Binding Number, StringFormat='Include cue {0}'}" IsChecked="{Binding Included}" Margin="0,0,10,0"
+                          AutomationProperties.HelpText="Uncheck to exclude these words and their speech deadline." />
+                <StackPanel Grid.Column="1" Margin="0,0,6,0">
+                  <TextBlock Text="Start" FontSize="11" />
+                  <infra:AccessibleTextBox Text="{Binding Start}" AutomationProperties.Name="{Binding Number, StringFormat='Cue {0} start timestamp'}" />
+                </StackPanel>
+                <StackPanel Grid.Column="2">
+                  <TextBlock Text="End" FontSize="11" />
+                  <infra:AccessibleTextBox Text="{Binding End}" AutomationProperties.Name="{Binding Number, StringFormat='Cue {0} end timestamp'}" />
+                </StackPanel>
+              </Grid>
+              <infra:AccessibleTextBox Text="{Binding Text}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="45"
+                                      AutomationProperties.Name="{Binding Number, StringFormat='Cue {0} text'}" />
+              <TextBlock Text="{Binding SpokenText, StringFormat='Spoken: {0}'}" TextWrapping="Wrap" FontSize="12" />
+              <TextBlock Text="{Binding Flags}" TextWrapping="Wrap" FontSize="12" />
+              <TextBlock Text="{Binding Estimate}" FontSize="11" />
+              <Grid ColumnDefinitions="Auto,*">
+                <Viewbox Name="CueErrorIcon" Width="18" Height="18" Margin="0,0,6,0"
+                         VerticalAlignment="Top" IsVisible="{Binding HasError}"
+                         AutomationProperties.Name="{Binding Number, StringFormat='Cue {0} has an error'}"
+                         ToolTip.Tip="{Binding StatusText}">
+                  <Canvas Width="20" Height="20">
+                    <Path Data="M 10,1 L 19,18 L 1,18 Z" Stroke="{DynamicResource BunyiWarning}" StrokeThickness="1.8" />
+                    <Path Data="M 10,6 L 10,11 M 10,13 L 10,15" Stroke="{DynamicResource BunyiWarning}" StrokeThickness="2" />
+                  </Canvas>
+                </Viewbox>
+                <TextBlock Grid.Column="1" Text="{Binding StatusText}" TextWrapping="Wrap" FontSize="12"
+                           AutomationProperties.Name="{Binding StatusText}" />
+              </Grid>
+              <TextBlock Text="{Binding SpeedDescription}" TextWrapping="Wrap" FontSize="12" />
+              <CheckBox Content="Override 1.25× limit" IsChecked="{Binding AllowSpeedLimitOverride}" FontSize="12"
+                        AutomationProperties.Name="{Binding Number, StringFormat='Override speed limit for cue {0}'}"
+                        ToolTip.Tip="Allow this cue's required speed above 1.25×. High speeds can reduce clarity. Turning off restores the original if its speed exceeds the limit." />
+              <WrapPanel>
+                <Button Content="Preview cue" IsEnabled="{Binding HasPreview}" Margin="0,0,6,4" Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).PreviewSrtCommand}" CommandParameter="{Binding}" />
+                <Button Content="Regenerate cue" IsEnabled="{Binding Included}" Margin="0,0,0,4" Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).RegenerateSrtCommand}" CommandParameter="{Binding}" />
+                <Button Content="Speed up to fit" IsEnabled="{Binding CanSpeedUp}" Margin="6,0,0,4"
+                        ToolTip.Tip="{Binding SpeedDescription}" Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).SpeedUpSrtCommand}" CommandParameter="{Binding}" />
+                <Button Content="Reset speed" IsEnabled="{Binding HasSpeedAdjustment}" Margin="6,0,0,4"
+                        Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).ResetSrtSpeedCommand}" CommandParameter="{Binding}" />
+              </WrapPanel>
+            </StackPanel>
+          </Border>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+    <Button Grid.Row="2" Content="Go to first error" Command="{Binding FirstSrtErrorCommand}" Margin="0,8,0,0" />
+  </Grid>
+</UserControl>

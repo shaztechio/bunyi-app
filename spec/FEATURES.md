@@ -18,6 +18,17 @@ concrete to match.
 Audience: non-technical end users. No terminal required; models
 auto-download with a progress bar; outputs are playable WAVs.
 
+**Experimental SRT support is part of this common specification**, for both
+native apps: Preset voice and Voice clone turn editable subtitle cues into one
+timed audio track. The complete contract below covers import, caption exclusion,
+timing warnings/errors, individual cue generation and reuse, speed fitting,
+portable saved projects, and the default-off Advanced preference. See
+[SRT timed scripts](#srt-timed-scripts-experimental-staged-implementation),
+[project and output formats](DATA-FORMATS.md), and [CLI support](CLI.md).
+Windows is the proving implementation; native macOS implementation is tracked
+in [#310](https://github.com/shaztechio/bunyi-app/issues/310). Experimental status
+and staged delivery do not make SRT a Windows-only feature specification.
+
 ---
 
 ## 1. Three generation modes
@@ -134,6 +145,149 @@ A segmented picker selects one of three modes. macOS source:
   records the gap, rather than shipping a different feature under its name.
 
 ## 2. Generation output
+
+### SRT timed scripts (experimental, staged implementation)
+
+This section is the **shared feature contract for macOS, Windows and Linux**,
+including all SRT behavior below. Each native app implements it in its own
+runtime; platform delivery status is tracked separately from the contract.
+
+Desktop SRT support is opt-in under **Preferences / Settings → Advanced →
+Experimental SRT support**, off by default, including existing installations.
+The checkbox persists and immediately enables Import SRT and Open project for
+Preset voice and Voice clone. Voice design remains excluded. Disabling retains
+the loaded project and cached takes, with a notice to re-enable. Save project
+and Use plain text remain available, but cue editing, generation, playback and
+speed adjustment are disabled. Re-enabling resumes without regeneration.
+After relaunch, enable the preference if needed, then use **Open project** to
+resume a saved `.bunyi-srt` project. Opening restores matching generated takes;
+only missing or invalidated cues require generation. The preference belongs to
+the app's settings, not the project: opening a project never enables it silently.
+An already running operation finishes normally. This desktop preference does
+not change the explicitly invoked CLI SRT interface. Native macOS parity,
+including this Advanced tab and gate, remains tracked in #310.
+
+
+Preset voice and Voice clone accept UTF-8 SRT files, with optional BOM and any
+standard newline. Voice design does not. See [SRT-PLAN.md](SRT-PLAN.md) for the
+full accepted workflow. Windows/.NET is the proving implementation; native
+macOS parity is tracked in [#310](https://github.com/shaztechio/bunyi-app/issues/310)
+before claiming this on all apps.
+
+An editable cue table retains original source and numbering and shows Include,
+Start, End, Text, spoken text, caption/markup flags, estimate, measured duration,
+and status. Each cue has a stable identity independent of duplicate numbers.
+Normalize cue line breaks to spaces and remove only case-insensitive i/b/u
+presentation tags (no attributes). Preserve other content; flag unknown markup
+and bracketed captions for review, included by default. Exclusion means no
+speech and no deadline at that cue. Included cues require spoken text, valid
+nonnegative SRT timestamps, end after start, and strictly increasing starts in
+source order. Preserve malformed timestamp strings for correction; structural
+parse errors identify source lines and block import rather than skipping text.
+No automatic sorting, encoding guessing, trimming, speed changes, or truncation.
+
+Generate complete cues sequentially with one frozen voice configuration. Cache
+completed cue clips for the session, including after Stop or timing errors.
+Text edits invalidate only their cue, timestamps/inclusion reuse clips, voice
+or model-source/reference changes invalidate dependent clips. Offer preview and
+per-cue regeneration. Continue after timing conflicts to report every conflict.
+The main SRT action describes its work: Generate cues initially, Resume with
+the missing cue count when some takes exist, Check timing when all takes exist
+but errors remain, and Export track when all included cues fit. Show ready,
+missing and error counts. Editing timestamps never requires regeneration;
+Regenerate cue makes only that selected take and returns to the table without
+implicitly exporting a track. Resume/Export is the explicit final action.
+Speaker identifier capitalization changes and opening/closing unchanged Settings
+must not invalidate takes. Existing saved projects with differently capitalized
+speaker identifiers retain their reusable audio. Log reuse versus invalidation
+without logging cue text.
+
+**Speed up to fit** is an explicit per-cue operation for Preset/Clone SRT takes.
+Use pitch-preserving time compression of the original accepted take, never new
+inference, silence trimming, or changed sample rate. Target the next included
+cue's start; for the final cue target its own end. Only offer it when audio
+exists, timestamps are valid and the original take exceeds that window. Disable
+the action when the current adjusted length already matches it. Display the
+required speed and actual adjusted duration. Display speed multipliers to two
+decimal places (for example, 2.41×), while using unrounded sample counts for
+fitting and limit checks. Default maximum 1.25×: if that is not enough, explain the
+required speed and keep the original/current audio and
+timing error unchanged. Do not silently apply the cap and claim a fit. Preview
+and export use the adjusted take; preserve the original and offer Reset speed.
+Always derive a replacement adjustment from the original, avoiding repeated
+processing. Timestamp/inclusion edits recheck the current adjusted audio rather
+than applying new speed automatically; the user can refit or reset. Text/voice
+changes and regeneration discard the old adjustment with the affected take.
+Operations run off the UI thread, support Stop, and commit only complete valid
+audio. Save/Open projects preserve both original and adjusted audio plus speed;
+exports record the adjustment. Warn that time compression can affect quality
+and encourage preview. Older project readers must reject adjusted projects
+rather than silently dropping speed or original audio. macOS parity is tracked
+in #310 with the rest of SRT; Windows is the proving implementation.
+
+Each cue offers **Override 1.25× limit**, off by default. Enabling it permits
+that cue's required fitting speed above 1.25×; no other cue is affected. Show a
+persistent warning that high speeds may sound unnatural or unintelligible.
+Fitting still requires a valid time window and complete, finite output, keeps
+the original, and does not apply automatically when the option is checked.
+Unchecking restores the original if the active adjustment exceeds 1.25×;
+otherwise it leaves the current take unchanged. Preview/reset and timestamp
+rechecks behave as before. Save/Open retains the per-cue option and adjusted
+audio, and export sidecars record the override. Projects using the option have
+a new schema so older readers reject them. Display speeds to two decimals;
+calculation uses full precision. High rates cannot guarantee intelligibility
+or content accuracy; encourage preview.
+Estimates are advisory. Actual complete sample counts decide fit: past own end
+warns; past next included start errors and blocks publication; equality passes.
+Subtitle display overlaps warn even before generation. Final duration is the
+later of final included end and final speech finish. Use 24 samples per SRT
+millisecond; fill timeline gaps with silence without ordinary inter-cue gaps.
+Complete clips start at cue timestamps: model silence can delay audible words
+by about half a second in measured Windows Preset trials. Count trailing
+silence too; do not promise word-accurate synchronization or content accuracy.
+
+Save one complete 24 kHz mono WAV and versioned timeline sidecar, one History
+entry, only after all included cues pass. Use bounded I/O for silence, protect
+against clipping uniformly, apply 5 ms cue edge fades without duration changes,
+reject non-finite audio. Stop remains available through assembly; no partial
+track counts as success. Working clips stay outside Outputs and are cleaned
+on session disposal; warn before replacing/closing a session with reusable
+work. **Save project / Open project** preserve an editable SRT session and all
+completed takes in a user-selected `.bunyi-srt` archive, including original and
+edited cues, inclusion, voice/language/style/transcript settings, and the clone
+reference if selected. Drafts may have timing errors or missing audio. Opening
+restores previews and rechecks timing; Generate reuses takes when model and
+reference identity still match. Model weights are not embedded. Record the
+selected model source but do not silently change global model settings on open;
+explain mismatches and conservatively regenerate if necessary. Save atomically:
+failure preserves the previous file; corrupt/incompatible Open preserves the
+current session. Save/Open run off the UI thread and are disabled during other
+work. Save updates the chosen project; Save as writes another archive. Mark
+subsequent edits, new takes and voice changes unsaved, and confirm before
+discarding unsaved work, including text-only drafts. Saved projects survive
+closing; exported WAV sidecars remain descriptions rather than projects.
+The script/project actions form one compact icon toolbar beside the Script
+heading: Import SRT, Open project, Save project, Save as, and Use plain text.
+Save/Save as and Use plain text appear for an imported/open SRT session. Every
+icon has a descriptive tooltip, a short accessible action name, and visible
+keyboard focus. Keep the existing commands and enabled-state rules. Do not
+repeat Save/Save as in a second row above the project status.
+In the cue summary, separate the error count from ready/missing counts. When
+errors exist, show it in bold with a warning triangle and a short accessible
+name, such as “43 cue errors”. Use the warning accent for additional emphasis;
+the icon and text must convey the state without relying on color. Hide the
+triangle when no errors remain.
+All editors are disabled during work; Help/logs stay reachable. Cue controls
+show a warning triangle beside an included cue's error status. Hide it as soon
+as the error is resolved or the cue is excluded. Keep the full error text and
+an accessible cue-specific error name; the icon never replaces the explanation.
+Controls have keyboard routes and named fields; errors link to their row.
+
+CLI/server uses the same engine via `--srt-file` for preset/clone, mutually
+exclusive with ordinary text inputs. Return cue diagnostics on timing errors
+and success. Warning-only export succeeds; overlap fails without a final WAV.
+
+### Shared generation and output rules
 
 - Sample rate **24 kHz**, mono, WAV.
 - **Long or multi-paragraph text is generated in recoverable sections.** A newline
@@ -782,7 +936,12 @@ macOS source: `BackupManager.swift`.
 
 ## 7. Settings
 
-Tabbed window (macOS: ⌘,). Tabs — the window title reflects the selected tab,
+Tabbed window (macOS: ⌘,). The tab order is **General, Models, Storage,
+Backup, Advanced, About** on Windows and Linux. **About is always the last
+Settings tab**, after Advanced and any future settings tabs. macOS uses the
+same settings order without About, which remains its native AppKit panel;
+the Advanced/SRT addition there is tracked in #310. The window title reflects
+the selected tab,
 **and names the window before it** where the platform's own convention is to
 name the window: the .NET app titles it **"Settings — General"**, macOS titles
 it "General" alone. macOS source: `SettingsView.swift`.
@@ -840,6 +999,8 @@ second reading of the same information.
 - **Models**: the three per-mode source fields (repo ID or base URL) + help.
 - **Storage**: models-folder location controls + pre-download commands.
 - **Backup**: back up / restore / stop + status.
+- **Advanced**: **Experimental SRT support**, a persisted checkbox, default
+  **off**. Enables desktop timed scripts for Preset voice and Voice clone; see §2.
 - **About** (.NET only): name, version, platform, licence and copyright —
   see §9a. macOS has no such tab; AppKit's About panel covers it there.
 
@@ -927,8 +1088,8 @@ macOS source: `WindowCloseGuard.swift`.
   user can reach without generating anything.
   - macOS gets this free: AppKit's About panel, filled from the bundle.
   - **.NET (Win+Linux)**: there is no equivalent and no menu bar to hang one
-    on, so it is an **About tab in Settings** (§7) — where a Windows or Linux
-    user looks for it.
+    on, so it is the **last tab, About, in Settings** (§7) — where a Windows or
+    Linux user looks for it.
 - The platform is named, not just the version. Windows and Linux are one
   codebase and look identical, so a version alone does not say which build a
   bug report is about.

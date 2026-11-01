@@ -100,8 +100,8 @@ public static class WavMetadata
     {
         try
         {
-            var bytes = File.ReadAllBytes(path);
-            var json = FindComment(bytes);
+            using var file = File.OpenRead(path);
+            var json = FindComment(file);
             if (json is null) return null;
 
             return JsonSerializer.Deserialize<OutputMetadata>(json, Json);
@@ -113,32 +113,36 @@ public static class WavMetadata
     }
 
     /// <summary>Walks the RIFF chunks looking for LIST/INFO's ICMT.</summary>
-    private static string? FindComment(byte[] bytes)
+    private static string? FindComment(Stream file)
     {
-        if (bytes.Length < 12) return null;
-        if (Encoding.ASCII.GetString(bytes, 0, 4) != "RIFF") return null;
-        if (Encoding.ASCII.GetString(bytes, 8, 4) != "WAVE") return null;
-
-        var position = 12;
-        while (position + 8 <= bytes.Length)
+        // Timed scripts can have hours of silence. Seek past audio instead of
+        // allocating the complete track merely to label a History row.
+        if (file.Length < 12) return null;
+        Span<byte> header = stackalloc byte[12];
+        file.ReadExactly(header);
+        if (!header[..4].SequenceEqual("RIFF"u8) || !header[8..].SequenceEqual("WAVE"u8)) return null;
+        while (file.Position + 8 <= file.Length)
         {
-            var id = Encoding.ASCII.GetString(bytes, position, 4);
-            var size = BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(position + 4, 4));
-            var body = position + 8;
-            if (body + size > bytes.Length) break;
-
-            if (id == "LIST" && size >= 4
-                && Encoding.ASCII.GetString(bytes, body, 4) == "INFO")
+            file.ReadExactly(header[..8]);
+            var size = BinaryPrimitives.ReadUInt32LittleEndian(header[4..8]);
+            var body = file.Position;
+            if (body + size > file.Length) break;
+            if (header[..4].SequenceEqual("LIST"u8) && size >= 4 && size <= 16 * 1024 * 1024)
             {
-                var found = FindInfoField(bytes, body + 4, (int)(body + size), "ICMT");
-                if (found is not null) return found;
+                var payload = new byte[(int)size];
+                file.ReadExactly(payload);
+                if (payload.AsSpan(0, 4).SequenceEqual("INFO"u8))
+                {
+                    var found = FindInfoField(payload, 4, payload.Length, "ICMT");
+                    if (found is not null) return found;
+                }
             }
 
             // Chunks are word-aligned: an odd size is followed by a pad byte
             // that is not counted in the size. Ignoring it walks into the
             // middle of the next chunk and the rest of the file reads as
             // garbage.
-            position = body + (int)size + ((size % 2 == 1) ? 1 : 0);
+            file.Position = body + size + (size % 2);
         }
 
         return null;

@@ -50,7 +50,97 @@ The audio plays automatically when the complete recording is saved. **Play** rep
 
 If the download is a lot to ask for before hearing anything, the **Storage** tab in Settings gives you a command per mode to fetch a model in advance instead.
 
-## The three modes
+## Timed speech from subtitles
+
+First enable **Experimental SRT support** under **Settings → Advanced** (off by
+default). In Preset voice or Voice clone, choose **Import SRT** instead of typing an
+ordinary script. Voice design does not support subtitle scripts. Use a UTF-8
+`.srt` file. The original file is never changed.
+
+Review each cue's start, end, text, and spoken text. Line breaks become spaces
+and basic italic/bold/underline tags are removed. Caption and unknown-format
+flags ask you to review the words; nothing is excluded automatically. Uncheck
+**Include cue** to leave those words out. Excluded cues create no speech
+deadline. All included start times must increase in file order.
+
+**Generate** creates each included cue in the same voice and checks its actual
+duration. Estimates are only a guide. Speech may continue past its own end:
+that is a warning, and export is allowed if it finishes before the next included
+cue starts. Speech continuing beyond the next start is an error and blocks
+export. Edit the words or times, exclude a cue, or use **Regenerate cue** for
+another take. **Go to first error** selects its row. **Preview cue** plays a
+completed take. Regeneration changes only that cue; Generate reuses completed
+takes and creates any missing ones. Changing the voice or model invalidates
+the affected takes.
+
+The complete audio clip starts at the cue timestamp, including any model
+silence. The audible words can start later (about half a second in measured
+Preset examples). Trailing silence counts too. Bunyi does not automatically
+trim, speed up, or cut off speech. Timing checks do not verify pronunciation,
+omitted words, or extra words; listen before using a track.
+
+When all cues fit, Bunyi saves one WAV with silence in the gaps. Its last cue
+may extend the recording past the subtitle end, with a warning. History shows
+one track. Keep the accompanying `.srt.json` timeline file beside the WAV when
+backing up or copying output folders; History's save-copy and Trash actions
+include it. The app's model backup does not back up audio outputs.
+
+**Save project** stores the editable script, voice settings, completed cue
+takes, and clone reference in one `.bunyi-srt` file. You can save a draft even
+with timing errors or unfinished cues. Close Bunyi, then use **Open project**
+to restore it later. Generate reuses matching saved takes and creates only
+missing or changed ones. The copied reference means you can move the project
+without keeping the original reference file at its old location.
+
+**Save** updates that file; **Save as…** creates another copy. The project label
+shows unsaved changes after editing or generation. Bunyi asks before discarding
+unsaved work; save first if you want to keep it. Stop keeps completed takes for
+corrections, but does not automatically save the project. Completed tracks stay
+in History independently of the project. An exported WAV's `.srt.json` file is
+an output description, not an editable project.
+
+Projects include voice audio and transcripts but not model downloads. Opening
+does not change your model settings. If the model source differs, Bunyi says so;
+choose the original model in Settings to reuse the saved takes, or Generate to
+replace them. Changed model files or reference content can also require new
+takes. Keep a copy of your project file for backup; the app's model backup does
+not include it.
+
+**Fixing a cue and resuming.** A timestamp change needs no new speech. If you
+change the words or want a different take, use that row's **Regenerate cue**,
+then review its status. The other completed takes are kept. The main button
+says **Resume (N cues)** when audio is still missing, **Check timing** when all
+takes exist but errors remain, or **Export track** when everything fits. Export
+reuses completed audio; it does not regenerate the whole script. The table
+shows ready, missing and error counts. A warning does not block export; an
+overlap does. Opening unchanged Settings or the model changing a speaker name's
+capitalization does not discard takes.
+
+**Speed up to fit.** On a generated cue, this adjusts the existing take to
+finish before the next included cue starts. For the last cue it targets its
+own end timestamp. It preserves pitch and does not regenerate speech, trim
+silence, or cut off the ending. The default maximum is **1.25×**; if more is needed,
+the required speed is shown and your take stays unchanged. Shorten the words,
+edit the timestamps, or regenerate that cue instead.
+
+The cue shows its applied speed and adjusted duration. **Preview cue** plays
+the adjusted version: faster speech can sound different, so listen before
+exporting. **Reset speed** restores the original take. Applying the operation
+again starts from the original, so adjustments do not build on each other.
+Timestamp edits do not automatically change speed; use Speed up to fit again
+or Reset speed. Save project preserves both versions. Projects containing speed
+adjustments require this newer build to open correctly.
+
+To exceed the normal limit for one cue, check **Override 1.25× limit** on that
+row, then choose **Speed up to fit**. Other cues keep their normal limit. This
+can make speech sound unnatural or unintelligible, so preview it carefully.
+Checking the box does not change audio by itself. Unchecking it restores the
+original take if the current speed is above 1.25×. Save project retains the
+per-cue option and both audio versions; older builds cannot open projects with
+overrides enabled. Speed calculations use full precision, with two decimals
+shown in the interface.
+
+## The three modes (voice settings)
 
 ### Preset voice
 
@@ -170,6 +260,8 @@ Light, dark, or follow the system. It applies to every Bunyi window straight awa
 Either way you never hold two models at once. The setting moves when the memory comes back, not whether it does.
 
 ### About
+
+About is the last Settings tab, after Advanced.
 
 The version you are running, the platform it was built for, and the licence and credits.
 

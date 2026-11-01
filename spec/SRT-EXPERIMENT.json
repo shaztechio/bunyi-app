@@ -1,0 +1,122 @@
+[
+  {
+    "trial": "clone-hello",
+    "text": "Hello.",
+    "durationSeconds": 0.56,
+    "elapsedSeconds": 10.9339365,
+    "modelSource": "https://models.bunyi.app/onnx/voiceclone",
+    "appVersion": "1.3.3",
+    "wav": "Voice-clone-20261101T184034.wav",
+    "sha256": "0c4231a39e9be35c3d9c2490f2f0817ae526ffbca0398da04fb401ba4970bab1",
+    "energyBoundariesDbfs": {
+      "-50": {
+        "leadingMs": 150.0,
+        "trailingMs": 10.0
+      },
+      "-40": {
+        "leadingMs": 180.0,
+        "trailingMs": 20.0
+      }
+    }
+  },
+  {
+    "trial": "clone-sentence",
+    "text": "Hello! We'll begin in just a few minutes.",
+    "durationSeconds": 3.6,
+    "elapsedSeconds": 13.9370861,
+    "modelSource": "https://models.bunyi.app/onnx/voiceclone",
+    "appVersion": "1.3.3",
+    "wav": "Voice-clone-20261101T184048.wav",
+    "sha256": "da6a76512877fa476d4ee0b7a244343630758476cd4578975694116ddc03e23c",
+    "energyBoundariesDbfs": {
+      "-50": {
+        "leadingMs": 30.0,
+        "trailingMs": 50.0
+      },
+      "-40": {
+        "leadingMs": 210.0,
+        "trailingMs": 70.0
+      }
+    }
+  },
+  {
+    "trial": "design-hello",
+    "text": "Hello.",
+    "durationSeconds": 0.8,
+    "elapsedSeconds": 10.785305,
+    "modelSource": "https://models.bunyi.app/onnx/voicedesign",
+    "appVersion": "1.3.3",
+    "wav": "Voice-design-20261101T183848.wav",
+    "sha256": "a0415c4e28f4603dffdb35b7cf785e12aa311e7e17129634a19bd7130fc16606",
+    "energyBoundariesDbfs": {
+      "-50": {
+        "leadingMs": 50.0,
+        "trailingMs": 160.0
+      },
+      "-40": {
+        "leadingMs": 60.0,
+        "trailingMs": 180.0
+      }
+    }
+  },
+  {
+    "trial": "design-sentence",
+    "text": "Hello! We'll begin in just a few minutes.",
+    "durationSeconds": 3.44,
+    "elapsedSeconds": 14.9797463,
+    "modelSource": "https://models.bunyi.app/onnx/voicedesign",
+    "appVersion": "1.3.3",
+    "wav": "Voice-design-20261101T183922.wav",
+    "sha256": "108bb7429ae5fab4440201b41f84d76ca5fa694fc7cd2422139b84ef65f6416b",
+    "energyBoundariesDbfs": {
+      "-50": {
+        "leadingMs": 50.0,
+        "trailingMs": 40.0
+      },
+      "-40": {
+        "leadingMs": 80.0,
+        "trailingMs": 50.0
+      }
+    }
+  },
+  {
+    "trial": "preset-hello",
+    "text": "Hello.",
+    "durationSeconds": 2.0,
+    "elapsedSeconds": 24.9720673,
+    "modelSource": "https://models.bunyi.app/onnx/customvoice",
+    "appVersion": "1.3.3",
+    "wav": "Preset-voice-20261101T183947.wav",
+    "sha256": "3f29c7b07da4c42cd7cd6084fdbffb2fa15fd127dea8a4a743758aa85be10739",
+    "energyBoundariesDbfs": {
+      "-50": {
+        "leadingMs": 430.0,
+        "trailingMs": 490.0
+      },
+      "-40": {
+        "leadingMs": 460.0,
+        "trailingMs": 580.0
+      }
+    }
+  },
+  {
+    "trial": "preset-sentence",
+    "text": "Hello! We'll begin in just a few minutes.",
+    "durationSeconds": 3.76,
+    "elapsedSeconds": 26.0441462,
+    "modelSource": "https://models.bunyi.app/onnx/customvoice",
+    "appVersion": "1.3.3",
+    "wav": "Preset-voice-20261101T184014.wav",
+    "sha256": "774293102ba8a44dc740652c38eec1e5eb4f9c342c729e3ca4faf3e3320a89c5",
+    "energyBoundariesDbfs": {
+      "-50": {
+        "leadingMs": 430.0,
+        "trailingMs": 450.0
+      },
+      "-40": {
+        "leadingMs": 500.0,
+        "trailingMs": 460.0
+      }
+    }
+  }
+]

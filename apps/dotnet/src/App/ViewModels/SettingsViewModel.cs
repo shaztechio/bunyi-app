@@ -40,7 +40,7 @@ public sealed record PreDownloadCommandRow(string Mode, string Command)
 }
 
 /// <summary>
-/// Settings (spec §7): General, Models, Storage and Backup.
+/// Settings (spec §7): General, Models, Storage, Backup, Advanced and About.
 /// </summary>
 public sealed partial class SettingsViewModel : ObservableObject
 {
@@ -54,6 +54,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     private bool _loading;
 
     [ObservableProperty] private Appearance _appearance;
+    [ObservableProperty] private bool _experimentalSrtEnabled;
 
     /// <summary>Spec §3e: whether leaving a mode unloads its model.</summary>
     [ObservableProperty] private bool _unloadOnModeSwitch = true;
@@ -205,6 +206,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 
         _settings = _store.Load();
         Appearance = _settings.Appearance;
+        ExperimentalSrtEnabled = _settings.ExperimentalSrtEnabled;
         UnloadOnModeSwitch = _settings.UnloadOnModeSwitch;
         SentenceGapMilliseconds = _settings.SentenceGapMilliseconds;
         PresetVoiceSource = _settings.SourceFor(TtsMode.PresetVoice);
@@ -274,6 +276,12 @@ public sealed partial class SettingsViewModel : ObservableObject
     {
         if (_loading) return;
         Persist(_settings with { UnloadOnModeSwitch = value });
+    }
+
+    partial void OnExperimentalSrtEnabledChanged(bool value)
+    {
+        if (_loading) return;
+        if (!Persist(_settings with { ExperimentalSrtEnabled = value })) Reload();
     }
 
     partial void OnSentenceGapMillisecondsChanged(int value)

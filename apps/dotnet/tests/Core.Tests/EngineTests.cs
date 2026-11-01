@@ -68,6 +68,70 @@ public sealed class EngineTests : IAsyncLifetime
         doctor: doctor, acquireLease: acquireLease);
 
     [Fact]
+    public async Task Srt_selected_regeneration_returns_to_review_then_resume_exports_without_more_inference()
+    {
+        var synth = new FakeSynthesizer();
+        await using var engine = NewEngine(synth);
+        using var session = new SrtSession(SrtDocument.Parse("1\n00:00:01,000 --> 00:00:02,000\nHello.\n\n2\n00:00:03,000 --> 00:00:04,000\nWorld."));
+        var request = Request() with { Srt = session, Speaker = "Ryan" };
+        await engine.GenerateAsync(request, null, default);
+        var corrected = session.Cues[0] with { Text = "Corrected." };
+        session.Update([corrected, session.Cues[1]]);
+        await engine.GenerateAsync(request with { Speaker = "ryan", SrtCueId = corrected.Id }, null, default);
+        Assert.Equal(3, synth.Requests.Count);
+        Assert.Null(engine.LastOutputPath);
+        Assert.Single(GeneratedOutputs.Read(Path.Combine(_root, "Outputs")));
+        await engine.GenerateAsync(request with { Speaker = "ryan" }, null, default);
+        Assert.Equal(3, synth.Requests.Count);
+        Assert.Equal(2, GeneratedOutputs.Read(Path.Combine(_root, "Outputs" )).Count);
+    }
+
+    [Fact]
+    public async Task Srt_publishes_one_track_and_sidecar_and_reuses_clips_after_time_edits()
+    {
+        var synth = new FakeSynthesizer();
+        await using var engine = NewEngine(synth);
+        using var session = new SrtSession(SrtDocument.Parse("1\n00:00:01,000 --> 00:00:01,100\nHello.\n\n2\n00:00:03,000 --> 00:00:03,100\nWorld."));
+        var request = Request() with { Srt = session };
+        var result = await engine.GenerateAsync(request, null, default);
+        Assert.Equal(4, result.Duration.TotalSeconds);
+        Assert.Equal(result.OutputPath, engine.LastOutputPath);
+        Assert.True(File.Exists(SrtSession.SidecarPath(result.OutputPath)));
+        Assert.Single(GeneratedOutputs.Read(Path.Combine(_root, "Outputs")));
+        Assert.Equal(2, synth.Requests.Count);
+        session.Update(session.Cues.Select(c => c with { End = c.Number == "2" ? "00:00:05,000" : c.End }).ToArray());
+        var next = await engine.GenerateAsync(request, null, default);
+        Assert.Equal(5, next.Duration.TotalSeconds);
+        Assert.Equal(2, synth.Requests.Count);
+        Assert.Equal(EngineState.Idle, engine.Status.State);
+    }
+
+    [Fact]
+    public async Task Srt_overlap_preserves_takes_but_never_publishes_partial_output()
+    {
+        var synth = new FakeSynthesizer();
+        await using var engine = NewEngine(synth);
+        using var session = new SrtSession(SrtDocument.Parse("1\n00:00:01,000 --> 00:00:01,100\nHello.\n\n2\n00:00:01,100 --> 00:00:02,000\nWorld."));
+        var failure = await Assert.ThrowsAsync<SrtTimingException>(() => engine.GenerateAsync(Request() with { Srt = session }, null, default));
+        Assert.Equal(0.9, failure.Diagnostics[0].OverlapSeconds);
+        Assert.Equal(2, synth.Requests.Count);
+        Assert.True(session.HasClips);
+        Assert.Null(engine.LastOutputPath);
+        Assert.Empty(GeneratedOutputs.Read(Path.Combine(_root, "Outputs")));
+    }
+
+    [Fact]
+    public async Task Srt_design_and_invalid_times_fail_before_model_preparation()
+    {
+        var synth = new FakeSynthesizer();
+        await using var engine = NewEngine(synth);
+        using var session = new SrtSession(SrtDocument.Parse("1\nbad --> 00:00:02,000\nHello."));
+        await Assert.ThrowsAsync<InvalidDataException>(() => engine.GenerateAsync(Request() with { Srt = session }, null, default));
+        await Assert.ThrowsAsync<InvalidDataException>(() => engine.GenerateAsync(Request() with { Srt = session, Mode = TtsMode.VoiceDesign }, null, default));
+        Assert.Equal(0, synth.Loads);
+    }
+
+    [Fact]
     public async Task Preload_reuses_residency_for_later_generation_without_writing_audio()
     {
         var synth = new FakeSynthesizer();

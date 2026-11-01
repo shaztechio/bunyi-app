@@ -250,7 +250,36 @@ limitations under the License.
               are drawn under, and Tab reached them first.
             -->
             <Grid RowDefinitions="Auto,*,Auto,Auto,Auto">
-              <TextBlock Grid.Row="0" Name="ScriptLabel" Text="SCRIPT" Classes="eyebrow" />
+              <DockPanel Grid.Row="0">
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6">
+                  <infra:AccessibleButton Classes="icon" Name="ImportSrtButton" Command="{Binding ImportSrtCommand}" IsVisible="{Binding CanImportSrt}"
+                      ToolTip.Tip="Import an SRT subtitle script" AutomationProperties.Name="Import SRT" AutomationProperties.HelpText="">
+                    <Path Data="{DynamicResource IconImportSrt}" />
+                  </infra:AccessibleButton>
+                  <infra:AccessibleButton Classes="icon" Name="OpenSrtProjectButton" Command="{Binding OpenSrtProjectCommand}" IsVisible="{Binding CanImportSrt}"
+                      ToolTip.Tip="Open a saved SRT project and its cue takes" AutomationProperties.Name="Open project" AutomationProperties.HelpText="">
+                    <Path Data="{DynamicResource IconFolder}" />
+                  </infra:AccessibleButton>
+                  <infra:AccessibleButton Classes="icon" Name="SaveSrtProjectButton" Command="{Binding SaveSrtProjectCommand}" IsVisible="{Binding HasSrt}"
+                      ToolTip.Tip="Save this project, including generated cue takes" AutomationProperties.Name="Save project" AutomationProperties.HelpText="">
+                    <Path Data="{DynamicResource IconProjectSave}" />
+                  </infra:AccessibleButton>
+                  <infra:AccessibleButton Classes="icon" Name="SaveSrtProjectAsButton" Command="{Binding SaveSrtProjectAsCommand}" IsVisible="{Binding HasSrt}"
+                      ToolTip.Tip="Save the project to another file" AutomationProperties.Name="Save project as" AutomationProperties.HelpText="">
+                    <Path Data="{DynamicResource IconProjectSaveAs}" />
+                  </infra:AccessibleButton>
+                  <infra:AccessibleButton Classes="icon" Name="PlainTextButton" Command="{Binding ClearSrtCommand}" IsVisible="{Binding HasSrt}"
+                      ToolTip.Tip="Switch to a plain text script" AutomationProperties.Name="Use plain text" AutomationProperties.HelpText="">
+                    <Path Data="{DynamicResource IconPlainText}" />
+                  </infra:AccessibleButton>
+                </StackPanel>
+                <TextBlock Name="ScriptLabel" Text="SCRIPT" Classes="eyebrow" VerticalAlignment="Center" />
+              </DockPanel>
+              <StackPanel Grid.Row="1" IsVisible="{Binding HasSrt}" Spacing="8">
+                <TextBlock IsVisible="{Binding SrtDisabledWithProject}" TextWrapping="Wrap"
+                           Text="Experimental SRT support is off. Your project and generated cues are retained. Re-enable it in Settings → Advanced to resume, or use Save project." />
+                <views:SrtCueTable IsEnabled="{Binding SrtEnabled}" />
+              </StackPanel>
 
 
               <TextBlock Grid.Row="2" Classes="needed" Margin="0,6,0,0"
@@ -265,7 +294,7 @@ limitations under the License.
                 Found by walking the real tree for controls with no name, after the
                 same fault turned up on the dropdowns (#159, #192).
               -->
-              <Grid Grid.Row="1" Height="{Binding ScriptEditorHeight}"
+              <Grid Grid.Row="1" Height="{Binding ScriptEditorHeight}" IsVisible="{Binding !HasSrt}"
                     VerticalAlignment="{Binding ScriptEditorAlignment}">
                 <infra:ScriptTextBox Name="ScriptBox" Text="{Binding Script}"
                        Classes.needed="{Binding NeedsText}"
@@ -683,7 +712,7 @@ limitations under the License.
             screen reader skips it — so it was purple, unpressable and silent.
             It stays live and says what is missing when pressed.
           -->
-          <Button Name="GenerateButton" Classes="primary" AutomationProperties.Name="Generate"
+          <Button Name="GenerateButton" Classes="primary" AutomationProperties.Name="{Binding GenerateActionText}"
                   Command="{Binding GenerateCommand}"
                   IsVisible="{Binding ShowGenerate}"
                   ToolTip.Tip="{Binding BlockedReason}"
@@ -691,7 +720,7 @@ limitations under the License.
             <StackPanel Orientation="Horizontal" Spacing="6">
               <Path Data="{DynamicResource IconWaveform16}" Stretch="None"
                     Width="16" Height="16" VerticalAlignment="Center" />
-              <TextBlock Text="Generate" VerticalAlignment="Center" />
+              <TextBlock Text="{Binding GenerateActionText}" VerticalAlignment="Center" />
             </StackPanel>
           </Button>
           <!--

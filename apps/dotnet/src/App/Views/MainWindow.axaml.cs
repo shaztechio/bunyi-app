@@ -125,6 +125,37 @@ public partial class MainWindow : Window
         model.History.ConfirmTrash = ConfirmTrashAsync;
         model.History.ChooseSaveLocation = ChooseSaveLocationAsync;
         model.ChooseReference = ChooseReferenceAsync;
+        model.ChooseSrt = async () =>
+        {
+            var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = "Import subtitle script", AllowMultiple = false,
+                FileTypeFilter = [new FilePickerFileType("SubRip subtitles") { Patterns = ["*.srt"] }]
+            });
+            return files.Count > 0 ? files[0].TryGetLocalPath() : null;
+        };
+        model.ChooseSrtProject = async () =>
+        {
+            var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = "Open SRT project", AllowMultiple = false,
+                FileTypeFilter = [new FilePickerFileType("Bunyi SRT project") { Patterns = ["*.bunyi-srt"] }]
+            });
+            return files.Count > 0 ? files[0].TryGetLocalPath() : null;
+        };
+        model.ChooseSrtProjectSave = async current =>
+        {
+            var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+            {
+                Title = "Save SRT project", DefaultExtension = "bunyi-srt",
+                SuggestedFileName = current is null ? "Subtitle project.bunyi-srt" : System.IO.Path.GetFileName(current),
+                FileTypeChoices = [new FilePickerFileType("Bunyi SRT project") { Patterns = ["*.bunyi-srt"] }]
+            });
+            return file?.TryGetLocalPath();
+        };
+        model.ConfirmDiscardSrt = () => AskAsync("Discard unsaved SRT changes?",
+            "Save the project first to keep your edits and generated takes. An existing saved project and completed tracks stay unchanged.",
+            "Discard changes", "Keep editing");
         model.FocusRequested += (_, input) => FocusTheProblem(input);
     }
 
@@ -483,6 +514,22 @@ public partial class MainWindow : Window
     protected override async void OnClosing(WindowClosingEventArgs e)
     {
         var engine = Engine;
+
+        if (!_closeConfirmed && DataContext is MainViewModel { IsBusy: true } busyModel && engine?.Status.IsBusy != true)
+        {
+            e.Cancel = true; // Save/Open owns its cancellation and must finish before closing.
+            busyModel.Status = "Finish the current operation, or press Stop, before closing.";
+            return;
+        }
+        if (!_closeConfirmed && engine?.Status.IsBusy != true && DataContext is MainViewModel { SrtUnsaved: true } srtModel)
+        {
+            e.Cancel = true;
+            if (_waitingToClose) return;
+            _waitingToClose = true;
+            if (await srtModel.ConfirmDiscardSrt!()) { _closeConfirmed = true; Close(); }
+            _waitingToClose = false;
+            return;
+        }
 
         if (_closeConfirmed || engine is null || !engine.Status.IsBusy)
         {

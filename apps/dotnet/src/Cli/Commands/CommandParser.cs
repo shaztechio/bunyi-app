@@ -25,9 +25,9 @@ public static class CommandParser
     private static readonly Dictionary<string, string[]> Options = new()
     {
         ["help"] = [], ["version"] = [], ["play"] = [],
-        ["generate.preset"] = ["text", "text-file", "stdin", "speaker", "style", "language", "detach"],
+        ["generate.preset"] = ["text", "text-file", "srt-file", "stdin", "speaker", "style", "language", "detach"],
         ["generate.design"] = ["text", "text-file", "stdin", "voice", "language", "detach"],
-        ["generate.clone"] = ["text", "text-file", "stdin", "reference", "transcript", "auto-transcribe", "saved-voice", "language", "detach"],
+        ["generate.clone"] = ["text", "text-file", "srt-file", "stdin", "reference", "transcript", "auto-transcribe", "saved-voice", "language", "detach"],
         ["transcribe"] = ["detach", "language"], ["speakers"] = ["detach"],
         ["models.list"] = [], ["models.status"] = ["mode"], ["models.download"] = ["mode", "all", "detach"],
         ["models.verify"] = ["mode", "detach"], ["models.remove"] = ["mode"],
@@ -104,13 +104,18 @@ public static class CommandParser
         if (request.Has("language") && !Languages.All.Contains(request.Get("language"))) throw Invalid("Unsupported language. Use: " + string.Join(", ", Languages.All));
         if (request.Operation.StartsWith("generate.", StringComparison.Ordinal))
         {
-            var count = new[] { "text", "text-file", "stdin" }.Count(request.Has);
+            var count = new[] { "text", "text-file", "stdin", "srt-file" }.Count(request.Has);
             if (count == 0) throw Missing("Provide text using --text, --text-file, or --stdin.");
-            if (count != 1) throw Invalid("Choose exactly one of --text, --text-file, or --stdin.");
+            if (count != 1) throw Invalid("Choose exactly one of --text, --text-file, --stdin, or --srt-file.");
+            if (request.Has("srt-file"))
+            {
+                args["srt-file"] = ReadableFile(request.Get("srt-file")!);
+                SrtDocument.Validate(await SrtDocument.ReadAsync(args["srt-file"]!, ct));
+            }
             if (request.Has("text-file")) args["text"] = await File.ReadAllTextAsync(ReadableFile(request.Get("text-file")!), ct);
             if (request.Has("stdin")) args["text"] = await input.ReadToEndAsync(ct);
             args.Remove("text-file"); args.Remove("stdin");
-            Required(request, "text");
+            if (!request.Has("srt-file")) Required(request, "text");
             if (request.Operation == "generate.design") Required(request, "voice");
             if (request.Operation == "generate.clone") ValidateReference(request, allowSaved: true);
         }
@@ -159,9 +164,9 @@ public static class CommandParser
 
     public const string Help = """
         Bunyi — local speech generation for people and agents
-        bunyi generate preset (--text TEXT | --text-file FILE | --stdin) [--speaker Ryan] [--style TEXT]
+        bunyi generate preset (--text TEXT | --text-file FILE | --stdin | --srt-file FILE) [--speaker Ryan] [--style TEXT]
         bunyi generate design (--text TEXT | --text-file FILE | --stdin) --voice DESCRIPTION
-        bunyi generate clone (--text TEXT | --text-file FILE | --stdin) (--reference FILE (--transcript TEXT | --auto-transcribe) | --saved-voice ID)
+        bunyi generate clone (--text TEXT | --text-file FILE | --stdin | --srt-file FILE) (--reference FILE (--transcript TEXT | --auto-transcribe) | --saved-voice ID)
           All generation modes: [--language auto|english|chinese|japanese|korean|german|french|russian|portuguese|spanish|italian]
         bunyi transcribe AUDIO [--language LANGUAGE] | speakers
         bunyi play AUDIO [--json | --jsonl] (local WAV/MP3/FLAC playback; waits until finished; Ctrl+C stops)

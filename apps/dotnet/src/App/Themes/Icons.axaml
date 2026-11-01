@@ -111,6 +111,12 @@ limitations under the License.
   <!-- Save a copy: an arrow into a tray. -->
   <StreamGeometry x:Key="IconSave">M12 3v11 M8 10.5l4 4 4-4 M4 17v2.5h16V17</StreamGeometry>
 
+  <!-- Project actions: use the existing stroked icon system. -->
+  <StreamGeometry x:Key="IconProjectSave">M4 3h13l4 4v14H3V3z M7 3v6h10V3 M7 21v-8h10v8</StreamGeometry>
+  <StreamGeometry x:Key="IconProjectSaveAs">M4 3h13l4 4v3 M3 3v18h7 M7 3v6h10V3 M7 17v-4h4 M12 18l7-7 3 3-7 7-4 1z M18 12l3 3</StreamGeometry>
+  <StreamGeometry x:Key="IconImportSrt">M5 3h10l4 4v5 M15 3v5h4 M5 3v18h6 M14 16h8 M18 12v8 M15 17l3 3 3-3</StreamGeometry>
+  <StreamGeometry x:Key="IconPlainText">M4 5h16 M12 5v15 M8 20h8 M4 5v3 M20 5v3</StreamGeometry>
+
   <!-- Copy details: two overlapping sheets. -->
   <StreamGeometry x:Key="IconCopy">M9 9h10v12H9z M15 9V3H5v12h4</StreamGeometry>
 

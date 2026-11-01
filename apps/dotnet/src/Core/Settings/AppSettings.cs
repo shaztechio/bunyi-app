@@ -33,6 +33,10 @@ public enum Appearance
 /// </summary>
 public sealed record AppSettings
 {
+    /// <summary>Opt-in desktop timed scripts; absent settings remain disabled.</summary>
+    [JsonPropertyName("experimentalSrtEnabled")]
+    public bool ExperimentalSrtEnabled { get; init; }
+
     private int _sentenceGapMilliseconds = 300;
 
     /// <summary>Added silence at long-text joins, in milliseconds (spec §7).</summary>

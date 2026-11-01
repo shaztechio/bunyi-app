@@ -59,6 +59,40 @@ public sealed class SettingsTests : HeadlessWindows
         Assert.Equal(0, NewModel().SentenceGapMilliseconds);
     }
 
+    [AvaloniaFact]
+    public async Task Experimental_srt_is_default_off_persisted_and_gates_entry_points_immediately()
+    {
+        var settings = NewModel();
+        Assert.False(settings.ExperimentalSrtEnabled);
+        using var model = new MainViewModel(new FakeEngine(), new FakePlayer(), _log) { Settings = settings };
+        var main = Open(new MainWindow { DataContext = model });
+        var preferences = Open(new SettingsWindow { DataContext = settings });
+        var tabs = preferences.FindControl<TabControl>("SettingsTabs")!;
+        tabs.SelectedIndex = 4;
+        preferences.UpdateLayout();
+        var checkbox = preferences.FindControl<CheckBox>("ExperimentalSrtCheckBox")!;
+        Assert.False(checkbox.IsChecked);
+        Assert.False(main.FindControl<Button>("ImportSrtButton")!.IsVisible);
+        Assert.False(main.FindControl<Button>("OpenSrtProjectButton")!.IsVisible);
+        var picks = 0;
+        model.ChooseSrt = () => { picks++; return Task.FromResult<string?>(null); };
+        model.ChooseSrtProject = model.ChooseSrt;
+        await model.ImportSrtCommand.ExecuteAsync(null);
+        await model.OpenSrtProjectCommand.ExecuteAsync(null);
+        Assert.Equal(0, picks);
+        checkbox.IsChecked = true;
+        Assert.True(NewModel().ExperimentalSrtEnabled);
+        Assert.True(main.FindControl<Button>("ImportSrtButton")!.IsVisible);
+        Assert.True(main.FindControl<Button>("OpenSrtProjectButton")!.IsVisible);
+        model.Mode = TtsMode.VoiceDesign;
+        Assert.False(model.CanImportSrt);
+        model.Mode = TtsMode.VoiceClone;
+        Assert.True(model.CanImportSrt);
+        checkbox.IsChecked = false;
+        Assert.False(NewModel().ExperimentalSrtEnabled);
+        Assert.False(model.CanImportSrt);
+    }
+
     private SettingsViewModel NewModel(bool mirrorDefault = false)
     {
         var store = new SettingsStore(_log, Path.Combine(_folder, "settings.json"));
@@ -124,13 +158,13 @@ public sealed class SettingsTests : HeadlessWindows
     [AvaloniaFact]
     public void The_window_opens_with_the_tabs_the_spec_names()
     {
-        // §7: General, Models, Storage, Backup — plus About, which §9a puts
+        // §7: General, Models, Storage, Backup, Advanced — then About, which §9a puts
         // here because Windows and Linux have no About panel of their own.
         var window = Open(new SettingsWindow { DataContext = NewModel() });
 
         var tabs = window.GetLogicalDescendants().OfType<TabItem>().ToList();
         Assert.Equal(
-            ["General", "Models", "Storage", "Backup", "About"],
+            ["General", "Models", "Storage", "Backup", "Advanced", "About"],
             tabs.Select(t => t.Header as string));
     }
 
@@ -209,7 +243,7 @@ public sealed class SettingsTests : HeadlessWindows
     public void About_links_identify_the_credited_project_and_its_role_and_license()
     {
         var window = Open(new SettingsWindow { DataContext = NewModel() });
-        window.FindControl<TabControl>("SettingsTabs")!.SelectedIndex = 4;
+        window.FindControl<TabControl>("SettingsTabs")!.SelectedIndex = 5;
         window.UpdateLayout();
         var links = window.GetVisualDescendants().OfType<Button>().Where(b => b.DataContext is Credit).ToArray();
         Assert.NotEmpty(links);
@@ -254,7 +288,7 @@ public sealed class SettingsTests : HeadlessWindows
         var window = Open(new SettingsWindow { DataContext = NewModel() });
 
         var tabs = window.GetLogicalDescendants().OfType<TabControl>().First();
-        tabs.SelectedIndex = 4;
+        tabs.SelectedIndex = 5;
         window.UpdateLayout();
 
         var shown = window.GetLogicalDescendants().OfType<TextBlock>()
@@ -357,7 +391,7 @@ public sealed class SettingsTests : HeadlessWindows
         var window = Open(new SettingsWindow { DataContext = NewModel() });
 
         var tabs = window.GetLogicalDescendants().OfType<TabControl>().First();
-        tabs.SelectedIndex = 4;
+        tabs.SelectedIndex = 5;
 
         Assert.Equal("Settings — About", window.Title);
     }
@@ -387,7 +421,7 @@ public sealed class SettingsTests : HeadlessWindows
         var window = Open(new SettingsWindow { DataContext = NewModel() });
 
         var tabs = window.GetLogicalDescendants().OfType<TabControl>().First();
-        tabs.SelectedIndex = 4;
+        tabs.SelectedIndex = 5;
         window.UpdateLayout();
 
         var shown = window.GetLogicalDescendants().OfType<TextBlock>()
@@ -445,7 +479,7 @@ public sealed class SettingsTests : HeadlessWindows
         var window = Open(new SettingsWindow { DataContext = NewModel() });
 
         var tabs = window.GetLogicalDescendants().OfType<TabControl>().First();
-        tabs.SelectedIndex = 4;
+        tabs.SelectedIndex = 5;
         window.UpdateLayout();
 
         var links = window.GetLogicalDescendants().OfType<Button>()
@@ -533,7 +567,7 @@ public sealed class SettingsTests : HeadlessWindows
 
         var tabControl = window.GetLogicalDescendants().OfType<TabControl>().First();
 
-        foreach (var (index, tab) in new[] { "General", "Models", "Storage", "Backup", "About" }.Index())
+        foreach (var (index, tab) in new[] { "General", "Models", "Storage", "Backup", "Advanced", "About" }.Index())
         {
             tabControl.SelectedIndex = index;
             Assert.Equal($"Settings — {tab}", window.Title);
