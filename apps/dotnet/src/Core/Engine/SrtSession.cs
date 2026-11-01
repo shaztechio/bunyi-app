@@ -24,11 +24,13 @@ using Bunyi.Core.Qwen;
 namespace Bunyi.Core.Engine;
 
 /// <summary>Session-local disk cache. Never a History entry or durable project.</summary>
-public sealed class SrtSession : IDisposable
+public sealed partial class SrtSession : IDisposable
 {
     private readonly string _folder = Path.Combine(Path.GetTempPath(), "bunyi-srt-" + Guid.NewGuid().ToString("N"));
     private readonly ConcurrentDictionary<string, Clip> _clips = new();
     private long _revision;
+    private long _version;
+    public long Version => Interlocked.Read(ref _version);
     private string? _configuration;
     private bool _disposed;
     public IReadOnlyList<SrtCue> Cues { get; private set; }
@@ -44,6 +46,7 @@ public sealed class SrtSession : IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         Interlocked.Increment(ref _revision);
+        Interlocked.Increment(ref _version);
         Cues = Array.AsReadOnly(cues.ToArray());
         var current = Cues.ToDictionary(c => c.Id);
         foreach (var id in _clips.Keys.ToArray())
@@ -53,6 +56,7 @@ public sealed class SrtSession : IDisposable
     public void Invalidate(string id)
     {
         Interlocked.Increment(ref _revision);
+        Interlocked.Increment(ref _version);
         RemoveClip(id);
         Recheck();
     }
@@ -63,6 +67,7 @@ public sealed class SrtSession : IDisposable
     public void InvalidateAll()
     {
         Interlocked.Increment(ref _revision);
+        Interlocked.Increment(ref _version);
         foreach (var id in _clips.Keys.ToArray()) RemoveClip(id);
         _configuration = null;
         Recheck();
@@ -89,7 +94,7 @@ public sealed class SrtSession : IDisposable
             referenceHash = Convert.ToHexString(await SHA256.HashDataAsync(file, ct));
         }
         var configuration = JsonSerializer.Serialize(new { request.Mode, request.Language, request.Speaker,
-            request.Instruct, request.ReferenceAudioPath, request.ReferenceTranscript,
+            request.Instruct, request.ReferenceTranscript,
             request.ReferenceTranscriptAudioSeconds, source, referenceHash });
         if (_configuration != configuration) { InvalidateAll(); _configuration = configuration; }
         var revision = Interlocked.Read(ref _revision);
@@ -130,6 +135,7 @@ public sealed class SrtSession : IDisposable
                     if (Interlocked.Read(ref _revision) != revision)
                         throw new OperationCanceledException("The cue script changed during generation. Generate again.");
                     _clips[cue.Id] = new Clip(cue.SpokenText, rawPath, preview, raw.LongLength, audio.Frames, raw.Max(x => Math.Abs(x)));
+                    Interlocked.Increment(ref _version);
                 }
                 catch { File.Delete(rawPath); File.Delete(preview); throw; }
                 Recheck();

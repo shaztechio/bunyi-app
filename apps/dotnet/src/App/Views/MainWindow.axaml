@@ -253,6 +253,7 @@ limitations under the License.
               <DockPanel Grid.Row="0">
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6">
                   <Button Content="Import SRT" Command="{Binding ImportSrtCommand}" IsVisible="{Binding CanImportSrt}" />
+                  <Button Content="Open project" Command="{Binding OpenSrtProjectCommand}" />
                   <Button Content="Use plain text" Command="{Binding ClearSrtCommand}" IsVisible="{Binding HasSrt}" />
                 </StackPanel>
                 <TextBlock Name="ScriptLabel" Text="SCRIPT" Classes="eyebrow" />

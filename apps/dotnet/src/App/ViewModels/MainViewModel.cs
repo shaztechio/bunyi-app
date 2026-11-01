@@ -1278,7 +1278,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
-        lock (_downloadGate) { _disposed = true; _pendingDownload = null; }
+        lock (_downloadGate) { if (_disposed) return; _disposed = true; _pendingDownload = null; }
         _downloadTicker?.Dispose();
         _ticker?.Dispose();
         _engine.StatusChanged -= OnEngineStatusChanged;

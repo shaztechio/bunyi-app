@@ -32,6 +32,27 @@ treated as opaque companions, not automatically imported projects. Back up
 output folders with both files. The app's existing model-only backup/restore
 does not include Outputs or sidecars; SRT does not expand that archive's scope.
 
+### Editable SRT projects
+
+`.bunyi-srt` is a ZIP archive with `project.json` (schemaVersion 1,
+normalization `srt-basic-v1`, voice settings, recorded model source, cue records,
+opaque runtime cache configuration, and clip descriptors) plus
+`clips/<cue-id>.f32` and an optional `reference.wav|mp3|flac`. Clips are 24 kHz
+mono little-endian float32, including the existing fades, with sample count,
+frame count and SHA-256 in the manifest. Recompute peaks and previews on Open;
+reject non-finite samples, missing/duplicate/unexpected entries, invalid cue
+identities, wrong lengths/checksums and unsupported versions. Never extract
+archive-supplied paths: copy only expected entries to a new temporary workspace.
+Limits: 16 MiB manifest, 10,000 cues, 512 MiB per clip, 256 MiB reference, 8 GiB
+total uncompressed content. Bound actual reads as well as declared lengths.
+Write a unique temporary archive beside the destination and rename only after
+completion. The original reference file is copied, so moving the project does
+not depend on its old path. Model identity changes may require regeneration;
+moving the reference alone must not invalidate identical audio. Projects contain
+voice recordings/transcripts but no model weights and no model credentials.
+They are user-managed files, outside the model-only app backup. Output sidecars
+are not accepted as project archives. Native macOS parity follows #310.
+
 ### Data roots
 
 Everything the app keeps for a user lives under one root, with fixed subfolder

@@ -19,8 +19,15 @@ limitations under the License.
              xmlns:infra="clr-namespace:Bunyi.App.Infrastructure"
              x:Class="Bunyi.App.Views.SrtCueTable" x:DataType="vm:MainViewModel">
   <Grid RowDefinitions="Auto,*,Auto" MinHeight="240">
-    <TextBlock Text="Review captions before generating. Excluded cues are silent. Complete clips start at timestamps; model silence can delay words by about half a second."
-               TextWrapping="Wrap" Margin="0,4,0,8" FontSize="12" />
+    <StackPanel Spacing="6" Margin="0,4,0,8">
+      <WrapPanel>
+        <Button Content="Save project" Command="{Binding SaveSrtProjectCommand}" Margin="0,0,6,0" />
+        <Button Content="Save as…" Command="{Binding SaveSrtProjectAsCommand}" />
+      </WrapPanel>
+      <TextBlock Text="{Binding SrtProjectLabel}" FontSize="12" TextWrapping="Wrap" />
+      <TextBlock Text="Review captions before generating. Excluded cues are silent. Complete clips start at timestamps; model silence can delay words by about half a second."
+                 TextWrapping="Wrap" FontSize="12" />
+    </StackPanel>
     <ListBox Grid.Row="1" Name="CueList" ItemsSource="{Binding SrtRows}" MaxHeight="420"
              SelectedItem="{Binding SelectedSrtCue}" SelectionChanged="OnSelectionChanged"
              AutomationProperties.Name="Editable subtitle cues">

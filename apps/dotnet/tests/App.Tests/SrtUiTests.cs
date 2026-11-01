@@ -27,6 +27,59 @@ namespace Bunyi.App.Tests;
 public sealed class SrtUiTests : HeadlessWindows
 {
     [AvaloniaFact]
+    public async Task Save_and_open_restore_voice_and_edits_and_guard_unsaved_drafts()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "bunyi-project-ui-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        var source = Path.Combine(directory, "script.srt");
+        var project = Path.Combine(directory, "script.bunyi-srt");
+        try
+        {
+            await File.WriteAllTextAsync(source, "1\n00:00:01,000 --> 00:00:02,000\nOriginal words.");
+            using var model = new MainViewModel(new FakeEngine(), new FakePlayer(), new RecordingLog())
+            { SrtSourceFor = _ => "test-model", Language = "english", Speaker = "aiden", Instruct = "calm" };
+            Open(new MainWindow { DataContext = model });
+            model.ConfirmDiscardSrt = () => Task.FromResult(true);
+            model.ChooseSrt = () => Task.FromResult<string?>(source);
+            await model.ImportSrtCommand.ExecuteAsync(null);
+            Assert.True(model.SrtUnsaved);
+            var savePickers = 0;
+            model.ChooseSrtProjectSave = _ => { savePickers++; return Task.FromResult<string?>(project); };
+            await model.SaveSrtProjectCommand.ExecuteAsync(null);
+            Assert.False(model.SrtUnsaved);
+            Assert.True(File.Exists(project));
+            Assert.Contains("saved", model.SrtProjectLabel);
+            model.SrtRows[0].End = "00:00:03,000";
+            Assert.True(model.SrtUnsaved);
+            await model.SaveSrtProjectCommand.ExecuteAsync(null);
+            Assert.Equal(1, savePickers); // Save uses the established destination.
+            model.SrtRows[0].Text = "Changed words.";
+            model.Language = "french";
+            model.Instruct = "quick";
+            model.ChooseSrtProject = () => Task.FromResult<string?>(project);
+            model.ConfirmDiscardSrt = () => Task.FromResult(false);
+            await model.OpenSrtProjectCommand.ExecuteAsync(null);
+            Assert.Equal("Changed words.", model.SrtRows[0].Text);
+            Assert.True(model.SrtUnsaved);
+            model.ConfirmDiscardSrt = () => Task.FromResult(true);
+            await model.OpenSrtProjectCommand.ExecuteAsync(null);
+            Assert.False(model.SrtUnsaved);
+            Assert.Equal("Original words.", model.SrtRows[0].Text);
+            Assert.Equal("00:00:03,000", model.SrtRows[0].End);
+            Assert.Equal("english", model.Language);
+            Assert.Equal("aiden", model.Speaker);
+            Assert.Equal("calm", model.Instruct);
+            await File.WriteAllTextAsync(project, "not a project");
+            await model.OpenSrtProjectCommand.ExecuteAsync(null);
+            Assert.Contains("Could not open", model.Status);
+            Assert.Equal("Original words.", model.SrtRows[0].Text);
+            Assert.False(model.SrtUnsaved);
+            await model.ClearSrtCommand.ExecuteAsync(null);
+        }
+        finally { Directory.Delete(directory, recursive: true); }
+    }
+
+    [AvaloniaFact]
     public async Task Imported_cues_are_editable_flagged_excludable_and_unavailable_in_design()
     {
         var file = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".srt");
@@ -36,6 +89,7 @@ public sealed class SrtUiTests : HeadlessWindows
             var engine = new FakeEngine();
             using var model = new MainViewModel(engine, new FakePlayer(), new RecordingLog()) { Script = "Ordinary text" };
             var window = Open(new MainWindow { DataContext = model });
+            model.ConfirmDiscardSrt = () => Task.FromResult(true);
             model.ChooseSrt = () => Task.FromResult<string?>(file);
             await model.ImportSrtCommand.ExecuteAsync(null);
             Assert.True(model.HasSrt);

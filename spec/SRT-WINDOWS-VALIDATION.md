@@ -93,3 +93,33 @@ screen-reader listening, macOS/MLX, and Linux acceptance remain unverified here.
 The locally published desktop build is in `tmp/srt-acceptance/win-x64/`. Keep the
 whole folder together; `Bunyi.App.exe` is the entry point. It is an unsigned
 development build, not an installer or release.
+
+## Editable project persistence follow-up
+
+Added explicit `.bunyi-srt` Save / Save as / Open with versioned ZIP storage,
+voice settings, editable draft state, raw cached takes, and embedded clone
+reference. Timing-error and text-only drafts can be saved. Reopening regenerates
+previews and recalculates timing; unchanged matching takes need no synthesis.
+Reference identity uses content rather than the old file path, so the copied
+reference does not invalidate a clone's takes. Model settings are not silently
+changed by Open. Projects remain separate from exported WAV sidecars.
+
+The persistence tests exercise close/move/reopen with a synthesizer that throws
+if invoked again, and clone reference portability after deleting the original.
+They cover atomic overwrite failure/cancellation, invalid drafts, incompatible
+versions, duplicate/path-traversal entries, changed checksums, non-finite samples
+even with a matching checksum, and the manifest read limit. Headless UI checks
+cover saved/unsaved state, repeated Save, restored settings, discard refusal,
+and retaining the current project after a corrupt Open.
+
+The final regression pass reports 945 core, 406 headless UI and 98 CLI passes
+(1,449 total), with the same eight environment-gated skips. The Windows
+self-contained publication also succeeds. A separate real-model restart probe was
+attempted but could not acquire the installed models folder because another
+Bunyi instance owns it. That instance was left untouched. No new real-model
+restart result is claimed; the earlier generation/export proof above and the
+deterministic persistence checks cover different parts of the feature.
+
+The updated self-contained build is published separately under
+`tmp/srt-projects/win-x64/`, preserving the older running test build. Native
+macOS project persistence is part of #310 along with the rest of SRT parity.

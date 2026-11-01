@@ -90,6 +90,12 @@ public partial class App : Application
                     ModelDownloader.FolderFor(runtime.SourceFor(mode), runtime.ModelsRoot),
                     ModelLayout.For(mode)).IsComplete,
                 Settings = settingsViewModel,
+                SrtSourceFor = mode => runtime.SourceFor(mode) switch
+                {
+                    ModelSource.Repo repo => repo.Id,
+                    ModelSource.BaseUrl url => url.Url.AbsoluteUri,
+                    _ => ""
+                },
                 CanRecoverDownload = runtime.CanUseHuggingFace,
                 UseHuggingFace = runtime.UseHuggingFace,
                 Doctor = RunDoctor,
@@ -121,6 +127,7 @@ public partial class App : Application
             };
 
             desktop.MainWindow = new MainWindow { DataContext = viewModel };
+            desktop.Exit += (_, _) => viewModel.Dispose();
             desktop.ShutdownRequested += async (_, _) => await runtime.DisposeAsync();
 
             log.Log("Bunyi started.");

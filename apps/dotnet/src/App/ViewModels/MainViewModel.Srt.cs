@@ -25,6 +25,14 @@ public sealed partial class MainViewModel
 {
     private SrtSession? _srt;
     private string? _srtCueId;
+    private string? _srtProjectPath;
+    private long _srtSavedVersion;
+    public bool SrtUnsaved => _srt is not null && (_srtProjectPath is null || _srt.Version != _srtSavedVersion);
+    public string SrtProjectLabel => _srtProjectPath is null ? "Unsaved SRT project"
+        : Path.GetFileName(_srtProjectPath) + (SrtUnsaved ? " · unsaved changes" : " · saved");
+    public Func<TtsMode, string>? SrtSourceFor { get; init; }
+    public Func<Task<string?>>? ChooseSrtProject { get; set; }
+    public Func<string?, Task<string?>>? ChooseSrtProjectSave { get; set; }
     public ObservableCollection<SrtCueRow> SrtRows { get; } = [];
     public bool HasSrt => _srt is not null && Mode != TtsMode.VoiceDesign;
     public bool CanImportSrt => Mode != TtsMode.VoiceDesign;
@@ -46,19 +54,94 @@ public sealed partial class MainViewModel
             if (!await MayDiscardSrt()) return;
             StopPlayback();
             _srt?.Dispose();
-            _srt = new SrtSession(cues);
-            SrtRows.Clear();
-            foreach (var cue in cues) SrtRows.Add(new SrtCueRow(cue, SyncSrt));
-            _srt.Changed += (_, _) => UiThread.Post(RefreshSrtRows);
-            SrtChanged();
-            RefreshSrtRows();
+            AttachSrt(new SrtSession(cues), null);
             Status = $"Imported {cues.Count} cues. Review caption flags, edit times and text, then Generate.";
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
         { Status = ex.Message; }
     }
 
-    private async Task<bool> MayDiscardSrt() => !HasSrtWork || ConfirmDiscardSrt is not null && await ConfirmDiscardSrt();
+    private async Task<bool> MayDiscardSrt() => !SrtUnsaved || ConfirmDiscardSrt is not null && await ConfirmDiscardSrt();
+
+    private void AttachSrt(SrtSession session, string? projectPath)
+    {
+        _srt = session;
+        _srtProjectPath = projectPath;
+        _srtSavedVersion = session.Version;
+        SrtRows.Clear();
+        foreach (var cue in session.Cues) SrtRows.Add(new SrtCueRow(cue, SyncSrt));
+        session.Changed += (_, _) => UiThread.Post(RefreshSrtRows);
+        SrtChanged();
+        RefreshSrtRows();
+    }
+
+    [RelayCommand]
+    private Task SaveSrtProjectAsync() => SaveSrtProject(false);
+    [RelayCommand]
+    private Task SaveSrtProjectAsAsync() => SaveSrtProject(true);
+    private async Task SaveSrtProject(bool saveAs)
+    {
+        if (IsBusy || _srt is null || !HasSrt) return;
+        var path = saveAs ? null : _srtProjectPath;
+        path ??= ChooseSrtProjectSave is null ? null : await ChooseSrtProjectSave(_srtProjectPath);
+        if (path is null) return;
+        using var cancellation = new CancellationTokenSource();
+        _generateCancellation = cancellation;
+        IsBusy = true;
+        Status = "Saving SRT project and cue takes…";
+        try
+        {
+            await _srt.SaveProjectAsync(path, CurrentRequest(), SrtSourceFor?.Invoke(Mode), cancellation.Token);
+            _srtProjectPath = path;
+            _srtSavedVersion = _srt.Version;
+            Status = "Project saved. You can close Bunyi and resume from this file.";
+        }
+        catch (OperationCanceledException) { Status = "Save stopped; the previous project file is unchanged."; }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or InvalidOperationException)
+        { Status = "Could not save the project. " + ex.Message; }
+        finally { _generateCancellation = null; IsBusy = false; RefreshSrtRows(); }
+    }
+
+    [RelayCommand]
+    private async Task OpenSrtProjectAsync()
+    {
+        if (IsBusy || ChooseSrtProject is null) return;
+        var path = await ChooseSrtProject();
+        if (path is null) return;
+        using var cancellation = new CancellationTokenSource();
+        _generateCancellation = cancellation;
+        IsBusy = true;
+        Status = "Opening SRT project and checking saved takes…";
+        SrtProjectLoad? opened = null;
+        try
+        {
+            opened = await SrtSession.OpenProjectAsync(path, cancellation.Token);
+            if (!await MayDiscardSrt()) return;
+            StopPlayback();
+            _srt?.Dispose();
+            _srt = null;
+            var request = opened.Request;
+            Mode = request.Mode;
+            Language = request.Language;
+            Speaker = request.Speaker ?? FallbackSpeakers.Default;
+            SelectedVoice = null;
+            Instruct = request.Instruct ?? "";
+            ReferenceAudioPath = request.ReferenceAudioPath;
+            ReferenceTranscript = request.ReferenceTranscript ?? "";
+            ReferenceTranscriptAudioSeconds = request.ReferenceTranscriptAudioSeconds;
+            LastOutputPath = null;
+            AttachSrt(opened.Session, path);
+            var savedSource = opened.ModelSource;
+            opened = null;
+            Status = "Project opened. Completed cue takes are restored; Generate reuses matching takes.";
+            if (savedSource is not null && savedSource != SrtSession.SafeModelSource(SrtSourceFor?.Invoke(Mode)))
+                Status += " The current model source differs. Choose the original model in Settings to reuse these takes; otherwise Generate replaces them.";
+        }
+        catch (OperationCanceledException) { Status = "Open stopped. The current project is unchanged."; }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or InvalidOperationException)
+        { Status = "Could not open the project. " + ex.Message; }
+        finally { opened?.Session.Dispose(); _generateCancellation = null; IsBusy = false; RefreshSrtRows(); }
+    }
 
     [RelayCommand]
     private async Task ClearSrtAsync()
@@ -67,6 +150,7 @@ public sealed partial class MainViewModel
         StopPlayback();
         _srt?.Dispose();
         _srt = null;
+        _srtProjectPath = null;
         SrtRows.Clear();
         SrtChanged();
     }
@@ -76,6 +160,8 @@ public sealed partial class MainViewModel
         OnPropertyChanged(nameof(HasSrt));
         OnPropertyChanged(nameof(CanImportSrt));
         OnPropertyChanged(nameof(HasSrtWork));
+        OnPropertyChanged(nameof(SrtUnsaved));
+        OnPropertyChanged(nameof(SrtProjectLabel));
         Refresh();
     }
     private void SyncSrt()
@@ -97,6 +183,8 @@ public sealed partial class MainViewModel
         foreach (var row in SrtRows)
             row.Refresh(diagnostics.GetValueOrDefault(row.Cue.Id), _srt.PreviewPath(row.Cue.Id), Language, nextStarts.GetValueOrDefault(row.Cue.Id));
         OnPropertyChanged(nameof(HasSrtWork));
+        OnPropertyChanged(nameof(SrtUnsaved));
+        OnPropertyChanged(nameof(SrtProjectLabel));
     }
     private void InvalidateSrtVoice()
     {

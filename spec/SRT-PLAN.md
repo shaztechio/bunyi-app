@@ -133,7 +133,9 @@ Explain that excluding a cue means its words will not be spoken.
   Never publish a partial or overlapping track as a successful output. Working
   cue clips are not individual History results. Clean temporary files when
   replacing/closing the session, with a guard before discarding reusable work.
-  Cross-restart project recovery is outside v1.
+  Explicit Save/Open project now preserves editable cues and completed takes
+  across restarts; see FEATURES.md and DATA-FORMATS.md. No automatic crash
+  recovery or implicit autosave is promised.
 
 ## Persistence and automation contracts
 
@@ -148,7 +150,7 @@ the sidecar. Define naming, schema, size limits, atomic publication, missing or
 invalid sidecar handling, and pair deletion in DATA-FORMATS.md. The existing
 app backup covers models only; output-folder backups must retain both files.
 Avoid unbounded
-RIFF text fields. Reopening an editable project remains outside v1.
+RIFF text fields. Editable projects use a separate `.bunyi-srt` archive.
 
 Include CLI/server support in the initial implementation. Specify SRT input,
 structured per-cue diagnostics (identity, actual duration, status, overrun and
@@ -156,7 +158,7 @@ overlap), cancellation, and successful output metadata in CLI.md. Warnings
 permit success; overlaps return failure and publish no final WAV. Callers can
 submit corrected SRT files without the desktop table.
 The automation path must use the same timing and normalization rules. Desktop
-cue editing need not imply a persistent project format in v1.
+cue projects are explicit desktop Save/Open operations, independent of exports.
 
 ## Implementation sequence and acceptance
 

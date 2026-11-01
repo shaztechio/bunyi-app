@@ -14,6 +14,9 @@
 
 using System.Buffers.Binary;
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.IO.Compression;
+using System.Security.Cryptography;
 using Bunyi.Core.Audio;
 using Bunyi.Core.Diagnostics;
 using Bunyi.Core.Engine;
@@ -196,6 +199,134 @@ public sealed class SrtTests : IDisposable
         Assert.Null(session.PreviewPath(b.Id));
         await Generate(session);
         Assert.NotNull(session.PreviewPath(b.Id));
+    }
+
+    [Fact]
+    public async Task Project_roundtrip_preserves_drafts_and_completed_takes_after_close_and_move()
+    {
+        Directory.CreateDirectory(_root);
+        var path = Path.Combine(_root, "draft.bunyi-srt");
+        var a = Cue(); var b = Cue("00:00:03,000", "00:00:04,000");
+        using (var original = new SrtSession([a, b]))
+        {
+            await Generate(original);
+            original.Update([a with { Start = "needs correction" }, b with { Included = false }]);
+            await original.SaveProjectAsync(path, Request(original), "test-model");
+        }
+        var moved = Path.Combine(_root, "moved.bunyi-srt");
+        File.Move(path, moved);
+        var opened = await SrtSession.OpenProjectAsync(moved);
+        using var restored = opened.Session;
+        Assert.Equal("needs correction", restored.Cues[0].Start);
+        Assert.False(restored.Cues[1].Included);
+        Assert.NotNull(restored.PreviewPath(a.Id));
+        Assert.NotNull(restored.PreviewPath(b.Id));
+        Assert.Equal("test-model", opened.ModelSource);
+        restored.Update([a, b]);
+        await Generate(restored, opened.Request, (_, _, _) => throw new Exception("Reopening must reuse saved takes"));
+    }
+
+    [Fact]
+    public async Task Clone_project_embeds_reference_and_reuses_takes_when_the_reference_path_changes()
+    {
+        Directory.CreateDirectory(_root);
+        var reference = Path.Combine(_root, "reference.wav");
+        WavWriter.Write(reference, new short[24000]);
+        var referenceBytes = await File.ReadAllBytesAsync(reference);
+        var path = Path.Combine(_root, "clone.bunyi-srt");
+        using (var original = new SrtSession([Cue()]))
+        {
+            var request = Request(original) with { Mode = TtsMode.VoiceClone, Speaker = null, ReferenceAudioPath = reference, ReferenceTranscript = "Hello." };
+            await Generate(original, request);
+            await original.SaveProjectAsync(path, request);
+        }
+        File.Delete(reference);
+        var opened = await SrtSession.OpenProjectAsync(path);
+        using var restored = opened.Session;
+        Assert.NotEqual(reference, opened.Request.ReferenceAudioPath);
+        Assert.Equal(referenceBytes, await File.ReadAllBytesAsync(opened.Request.ReferenceAudioPath!));
+        await Generate(restored, opened.Request, (_, _, _) => throw new Exception("The copied reference has identical content"));
+    }
+
+    [Fact]
+    public async Task Failed_or_cancelled_save_keeps_the_previous_project_and_removes_partial_archive()
+    {
+        Directory.CreateDirectory(_root);
+        var path = Path.Combine(_root, "saved.bunyi-srt");
+        using var session = new SrtSession([Cue()]);
+        await Generate(session);
+        await session.SaveProjectAsync(path, Request(session));
+        var saved = await File.ReadAllBytesAsync(path);
+        await Assert.ThrowsAsync<FileNotFoundException>(() => session.SaveProjectAsync(path,
+            Request(session) with { Mode = TtsMode.VoiceClone, ReferenceAudioPath = Path.Combine(_root, "missing.wav") }));
+        using var cancel = new CancellationTokenSource(); cancel.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => session.SaveProjectAsync(path, Request(session), ct: cancel.Token));
+        Assert.Equal(saved, await File.ReadAllBytesAsync(path));
+        Assert.Empty(Directory.GetFiles(_root, "*.partial"));
+    }
+
+    [Theory]
+    [InlineData("version")]
+    [InlineData("duplicate")]
+    [InlineData("path")]
+    [InlineData("checksum")]
+    [InlineData("nonfinite")]
+    public async Task Rejects_incompatible_or_tampered_projects_without_extracting_arbitrary_paths(string corruption)
+    {
+        Directory.CreateDirectory(_root);
+        var path = Path.Combine(_root, "corrupt.bunyi-srt");
+        using var session = new SrtSession([Cue()]);
+        await Generate(session);
+        await session.SaveProjectAsync(path, Request(session));
+        using (var zip = ZipFile.Open(path, ZipArchiveMode.Update))
+        {
+            if (corruption == "path") zip.CreateEntry("../escaped.f32");
+            else if (corruption == "duplicate") zip.CreateEntry("project.json");
+            else
+            {
+                JsonNode manifest;
+                using (var reader = new StreamReader(zip.GetEntry("project.json")!.Open())) manifest = JsonNode.Parse(reader.ReadToEnd())!;
+                if (corruption == "version") manifest["schemaVersion"] = 999;
+                else
+                {
+                    var entry = zip.Entries.Single(e => e.FullName.StartsWith("clips/", StringComparison.Ordinal));
+                    var name = entry.FullName;
+                    byte[] raw;
+                    using (var data = new MemoryStream()) { using var source = entry.Open(); source.CopyTo(data); raw = data.ToArray(); }
+                    entry.Delete();
+                    if (corruption == "nonfinite") BinaryPrimitives.WriteInt32LittleEndian(raw, 0x7fc00000);
+                    else raw[0] ^= 1;
+                    using (var target = zip.CreateEntry(name).Open()) target.Write(raw);
+                    if (corruption == "nonfinite") manifest["clips"]![0]!["sha256"] = Convert.ToHexString(SHA256.HashData(raw));
+                }
+                zip.GetEntry("project.json")!.Delete();
+                using var writer = new StreamWriter(zip.CreateEntry("project.json").Open()); writer.Write(manifest.ToJsonString());
+            }
+        }
+        await Assert.ThrowsAsync<InvalidDataException>(() => SrtSession.OpenProjectAsync(path));
+        Assert.True(session.HasClips);
+        Assert.False(File.Exists(Path.Combine(_root, "escaped.f32")));
+    }
+
+    [Fact]
+    public async Task Project_supports_text_only_invalid_drafts_and_bounds_manifest_reads()
+    {
+        Directory.CreateDirectory(_root);
+        var path = Path.Combine(_root, "draft.bunyi-srt");
+        using var draft = new SrtSession([Cue("invalid") with { Included = false }]);
+        await draft.SaveProjectAsync(path, Request(draft));
+        var opened = await SrtSession.OpenProjectAsync(path);
+        using (opened.Session)
+        {
+            Assert.False(opened.Session.HasClips);
+            Assert.False(opened.Session.Cues[0].Included);
+            Assert.Equal("invalid", opened.Session.Cues[0].Start);
+        }
+        File.Delete(path);
+        using (var zip = ZipFile.Open(path, ZipArchiveMode.Create))
+        using (var writer = new StreamWriter(zip.CreateEntry("project.json").Open()))
+            writer.Write(new string(' ', SrtDocument.MaximumBytes + 1));
+        await Assert.ThrowsAsync<InvalidDataException>(() => SrtSession.OpenProjectAsync(path));
     }
 
     [Fact]

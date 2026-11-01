@@ -84,10 +84,26 @@ one track. Keep the accompanying `.srt.json` timeline file beside the WAV when
 backing up or copying output folders; History's save-copy and Trash actions
 include it. The app's model backup does not back up audio outputs.
 
-Stop keeps completed cue takes for corrections during this session. Closing,
-replacing the imported script, or choosing **Use plain text** discards those
-temporary takes after confirmation. Completed tracks stay in History. There
-is no saved editable subtitle project in this version.
+**Save project** stores the editable script, voice settings, completed cue
+takes, and clone reference in one `.bunyi-srt` file. You can save a draft even
+with timing errors or unfinished cues. Close Bunyi, then use **Open project**
+to restore it later. Generate reuses matching saved takes and creates only
+missing or changed ones. The copied reference means you can move the project
+without keeping the original reference file at its old location.
+
+**Save** updates that file; **Save as…** creates another copy. The project label
+shows unsaved changes after editing or generation. Bunyi asks before discarding
+unsaved work; save first if you want to keep it. Stop keeps completed takes for
+corrections, but does not automatically save the project. Completed tracks stay
+in History independently of the project. An exported WAV's `.srt.json` file is
+an output description, not an editable project.
+
+Projects include voice audio and transcripts but not model downloads. Opening
+does not change your model settings. If the model source differs, Bunyi says so;
+choose the original model in Settings to reuse the saved takes, or Generate to
+replace them. Changed model files or reference content can also require new
+takes. Keep a copy of your project file for backup; the app's model backup does
+not include it.
 
 ## The three modes (voice settings)
 

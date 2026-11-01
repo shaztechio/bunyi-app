@@ -175,7 +175,20 @@ against clipping uniformly, apply 5 ms cue edge fades without duration changes,
 reject non-finite audio. Stop remains available through assembly; no partial
 track counts as success. Working clips stay outside Outputs and are cleaned
 on session disposal; warn before replacing/closing a session with reusable
-work. Cross-restart recovery and reopening sidecars as projects are outside v1.
+work. **Save project / Open project** preserve an editable SRT session and all
+completed takes in a user-selected `.bunyi-srt` archive, including original and
+edited cues, inclusion, voice/language/style/transcript settings, and the clone
+reference if selected. Drafts may have timing errors or missing audio. Opening
+restores previews and rechecks timing; Generate reuses takes when model and
+reference identity still match. Model weights are not embedded. Record the
+selected model source but do not silently change global model settings on open;
+explain mismatches and conservatively regenerate if necessary. Save atomically:
+failure preserves the previous file; corrupt/incompatible Open preserves the
+current session. Save/Open run off the UI thread and are disabled during other
+work. Save updates the chosen project; Save as writes another archive. Mark
+subsequent edits, new takes and voice changes unsaved, and confirm before
+discarding unsaved work, including text-only drafts. Saved projects survive
+closing; exported WAV sidecars remain descriptions rather than projects.
 All editors are disabled during work; Help/logs stay reachable. Cue controls
 have keyboard routes and named fields; errors link to their row.
 
