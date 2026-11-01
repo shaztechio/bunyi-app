@@ -13,9 +13,9 @@ each included cue spoken at its start timestamp. The recording begins at
 00:00:00; silence fills the time before the first cue and between clips.
 The user can align the WAV with a video without moving individual lines.
 
-SRT is an input type alongside ordinary text, available for Preset voice,
-Voice design, and Voice clone. Use one selected voice and one set of voice
-settings for the entire file. Multiple speakers, video import, automatic
+SRT is an input type alongside ordinary text, available for Preset voice
+and Voice clone only. Voice design is outside SRT support. Use one selected
+voice and one set of voice settings for the entire file. Multiple speakers, video import, automatic
 rewriting, automatic speed changes, and truncated speech are outside v1.
 
 ## Confirmed timing rules
@@ -62,8 +62,10 @@ correctly. Preview remains necessary for pronunciation and content quality.
    preview once audio exists. Preserve source order and original numbers;
    use an internal stable identity so duplicate numbers cannot mix up clips.
 4. Join display line breaks within a cue with spaces for speech. Remove a
-   documented allowlist of presentation tags such as italics while preserving
-   the editable source text. Flag unknown markup for review rather than
+   documented allowlist of presentation tags (`<i>`, `<b>`, `<u>` and their
+   closing tags) while preserving the original imported text separately.
+   Show the normalized spoken text beside the editable cue text so users can
+   review what will be generated. Flag unknown markup for review rather than
    speaking or deleting it silently. Define the exact normalization fixtures
    in the feature spec before parser implementation.
 5. Flag likely non-speech captions such as `[music]` and `[door closes]`.
@@ -97,11 +99,9 @@ Explain that excluding a cue means its words will not be spoken.
   Existing long-text recovery may run inside a cue, but any internal pauses
   count toward that cue's measured duration. Ordinary inter-section gaps must
   never be inserted between SRT cues or shift their start timestamps.
-- For Voice design, establish one fixed voice reference and reuse it across
-  cues through the existing continuation approach. Do not redesign each cue.
-  Specify how the initial reference is chosen, including a very short first
-  cue, before implementation. Any speech used as the reference appears in the
-  track exactly once. Explain the continuation-model dependency.
+- Preset retains the selected speaker and style; Clone reuses the selected
+  reference recording and exact transcript throughout. SRT does not establish
+  or depend on a Voice design continuation reference.
 - Retain completed clips in a temporary run workspace on Stop or a timing
   error so users can correct individual cues without regenerating everything.
   Allow regeneration of one cue; a new take may have a different duration.
@@ -110,17 +110,19 @@ Explain that excluding a cue means its words will not be spoken.
 - Text edits invalidate only that cue's audio. Timestamp edits and inclusion
   changes retain reusable audio and recalculate all affected timing statuses.
   Changes to the voice, style, language, model, or clone reference invalidate
-  dependent clips. Changing Voice design's fixed reference invalidates every
-  clip conditioned on it. Never combine clips with stale generation settings.
+  dependent clips. Never combine clips with stale generation settings.
 - Measure and place audio using integer sample positions, with a single
   documented timestamp-to-sample conversion. SRT milliseconds map exactly to
   24 kHz samples. Use sample counts for comparisons; rounded display values
   must not hide a small overlap. Never accumulate rounded cue durations.
-- Resolve generated leading silence explicitly before shipping. V1 should
-  place the complete clip at the timestamp without heuristic silence trimming
-  that could cut quiet speech, and explain that audible onset can be slightly
-  later. Validate real-model onset behavior and revisit only with a safe,
-  explicitly specified approach.
+- Place the complete clip at the timestamp without heuristic silence trimming
+  that could cut quiet speech, and explain that audible onset can be later
+  (about half a second in the initial Windows Preset trials). Do not promise
+  word-accurate synchronization. Validate real-model onset behavior and revisit only with a safe,
+  explicitly specified approach. Count trailing silence in measured duration
+  too; this may conservatively report an overlap after the words have ended.
+  A previewable manual trim operation is a possible future improvement, not
+  part of v1.
 - Assemble only a valid track. Use bounded buffers or streaming writes so a
   long sparse timeline does not require allocating its entire silence in RAM.
   Apply existing edge-fade and uniform clipping-protection rules without
@@ -135,21 +137,31 @@ Explain that excluding a cue means its words will not be spoken.
 
 Define versioned metadata for timed output before implementation: source kind,
 original cue identity, edited timestamps/text, inclusion, normalization policy,
-voice settings, model/continuation model, and actual durations. Preserve enough
+voice settings, model, and actual durations. Preserve enough
 information to explain the generated timeline without requiring the original
-SRT file. History represents one complete track. Decide metadata size limits
-and embedded-versus-sidecar storage in DATA-FORMATS.md; avoid unbounded RIFF
-text fields. Include backup/restore behavior for any new durable files.
+SRT file. Keep existing standard metadata embedded in the WAV and store the
+full timeline in a versioned JSON sidecar beside it. History and backup/restore
+treat the pair as one output; the WAV remains independently playable without
+the sidecar. Define naming, schema, size limits, atomic publication, missing or
+invalid sidecar handling, and pair deletion in DATA-FORMATS.md. Avoid unbounded
+RIFF text fields. Reopening an editable project remains outside v1.
 
-Specify CLI/server SRT input, structured per-cue diagnostics, warning versus
-error exit behavior, cancellation, and successful output metadata in CLI.md.
+Include CLI/server support in the initial implementation. Specify SRT input,
+structured per-cue diagnostics (identity, actual duration, status, overrun and
+overlap), cancellation, and successful output metadata in CLI.md. Warnings
+permit success; overlaps return failure and publish no final WAV. Callers can
+submit corrected SRT files without the desktop table.
 The automation path must use the same timing and normalization rules. Desktop
 cue editing need not imply a persistent project format in v1.
 
 ## Implementation sequence and acceptance
 
-1. Finalize normalization, Voice design reference selection, metadata, and
-   CLI contracts; update the shared specifications before app changes.
+Pre-implementation research is recorded in [SRT-EXPERIMENT.md](SRT-EXPERIMENT.md).
+
+1. Translate the accepted normalization, metadata, and CLI decisions into
+   exact shared specifications before app changes. Record the short-cue and
+   leading/trailing-silence experiment; Voice design measurements are research
+   only and do not gate or expand SRT's two-mode scope.
 2. Implement independent UI-free parsers, validation, timing arithmetic, and
    track assemblers in Swift and C#. Use identical fixture inputs and expected
    outcomes to enforce parity without sharing runtime code.
@@ -175,7 +187,7 @@ Required checks:
 - UI checks: editable table validation, keyboard access, error navigation,
   non-color statuses, disabled inputs during work, and reachable Stop/Help/logs.
   Verify actual screen-reader behavior separately from toolkit peer tests.
-- Real-model listening on macOS and Windows/Linux: all three modes, short
+- Real-model listening on macOS and Windows/Linux: Preset and Clone, short
   cues, multilingual text, voice continuity, audible onset, complete words,
   warning-only export, overlap correction, and alignment against a known
   timeline. Record any model limitations rather than treating duration checks
