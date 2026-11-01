@@ -200,7 +200,10 @@ subsequent edits, new takes and voice changes unsaved, and confirm before
 discarding unsaved work, including text-only drafts. Saved projects survive
 closing; exported WAV sidecars remain descriptions rather than projects.
 All editors are disabled during work; Help/logs stay reachable. Cue controls
-have keyboard routes and named fields; errors link to their row.
+show a warning triangle beside an included cue's error status. Hide it as soon
+as the error is resolved or the cue is excluded. Keep the full error text and
+an accessible cue-specific error name; the icon never replaces the explanation.
+Controls have keyboard routes and named fields; errors link to their row.
 
 CLI/server uses the same engine via `--srt-file` for preset/clone, mutually
 exclusive with ordinary text inputs. Return cue diagnostics on timing errors
