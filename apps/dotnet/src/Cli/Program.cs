@@ -137,6 +137,8 @@ public static class Program
             RequiredFileMissingException => ("required_file_missing", 10),
             DownloadServiceException error => (error.Code, 10),
             Bunyi.Core.Qwen.GenerationDidNotFinishException => ("generation_did_not_finish", 10),
+            SrtTimingException => ("srt_timing_failed", 7),
+            InvalidDataException => ("invalid_input", 2),
             ArgumentException => ("invalid_arguments", 2),
             FileNotFoundException or DirectoryNotFoundException => ("missing_input", 3),
             HttpRequestException => ("download_failed", 10),
@@ -144,6 +146,7 @@ public static class Program
             _ => ("operation_failed", 10)
         };
         var result = CliProtocol.Error(request, code, CliLog.Redact(ex.Message), exit);
+        if (ex is SrtTimingException timing) result["cues"] = timing.Diagnostics;
         if (ex is DownloadServiceException service)
         {
             result["host"] = service.SourceUri.Host;

@@ -221,6 +221,16 @@ Every generation accepts exactly one text source:
 - `--text <text>`;
 - `--text-file <path>`;
 - standard input when `--stdin` is present.
+- `--srt-file <path>` for preset/clone only (UTF-8, parsed and validated before
+  model preparation). It is mutually exclusive with the other sources.
+
+SRT returns `cues` diagnostics and `sidecarPath` with the ordinary successful
+result. Each diagnostic identifies its cue and includes measured duration,
+status, overrun and overlap seconds. Warnings permit success; overlaps return
+`srt_timing_failed` with diagnostics and exit code 7, with no final WAV. Progress
+includes cue position/count and frame/audio progress in its detail. Server and
+one-shot use identical validation and timing rules. Automation edits an SRT
+and resubmits; cross-request cue caching is not promised.
 
 Common options are `--language <language>`, `--json`, `--jsonl`,
 `--one-shot`, and `--require-server`. Languages and their spelling are the

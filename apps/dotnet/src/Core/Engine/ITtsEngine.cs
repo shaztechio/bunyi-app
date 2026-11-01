@@ -83,6 +83,8 @@ public sealed record GenerateRequest(
     string? ReferenceTranscript = null,
     double? ReferenceTranscriptAudioSeconds = null)
 {
+    public SrtSession? Srt { get; init; }
+    public string? SrtCueId { get; init; }
     // Internal section orchestration, not user settings or CLI parameters.
     internal int? SectionFrameLimit { get; init; }
     internal bool KeepRawSamples { get; init; }

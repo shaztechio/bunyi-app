@@ -62,6 +62,13 @@ public sealed class CommandDispatcher(ILogSink log)
         if (operation.StartsWith("generate.", StringComparison.Ordinal))
         {
             mode = CommandParser.Mode(operation.Split('.')[1]);
+            using var srt = request.Has("srt-file")
+                ? new SrtSession(await SrtDocument.ReadAsync(request.Get("srt-file")!, ct)) : null;
+            if (srt is not null)
+            {
+                if (mode == TtsMode.VoiceDesign) throw CommandParser.Invalid("SRT supports Preset voice and Voice clone only.");
+                SrtDocument.Validate(srt.Cues);
+            }
             var reference = request.Get("reference");
             var transcript = request.Get("transcript");
             double? transcriptAudioSeconds = null;
@@ -80,14 +87,20 @@ public sealed class CommandDispatcher(ILogSink log)
                 transcript = transcribed.Text;
                 transcriptAudioSeconds = transcribed.AudioSeconds;
             }
-            var generation = new GenerateRequest(mode, request.Get("text")!, request.Get("language") ?? Languages.Default,
-                request.Get("speaker") ?? FallbackSpeakers.Default, request.Get("style") ?? request.Get("voice"), reference, transcript, transcriptAudioSeconds);
+            var generation = new GenerateRequest(mode, srt is null ? request.Get("text")! : "SRT timed speech", request.Get("language") ?? Languages.Default,
+                request.Get("speaker") ?? FallbackSpeakers.Default, request.Get("style") ?? request.Get("voice"), reference, transcript, transcriptAudioSeconds) { Srt = srt };
             if (GenerationReadiness.Missing(generation) is { } missing) throw CommandParser.Missing(missing.Reason);
             var result = await runtime.Engine.GenerateAsync(generation, engineProgress, ct);
-            return CliProtocol.Result(request, ("outputPath", Path.GetFullPath(result.OutputPath)),
+            var response = CliProtocol.Result(request, ("outputPath", Path.GetFullPath(result.OutputPath)),
                 ("mode", CommandParser.ModeName(mode)), ("durationSeconds", result.Duration.TotalSeconds), ("frames", result.Frames),
                 ("elapsedSeconds", result.Elapsed.TotalSeconds), ("modelSource", SourceText(runtime.SourceFor(mode))),
                 ("metadata", WavMetadata.TryRead(result.OutputPath)));
+            if (srt is not null)
+            {
+                response["cues"] = srt.Diagnostics;
+                response["sidecarPath"] = SrtSession.SidecarPath(result.OutputPath);
+            }
+            return response;
         }
 
         switch (operation)
@@ -193,7 +206,7 @@ public sealed class CommandDispatcher(ILogSink log)
             case "history.show": return CliProtocol.Result(request, ("output", FindOutput(request.Get("target")!)));
             case "history.remove":
                 var output = FindOutput(request.Get("target")!);
-                if (!Trash.TryMoveToTrash(output.Path, log)) throw new IOException("Could not move the output to Trash.");
+                if (!OutputFiles.TryTrash(output.Path, log)) throw new IOException("Could not move the output to Trash.");
                 return CliProtocol.Result(request, ("removedPath", output.Path), ("recoverable", true));
             case "backup.create":
             case "backup.restore":

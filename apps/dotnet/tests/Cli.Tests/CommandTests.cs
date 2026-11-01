@@ -21,6 +21,28 @@ namespace Bunyi.Cli.Tests;
 
 public sealed class CommandTests
 {
+    [Fact]
+    public async Task Srt_input_is_exclusive_validated_and_rejected_for_design()
+    {
+        var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".srt");
+        try
+        {
+            await File.WriteAllTextAsync(path, "1\n00:00:01,000 --> 00:00:02,000\nHello.");
+            var valid = CommandParser.Parse(["generate", "preset", "--srt-file", path]);
+            await CommandParser.NormalizeInputsAsync(valid, TextReader.Null, default);
+            Assert.False(valid.Has("text"));
+            var exclusive = CommandParser.Parse(["generate", "preset", "--srt-file", path, "--text", "Hello"]);
+            await Assert.ThrowsAsync<CliException>(() => CommandParser.NormalizeInputsAsync(exclusive, TextReader.Null, default));
+            Assert.Throws<CliException>(() => CommandParser.Parse(["generate", "design", "--srt-file", path, "--voice", "warm"]));
+            await File.WriteAllTextAsync(path, "1\ninvalid --> 00:00:02,000\nHello.");
+            var stdout = new StringWriter();
+            Assert.Equal(2, await Program.RunAsync(["generate", "preset", "--srt-file", path, "--json"], TextReader.Null, stdout, new StringWriter()));
+            using var json = JsonDocument.Parse(stdout.ToString());
+            Assert.Equal("invalid_input", json.RootElement.GetProperty("error").GetProperty("code").GetString());
+        }
+        finally { File.Delete(path); }
+    }
+
     [Theory]
     [InlineData("generate preset --text hello --voice wrong")]
     [InlineData("generate design --text hello --speaker Ryan")]

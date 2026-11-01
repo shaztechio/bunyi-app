@@ -1,0 +1,151 @@
+[
+  {
+    "trial": "preset",
+    "ok": false,
+    "cues": [
+      {
+        "id": "37c6a3ef87824067a52978fa58d3c34d",
+        "number": "1",
+        "status": "error",
+        "message": "Speech overlaps cue 2 by 0.840 seconds.",
+        "sampleCount": 92160,
+        "durationSeconds": 3.84,
+        "overrunSeconds": 3.64,
+        "overlapSeconds": 0.84
+      },
+      {
+        "id": "dcf410da75ac42f4a0cc22e273b890eb",
+        "number": "2",
+        "status": "warning",
+        "message": "Speech exceeds its end by 6.840 seconds.",
+        "sampleCount": 168960,
+        "durationSeconds": 7.04,
+        "overrunSeconds": 6.84,
+        "overlapSeconds": 0
+      }
+    ],
+    "error": "srt_timing_failed",
+    "exitCode": 7
+  },
+  {
+    "trial": "clone",
+    "ok": true,
+    "cues": [
+      {
+        "id": "2d0907fffe414d8f877c931309a4fc15",
+        "number": "1",
+        "status": "warning",
+        "message": "Speech exceeds its end by 0.440 seconds.",
+        "sampleCount": 15360,
+        "durationSeconds": 0.64,
+        "overrunSeconds": 0.44,
+        "overlapSeconds": 0
+      },
+      {
+        "id": "89696217497649b9a90165d56567e00f",
+        "number": "2",
+        "status": "warning",
+        "message": "Speech exceeds its end by 0.360 seconds.",
+        "sampleCount": 13440,
+        "durationSeconds": 0.56,
+        "overrunSeconds": 0.36,
+        "overlapSeconds": 0
+      }
+    ],
+    "durationSeconds": 4.56,
+    "modelSource": "https://models.bunyi.app/onnx/voiceclone",
+    "wav": "Voice-clone-20261101T184851-SRT-124131a22bd84cb98c61a443b7063bbe.wav",
+    "sha256": "1ffae9d521b6c4791793da27d0a7cbd6f7889031c1a9f0fffdb94866e3d3728c",
+    "exactPlacementAndSilenceVerified": true
+  },
+  {
+    "trial": "overlap",
+    "ok": false,
+    "cues": [
+      {
+        "id": "0108b67605ba420fb4adf017ce07bbd3",
+        "number": "1",
+        "status": "error",
+        "message": "Speech overlaps cue 2 by 2.300 seconds.",
+        "sampleCount": 57600,
+        "durationSeconds": 2.4,
+        "overrunSeconds": 2.35,
+        "overlapSeconds": 2.3
+      },
+      {
+        "id": "f269018f1e224462983e944adc66684c",
+        "number": "2",
+        "status": "warning",
+        "message": "Speech exceeds its end by 1.020 seconds.",
+        "sampleCount": 46080,
+        "durationSeconds": 1.92,
+        "overrunSeconds": 1.02,
+        "overlapSeconds": 0
+      }
+    ],
+    "error": "srt_timing_failed",
+    "exitCode": 7
+  },
+  {
+    "trial": "preset-wide",
+    "ok": true,
+    "cues": [
+      {
+        "id": "4b707dd2cb184530ad403d66b3de7f6d",
+        "number": "1",
+        "status": "warning",
+        "message": "Speech exceeds its end by 2.040 seconds.",
+        "sampleCount": 53760,
+        "durationSeconds": 2.24,
+        "overrunSeconds": 2.04,
+        "overlapSeconds": 0
+      },
+      {
+        "id": "19d872d6df7243c19fa57d15113f17e1",
+        "number": "2",
+        "status": "warning",
+        "message": "Speech exceeds its end by 20.600 seconds.",
+        "sampleCount": 499200,
+        "durationSeconds": 20.8,
+        "overrunSeconds": 20.6,
+        "overlapSeconds": 0
+      }
+    ],
+    "durationSeconds": 50.8,
+    "modelSource": "https://models.bunyi.app/onnx/customvoice",
+    "wav": "Preset-voice-20261101T185215-SRT-278d22bdeeda4985bf943f3c1d1cb0db.wav",
+    "sha256": "a11bed46076dbb520642ca364f516dc5b87436a64adac9a9fc90e1bd328e3eea",
+    "exactPlacementAndSilenceVerified": true
+  },
+  {
+    "trial": "server-clone",
+    "ok": true,
+    "cues": [
+      {
+        "id": "53a7b71925f24fe0bf9f75da621023b1",
+        "number": "1",
+        "status": "warning",
+        "message": "Speech exceeds its end by 0.440 seconds.",
+        "sampleCount": 15360,
+        "durationSeconds": 0.64,
+        "overrunSeconds": 0.44,
+        "overlapSeconds": 0
+      },
+      {
+        "id": "8023255a5ae24947b094c317825c675c",
+        "number": "2",
+        "status": "warning",
+        "message": "Speech exceeds its end by 0.600 seconds.",
+        "sampleCount": 19200,
+        "durationSeconds": 0.8,
+        "overrunSeconds": 0.6,
+        "overlapSeconds": 0
+      }
+    ],
+    "durationSeconds": 4.8,
+    "modelSource": "https://models.bunyi.app/onnx/voiceclone",
+    "wav": "Voice-clone-20261101T185745-SRT-dfa92010acf045959edc3f9a240e595b.wav",
+    "sha256": "b120ffe5a96bb1dce311c9581eb166f1e724a0bffa1a9ccca74427d5e0a28c43",
+    "exactPlacementAndSilenceVerified": true
+  }
+]

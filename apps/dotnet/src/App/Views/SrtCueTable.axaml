@@ -1,0 +1,64 @@
+<!--
+Copyright 2026 Shazron Abdullah and Bunyi contributors
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:Bunyi.App.ViewModels"
+             xmlns:infra="clr-namespace:Bunyi.App.Infrastructure"
+             x:Class="Bunyi.App.Views.SrtCueTable" x:DataType="vm:MainViewModel">
+  <Grid RowDefinitions="Auto,*,Auto" MinHeight="240">
+    <TextBlock Text="Review captions before generating. Excluded cues are silent. Complete clips start at timestamps; model silence can delay words by about half a second."
+               TextWrapping="Wrap" Margin="0,4,0,8" FontSize="12" />
+    <ListBox Grid.Row="1" Name="CueList" ItemsSource="{Binding SrtRows}" MaxHeight="420"
+             SelectedItem="{Binding SelectedSrtCue}" SelectionChanged="OnSelectionChanged"
+             AutomationProperties.Name="Editable subtitle cues">
+      <ListBox.Styles>
+        <Style Selector="ListBoxItem"><Setter Property="HorizontalContentAlignment" Value="Stretch" /></Style>
+      </ListBox.Styles>
+      <ListBox.ItemTemplate>
+        <DataTemplate x:DataType="vm:SrtCueRow">
+          <Border BorderThickness="0,0,0,1" BorderBrush="#40808080" Padding="4,8">
+            <StackPanel Spacing="5">
+              <Grid ColumnDefinitions="Auto,*,*">
+                <CheckBox Content="{Binding Number, StringFormat='Include cue {0}'}" IsChecked="{Binding Included}" Margin="0,0,10,0"
+                          AutomationProperties.HelpText="Uncheck to exclude these words and their speech deadline." />
+                <StackPanel Grid.Column="1" Margin="0,0,6,0">
+                  <TextBlock Text="Start" FontSize="11" />
+                  <infra:AccessibleTextBox Text="{Binding Start}" AutomationProperties.Name="{Binding Number, StringFormat='Cue {0} start timestamp'}" />
+                </StackPanel>
+                <StackPanel Grid.Column="2">
+                  <TextBlock Text="End" FontSize="11" />
+                  <infra:AccessibleTextBox Text="{Binding End}" AutomationProperties.Name="{Binding Number, StringFormat='Cue {0} end timestamp'}" />
+                </StackPanel>
+              </Grid>
+              <infra:AccessibleTextBox Text="{Binding Text}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="45"
+                                      AutomationProperties.Name="{Binding Number, StringFormat='Cue {0} text'}" />
+              <TextBlock Text="{Binding SpokenText, StringFormat='Spoken: {0}'}" TextWrapping="Wrap" FontSize="12" />
+              <TextBlock Text="{Binding Flags}" TextWrapping="Wrap" FontSize="12" />
+              <TextBlock Text="{Binding Estimate}" FontSize="11" />
+              <TextBlock Text="{Binding StatusText}" TextWrapping="Wrap" FontSize="12"
+                         AutomationProperties.Name="{Binding StatusText}" />
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Content="Preview cue" IsEnabled="{Binding HasPreview}" Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).PreviewSrtCommand}" CommandParameter="{Binding}" />
+                <Button Content="Regenerate cue" IsEnabled="{Binding Included}" Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).RegenerateSrtCommand}" CommandParameter="{Binding}" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+    <Button Grid.Row="2" Content="Go to first error" Command="{Binding FirstSrtErrorCommand}" Margin="0,8,0,0" />
+  </Grid>
+</UserControl>

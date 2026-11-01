@@ -1,6 +1,8 @@
 # SRT timed speech — feature plan
 
-Status: planned; not implemented. This document records the agreed product
+Status: Windows/.NET implementation under validation; native macOS follows
+after the Windows proof ([#310](https://github.com/shaztechio/bunyi-app/issues/310)).
+This document records the agreed product
 decisions and the implementation sequence. Before implementation, promote the
 observable contract into [FEATURES.md](FEATURES.md), the storage contract into
 [DATA-FORMATS.md](DATA-FORMATS.md), and the automation contract into
@@ -140,10 +142,12 @@ original cue identity, edited timestamps/text, inclusion, normalization policy,
 voice settings, model, and actual durations. Preserve enough
 information to explain the generated timeline without requiring the original
 SRT file. Keep existing standard metadata embedded in the WAV and store the
-full timeline in a versioned JSON sidecar beside it. History and backup/restore
+full timeline in a versioned JSON sidecar beside it. History copy/trash
 treat the pair as one output; the WAV remains independently playable without
 the sidecar. Define naming, schema, size limits, atomic publication, missing or
-invalid sidecar handling, and pair deletion in DATA-FORMATS.md. Avoid unbounded
+invalid sidecar handling, and pair deletion in DATA-FORMATS.md. The existing
+app backup covers models only; output-folder backups must retain both files.
+Avoid unbounded
 RIFF text fields. Reopening an editable project remains outside v1.
 
 Include CLI/server support in the initial implementation. Specify SRT input,

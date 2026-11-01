@@ -8,6 +8,32 @@ differ (MLX `.safetensors` on macOS vs ONNX on the .NET app).
 
 ## Per-user app data
 
+### Timed output sidecar (SRT)
+
+An SRT output has `<wav-stem>.srt.json` beside its WAV. Schema version 1 stores
+`schemaVersion`, `sourceKind` (`srt`), `normalization` (`srt-basic-v1`), standard
+output `metadata`, and `cues`: stable `id`, original `number`, `originalText`,
+edited `text`, normalized `spokenText`, `start`/`end` timestamp strings,
+`included`, optional `sampleCount`, and a `diagnostic` object containing measured
+`status`, `message`, `durationSeconds`, `overrunSeconds`, and `overlapSeconds`.
+Keep full text in the sidecar; embedded standard metadata identifies SRT output
+with a bounded cue-count summary rather than the full timeline. No reference
+audio is copied into the output. UTF-8, at most 16 MiB, at most 10,000 cues;
+larger inputs fail clearly. RIFF PCM output is limited to its 32-bit size range
+and fails before publication if exceeded. Silence is streamed, not allocated.
+
+Publish the sidecar first and the completed WAV last under unique names using
+same-directory temporary files. A failed WAV commit removes the new sidecar;
+History discovers only WAVs, so a crash leaving a sidecar alone creates no
+successful History entry. Missing or invalid sidecars never prevent WAV
+playback. History copy/trash include an existing sidecar;
+never trust paths from JSON to find companion files. Invalid sidecars are
+treated as opaque companions, not automatically imported projects. Back up
+output folders with both files. The app's existing model-only backup/restore
+does not include Outputs or sidecars; SRT does not expand that archive's scope.
+
+### Data roots
+
 Everything the app keeps for a user lives under one root, with fixed subfolder
 names so a folder is recognisable across platforms:
 

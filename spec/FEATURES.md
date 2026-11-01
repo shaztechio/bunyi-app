@@ -135,6 +135,56 @@ A segmented picker selects one of three modes. macOS source:
 
 ## 2. Generation output
 
+### SRT timed scripts (staged implementation)
+
+Preset voice and Voice clone accept UTF-8 SRT files, with optional BOM and any
+standard newline. Voice design does not. See [SRT-PLAN.md](SRT-PLAN.md) for the
+full accepted workflow. Windows/.NET is the proving implementation; native
+macOS parity is tracked in [#310](https://github.com/shaztechio/bunyi-app/issues/310)
+before claiming this on all apps.
+
+An editable cue table retains original source and numbering and shows Include,
+Start, End, Text, spoken text, caption/markup flags, estimate, measured duration,
+and status. Each cue has a stable identity independent of duplicate numbers.
+Normalize cue line breaks to spaces and remove only case-insensitive i/b/u
+presentation tags (no attributes). Preserve other content; flag unknown markup
+and bracketed captions for review, included by default. Exclusion means no
+speech and no deadline at that cue. Included cues require spoken text, valid
+nonnegative SRT timestamps, end after start, and strictly increasing starts in
+source order. Preserve malformed timestamp strings for correction; structural
+parse errors identify source lines and block import rather than skipping text.
+No automatic sorting, encoding guessing, trimming, speed changes, or truncation.
+
+Generate complete cues sequentially with one frozen voice configuration. Cache
+completed cue clips for the session, including after Stop or timing errors.
+Text edits invalidate only their cue, timestamps/inclusion reuse clips, voice
+or model-source/reference changes invalidate dependent clips. Offer preview and
+per-cue regeneration. Continue after timing conflicts to report every conflict.
+Estimates are advisory. Actual complete sample counts decide fit: past own end
+warns; past next included start errors and blocks publication; equality passes.
+Subtitle display overlaps warn even before generation. Final duration is the
+later of final included end and final speech finish. Use 24 samples per SRT
+millisecond; fill timeline gaps with silence without ordinary inter-cue gaps.
+Complete clips start at cue timestamps: model silence can delay audible words
+by about half a second in measured Windows Preset trials. Count trailing
+silence too; do not promise word-accurate synchronization or content accuracy.
+
+Save one complete 24 kHz mono WAV and versioned timeline sidecar, one History
+entry, only after all included cues pass. Use bounded I/O for silence, protect
+against clipping uniformly, apply 5 ms cue edge fades without duration changes,
+reject non-finite audio. Stop remains available through assembly; no partial
+track counts as success. Working clips stay outside Outputs and are cleaned
+on session disposal; warn before replacing/closing a session with reusable
+work. Cross-restart recovery and reopening sidecars as projects are outside v1.
+All editors are disabled during work; Help/logs stay reachable. Cue controls
+have keyboard routes and named fields; errors link to their row.
+
+CLI/server uses the same engine via `--srt-file` for preset/clone, mutually
+exclusive with ordinary text inputs. Return cue diagnostics on timing errors
+and success. Warning-only export succeeds; overlap fails without a final WAV.
+
+### Shared generation and output rules
+
 - Sample rate **24 kHz**, mono, WAV.
 - **Long or multi-paragraph text is generated in recoverable sections.** A newline
   (LF, CRLF, or CR) between non-empty paragraphs always starts a new section,

@@ -54,6 +54,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public DownloadViewModel Download { get; } = new();
     public void RefreshModelNotice()
     {
+        InvalidateSrtVoice();
         _downloadFailure = null;
         OnPropertyChanged(nameof(NeedsModel));
         OnPropertyChanged(nameof(CanUseHuggingFace));
@@ -139,7 +140,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string? _lastOutputPath;
     [ObservableProperty] private bool _isPlaying;
 
-    public bool HasSpeechEstimate => !string.IsNullOrWhiteSpace(Script);
+    public bool HasSpeechEstimate => !HasSrt && !string.IsNullOrWhiteSpace(Script);
     public string SpeechEstimateText
     {
         get
@@ -498,7 +499,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     /// <summary>Whether they belong on screen at all.</summary>
     public bool ShowExamples =>
-        !ShowingHistory && ExamplePrompts.ShouldShow(Mode, Script, LastOutputPath is not null);
+        !HasSrt && !ShowingHistory && ExamplePrompts.ShouldShow(Mode, Script, LastOutputPath is not null);
 
     /// <summary>Only preset voice is implemented so far.</summary>
     public bool ModeIsAvailable => ModelLayout.Exists(Mode);
@@ -826,6 +827,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _downloadFailure = null;
         OnPropertyChanged(nameof(CanUseHuggingFace));
 
+        if (HasSrt)
+        {
+            try { SrtDocument.Validate(_srt!.Cues); }
+            catch (InvalidDataException ex) { Status = ex.Message; FirstSrtError(); return; }
+        }
+
         // Pressed before it is ready: say what is missing, put the cursor in it,
         // and mark it. Doing nothing was the old behaviour and it is what made
         // the button look broken.
@@ -864,11 +871,23 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             LastOutputPath = path;
 
             // §2: the result plays itself once it is written.
-            if (path is not null) { Status = "Your audio is ready"; Play(); }
+            if (path is not null)
+            {
+                Status = HasSrt && _srt!.Diagnostics.Any(d => d.Status == "warning")
+                    ? "Your audio is ready with timing warnings. Review the cue table." : "Your audio is ready";
+                Play();
+            }
         }
         catch (OperationCanceledException)
         {
             Status = "Stopped";
+        }
+        catch (SrtTimingException timing)
+        {
+            RefreshSrtRows();
+            Status = timing.Diagnostics.Any(d => d.Status == "error")
+                ? "Timing errors prevent export. Select Go to first error to review them."
+                : "Cue audio is ready. Generate the remaining cues to complete the track.";
         }
         catch (PreflightFailedException failed)
         {
@@ -896,6 +915,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             _downloadTicker?.Stop();
             Download.Clear();
             IsBusy = _engine.Status.IsBusy;
+            RefreshSrtRows();
             Refresh();
         }
     }
@@ -993,13 +1013,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     private GenerateRequest CurrentRequest() => new(
         Mode,
-        Script,
+        HasSrt ? "SRT timed speech" : Script,
         Language,
         Mode == TtsMode.PresetVoice ? Speaker : null,
         Mode == TtsMode.VoiceClone ? null : Instruct,
         Mode == TtsMode.VoiceClone ? ReferenceAudioPath : null,
         Mode == TtsMode.VoiceClone ? ReferenceTranscript : null,
-        Mode == TtsMode.VoiceClone ? ReferenceTranscriptAudioSeconds : null);
+        Mode == TtsMode.VoiceClone ? ReferenceTranscriptAudioSeconds : null)
+        { Srt = HasSrt ? _srt : null, SrtCueId = _srtCueId };
 
     private void OnEngineStatusChanged(object? sender, EngineStatus status)
     {
@@ -1163,17 +1184,18 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     // recording in clone mode did exactly that: readiness was satisfied and
     // nothing said so.
     partial void OnScriptChanged(string value) => Refresh();
-    partial void OnInstructChanged(string value) => Refresh();
+    partial void OnInstructChanged(string value) { InvalidateSrtVoice(); Refresh(); }
     partial void OnIsBusyChanged(bool value) => Refresh();
     partial void OnLastOutputPathChanged(string? value) => Refresh();
-    partial void OnLanguageChanged(string value) => Refresh();
-    partial void OnSpeakerChanged(string value) => Refresh();
+    partial void OnLanguageChanged(string value) { InvalidateSrtVoice(); Refresh(); }
+    partial void OnSpeakerChanged(string value) { InvalidateSrtVoice(); Refresh(); }
     partial void OnReferenceAudioPathChanged(string? value)
     {
         ReferenceTranscriptAudioSeconds = null;
+        InvalidateSrtVoice();
         Refresh();
     }
-    partial void OnReferenceTranscriptChanged(string value) => Refresh();
+    partial void OnReferenceTranscriptChanged(string value) { InvalidateSrtVoice(); Refresh(); }
 
     partial void OnShowingHistoryChanged(bool value)
     {
@@ -1236,6 +1258,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     partial void OnModeChanged(TtsMode value)
     {
+        InvalidateSrtVoice();
+        SrtChanged();
         _downloadFailure = null;
         ReleaseModelOfModeBeingLeft();
 
@@ -1260,5 +1284,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _engine.StatusChanged -= OnEngineStatusChanged;
         History.Dispose();
         _player.Dispose();
+        _srt?.Dispose();
     }
 }

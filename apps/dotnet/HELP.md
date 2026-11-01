@@ -50,7 +50,46 @@ The audio plays automatically when the complete recording is saved. **Play** rep
 
 If the download is a lot to ask for before hearing anything, the **Storage** tab in Settings gives you a command per mode to fetch a model in advance instead.
 
-## The three modes
+## Timed speech from subtitles
+
+In Preset voice or Voice clone, choose **Import SRT** instead of typing an
+ordinary script. Voice design does not support subtitle scripts. Use a UTF-8
+`.srt` file. The original file is never changed.
+
+Review each cue's start, end, text, and spoken text. Line breaks become spaces
+and basic italic/bold/underline tags are removed. Caption and unknown-format
+flags ask you to review the words; nothing is excluded automatically. Uncheck
+**Include cue** to leave those words out. Excluded cues create no speech
+deadline. All included start times must increase in file order.
+
+**Generate** creates each included cue in the same voice and checks its actual
+duration. Estimates are only a guide. Speech may continue past its own end:
+that is a warning, and export is allowed if it finishes before the next included
+cue starts. Speech continuing beyond the next start is an error and blocks
+export. Edit the words or times, exclude a cue, or use **Regenerate cue** for
+another take. **Go to first error** selects its row. **Preview cue** plays a
+completed take. Regeneration changes only that cue; Generate reuses completed
+takes and creates any missing ones. Changing the voice or model invalidates
+the affected takes.
+
+The complete audio clip starts at the cue timestamp, including any model
+silence. The audible words can start later (about half a second in measured
+Preset examples). Trailing silence counts too. Bunyi does not automatically
+trim, speed up, or cut off speech. Timing checks do not verify pronunciation,
+omitted words, or extra words; listen before using a track.
+
+When all cues fit, Bunyi saves one WAV with silence in the gaps. Its last cue
+may extend the recording past the subtitle end, with a warning. History shows
+one track. Keep the accompanying `.srt.json` timeline file beside the WAV when
+backing up or copying output folders; History's save-copy and Trash actions
+include it. The app's model backup does not back up audio outputs.
+
+Stop keeps completed cue takes for corrections during this session. Closing,
+replacing the imported script, or choosing **Use plain text** discards those
+temporary takes after confirmation. Completed tracks stay in History. There
+is no saved editable subtitle project in this version.
+
+## The three modes (voice settings)
 
 ### Preset voice
 

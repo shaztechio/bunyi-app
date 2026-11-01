@@ -288,6 +288,11 @@ public sealed class OnnxTtsEngine : ITtsEngine
         CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(request);
+        if (request.Srt is { } timed)
+        {
+            if (request.Mode == TtsMode.VoiceDesign) throw new InvalidDataException("SRT supports Preset voice and Voice clone only.");
+            SrtDocument.Validate(timed.Cues);
+        }
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (!_lifecycle.Wait(0)) throw new EngineBusyException(Status.State);
 
@@ -401,6 +406,17 @@ public sealed class OnnxTtsEngine : ITtsEngine
 
                 var supportsInstruct = _synth.SupportsInstruct;
                 string? continuationModelRepo = null;
+                if (request.Srt is { } srt)
+                {
+                    var srtRequest = supportsInstruct || request.Mode == TtsMode.VoiceClone ? request : request with { Instruct = null };
+                    if (srtRequest.Instruct != request.Instruct) _log.Log("The model ignored style; timed output metadata omits it.");
+                    var identity = SourceName(source, folder) + "|" + folder + "|" + string.Join(";",
+                        Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal)
+                            .Select(p => { var f = new FileInfo(p); return $"{f.Name}:{f.Length}:{f.LastWriteTimeUtc.Ticks}"; }));
+                    await srt.GenerateAsync(srtRequest, identity, Section, s => Publish(s, progress), Release, _log, token).ConfigureAwait(false);
+                    Publish(new EngineStatus(EngineState.Finalizing, Detail: "Assembling the timed audio track"), progress);
+                    return WriteSrtOutput(srtRequest, srt, folder, source, started, token);
+                }
                 var audio = SpeechDurationEstimate.RequiresSections(request.Text, request.Language)
                     ? await new LongTextGeneration(Section, s => Publish(s, progress), _log, gapMilliseconds)
                         .GenerateAsync(request, token).ConfigureAwait(false)
@@ -597,6 +613,47 @@ public sealed class OnnxTtsEngine : ITtsEngine
         {
             // Reclaiming memory must not fail a run that otherwise succeeded.
             _log.Log($"Could not release working memory: {ex.Message}");
+        }
+    }
+
+    private GenerateResult WriteSrtOutput(GenerateRequest request, SrtSession session, string modelFolder,
+        ModelSource source, Stopwatch started, CancellationToken ct)
+    {
+        var now = _time.GetLocalNow();
+        var folder = AppPaths.EnsureFolder(_outputFolder());
+        var path = Path.Combine(folder, Path.GetFileNameWithoutExtension(WavWriter.FileNameFor(request.Mode, now)) + $"-SRT-{Guid.NewGuid():N}.wav");
+        var temporary = path + ".partial";
+        var sidecar = SrtSession.SidecarPath(path);
+        var sidecarTemporary = sidecar + ".partial";
+        var sidecarPublished = false;
+        var committed = false;
+        try
+        {
+            var result = session.WriteTrack(temporary, _log, ct);
+            var metadata = MetadataFor(request, modelFolder, now, source);
+            session.WriteSidecar(sidecarTemporary, metadata);
+            var summary = metadata with { Text = $"SRT timed speech · {session.Cues.Count(c => c.Included)} cues" };
+            if (!WavMetadata.TryWrite(temporary, summary)) throw new IOException("Could not write timed output metadata.");
+            lock (_gate)
+            {
+                ct.ThrowIfCancellationRequested();
+                if (_status.State == EngineState.Stopping) throw new OperationCanceledException(ct);
+                File.Move(sidecarTemporary, sidecar);
+                sidecarPublished = true;
+                File.Move(temporary, path);
+                committed = true;
+                LastOutputPath = path;
+            }
+            return new GenerateResult(path, TimeSpan.FromTicks((result.Samples * TimeSpan.TicksPerSecond + 12000) / 24000), result.Frames, started.Elapsed);
+        }
+        finally
+        {
+            foreach (var file in new[] { temporary, sidecarTemporary }.Concat(sidecarPublished && !committed ? [sidecar] : Array.Empty<string>()))
+            {
+                try { File.Delete(file); }
+                catch (IOException ex) { _log.Log($"Could not remove temporary timed output: {ex.Message}"); }
+                catch (UnauthorizedAccessException ex) { _log.Log($"Could not remove temporary timed output: {ex.Message}"); }
+            }
         }
     }
 

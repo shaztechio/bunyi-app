@@ -125,6 +125,18 @@ public partial class MainWindow : Window
         model.History.ConfirmTrash = ConfirmTrashAsync;
         model.History.ChooseSaveLocation = ChooseSaveLocationAsync;
         model.ChooseReference = ChooseReferenceAsync;
+        model.ChooseSrt = async () =>
+        {
+            var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = "Import subtitle script", AllowMultiple = false,
+                FileTypeFilter = [new FilePickerFileType("SubRip subtitles") { Patterns = ["*.srt"] }]
+            });
+            return files.Count > 0 ? files[0].TryGetLocalPath() : null;
+        };
+        model.ConfirmDiscardSrt = () => AskAsync("Discard generated cue takes?",
+            "The completed track stays in History. Temporary cue takes cannot be recovered after closing or replacing this script.",
+            "Discard takes", "Keep editing");
         model.FocusRequested += (_, input) => FocusTheProblem(input);
     }
 
@@ -483,6 +495,16 @@ public partial class MainWindow : Window
     protected override async void OnClosing(WindowClosingEventArgs e)
     {
         var engine = Engine;
+
+        if (!_closeConfirmed && engine?.Status.IsBusy != true && DataContext is MainViewModel { HasSrtWork: true } srtModel)
+        {
+            e.Cancel = true;
+            if (_waitingToClose) return;
+            _waitingToClose = true;
+            if (await srtModel.ConfirmDiscardSrt!()) { _closeConfirmed = true; Close(); }
+            _waitingToClose = false;
+            return;
+        }
 
         if (_closeConfirmed || engine is null || !engine.Status.IsBusy)
         {

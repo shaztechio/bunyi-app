@@ -250,7 +250,14 @@ limitations under the License.
               are drawn under, and Tab reached them first.
             -->
             <Grid RowDefinitions="Auto,*,Auto,Auto,Auto">
-              <TextBlock Grid.Row="0" Name="ScriptLabel" Text="SCRIPT" Classes="eyebrow" />
+              <DockPanel Grid.Row="0">
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6">
+                  <Button Content="Import SRT" Command="{Binding ImportSrtCommand}" IsVisible="{Binding CanImportSrt}" />
+                  <Button Content="Use plain text" Command="{Binding ClearSrtCommand}" IsVisible="{Binding HasSrt}" />
+                </StackPanel>
+                <TextBlock Name="ScriptLabel" Text="SCRIPT" Classes="eyebrow" />
+              </DockPanel>
+              <views:SrtCueTable Grid.Row="1" IsVisible="{Binding HasSrt}" />
 
 
               <TextBlock Grid.Row="2" Classes="needed" Margin="0,6,0,0"
@@ -265,7 +272,7 @@ limitations under the License.
                 Found by walking the real tree for controls with no name, after the
                 same fault turned up on the dropdowns (#159, #192).
               -->
-              <Grid Grid.Row="1" Height="{Binding ScriptEditorHeight}"
+              <Grid Grid.Row="1" Height="{Binding ScriptEditorHeight}" IsVisible="{Binding !HasSrt}"
                     VerticalAlignment="{Binding ScriptEditorAlignment}">
                 <infra:ScriptTextBox Name="ScriptBox" Text="{Binding Script}"
                        Classes.needed="{Binding NeedsText}"
