@@ -42,9 +42,11 @@ public sealed partial class MainViewModel
             return included.Length == missing ? "Generate cues" : $"Resume ({missing} {(missing == 1 ? "cue" : "cues")})";
         }
     }
+    public int SrtErrorCount => SrtRows.Count(r => r.Included && r.HasError);
+    public bool HasSrtErrors => SrtErrorCount > 0;
+    public string SrtErrorSummary => $"{SrtErrorCount} {(SrtErrorCount == 1 ? "error" : "errors")}";
     public string SrtResumeSummary => $"{SrtRows.Count(r => r.Included && r.HasPreview)} cues ready · "
-        + $"{SrtRows.Count(r => r.Included && !r.HasPreview)} missing · {SrtRows.Count(r => r.Included && r.HasError)} errors. "
-        + "Timestamp edits reuse audio. Regenerate only when the spoken text or take must change.";
+        + $"{SrtRows.Count(r => r.Included && !r.HasPreview)} missing";
     private void RefreshSrtModelContext()
     {
         if (CurrentSrtModelContext != _srtModelContext) InvalidateSrtVoice();
@@ -187,6 +189,9 @@ public sealed partial class MainViewModel
         OnPropertyChanged(nameof(SrtProjectLabel));
         OnPropertyChanged(nameof(GenerateActionText));
         OnPropertyChanged(nameof(SrtResumeSummary));
+        OnPropertyChanged(nameof(SrtErrorCount));
+        OnPropertyChanged(nameof(HasSrtErrors));
+        OnPropertyChanged(nameof(SrtErrorSummary));
         Refresh();
     }
     private void SyncSrt()
@@ -214,6 +219,9 @@ public sealed partial class MainViewModel
         OnPropertyChanged(nameof(SrtProjectLabel));
         OnPropertyChanged(nameof(GenerateActionText));
         OnPropertyChanged(nameof(SrtResumeSummary));
+        OnPropertyChanged(nameof(SrtErrorCount));
+        OnPropertyChanged(nameof(HasSrtErrors));
+        OnPropertyChanged(nameof(SrtErrorSummary));
     }
     private void InvalidateSrtVoice()
     {

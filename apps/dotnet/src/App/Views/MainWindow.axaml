@@ -252,11 +252,28 @@ limitations under the License.
             <Grid RowDefinitions="Auto,*,Auto,Auto,Auto">
               <DockPanel Grid.Row="0">
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6">
-                  <Button Content="Import SRT" Command="{Binding ImportSrtCommand}" IsVisible="{Binding CanImportSrt}" />
-                  <Button Content="Open project" Command="{Binding OpenSrtProjectCommand}" />
-                  <Button Content="Use plain text" Command="{Binding ClearSrtCommand}" IsVisible="{Binding HasSrt}" />
+                  <infra:AccessibleButton Classes="icon" Name="ImportSrtButton" Command="{Binding ImportSrtCommand}" IsVisible="{Binding CanImportSrt}"
+                      ToolTip.Tip="Import an SRT subtitle script" AutomationProperties.Name="Import SRT" AutomationProperties.HelpText="">
+                    <Path Data="{DynamicResource IconImportSrt}" />
+                  </infra:AccessibleButton>
+                  <infra:AccessibleButton Classes="icon" Name="OpenSrtProjectButton" Command="{Binding OpenSrtProjectCommand}"
+                      ToolTip.Tip="Open a saved SRT project and its cue takes" AutomationProperties.Name="Open project" AutomationProperties.HelpText="">
+                    <Path Data="{DynamicResource IconFolder}" />
+                  </infra:AccessibleButton>
+                  <infra:AccessibleButton Classes="icon" Name="SaveSrtProjectButton" Command="{Binding SaveSrtProjectCommand}" IsVisible="{Binding HasSrt}"
+                      ToolTip.Tip="Save this project, including generated cue takes" AutomationProperties.Name="Save project" AutomationProperties.HelpText="">
+                    <Path Data="{DynamicResource IconProjectSave}" />
+                  </infra:AccessibleButton>
+                  <infra:AccessibleButton Classes="icon" Name="SaveSrtProjectAsButton" Command="{Binding SaveSrtProjectAsCommand}" IsVisible="{Binding HasSrt}"
+                      ToolTip.Tip="Save the project to another file" AutomationProperties.Name="Save project as" AutomationProperties.HelpText="">
+                    <Path Data="{DynamicResource IconProjectSaveAs}" />
+                  </infra:AccessibleButton>
+                  <infra:AccessibleButton Classes="icon" Name="PlainTextButton" Command="{Binding ClearSrtCommand}" IsVisible="{Binding HasSrt}"
+                      ToolTip.Tip="Switch to a plain text script" AutomationProperties.Name="Use plain text" AutomationProperties.HelpText="">
+                    <Path Data="{DynamicResource IconPlainText}" />
+                  </infra:AccessibleButton>
                 </StackPanel>
-                <TextBlock Name="ScriptLabel" Text="SCRIPT" Classes="eyebrow" />
+                <TextBlock Name="ScriptLabel" Text="SCRIPT" Classes="eyebrow" VerticalAlignment="Center" />
               </DockPanel>
               <views:SrtCueTable Grid.Row="1" IsVisible="{Binding HasSrt}" />
 

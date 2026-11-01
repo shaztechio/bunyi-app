@@ -18,14 +18,29 @@ limitations under the License.
              xmlns:vm="clr-namespace:Bunyi.App.ViewModels"
              xmlns:infra="clr-namespace:Bunyi.App.Infrastructure"
              x:Class="Bunyi.App.Views.SrtCueTable" x:DataType="vm:MainViewModel">
+  <UserControl.Styles>
+    <Style Selector="TextBlock.errorCount.hasErrors">
+      <Setter Property="Foreground" Value="{DynamicResource BunyiWarning}" />
+    </Style>
+  </UserControl.Styles>
   <Grid RowDefinitions="Auto,*,Auto" MinHeight="240">
     <StackPanel Spacing="6" Margin="0,4,0,8">
-      <WrapPanel>
-        <Button Content="Save project" Command="{Binding SaveSrtProjectCommand}" Margin="0,0,6,0" />
-        <Button Content="Save as…" Command="{Binding SaveSrtProjectAsCommand}" />
-      </WrapPanel>
       <TextBlock Text="{Binding SrtProjectLabel}" FontSize="12" TextWrapping="Wrap" />
-      <TextBlock Text="{Binding SrtResumeSummary}" FontSize="12" TextWrapping="Wrap" />
+      <WrapPanel>
+        <TextBlock Text="{Binding SrtResumeSummary}" FontSize="12" VerticalAlignment="Center" />
+        <TextBlock Text=" · " FontSize="12" VerticalAlignment="Center" />
+        <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center"
+                    AutomationProperties.Name="{Binding SrtErrorCount, StringFormat='Cue errors: {0}'}">
+          <Viewbox Width="15" Height="15" IsVisible="{Binding HasSrtErrors}">
+            <Canvas Width="20" Height="20">
+              <Path Data="M 10,1 L 19,18 L 1,18 Z" Stroke="{DynamicResource BunyiWarning}" StrokeThickness="1.8" />
+              <Path Data="M 10,6 L 10,11 M 10,13 L 10,15" Stroke="{DynamicResource BunyiWarning}" StrokeThickness="2" />
+            </Canvas>
+          </Viewbox>
+          <TextBlock Text="{Binding SrtErrorSummary}" FontSize="12" FontWeight="SemiBold"
+                     Classes="errorCount" Classes.hasErrors="{Binding HasSrtErrors}" />
+        </StackPanel>
+      </WrapPanel>
       <TextBlock Text="Review captions before generating. Excluded cues are silent. Complete clips start at timestamps; model silence can delay words by about half a second."
                  TextWrapping="Wrap" FontSize="12" />
     </StackPanel>
@@ -62,8 +77,8 @@ limitations under the License.
                          AutomationProperties.Name="{Binding Number, StringFormat='Cue {0} has an error'}"
                          ToolTip.Tip="{Binding StatusText}">
                   <Canvas Width="20" Height="20">
-                    <Path Data="M 10,1 L 19,18 L 1,18 Z" Stroke="#C77700" StrokeThickness="1.8" />
-                    <Path Data="M 10,6 L 10,11 M 10,13 L 10,15" Stroke="#C77700" StrokeThickness="2" />
+                    <Path Data="M 10,1 L 19,18 L 1,18 Z" Stroke="{DynamicResource BunyiWarning}" StrokeThickness="1.8" />
+                    <Path Data="M 10,6 L 10,11 M 10,13 L 10,15" Stroke="{DynamicResource BunyiWarning}" StrokeThickness="2" />
                   </Canvas>
                 </Viewbox>
                 <TextBlock Grid.Column="1" Text="{Binding StatusText}" TextWrapping="Wrap" FontSize="12"

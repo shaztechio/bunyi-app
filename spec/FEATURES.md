@@ -220,6 +220,17 @@ work. Save updates the chosen project; Save as writes another archive. Mark
 subsequent edits, new takes and voice changes unsaved, and confirm before
 discarding unsaved work, including text-only drafts. Saved projects survive
 closing; exported WAV sidecars remain descriptions rather than projects.
+The script/project actions form one compact icon toolbar beside the Script
+heading: Import SRT, Open project, Save project, Save as, and Use plain text.
+Save/Save as and Use plain text appear for an imported/open SRT session. Every
+icon has a descriptive tooltip, a short accessible action name, and visible
+keyboard focus. Keep the existing commands and enabled-state rules. Do not
+repeat Save/Save as in a second row above the project status.
+In the cue summary, separate the error count from ready/missing counts. When
+errors exist, show it in bold with a warning triangle and a short accessible
+name, such as “43 cue errors”. Use the warning accent for additional emphasis;
+the icon and text must convey the state without relying on color. Hide the
+triangle when no errors remain.
 All editors are disabled during work; Help/logs stay reachable. Cue controls
 show a warning triangle beside an included cue's error status. Hide it as soon
 as the error is resolved or the cue is excluded. Keep the full error text and
