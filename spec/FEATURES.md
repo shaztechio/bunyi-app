@@ -18,6 +18,17 @@ concrete to match.
 Audience: non-technical end users. No terminal required; models
 auto-download with a progress bar; outputs are playable WAVs.
 
+**Experimental SRT support is part of this common specification**, for both
+native apps: Preset voice and Voice clone turn editable subtitle cues into one
+timed audio track. The complete contract below covers import, caption exclusion,
+timing warnings/errors, individual cue generation and reuse, speed fitting,
+portable saved projects, and the default-off Advanced preference. See
+[SRT timed scripts](#srt-timed-scripts-experimental-staged-implementation),
+[project and output formats](DATA-FORMATS.md), and [CLI support](CLI.md).
+Windows is the proving implementation; native macOS implementation is tracked
+in [#310](https://github.com/shaztechio/bunyi-app/issues/310). Experimental status
+and staged delivery do not make SRT a Windows-only feature specification.
+
 ---
 
 ## 1. Three generation modes
@@ -136,6 +147,10 @@ A segmented picker selects one of three modes. macOS source:
 ## 2. Generation output
 
 ### SRT timed scripts (experimental, staged implementation)
+
+This section is the **shared feature contract for macOS, Windows and Linux**,
+including all SRT behavior below. Each native app implements it in its own
+runtime; platform delivery status is tracked separately from the contract.
 
 Desktop SRT support is opt-in under **Preferences / Settings → Advanced →
 Experimental SRT support**, off by default, including existing installations.
