@@ -330,6 +330,22 @@ limitations under the License.
       </StackPanel>
     </TabItem>
 
+    <TabItem Header="Advanced">
+      <ScrollViewer>
+        <StackPanel Margin="12" Spacing="12">
+          <TextBlock Text="EXPERIMENTAL FEATURES" Classes="eyebrow" />
+          <CheckBox Name="ExperimentalSrtCheckBox" Content="Experimental SRT support"
+                    IsChecked="{Binding ExperimentalSrtEnabled}"
+                    AutomationProperties.HelpText="Enable timed subtitle projects for Preset voice and Voice clone. Off by default." />
+          <Border Classes="callout">
+            <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.8"
+                       Text="Import subtitles, edit cues, and generate a timed audio track with Preset voice or Voice clone. This feature is experimental. Turning it off keeps your open project and generated cues; re-enable it to resume." />
+          </Border>
+          <TextBlock Text="{Binding SourceStatus}" TextWrapping="Wrap" />
+        </StackPanel>
+      </ScrollViewer>
+    </TabItem>
+
     <!--
       What an About panel would say. macOS gets one free from AppKit; there is
       no equivalent here and no menu bar to hang one on, so it lives where a
@@ -455,21 +471,5 @@ limitations under the License.
         </StackPanel>
       </ScrollViewer>
     </TabItem>
-    <TabItem Header="Advanced">
-      <ScrollViewer>
-        <StackPanel Margin="12" Spacing="12">
-          <TextBlock Text="EXPERIMENTAL FEATURES" Classes="eyebrow" />
-          <CheckBox Name="ExperimentalSrtCheckBox" Content="Experimental SRT support"
-                    IsChecked="{Binding ExperimentalSrtEnabled}"
-                    AutomationProperties.HelpText="Enable timed subtitle projects for Preset voice and Voice clone. Off by default." />
-          <Border Classes="callout">
-            <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.8"
-                       Text="Import subtitles, edit cues, and generate a timed audio track with Preset voice or Voice clone. This feature is experimental. Turning it off keeps your open project and generated cues; re-enable it to resume." />
-          </Border>
-          <TextBlock Text="{Binding SourceStatus}" TextWrapping="Wrap" />
-        </StackPanel>
-      </ScrollViewer>
-    </TabItem>
-
   </TabControl>
 </Window>

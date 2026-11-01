@@ -261,6 +261,8 @@ Either way you never hold two models at once. The setting moves when the memory 
 
 ### About
 
+About is the last Settings tab, after Advanced.
+
 The version you are running, the platform it was built for, and the licence and credits.
 
 ## Doctor

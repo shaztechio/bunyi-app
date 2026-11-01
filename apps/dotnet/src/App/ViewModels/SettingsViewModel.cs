@@ -40,7 +40,7 @@ public sealed record PreDownloadCommandRow(string Mode, string Command)
 }
 
 /// <summary>
-/// Settings (spec §7): General, Models, Storage, Backup, About and Advanced.
+/// Settings (spec §7): General, Models, Storage, Backup, Advanced and About.
 /// </summary>
 public sealed partial class SettingsViewModel : ObservableObject
 {

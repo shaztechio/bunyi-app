@@ -936,7 +936,12 @@ macOS source: `BackupManager.swift`.
 
 ## 7. Settings
 
-Tabbed window (macOS: ⌘,). Tabs — the window title reflects the selected tab,
+Tabbed window (macOS: ⌘,). The tab order is **General, Models, Storage,
+Backup, Advanced, About** on Windows and Linux. **About is always the last
+Settings tab**, after Advanced and any future settings tabs. macOS uses the
+same settings order without About, which remains its native AppKit panel;
+the Advanced/SRT addition there is tracked in #310. The window title reflects
+the selected tab,
 **and names the window before it** where the platform's own convention is to
 name the window: the .NET app titles it **"Settings — General"**, macOS titles
 it "General" alone. macOS source: `SettingsView.swift`.
@@ -1083,8 +1088,8 @@ macOS source: `WindowCloseGuard.swift`.
   user can reach without generating anything.
   - macOS gets this free: AppKit's About panel, filled from the bundle.
   - **.NET (Win+Linux)**: there is no equivalent and no menu bar to hang one
-    on, so it is an **About tab in Settings** (§7) — where a Windows or Linux
-    user looks for it.
+    on, so it is the **last tab, About, in Settings** (§7) — where a Windows or
+    Linux user looks for it.
 - The platform is named, not just the version. Windows and Linux are one
   codebase and look identical, so a version alone does not say which build a
   bug report is about.
