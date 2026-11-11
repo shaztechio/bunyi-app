@@ -31,7 +31,7 @@ permissions:
   contents: read
 jobs:
   install:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -48,7 +48,7 @@ jobs:
           - image: fedora:44
             format: rpm
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: useblacksmith/checkout@v1 # v7
         with:
           persist-credentials: false
           ref: ${{ inputs.ref || github.ref }}

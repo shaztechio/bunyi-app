@@ -49,7 +49,7 @@ jobs:
   build:
     # macos-26, not macos-15: the app needs Xcode 26 for Swift 6.2 and
     # mlx-swift's Metal toolchain. This must stay in step with macos.yml.
-    runs-on: macos-26
+    runs-on: blacksmith-6vcpu-macos-26
     # MLX compiles a large amount of C++ and Metal from source on a cold cache,
     # and notarization adds a wait on Apple's service after that.
     timeout-minutes: 120
@@ -367,7 +367,7 @@ jobs:
   refresh-site:
     name: Refresh website
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 5
     permissions:
       actions: write

@@ -42,7 +42,7 @@ jobs:
     timeout-minutes: 90
     # Xcode 26 required: the app uses Swift 6.2 features and mlx-swift's
     # Metal Toolchain. It does NOT build on the macos-15 image (Xcode 16.4).
-    runs-on: macos-26
+    runs-on: blacksmith-6vcpu-macos-26
     defaults:
       run:
         working-directory: apps/macos

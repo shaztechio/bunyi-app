@@ -47,13 +47,13 @@ jobs:
   # Deciding the version once, before anything is built, so both platforms
   # stamp the same number and the tag cannot disagree with the binaries.
   version:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     outputs:
       version: ${{ steps.pick.outputs.version }}
       tag: ${{ steps.pick.outputs.tag }}
       publish: ${{ steps.pick.outputs.publish }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: useblacksmith/checkout@v1 # v7
         with:
           persist-credentials: false
           # Release notes read the commits since the previous tag, so a shallow
@@ -161,22 +161,22 @@ jobs:
         # Runtime's GPU package; see Bunyi.Core.csproj for why it is a separate
         # download rather than the only one.
         include:
-          - os: windows-latest
+          - os: blacksmith-4vcpu-windows-2025
             rid: win-x64
             archive: zip
             cuda: false
             suffix: ''
-          - os: ubuntu-latest
+          - os: blacksmith-4vcpu-ubuntu-2404
             rid: linux-x64
             archive: tar.gz
             cuda: false
             suffix: ''
-          - os: windows-latest
+          - os: blacksmith-4vcpu-windows-2025
             rid: win-x64
             archive: zip
             cuda: true
             suffix: '-cuda'
-          - os: ubuntu-latest
+          - os: blacksmith-4vcpu-ubuntu-2404
             rid: linux-x64
             archive: tar.gz
             cuda: true
@@ -334,7 +334,7 @@ jobs:
 
   windows-sign:
     needs: [version, build]
-    runs-on: windows-latest
+    runs-on: blacksmith-4vcpu-windows-2025
     timeout-minutes: 40
     permissions:
       contents: read
@@ -413,9 +413,9 @@ jobs:
   release:
     needs: [version, build, windows-sign, linux-installers]
     if: needs.version.outputs.publish == 'true'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: useblacksmith/checkout@v1 # v7
         with:
           persist-credentials: false
           ref: ${{ needs.version.outputs.tag }}
@@ -531,7 +531,7 @@ jobs:
     name: Refresh website
     needs: [version, release]
     if: needs.release.result == 'success'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 5
     permissions:
       actions: write

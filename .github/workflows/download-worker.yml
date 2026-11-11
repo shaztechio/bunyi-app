@@ -27,12 +27,12 @@ permissions:
   contents: read
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     defaults:
       run:
         working-directory: workers/downloads
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: useblacksmith/checkout@v1 # v7
         with:
           persist-credentials: false
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
@@ -46,7 +46,7 @@ jobs:
   native-redirects:
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [blacksmith-4vcpu-ubuntu-2404, blacksmith-4vcpu-windows-2025, blacksmith-6vcpu-macos-15]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     defaults:
